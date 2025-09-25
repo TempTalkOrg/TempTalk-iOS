@@ -1,0 +1,3800 @@
+/* Button text to dismiss missing contacts permission alert */
+"AB_PERMISSION_MISSING_ACTION_NOT_NOW" = "Not Now";
+
+/* Action sheet item */
+"ACCEPT_NEW_IDENTITY_ACTION" = "Accept New Safety Number";
+
+/* Label for 'audio call' button in contact view. */
+"ACTION_AUDIO_CALL" = "Chative Call";
+
+/* Label for 'invite' button in contact view. */
+"ACTION_INVITE" = "Invite to Chative";
+
+/* Label for 'send message' button in contact view.
+   Label for button that lets you send a message to a contact. */
+"ACTION_SEND_MESSAGE" = "Send Message";
+
+/* Label for 'share contact' button. */
+"ACTION_SHARE_CONTACT" = "Share Contact";
+
+/* Label for 'video call' button in contact view. */
+"ACTION_VIDEO_CALL" = "Video Call";
+
+/* A label for the 'add by phone number' button in the 'add group member' view */
+"ADD_GROUP_MEMBER_VIEW_BUTTON" = "Add";
+
+/* Title for the 'add contact' section of the 'add group member' view. */
+"ADD_GROUP_MEMBER_VIEW_CONTACT_TITLE" = "Add Contact";
+
+/* Title for the 'add by phone number' section of the 'add group member' view. */
+"ADD_GROUP_MEMBER_VIEW_PHONE_NUMBER_TITLE" = "Add by Phone Number";
+
+/* Title for the 'add group member' view. */
+"ADD_GROUP_MEMBER_VIEW_TITLE" = "Add Member";
+
+/* Message shown in conversation view that offers to share your profile with a group. */
+"ADD_GROUP_TO_PROFILE_WHITELIST_OFFER" = "Would you like to share your profile with this group?";
+
+/* Message shown in conversation view that offers to add an unknown user to your phone's contacts. */
+"ADD_TO_CONTACTS_OFFER" = "Would you like to add this user to your contacts?";
+
+/* Message shown in conversation view that offers to share your profile with a user. */
+"ADD_USER_TO_PROFILE_WHITELIST_OFFER" = "Would you like to share your profile with this user?";
+
+/* The label for the 'discard' button in alerts and action sheets. */
+"ALERT_DISCARD_BUTTON" = "Discard";
+
+/* The label for the 'don't save' button in action sheets. */
+"ALERT_DONT_SAVE" = "Don't Save";
+
+/* No comment provided by engineer. */
+"ALERT_ERROR_TITLE" = "Error";
+
+/* The label for the 'save' button in action sheets. */
+"ALERT_SAVE" = "Save";
+
+/* No comment provided by engineer. */
+"ANSWER_CALL_BUTTON_TITLE" = "Answer";
+
+/* No comment provided by engineer. */
+"APN_Message" = "New Message!";
+
+/* No comment provided by engineer. */
+"APN_MESSAGE_FROM" = "Message from";
+
+/* No comment provided by engineer. */
+"APN_MESSAGE_IN_GROUP" = "Message in group";
+
+/* No comment provided by engineer. */
+"APN_MESSAGE_IN_GROUP_DETAILED" = "%@ in group %@: %@";
+
+/* Message for the 'app launch failed' alert. */
+"APP_LAUNCH_FAILURE_ALERT_MESSAGE" = "Chative can't launch. Please send your debug logs to our team so that we can try to resolve this issue.";
+
+/* Title for the 'app launch failed' alert. */
+"APP_LAUNCH_FAILURE_ALERT_TITLE" = "Error";
+
+/* Text prompting user to edit their profile name. */
+"APP_SETTINGS_EDIT_PROFILE_NAME_PROMPT" = "Enter your name";
+
+/* Message format for the 'new app version available' alert. Embeds: {{The latest app version number.}}. */
+"APP_UPDATE_NAG_ALERT_MESSAGE_FORMAT" = "Version %@ is now available in the App Store.";
+
+/* Title for the 'new app version available' alert. */
+"APP_UPDATE_NAG_ALERT_TITLE" = "A new version of TempTalk is available now";
+
+/* Label for the 'update' button in the 'new app version available' alert. */
+"APP_UPDATE_NAG_ALERT_UPDATE_BUTTON" = "Update";
+
+/* Name of application */
+"APPLICATION_NAME" = "Chative";
+
+/* Pressing this button moves a thread from the inbox to the archive */
+"ARCHIVE_ACTION" = "Archive";
+
+/* One line label indicating the user can add no more text to the attachment caption. */
+"ATTACHMENT_APPROVAL_CAPTION_LENGTH_LIMIT_REACHED" = "Message limit reached.";
+
+/* Format string for file extension label in call interstitial view */
+"ATTACHMENT_APPROVAL_FILE_EXTENSION_FORMAT" = "File type: %@";
+
+/* Format string for file size label in call interstitial view. Embeds: {{file size as 'N mb' or 'N kb'}}. */
+"ATTACHMENT_APPROVAL_FILE_SIZE_FORMAT" = "Size: %@";
+
+/* Label for 'send' button in the 'attachment approval' dialog. */
+"ATTACHMENT_APPROVAL_SEND_BUTTON" = "Send";
+
+/* Generic filename for an attachment with no known name */
+"ATTACHMENT_DEFAULT_FILENAME" = "Attachment";
+
+/* Status label when an attachment download has failed. */
+"ATTACHMENT_DOWNLOADING_STATUS_FAILED" = "Failed. Tap to retry.";
+
+/* Status label when an attachment is currently downloading */
+"ATTACHMENT_DOWNLOADING_STATUS_IN_PROGRESS" = "Downloading…";
+
+/* Status label when an attachment is enqueued, but hasn't yet started downloading */
+"ATTACHMENT_DOWNLOADING_STATUS_QUEUED" = "Tap To Download";
+
+/* The title of the 'attachment error' alert. */
+"ATTACHMENT_ERROR_ALERT_TITLE" = "Error Sending Attachment";
+
+/* Attachment error message for image attachments which could not be converted to JPEG */
+"ATTACHMENT_ERROR_COULD_NOT_CONVERT_TO_JPEG" = "Image attachment could not be resized.";
+
+/* Attachment error message for video attachments which could not be converted to MP4 */
+"ATTACHMENT_ERROR_COULD_NOT_CONVERT_TO_MP4" = "Unable to process video.";
+
+/* Attachment error message for image attachments which cannot be parsed */
+"ATTACHMENT_ERROR_COULD_NOT_PARSE_IMAGE" = "Image attachment could not be parsed.";
+
+/* Attachment error message for image attachments in which metadata could not be removed */
+"ATTACHMENT_ERROR_COULD_NOT_REMOVE_METADATA" = "Unable to remove metadata from image.";
+
+/* Attachment error message for image attachments which could not be resized */
+"ATTACHMENT_ERROR_COULD_NOT_RESIZE_IMAGE" = "Could not resize image.";
+
+/* Attachment error message for attachments whose data exceed file size limits */
+"ATTACHMENT_ERROR_FILE_SIZE_TOO_LARGE" = "Attachment is too large.";
+
+/* Attachment error message for attachments with invalid data */
+"ATTACHMENT_ERROR_INVALID_DATA" = "Attachment has invalid contents.";
+
+/* Attachment error message for attachments with an invalid file format */
+"ATTACHMENT_ERROR_INVALID_FILE_FORMAT" = "Attachment has invalid file format.";
+
+/* Attachment error message for attachments without any data */
+"ATTACHMENT_ERROR_MISSING_DATA" = "Attachment is empty.";
+
+/* Accessibility hint describing what you can do with the attachment button */
+"ATTACHMENT_HINT" = "Choose or take a picture and then send it";
+
+/* Accessibility label for attaching photos */
+"ATTACHMENT_LABEL" = "Attachment";
+
+/* attachment menu option to send contact */
+"ATTACHMENT_MENU_CONTACT_BUTTON" = "Contact";
+
+/* Alert title when picking a document fails for an unknown reason */
+"ATTACHMENT_PICKER_DOCUMENTS_FAILED_ALERT_TITLE" = "Failed to choose document.";
+
+/* Alert body when picking a document fails because user picked a directory/bundle */
+"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_BODY" = "Chative can't handle that file as is. Try zipping it before sending.";
+
+/* Alert title when picking a document fails because user picked a directory/bundle */
+"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_TITLE" = "Unsupported File";
+
+/* Short text label for a voice message attachment, used for thread preview and on the lock screen */
+"ATTACHMENT_TYPE_VOICE_MESSAGE" = "[Voice Message]";
+
+"UNSUPPORTED_MESSAGE_TIP" = "Unsupported message, please upgrade to the latest version.";
+"CANNOT_DISPLAYED_MESSAGE_TIP" = "This message type cannot be displayed";
+
+/* action sheet button title to enable built in speaker during a call */
+"AUDIO_ROUTE_BUILT_IN_SPEAKER" = "Speaker";
+
+/* button text for back button */
+"BACK_BUTTON" = "Back";
+
+/* Error indicating the backup export could not export the user's data. */
+"BACKUP_EXPORT_ERROR_COULD_NOT_EXPORT" = "Backup data could not be exported.";
+
+/* Error indicating that the app received an invalid response from CloudKit. */
+"BACKUP_EXPORT_ERROR_INVALID_CLOUDKIT_RESPONSE" = "Invalid Service Response";
+
+/* Error indicating the backup export failed to save a file to the cloud. */
+"BACKUP_EXPORT_ERROR_SAVE_FILE_TO_CLOUD_FAILED" = "Backup data could not be uploaded.";
+
+/* Indicates that the cloud is being cleaned up. */
+"BACKUP_EXPORT_PHASE_CLEAN_UP" = "Cleaning Up Backup";
+
+/* Indicates that the backup export is being configured. */
+"BACKUP_EXPORT_PHASE_CONFIGURATION" = "Initializing Backup";
+
+/* Indicates that the database data is being exported. */
+"BACKUP_EXPORT_PHASE_DATABASE_EXPORT" = "Exporting Data";
+
+/* Indicates that the backup export data is being exported. */
+"BACKUP_EXPORT_PHASE_EXPORT" = "Exporting Backup";
+
+/* Indicates that the backup export data is being uploaded. */
+"BACKUP_EXPORT_PHASE_UPLOAD" = "Uploading Backup";
+
+/* Error indicating the backup import could not import the user's data. */
+"BACKUP_IMPORT_ERROR_COULD_NOT_IMPORT" = "Backup could not be imported.";
+
+/* Indicates that the backup import is being configured. */
+"BACKUP_IMPORT_PHASE_CONFIGURATION" = "Configuring Backup";
+
+/* Indicates that the backup import data is being downloaded. */
+"BACKUP_IMPORT_PHASE_DOWNLOAD" = "Downloading Backup Data";
+
+/* Indicates that the backup import data is being finalized. */
+"BACKUP_IMPORT_PHASE_FINALIZING" = "Finalizing Backup";
+
+/* Indicates that the backup import data is being imported. */
+"BACKUP_IMPORT_PHASE_IMPORT" = "Importing backup.";
+
+/* Indicates that the backup database is being restored. */
+"BACKUP_IMPORT_PHASE_RESTORING_DATABASE" = "Restoring Database";
+
+/* Indicates that the backup import data is being restored. */
+"BACKUP_IMPORT_PHASE_RESTORING_FILES" = "Restoring Files";
+
+/* An explanation of the consequences of blocking another user. */
+"BLOCK_BEHAVIOR_EXPLANATION" = "Blocked users will not be able to call you or send you messages.";
+
+/* Button label for the 'block' button */
+"BLOCK_LIST_BLOCK_BUTTON" = "Block";
+
+/* A format for the 'block user' action sheet title. Embeds {{the blocked user's name or phone number}}. */
+"BLOCK_LIST_BLOCK_TITLE_FORMAT" = "Block %@?";
+
+/* Button label for the 'unblock' button */
+"BLOCK_LIST_UNBLOCK_BUTTON" = "Unblock";
+
+/* A format for the 'unblock user' action sheet title. Embeds {{the blocked user's name or phone number}}. */
+"BLOCK_LIST_UNBLOCK_TITLE_FORMAT" = "Unblock %@?";
+
+/* A label for the block button in the block list view */
+"BLOCK_LIST_VIEW_BLOCK_BUTTON" = "Block";
+
+/* The title of the 'block user failed' alert. */
+"BLOCK_LIST_VIEW_BLOCK_FAILED_ALERT_MESSAGE" = "Failed to Block User.";
+
+/* The title of the 'block user failed' alert. */
+"BLOCK_LIST_VIEW_BLOCK_FAILED_ALERT_TITLE" = "Error";
+
+/* The message format of the 'user blocked' alert. Embeds {{the blocked user's name or phone number}}. */
+"BLOCK_LIST_VIEW_BLOCKED_ALERT_MESSAGE_FORMAT" = "%@ has been blocked";
+
+/* The title of the 'user blocked' alert. */
+"BLOCK_LIST_VIEW_BLOCKED_ALERT_TITLE" = "User Blocked";
+
+/* The message of the 'You can't block yourself' alert. */
+"BLOCK_LIST_VIEW_CANT_BLOCK_SELF_ALERT_MESSAGE" = "You can't block yourself.";
+
+/* The title of the 'You can't block yourself' alert. */
+"BLOCK_LIST_VIEW_CANT_BLOCK_SELF_ALERT_TITLE" = "Error";
+
+/* The title of the 'unblock user failed' alert. */
+"BLOCK_LIST_VIEW_UNBLOCK_FAILED_ALERT_MESSAGE" = "Failed to Unblock User.";
+
+/* The title of the 'unblock user failed' alert. */
+"BLOCK_LIST_VIEW_UNBLOCK_FAILED_ALERT_TITLE" = "Error";
+
+/* The message format of the 'user unblocked' alert. Embeds {{the blocked user's name or phone number}}. */
+"BLOCK_LIST_VIEW_UNBLOCKED_ALERT_MESSAGE_FORMAT" = "%@ has been unblocked.";
+
+/* The title of the 'user unblocked' alert. */
+"BLOCK_LIST_VIEW_UNBLOCKED_ALERT_TITLE" = "User Unblocked";
+
+/* Action sheet that will block an unknown user. */
+"BLOCK_OFFER_ACTIONSHEET_BLOCK_ACTION" = "Block";
+
+/* Title format for action sheet that offers to block an unknown user.Embeds {{the unknown user's name or phone number}}. */
+"BLOCK_OFFER_ACTIONSHEET_TITLE_FORMAT" = "Block %@?";
+
+/* Label for 'continue' button. */
+"BUTTON_CONTINUE" = "Continue";
+
+/* Label for generic done button. */
+"BUTTON_DONE" = "Done";
+
+"BUTTON_OK" = "Ok";
+
+/* Button text to enable batch selection mode */
+"BUTTON_SELECT" = "Select";
+
+/* Label for button that lets users call a contact again. */
+"CALL_AGAIN_BUTTON_TITLE" = "Call Again";
+
+/* Alert message when calling and permissions for microphone are missing */
+"CALL_AUDIO_PERMISSION_MESSAGE" = "Chative requires access to your microphone to make calls and record voice messages. You can grant this permission in the Settings app.";
+
+/* Alert title when calling and permissions for microphone are missing */
+"CALL_AUDIO_PERMISSION_TITLE" = "Microphone Access Required";
+
+/* Accessibility label for placing call button */
+"CALL_LABEL" = "Call";
+
+/* Call setup status label after outgoing call times out */
+"CALL_SCREEN_STATUS_NO_ANSWER" = "No Answer.";
+
+/* embeds {{Call Status}} in call screen label. For ongoing calls, {{Call Status}} is a seconds timer like 01:23, otherwise {{Call Status}} is a short text like 'Ringing', 'Busy', or 'Failed Call' */
+"CALL_STATUS_FORMAT" = "Chative %@";
+
+/* Label for call button for alert offering to call a user. */
+"CALL_USER_ALERT_CALL_BUTTON" = "Call";
+
+/* Message format for alert offering to call a user. Embeds {{the user's display name or phone number}}. */
+"CALL_USER_ALERT_MESSAGE_FORMAT" = "Would you like to call %@?";
+
+/* Title for alert offering to call a user. */
+"CALL_USER_ALERT_TITLE" = "Call?";
+
+/* Accessibility label for accepting incoming calls */
+"CALL_VIEW_ACCEPT_INCOMING_CALL_LABEL" = "Accept incoming call";
+
+/* Accessibility label for selection the audio source */
+"CALL_VIEW_AUDIO_SOURCE_LABEL" = "Audio";
+
+/* Accessibility label for declining incoming calls */
+"CALL_VIEW_DECLINE_INCOMING_CALL_LABEL" = "Decline incoming call";
+
+/* Accessibility label for hang up call */
+"CALL_VIEW_HANGUP_LABEL" = "End call";
+
+/* Accessibility label for muting the microphone */
+"CALL_VIEW_MUTE_LABEL" = "Mute";
+
+/* Reminder to the user of the benefits of enabling CallKit and disabling CallKit privacy. */
+"CALL_VIEW_SETTINGS_NAG_DESCRIPTION_ALL" = "You can answer calls directly from your lock screen and see the name and phone number for incoming calls if you change your settings.\n\nSee the privacy settings for details.";
+
+/* Reminder to the user of the benefits of disabling CallKit privacy. */
+"CALL_VIEW_SETTINGS_NAG_DESCRIPTION_PRIVACY" = "You can see the name and phone number for incoming calls if you change your settings.\n\nSee the privacy settings for details.";
+
+/* Label for button that dismiss the call view's settings nag. */
+"CALL_VIEW_SETTINGS_NAG_NOT_NOW_BUTTON" = "Not Now";
+
+/* Label for button that shows the privacy settings. */
+"CALL_VIEW_SETTINGS_NAG_SHOW_CALL_SETTINGS" = "Show Privacy Settings";
+
+/* Accessibility label to toggle front vs. rear facing camera */
+"CALL_VIEW_SWITCH_CAMERA_DIRECTION" = "Switch Camera Direction";
+
+/* Accessibility label to switch to audio only */
+"CALL_VIEW_SWITCH_TO_AUDIO_LABEL" = "Switch to audio call";
+
+/* Accessibility label to switch to video call */
+"CALL_VIEW_SWITCH_TO_VIDEO_LABEL" = "Switch to video call";
+
+/* Label for the 'return to call' banner. */
+"CALL_WINDOW_RETURN_TO_CALL" = "Touch to return to call";
+
+/* notification action */
+"CALLBACK_BUTTON_TITLE" = "Call Back";
+
+/* The generic name used for calls if CallKit privacy is enabled */
+"CALLKIT_ANONYMOUS_CONTACT_NAME" = "Chative User";
+
+/* Message for alert explaining that a user cannot be verified. */
+"CANT_VERIFY_IDENTITY_ALERT_MESSAGE" = "This user can't be verified until you've exchanged messages with them.";
+
+/* Title for alert explaining that a user cannot be verified. */
+"CANT_VERIFY_IDENTITY_ALERT_TITLE" = "Error";
+
+/* Title for the 'censorship circumvention country' view. */
+"CENSORSHIP_CIRCUMVENTION_COUNTRY_VIEW_TITLE" = "Select Country";
+
+/* Error indicating that the app could not determine that user's CloudKit account status */
+"CLOUDKIT_STATUS_COULD_NOT_DETERMINE" = "There was an error communicating with iCloud for backups.";
+
+/* Error indicating that user does not have an iCloud account. */
+"CLOUDKIT_STATUS_NO_ACCOUNT" = "You do not have an iCloud Account for backups.";
+
+/* Error indicating that the app was prevented from accessing the user's CloudKit account. */
+"CLOUDKIT_STATUS_RESTRICTED" = "Chative was not allowed to access your iCloud account for backups.";
+
+/* Activity Sheet label */
+"COMPARE_SAFETY_NUMBER_ACTION" = "Compare with Clipboard";
+
+/* Table section header for contact listing when composing a new message */
+"COMPOSE_MESSAGE_CONTACT_SECTION_TITLE" = "Contacts";
+
+/* Table section header for group listing when composing a new message */
+"COMPOSE_MESSAGE_GROUP_SECTION_TITLE" = "My Groups";
+
+/* Table section header for invite listing when composing a new message */
+"COMPOSE_MESSAGE_INVITE_SECTION_TITLE" = "Invite";
+
+/* Multi-line label explaining why compose-screen contact picker is empty. */
+"COMPOSE_SCREEN_MISSING_CONTACTS_PERMISSION" = "To see which of your contacts are Chative users, allow contacts access in your system settings.";
+
+/* No comment provided by engineer. */
+"CONFIRM_ACCOUNT_DESTRUCTION_TEXT" = "This will reset the application by deleting your messages and unregister you with the server. The app will close after deletion of data.";
+
+/* No comment provided by engineer. */
+"CONFIRM_ACCOUNT_DESTRUCTION_TITLE" = "Are you sure you want to delete your account?";
+
+"CONFIRM_ACCOUNT_LOGOUT_TITLE" = "Logout";
+
+"CONFIRM_ACCOUNT_LOGOUT_TIP_MESSAGE" = "All messages will be deleted for security.";
+
+"CONFIRM_ACCOUNT_ACTION_DELETE_AND_LOGOUT" = "Logout";
+
+"CONFIRM_ACCOUNT_DELETE_TITLE" = "Delete Account";
+
+"CONFIRM_ACCOUNT_DELETE_DESC" = "Your account will be permanently delete.";
+
+"CONFIRM_ACCOUNT_ACTION_DELETE_ACCOUNT" = "Delete";
+
+/* Logout not linked body */
+"ACCOUNT_LOGOUT_NOT_LINK_DESCRIPTION" = "No email or phone linked, continuing will delete your account.";
+
+/* Alert body */
+"CONFIRM_LEAVE_GROUP_DESCRIPTION" = "Leaving this group will delete all its data from your device.";
+
+/* Alert title */
+"CONFIRM_LEAVE_GROUP_TITLE" = "Leave Group";
+
+/* Button text */
+"CONFIRM_LINK_NEW_DEVICE_ACTION" = "Link New Device";
+
+/* Action sheet body presented when a user's SN has recently changed. Embeds {{contact's name or phone number}} */
+"CONFIRM_SENDING_TO_CHANGED_IDENTITY_BODY_FORMAT" = "%@ may have reinstalled or changed devices. Verify your safety number with them to ensure privacy.";
+
+/* Action sheet title presented when a user's SN has recently changed. Embeds {{contact's name or phone number}} */
+"CONFIRM_SENDING_TO_CHANGED_IDENTITY_TITLE_FORMAT" = "Safety number with %@ has changed";
+
+/* Generic button text to proceed with an action */
+"CONFIRMATION_TITLE" = "Confirm";
+
+/* Label for a contact's postal address. */
+"CONTACT_ADDRESS" = "Address";
+
+/* An indicator that a contact has been blocked. */
+"CONTACT_CELL_IS_BLOCKED" = "Blocked";
+
+/* An indicator that a contact is no longer verified. */
+"CONTACT_CELL_IS_NO_LONGER_VERIFIED" = "Not Verified";
+
+/* No comment provided by engineer. */
+"CONTACT_DETAIL_COMM_TYPE_INSECURE" = "The user does not exist";
+
+"CONTACT_DETAIL_COMM_TYPE_UNLOGIN" = "This account has been logged out and messages can not be reached.";
+
+"CONTACT_DETAIL_COMM_TYPE_FORBIDDEN" = "Operation denied.";
+
+/* Inactive（60天）用户会被进行“Inactive处理”. */
+"CONTACT_DETAIL_COMM_TYPE_INACTIVE" = "User is inactive and cannot receive messages";
+
+/* Label for the 'edit name' button in the contact share approval view. */
+"CONTACT_EDIT_NAME_BUTTON" = "Edit";
+
+/* Label for a contact's email address. */
+"CONTACT_EMAIL" = "Email";
+
+/* Label for the 'city' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_CITY" = "City";
+
+/* Label for the 'country' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_COUNTRY" = "Country";
+
+/* Label for the 'neighborhood' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_NEIGHBORHOOD" = "Neighborhood";
+
+/* Label for the 'pobox' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_POBOX" = "P.O. Box";
+
+/* Label for the 'postcode' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_POSTCODE" = "Post Code";
+
+/* Label for the 'region' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_REGION" = "Region";
+
+/* Label for the 'street' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_STREET" = "Street";
+
+/* Label for the 'family name' field of a contact. */
+"CONTACT_FIELD_FAMILY_NAME" = "Family Name";
+
+/* Label for the 'given name' field of a contact. */
+"CONTACT_FIELD_GIVEN_NAME" = "Given Name";
+
+/* Label for the 'middle name' field of a contact. */
+"CONTACT_FIELD_MIDDLE_NAME" = "Middle Name";
+
+/* Label for the 'name prefix' field of a contact. */
+"CONTACT_FIELD_NAME_PREFIX" = "Prefix";
+
+/* Label for the 'name suffix' field of a contact. */
+"CONTACT_FIELD_NAME_SUFFIX" = "Suffix";
+
+/* Label for the 'organization' field of a contact. */
+"CONTACT_FIELD_ORGANIZATION" = "Organization";
+
+/* Label for a contact's phone number. */
+"CONTACT_PHONE" = "Phone";
+
+/* table cell subtitle when contact card has no email */
+"CONTACT_PICKER_NO_EMAILS_AVAILABLE" = "No email available.";
+
+/* table cell subtitle when contact card has no known phone number */
+"CONTACT_PICKER_NO_PHONE_NUMBERS_AVAILABLE" = "No phone number available.";
+
+/* navbar title for contact picker when sharing a contact */
+"CONTACT_PICKER_TITLE" = "Select Contact";
+
+/* Title for the 'Approve contact share' view. */
+"CONTACT_SHARE_APPROVAL_VIEW_TITLE" = "Share Contact";
+
+/* Title for the 'edit contact share name' view. */
+"CONTACT_SHARE_EDIT_NAME_VIEW_TITLE" = "Edit Name";
+
+/* Error indicating that an invalid contact cannot be shared. */
+"CONTACT_SHARE_INVALID_CONTACT" = "Invalid contact.";
+
+/* Error indicating that at least one contact field must be selected before sharing a contact. */
+"CONTACT_SHARE_NO_FIELDS_SELECTED" = "No contact fields selected.";
+
+/* Label for 'open address in maps app' button in contact view. */
+"CONTACT_VIEW_OPEN_ADDRESS_IN_MAPS_APP" = "Open in Maps";
+
+/* Label for 'open email in email app' button in contact view. */
+"CONTACT_VIEW_OPEN_EMAIL_IN_EMAIL_APP" = "Send Email";
+
+/* Indicates that a contact has no name. */
+"CONTACT_WITHOUT_NAME" = "Unnamed Contact";
+
+"CONVERSATION_TITLE_TO" = "Topic from";
+
+"CONVERSATION_TITLE_TO_SELF" = "yourself";
+
+"SOURCE_FROM_GROUP" = "Group";
+
+"CONVERSATION_THREAD_CONTEXY_REPLAY" = "Reply";
+
+"TOPICLIST_TITLE" = "Topic list";
+
+/* title for conversation settings screen */
+"CONVERSATION_SETTINGS" = "Conversation Settings";
+
+/* Label for 'new contact' button in conversation settings view. */
+"CONVERSATION_SETTINGS_ADD_TO_EXISTING_CONTACT" = "Add to Existing Contact";
+
+/* table cell label in conversation settings */
+"CONVERSATION_SETTINGS_BLOCK_THIS_USER" = "Block this user";
+
+"CONVERSATION_SETTINGS_STICKY_ON_TOP" = "Stick";
+
+"CONVERSATION_SETTINGS_MUTE" = "Mute";
+
+"CONVERSATION_SETTINGS_STICKY_BLOCK" = "Block";
+
+"CONVERSATION_SETTINGS_STICKY_BLOCK_HEADER_TIP" = "You have blocked private messages from this bot, please change it in the session settings";
+"CONVERSATION_SETTINGS_STICKY_BLOCK_TIP" = "Blocked";
+"CONVERSATION_SETTINGS_STICKY_UNBLOCK_TIP" = "Unblocked";
+
+"CONVERSATION_SETTINGS_ARCHIVE" = "Timer";
+"CONVERSATION_SETTINGS_NEVER_ARCHIVE" = "Do not expire";
+"CONVERSATION_SETTINGS_ARCHIVE_MINUTERS" = "m";
+"CONVERSATION_SETTINGS_ARCHIVE_MINUTER" = "m";
+"CONVERSATION_SETTINGS_ARCHIVE_HOURS" = "h";
+"CONVERSATION_SETTINGS_ARCHIVE_HOUR" = "h";
+"CONVERSATION_SETTINGS_ARCHIVE_DAYS" = "d";
+"CONVERSATION_SETTINGS_ARCHIVE_DAY" = "d";
+"CONVERSATION_SETTINGS_ARCHIVE_DEFAULT" = "Default";
+
+"CONVERSATION_SETTINGS_SEARCH_HISTORY" = "Search Chat History";
+
+"CONVERSATION_SETTINGS_GROUP_IN_COMMON" = "Group in Common";
+
+/* Navbar title when viewing settings for a 1-on-1 thread */
+"CONVERSATION_SETTINGS_CONTACT_INFO_TITLE" = "Contact Info";
+
+/* Label for table cell which leads to picking a new conversation color */
+"CONVERSATION_SETTINGS_CONVERSATION_COLOR" = "Color";
+
+/* Navbar title when viewing settings for a group thread */
+"CONVERSATION_SETTINGS_GROUP_INFO_TITLE" = "Group Info";
+
+/* Title of the 'mute this thread' action sheet. */
+"CONVERSATION_SETTINGS_MUTE_ACTION_SHEET_TITLE" = "Mute";
+
+/* label for 'mute thread' cell in conversation settings */
+"CONVERSATION_SETTINGS_MUTE_LABEL" = "Mute";
+
+/* Indicates that the current thread is not muted. */
+"CONVERSATION_SETTINGS_MUTE_NOT_MUTED" = "Not muted";
+
+/* Label for button to mute a thread for a day. */
+"CONVERSATION_SETTINGS_MUTE_ONE_DAY_ACTION" = "Mute for one day";
+
+/* Label for button to mute a thread for a hour. */
+"CONVERSATION_SETTINGS_MUTE_ONE_HOUR_ACTION" = "Mute for one hour";
+
+/* Label for button to mute a thread for a minute. */
+"CONVERSATION_SETTINGS_MUTE_ONE_MINUTE_ACTION" = "Mute for one minute";
+
+/* Label for button to mute a thread for a week. */
+"CONVERSATION_SETTINGS_MUTE_ONE_WEEK_ACTION" = "Mute for one week";
+
+/* Label for button to mute a thread for a year. */
+"CONVERSATION_SETTINGS_MUTE_ONE_YEAR_ACTION" = "Mute for one year";
+
+/* Indicates that this thread is muted until a given date or time. Embeds {{The date or time which the thread is muted until}}. */
+"CONVERSATION_SETTINGS_MUTED_UNTIL_FORMAT" = "until %@";
+
+/* Label for 'new contact' button in conversation settings view. */
+"CONVERSATION_SETTINGS_NEW_CONTACT" = "Add To Contacts";
+
+/* Label for button that opens conversation settings. */
+"CONVERSATION_SETTINGS_TAP_TO_CHANGE" = "Tap to Change";
+
+/* Label for button to unmute a thread. */
+"CONVERSATION_SETTINGS_UNMUTE_ACTION" = "Unmute";
+
+/* Indicates that user's profile has been shared with a group. */
+"CONVERSATION_SETTINGS_VIEW_PROFILE_IS_SHARED_WITH_GROUP" = "This group can see your profile.";
+
+/* Indicates that user's profile has been shared with a user. */
+"CONVERSATION_SETTINGS_VIEW_PROFILE_IS_SHARED_WITH_USER" = "This user can see your profile.";
+
+/* Button to confirm that user wants to share their profile with a user or group. */
+"CONVERSATION_SETTINGS_VIEW_SHARE_PROFILE" = "Share Profile";
+
+/* Action that shares user profile with a group. */
+"CONVERSATION_SETTINGS_VIEW_SHARE_PROFILE_WITH_GROUP" = "Share Your Profile";
+
+/* Action that shares user profile with a user. */
+"CONVERSATION_SETTINGS_VIEW_SHARE_PROFILE_WITH_USER" = "Share Your Profile";
+
+/* Message shown in conversation view that offers to add an unknown user to your phone's contacts. */
+"CONVERSATION_VIEW_ADD_TO_CONTACTS_OFFER" = "Add to Contacts";
+
+/* Message shown in conversation view that offers to share your profile with a user. */
+"CONVERSATION_VIEW_ADD_USER_TO_PROFILE_WHITELIST_OFFER" = "Share Your Profile With This User";
+
+/* Title for the group of buttons show for unknown contacts offering to add them to contacts, etc. */
+"CONVERSATION_VIEW_CONTACTS_OFFER_TITLE" = "This user is not in your contacts.";
+
+/* Indicates that the app is loading more messages in this conversation. */
+"CONVERSATION_VIEW_LOADING_MORE_MESSAGES" = "Loading More Messages...";
+
+/* Indicator on truncated text messages that they can be tapped to see the entire text message. */
+"CONVERSATION_VIEW_OVERSIZE_TEXT_TAP_FOR_MORE" = "Tap For More";
+
+/* Message shown in conversation view that offers to block an unknown user. */
+"CONVERSATION_VIEW_UNKNOWN_CONTACT_BLOCK_OFFER" = "Block This User";
+
+/* ActionSheet title */
+"CORRUPTED_SESSION_DESCRIPTION" = "Resetting your session will allow you to receive future messages from %@, but it will not recover any already corrupted messages.";
+
+/* No comment provided by engineer. */
+"COUNTRYCODE_SELECT_TITLE" = "Select Country Code";
+
+/* Accessibility label for the create group new group button */
+"CREATE_NEW_GROUP" = "Create new group";
+
+/* Title for the 'crop/scale image' dialog. */
+"CROP_SCALE_IMAGE_VIEW_TITLE" = "Move and Scale";
+
+/* Subtitle shown while the app is updating its database. */
+"DATABASE_VIEW_OVERLAY_SUBTITLE" = "This can take a few minutes.";
+
+/* Title shown while the app is updating its database. */
+"DATABASE_VIEW_OVERLAY_TITLE" = "Optimizing Database";
+
+/* Format string for a relative time, expressed as a certain number of hours in the past. Embeds {{The number of hours}}. */
+"DATE_HOURS_AGO_FORMAT" = "%@ Hr Ago";
+
+/* Format string for a relative time, expressed as a certain number of minutes in the past. Embeds {{The number of minutes}}. */
+"DATE_MINUTES_AGO_FORMAT" = "%@ Min Ago";
+
+/* The present; the current time. */
+"DATE_NOW" = "Now";
+
+/* The current day. */
+"DATE_TODAY" = "Today";
+
+/* The day before today. */
+"DATE_YESTERDAY" = "Yesterday";
+
+/* Error indicating that the debug logs could not be copied. */
+"DEBUG_LOG_ALERT_COULD_NOT_COPY_LOGS" = "Could not copy logs.";
+
+/* Error indicating that the debug logs could not be packaged. */
+"DEBUG_LOG_ALERT_COULD_NOT_PACKAGE_LOGS" = "Could not package logs.";
+
+/* Error indicating that a debug log could not be uploaded. */
+"DEBUG_LOG_ALERT_ERROR_UPLOADING_LOG" = "Could not upload logs.";
+
+/* Message of the debug log alert. */
+"DEBUG_LOG_ALERT_MESSAGE" = "What would you like to do with the link to your debug log?";
+
+/* Error indicating that no debug logs could be found. */
+"DEBUG_LOG_ALERT_NO_LOGS" = "Could not find any logs.";
+
+/* Label for the 'Open a Bug Report' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_BUG_REPORT" = "Open a Bug Report";
+
+/* Label for the 'copy link' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_COPY_LINK" = "Copy Link";
+
+/* Label for the 'email debug log' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_EMAIL" = "Email Support";
+
+/* Label for the 'send to last thread' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_SEND_TO_LAST_THREAD" = "Send to Last Thread";
+
+/* Label for the 'send to self' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_SEND_TO_SELF" = "Send to Self";
+
+/* Label for the 'Share' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_SHARE" = "Share";
+
+/* Title of the alert shown for failures while uploading debug logs.
+   Title of the debug log alert. */
+"DEBUG_LOG_ALERT_TITLE" = "Upload log successfully";
+
+/* Message of the alert before redirecting to GitHub Issues. */
+"DEBUG_LOG_GITHUB_ISSUE_ALERT_MESSAGE" = "The gist link was copied in your clipboard. You are about to be redirected to the GitHub issue list.";
+
+/* Title of the alert before redirecting to GitHub Issues. */
+"DEBUG_LOG_GITHUB_ISSUE_ALERT_TITLE" = "GitHub Redirection";
+
+/* Label for button that lets users re-register using the same phone number. */
+"DEREGISTRATION_REREGISTER_WITH_RE_LOGIN" = "Click re-login";
+
+/* Label warning the user that they have been de-registered. */
+"DEREGISTRATION_WARNING" = "This device has been logged out. Your account may have been logged in on another device. Tap to re-login.";
+
+/* {{Short Date}} when device last communicated with Signal Server. */
+"DEVICE_LAST_ACTIVE_AT_LABEL" = "Last active: %@";
+
+/* {{Short Date}} when device was linked. */
+"DEVICE_LINKED_AT_LABEL" = "Linked: %@";
+
+/* Alert title that can occur when viewing device manager. */
+"DEVICE_LIST_UPDATE_FAILED_TITLE" = "Failed to update device list.";
+
+/* table cell label in conversation settings */
+"DISAPPEARING_MESSAGES" = "Expiring Messages";
+
+/* Info Message when added to a group which has enabled disappearing messages. Embeds {{time amount}} before messages disappear, see the *_TIME_AMOUNT strings for context. */
+"DISAPPEARING_MESSAGES_CONFIGURATION_GROUP_EXISTING_FORMAT" = "Messages in this conversation will expire after %@.";
+
+/* subheading in conversation settings */
+"DISAPPEARING_MESSAGES_DESCRIPTION" = "When enabled, messages sent and received in this conversation will expire after they have been seen.";
+
+/* Accessibility hint that contains current timeout information */
+"DISAPPEARING_MESSAGES_HINT" = "Currently messages expire after %@";
+
+/* Accessibility label for disappearing messages */
+"DISAPPEARING_MESSAGES_LABEL" = "Expiring messages settings";
+
+/* Short text to dismiss current modal / actionsheet / screen */
+"DISMISS_BUTTON_TEXT" = "Dismiss";
+
+/* Section title for the 'domain fronting country' view. */
+"DOMAIN_FRONTING_COUNTRY_VIEW_SECTION_HEADER" = "Censorship Circumvention Location";
+
+/* Alert body for when the user has just tried to edit a contacts after declining to give Signal contacts permissions */
+"EDIT_CONTACT_WITHOUT_CONTACTS_PERMISSION_ALERT_BODY" = "You can give access in the Settings app.";
+
+/* Alert title for when the user has just tried to edit a contacts after declining to give Signal contacts permissions */
+"EDIT_CONTACT_WITHOUT_CONTACTS_PERMISSION_ALERT_TITLE" = "Chative Needs Contact Access to Edit Contact Information";
+
+/* table cell label in conversation settings */
+"EDIT_GROUP_ACTION" = "Edit Group";
+
+"ENTER_GROUP_ACTION" = "Enter Group";
+
+"ENTER_GROUP_FAILURE" = "Join group failure";
+
+"ENTER_GROUP_FAILURE_EXPIRED" = "Invitation has expired";
+
+"ENTER_GROUP_FAILURE_NOT_EXIST" = "No such group";
+
+"ENTER_GROUP_FAILURE_FULL" = "The group members reach limitation, unable to join.";
+
+"ADD_MEMBER_GROUP_ACTION" = "Add Members";
+
+"REMOVE_MEMBER_GROUP_ACTION" = "Remove Members";
+
+"DISMISS_GROUP_ACTION" = "Disband Group";
+
+"DISMISS_GROUP_MESSAGE" = "%@ disbanded this group.";
+
+"GROUP_DISMISSED" = "The group has been disbanded";
+
+"DISMISS_GROUP_MESSAGE_FOR_OWER" = "You disbanded this group. All the messages have been deleted.";
+
+"DISMISS_GROUP_MESSAGE_FOR_OTHER" = "This group has been disbanded. All the messages have been deleted.";
+
+"REMOVE_FROM_GROUP_ALL_GROUP_MESSAGE" = "%@ has been removed from the group. All the messages have been deleted.";
+
+
+"CONFIRM_DISMISS_GROUP_TITLE" = "Disband Group";
+
+"CONFIRM_DISBAND" = "Disband";
+
+/* a title for the contacts section of the 'new/update group' view. */
+"EDIT_GROUP_CONTACTS_SECTION_TITLE" = "Contacts";
+
+/* The navbar title for the 'update group' view. */
+"EDIT_GROUP_DEFAULT_TITLE" = "Edit Group";
+
+/* Label for the cell that lets you add a new member to a group. */
+"EDIT_GROUP_MEMBERS_ADD_MEMBER" = "Add…";
+
+/* a title for the members section of the 'new/update group' view. */
+"EDIT_GROUP_MEMBERS_SECTION_TITLE" = "Members";
+
+/* An indicator that a user is a new member of the group. */
+"EDIT_GROUP_NEW_MEMBER_LABEL" = "Added";
+
+/* The title for the 'update group' button. */
+"EDIT_GROUP_UPDATE_BUTTON" = "Update";
+
+/* The alert message if user tries to exit update group view without saving changes. */
+"EDIT_GROUP_VIEW_UNSAVED_CHANGES_MESSAGE" = "You've changed this group. Would you like to save these changes?";
+
+/* The alert title if user tries to exit update group view without saving changes. */
+"EDIT_GROUP_VIEW_UNSAVED_CHANGES_TITLE" = "Unsaved Changes";
+
+/* Short name for edit menu item to copy contents of media message. */
+"EDIT_ITEM_COPY_ACTION" = "Copy";
+
+/* No comment provided by engineer. */
+"EDIT_TXT" = "Edit";
+
+/* body of email sent to contacts when inviting to install Signal. Embeds {{link to install Signal}} and {{link to the Signal home page}} */
+"EMAIL_INVITE_BODY" = "Hey,\n\nLately I've been using Chative to keep the conversations on my iPhone private. I'd like you to install it too, so we can be confident that only you and I can read our messages or hear our calls.\n\nChative is available for iPhones and Android. Get it here: %@\n\nChative works like your existing messaging app. We can send pictures and video, make calls, and start group chats. The best part is, no one else can see any of it, not even the people who make Chative!\n\nYou can read more about Open Whisper Systems, the people who make Chative, here: %@";
+
+/* subject of email sent to contacts when inviting to install Signal */
+"EMAIL_INVITE_SUBJECT" = "Let's switch to Chative";
+
+/* Second part of the label that shows up when there are neither active nor archived conversations */
+"EMPTY_ARCHIVE_FIRST_TEXT" = "Tap on the compose button.";
+
+/* First (bolded) part of the label that shows up when there are neither active nor archived conversations */
+"EMPTY_ARCHIVE_FIRST_TITLE" = "Start your first %@ conversation!";
+
+/* No comment provided by engineer. */
+"EMPTY_ARCHIVE_TEXT" = "You can archive inactive conversations for later from your Inbox.";
+
+/* No comment provided by engineer. */
+"EMPTY_ARCHIVE_TITLE" = "Clean Up Your Conversations.";
+
+/* Full width label displayed when attempting to compose message */
+"EMPTY_CONTACTS_LABEL_LINE1" = "None of your contacts have Chative.";
+
+/* Full width label displayed when attempting to compose message */
+"EMPTY_CONTACTS_LABEL_LINE2" = "Why don't you invite someone?";
+
+/* No comment provided by engineer. */
+"EMPTY_INBOX_FIRST_TEXT" = "Tip: add a conversation as a reminder!";
+
+/* No comment provided by engineer. */
+"EMPTY_INBOX_FIRST_TITLE" = "Done. Done. Done.";
+
+/* No comment provided by engineer. */
+"EMPTY_INBOX_TEXT" = "None. Zero. Zilch. Nada.";
+
+/* No comment provided by engineer. */
+"EMPTY_INBOX_TITLE" = "Squeaky Freaking Clean.";
+
+/* Indicates that user should confirm their 'two factor auth pin'. */
+"ENABLE_2FA_VIEW_CONFIRM_PIN_INSTRUCTIONS" = "Confirm your PIN.";
+
+/* Error indicating that attempt to disable 'two-factor auth' failed. */
+"ENABLE_2FA_VIEW_COULD_NOT_DISABLE_2FA" = "Could not disable Registration Lock.";
+
+/* Error indicating that attempt to enable 'two-factor auth' failed. */
+"ENABLE_2FA_VIEW_COULD_NOT_ENABLE_2FA" = "Could not enable Registration Lock.";
+
+/* Label for the 'enable two-factor auth' item in the settings view */
+"ENABLE_2FA_VIEW_DISABLE_2FA" = "Disable";
+
+/* Label for the 'enable two-factor auth' item in the settings view */
+"ENABLE_2FA_VIEW_ENABLE_2FA" = "Enable";
+
+/* Label for the 'next' button in the 'enable two factor auth' views. */
+"ENABLE_2FA_VIEW_NEXT_BUTTON" = "Next";
+
+/* Error indicating that the entered 'two-factor auth PINs' do not match. */
+"ENABLE_2FA_VIEW_PIN_DOES_NOT_MATCH" = "PIN does not match.";
+
+/* Indicates that user should select a 'two factor auth pin'. */
+"ENABLE_2FA_VIEW_SELECT_PIN_INSTRUCTIONS" = "Enter a Registration Lock PIN. You will be asked to enter this PIN the next time you register this phone number with Chative.";
+
+/* Indicates that user has 'two factor auth pin' disabled. */
+"ENABLE_2FA_VIEW_STATUS_DISABLED_INSTRUCTIONS" = "For increased security, enable a Registration Lock PIN that will be required in order to register this phone number with Chative again.";
+
+/* Indicates that user has 'two factor auth pin' enabled. */
+"ENABLE_2FA_VIEW_STATUS_ENABLED_INSTRUCTIONS" = "Registration Lock is enabled. You'll need to enter your PIN when registering your phone number with Chative again.";
+
+/* Title for the 'enable two factor auth PIN' views. */
+"ENABLE_2FA_VIEW_TITLE" = "Registration Lock";
+
+"ENTER_2FA_ALERT_MESSAGE" = "Please enter the pin code.Please contact the administrator if you forget.";
+
+/* Call setup status label */
+"END_CALL_RESPONDER_IS_BUSY" = "Busy.";
+
+/* Call setup status label */
+"END_CALL_UNCATEGORIZED_FAILURE" = "Call Failed.";
+
+/* Error indicating that the phone's contacts could not be retrieved. */
+"ERROR_COULD_NOT_FETCH_CONTACTS" = "Could not access contacts.";
+
+/* Generic notice when message failed to send. */
+"ERROR_DESCRIPTION_CLIENT_SENDING_FAILURE" = "Failed to send message.";
+
+"ERROR_ATTACHMENT_EXCEEDS_LIMIT" = "Attachment exceeds limit.";
+
+/* Error message indicating that message send is disabled due to prekey update failures */
+"ERROR_DESCRIPTION_MESSAGE_SEND_DISABLED_PREKEY_UPDATE_FAILURES" = "Unable to send due to stale privacy data.";
+
+/* Error message indicating that message send failed due to block list */
+"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_BLOCK_LIST" = "Failed to message user because you blocked them.";
+
+/* Error message indicating that message send failed due to failed attachment write */
+"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_FAILED_ATTACHMENT_WRITE" = "Failed due to failed attachment write.";
+
+/* Generic error used whenever Signal can't contact the server */
+"ERROR_DESCRIPTION_NO_INTERNET" = "Chative was unable to connect to the internet. Please try from another WiFi network or use mobile data.";
+
+/* Error indicating that an outgoing message had no valid recipients. */
+"ERROR_DESCRIPTION_NO_VALID_RECIPIENTS" = "Message send failed due to a lack of valid recipients.";
+
+/* Error indicating that a socket request failed. */
+"ERROR_DESCRIPTION_REQUEST_FAILED" = "Network request failed.";
+
+/* Error indicating that a socket request timed out. */
+"ERROR_DESCRIPTION_REQUEST_TIMED_OUT" = "Network request timed out.";
+
+/* Error indicating that a socket response failed. */
+"ERROR_DESCRIPTION_RESPONSE_FAILED" = "Invalid response from service.";
+
+/* Error message when attempting to send message */
+"ERROR_DESCRIPTION_SENDING_UNAUTHORIZED" = "Your device is no longer registered for your phone number. You must remove and reinstall Chative.";
+
+"ERROR_DESCRIPTION_PERMISSION_DENIED" = "Permission denied";
+
+/* Generic server error */
+"ERROR_DESCRIPTION_SERVER_FAILURE" = "Server Error. Please try again later.";
+
+/* Worst case generic error message */
+"ERROR_DESCRIPTION_UNKNOWN_ERROR" = "An unknown error occurred.";
+
+/* Error message when attempting to send message */
+"ERROR_DESCRIPTION_UNREGISTERED_RECIPIENT" = "Contact is not a Chative user.";
+
+/* Error message when unable to receive an attachment because the sending client is too old. */
+"ERROR_MESSAGE_ATTACHMENT_FROM_OLD_CLIENT" = "Failure: Ask sender to update Chative and resend.";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_DUPLICATE_MESSAGE" = "Received a duplicated message.";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_INVALID_KEY_EXCEPTION" = "The recipient's key is not valid.";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_INVALID_MESSAGE" = "Failed to decrypt the message. Please contact @ChativeBot for help.";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_INVALID_VERSION" = "Received a message not compatible with this version.";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_NO_SESSION" = "No available session for contact.";
+
+/* Shown when signal users safety numbers changed */
+"ERROR_MESSAGE_NON_BLOCKING_IDENTITY_CHANGE" = "Safety number changed.";
+
+/* Shown when signal users safety numbers changed, embeds the user's {{name or phone number}} */
+"ERROR_MESSAGE_NON_BLOCKING_IDENTITY_CHANGE_FORMAT" = "Your safety number with %@ has changed.";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_UNKNOWN_ERROR" = "An unknown error occurred.";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_WRONG_TRUSTED_IDENTITY_KEY" = "Safety number changed.";
+
+/* Format string for 'unregistered user' error. Embeds {{the unregistered user's name or signal id}}. */
+"ERROR_UNREGISTERED_USER_FORMAT" = "Unregistered User: %@";
+
+/* action sheet header when re-sending message which failed because of too many attempts */
+"FAILED_SENDING_BECAUSE_RATE_LIMIT" = "Too many failures with this contact. Please try again shortly.";
+
+/* action sheet header when re-sending message which failed because of untrusted identity keys */
+"FAILED_SENDING_BECAUSE_UNTRUSTED_IDENTITY_KEY" = "Your safety number with %@ has recently changed. You may wish to verify before resending.";
+
+/* alert title */
+"FAILED_VERIFICATION_TITLE" = "Failed to Verify Safety Number!";
+
+/* Button that marks user as verified after a successful fingerprint scan. */
+"FINGERPRINT_SCAN_VERIFY_BUTTON" = "Mark as Verified";
+
+/* No comment provided by engineer. */
+"FINGERPRINT_SHRED_KEYMATERIAL_BUTTON" = "Reset Session";
+
+/* Accessibility label for finishing new group */
+"FINISH_GROUP_CREATION_LABEL" = "Finish creating group";
+
+/* Label indicating media gallery is empty */
+"GALLERY_TILES_EMPTY_GALLERY" = "You don't have any media in this conversation.";
+
+/* Label indicating loading is in progress */
+"GALLERY_TILES_LOADING_MORE_RECENT_LABEL" = "Loading Newer Media...";
+
+/* Label indicating loading is in progress */
+"GALLERY_TILES_LOADING_OLDER_LABEL" = "Loading Older Media...";
+
+/* A label for generic attachments. */
+"GENERIC_ATTACHMENT_LABEL" = "Attachment";
+
+/* Error displayed when there is a failure fetching a GIF from the remote service. */
+"GIF_PICKER_ERROR_FETCH_FAILURE" = "Failed to fetch the requested GIF. Please verify you are online.";
+
+/* Generic error displayed when picking a GIF */
+"GIF_PICKER_ERROR_GENERIC" = "An unknown error occurred.";
+
+/* Shown when selected GIF couldn't be fetched */
+"GIF_PICKER_FAILURE_ALERT_TITLE" = "Unable to Choose GIF";
+
+/* Alert message shown when user tries to search for GIFs without entering any search terms. */
+"GIF_PICKER_VIEW_MISSING_QUERY" = "Please enter your search.";
+
+/* Title for the 'GIF picker' dialog. */
+"GIF_PICKER_VIEW_TITLE" = "GIF Search";
+
+/* Indicates that an error occurred while searching. */
+"GIF_VIEW_SEARCH_ERROR" = "Error. Tap to Retry.";
+
+/* Indicates that the user's search had no results. */
+"GIF_VIEW_SEARCH_NO_RESULTS" = "No Results.";
+
+/* Placeholder text for the search field in GIF view */
+"GIF_VIEW_SEARCH_PLACEHOLDER_TEXT" = "Enter your search";
+
+/* No comment provided by engineer. */
+"GROUP_AVATAR_CHANGED" = "Group Avatar changed. ";
+
+/* No comment provided by engineer. */
+"GROUP_CREATED" = "created the group.";
+
+/* Message shown in conversation view that indicates there were issues with group creation. */
+"GROUP_CREATION_FAILED" = "Not all members could be added to the group. Tap to retry.";
+
+/* Conversation settings table section title */
+"GROUP_MANAGEMENT_SECTION" = "Group Members";
+
+"GROUP_MANAGEMENT_ADD_ADDMIN" = "Adding a Group Administrator";
+
+/* No comment provided by engineer. */
+"GROUP_MEMBER_JOINED" = " %@ joined the group";
+
+"GROUP_MEMBER_INTITED_TO_JOIN" = "%@ added %@ to the group.";
+
+"GROUP_INVITE_SOME_BODY_JOIN_GROUP" = "%@ joined the group via %@’s invite link.";
+
+"GROUP_MEMBER_NOTIFY_TO_REMOVE" = "%@ removed %@ from the group.";
+
+"GROUP_MEMBER_NOTIFY_TO_CHANGE_NAME" = "%@ changed the group name.";
+
+"GROUP_MEMBER_NOTIFY_TO_CHANGE_AVATAR" = "%@ updated the group avatar.";
+
+"GROUP_MEMBER_INFO_UPDATE_BECOME_OWER" = " %@ become the new owner";//某某成为新群主
+
+"GROUP_MEMBER_INFO_UPDATE_BECOME_ADMIN" = " %@ become the new moderator";//某某成为新的管理员
+
+"GROUP_MEMBER_INFO_UPDATE_DELETE_ADMIN" = " %@ has been removed as a group moderator";//某某将XXXXX从群协调人中移除
+
+"GROUP_MEMBER_INFO_UPDATE_ADMIN_RESET" = "%@ promoted %@ to admin.";
+"GROUP_MEMBER_INFO_UPDATE_ADMIN_CANCEL" = "%@ demoted %@ from admin.";
+"GROUP_MEMBER_INFO_UPDATE_BECOME_ADMIN_TRANSFER" = "%@ transferred group ownership to %@ ";
+
+/* No comment provided by engineer. */
+"GROUP_MEMBER_LEFT" = " %@ left the group ";
+
+/* Button label to add information to an unknown contact */
+"GROUP_MEMBERS_ADD_CONTACT_INFO" = "Add Contact";
+
+/* Button label for the 'call group member' button */
+"GROUP_MEMBERS_CALL" = "Call";
+
+/* Label for the button that clears all verification errors in the 'group members' view. */
+"GROUP_MEMBERS_RESET_NO_LONGER_VERIFIED" = "Clear Verification For All";
+
+/* Label for the 'reset all no-longer-verified group members' confirmation alert. */
+"GROUP_MEMBERS_RESET_NO_LONGER_VERIFIED_ALERT_MESSAGE" = "This will clear the verification of all group members whose safety numbers have changed since they were last verified.";
+
+/* Title for the 'members' section of the 'group members' view. */
+"GROUP_MEMBERS_SECTION_TITLE_MEMBERS" = "Members";
+
+/* Title for the 'no longer verified' section of the 'group members' view. */
+"GROUP_MEMBERS_SECTION_TITLE_NO_LONGER_VERIFIED" = "No Longer Marked as Verified";
+
+/* Button label for the 'send message to group member' button */
+"GROUP_MEMBERS_SEND_MESSAGE" = "Send Message";
+
+/* Button label for the 'show contact info' button */
+"GROUP_MEMBERS_VIEW_CONTACT_INFO" = "Contact Info";
+
+/* No comment provided by engineer. */
+"GROUP_REMOVING" = "Leaving group %@";
+
+/* Title of alert indicating that group deletion failed. */
+"GROUP_REMOVING_FAILED" = "Failed to leave group";
+
+/* No comment provided by engineer. */
+"GROUP_TITLE_CHANGED" = "Title is now '%@'. ";
+
+/* No comment provided by engineer. */
+"GROUP_UPDATED" = "Group updated.";
+
+/* No comment provided by engineer. */
+"GROUP_YOU_LEFT" = "You left the group. All the messages have been deleted.";
+
+/* Label for 'archived conversations' button. */
+"HOME_VIEW_ARCHIVED_CONVERSATIONS" = "Archived Conversations";
+
+"CONVERSATION_VIEW_CONFIDETIAL_TAP_TO_VIEW" = "Tap to view";
+
+/* A label for conversations with blocked users. */
+"HOME_VIEW_BLOCKED_CONTACT_CONVERSATION" = "Blocked";
+
+/* Placeholder text for search bar which filters conversations. */
+"HOME_VIEW_CONVERSATION_SEARCHBAR_PLACEHOLDER" = "Search";
+
+"HOME_AND_CONVERSATION_SEARCHBAR_PLACEHOLDER" = "Search for messages or users";
+
+/* Format string when search returns no results. Embeds {{search term}} */
+"HOME_VIEW_SEARCH_NO_RESULTS_FORMAT" = "No results found";
+
+/* Title for the home view's 'archive' mode. */
+"HOME_VIEW_TITLE_ARCHIVE" = "Archive";
+
+/* Title for the home view's default mode. */
+"HOME_VIEW_TITLE_INBOX" = "Chats";
+
+/* Title for the home list action 'sticky on top'. */
+"HOME_TABLE_ACTION_STICK" = "Stick";
+
+"HOME_TABLE_ACTION_UNSTICK" = "UnStick";
+
+"HOME_TABLE_ACTION_READ" = "Read";
+
+"HOME_TABLE_ACTION_UNREAD" = "Unread";
+
+"HOME_TABLE_ACTION_ARCHIVE" = "Archive";
+
+"HOME_TABLE_ACTION_UNARCHIVE" = "Unarchive";
+
+"NUMBER_OF_STICK_THREAD_MAX" = "Sorry, you can only stick %lu chats to the top.";
+
+/* Call setup status label */
+"IN_CALL_CONNECTING" = "Connecting…";
+
+/* Call setup status label */
+"IN_CALL_RECONNECTING" = "Reconnecting...";
+
+/* Call setup status label */
+"IN_CALL_RINGING" = "Ringing…";
+
+/* Call setup status label */
+"IN_CALL_SECURING" = "Answered. Securing…";
+
+/* Call setup status label */
+"IN_CALL_TERMINATED" = "Call Ended.";
+
+/* Label reminding the user that they are in archive mode. */
+"INBOX_VIEW_ARCHIVE_MODE_REMINDER" = "These conversations are archived. They will appear in your inbox when you receive new messages.";
+
+/* Multi-line label explaining how to show names instead of phone numbers in your inbox */
+"INBOX_VIEW_MISSING_CONTACTS_PERMISSION" = "To see the names of your contacts, update your system settings to allow contact access.";
+
+/* notification body */
+"INCOMING_CALL" = "Incoming call";
+
+/* notification body */
+"INCOMING_CALL_FROM" = "Incoming call from %@";
+
+/* info message recorded in conversation history when local user declined a call */
+"INCOMING_DECLINED_CALL" = "You declined a call";
+
+/* No comment provided by engineer. */
+"INCOMING_INCOMPLETE_CALL" = "Incoming call";
+
+/* info message text shown in conversation view */
+"INFO_MESSAGE_MISSED_CALL_DUE_TO_CHANGED_IDENITY" = "Missed call because their safety number has changed.";
+
+/* Message for the alert indicating that an audio file is invalid. */
+"INVALID_AUDIO_FILE_ALERT_ERROR_MESSAGE" = "Invalid audio file.";
+
+/* Alert body when contacts disabled while trying to invite contacts to signal */
+"INVITE_FLOW_REQUIRES_CONTACT_ACCESS_BODY" = "To invite your contacts, you need to allow Chative access to your contacts in the Settings app.";
+
+/* Alert title when contacts disabled while trying to invite contacts to signal */
+"INVITE_FLOW_REQUIRES_CONTACT_ACCESS_TITLE" = "Allow Contact Access";
+
+/* Label for the cell that presents the 'invite contacts' workflow. */
+"INVITE_FRIENDS_CONTACT_TABLE_BUTTON" = "Invite Friends to Chative";
+
+/* Search */
+"INVITE_FRIENDS_PICKER_SEARCHBAR_PLACEHOLDER" = "Search";
+
+/* Navbar title */
+"INVITE_FRIENDS_PICKER_TITLE" = "Invite Friends";
+
+/* Alert warning that sending an invite to multiple users will create a group message whose recipients will be able to see each other. */
+"INVITE_WARNING_MULTIPLE_INVITES_BY_TEXT" = "Inviting multiple users at the same time will send a group message whose recipients will be able to see each other.";
+
+/* Slider label embeds {{TIME_AMOUNT}}, e.g. '2 hours'. See *_TIME_AMOUNT strings for examples. */
+"KEEP_MESSAGES_DURATION" = "Messages expire after %@.";
+
+/* Slider label when disappearing messages is off */
+"KEEP_MESSAGES_FOREVER" = "Messages do not expire.";
+
+/* Confirmation button within contextual alert */
+"LEAVE_BUTTON_TITLE" = "Leave";
+
+/* table cell label in conversation settings */
+"LEAVE_GROUP_ACTION" = "Leave Group";
+
+/* report an invalid linking code */
+"LINK_DEVICE_INVALID_CODE_BODY" = "This QR code is not valid, make sure you are scanning the QR code displayed on the device you want to link.";
+
+/* report an invalid linking code */
+"LINK_DEVICE_INVALID_CODE_TITLE" = "Linking Device Failed";
+
+/* confirm the users intent to link a new device */
+"LINK_DEVICE_PERMISSION_ALERT_BODY" = "This device will be able to see your groups and contacts, read all your messages, and send messages in your name.";
+
+/* confirm the users intent to link a new device */
+"LINK_DEVICE_PERMISSION_ALERT_TITLE" = "Link this device?";
+
+/* attempt another linking */
+"LINK_DEVICE_RESTART" = "Retry";
+
+/* QR Scanning screen instructions, placed alongside a camera view for scanning QR Codes */
+"LINK_DEVICE_SCANNING_INSTRUCTIONS" = "Scan the QR code displayed on the device to link.";
+
+/* Subheading for 'Link New Device' navigation */
+"LINK_NEW_DEVICE_SUBTITLE" = "Scan QR Code";
+
+/* Navigation title when scanning QR code to add new device. */
+"LINK_NEW_DEVICE_TITLE" = "Link New Device";
+
+/* Menu item and navbar title for the device manager */
+"LINKED_DEVICES_TITLE" = "Linked Devices";
+
+/* Alert Title */
+"LINKING_DEVICE_FAILED_TITLE" = "Linking Device Failed";
+
+/* table cell label in conversation settings */
+"LIST_GROUP_MEMBERS_ACTION" = "Group Members";
+
+"LIST_GROUP_MEMBERS_MANAGER" = "Group Management";
+
+"LIST_GROUP_MEMBERS_TRANSFER" = "Transfer Group Ownership";
+"LIST_GROUP_INVITE_RULE" = "Only moderators can add members";
+"LIST_GROUP_REMOVE_RULE" = "Anyone can remove members";
+"LIST_GROUP_REJOIN_RULE" = "Removed members can rejoin";
+
+"LIST_GROUP_PUBLISH_GROUP" = "Only moderators can speak";
+"ENABLE_GROUP_INVITE_LINK" = "Enable group invite link";
+"TOAST_ONLY_MODETATORS_CAN_SPEAK" = "Only moderators can speak";
+"TOAST_ONLY_FOR_UNBLOCK_USER" = "Plese unblock user";
+"INFO_MESSAGE_ONLY_OWNER_CAN_SPEAK" = "This group has been set to only owner can speak";
+"INFO_MESSAGE_ONLY_MODERATORS_CAN_SPEAK" = "This group has been set to only moderators can speak";
+"INFO_MESSAGE_EVERYONE_CAN_SPEAK" = "This group has been set to allow everyone to speak";
+
+"LIST_GROUP_MEMBERS_MODERATORS" = "MODERATORS";
+"LIST_GROUP_MEMBERS_PARTICIPANTS" = "PARTICIPANTS";
+
+"LIST_GROUP_MEMBERS_ADMIN" = "Group Moderators";
+"LIST_GROUP_MEMBERS_ADD_MANAGER" = "Add group moderator";
+"LIST_GROUP_MEMBERS_DELETE_MANAGER" = "Delete group moderator";
+"LIST_GROUP_MEMBERS_TRADSFAR_OWER" = "Transfer Group Ownership";
+"LIST_GROUP_MEMBERS_TRADSFAR_OWER_TIP" = "Select %@ as the new group owner? You will automatically give up ownership";
+"LIST_GROUP_MEMBERS_TRADSFAR_OWER_SUCESS_TIP" = "Group ownership transferred successfully.";
+"LIST_GROUP_MEMBERS_TRADSFAR_OWER_FAILED_TIP" = "Transfer failed. Please try again";
+
+/* No comment provided by engineer. */
+"LOGGING_SECTION" = "Logging";
+
+/* Title for the 'long text message' view. */
+"LONG_TEXT_VIEW_TITLE" = "Message";
+
+/* nav bar button item */
+"MEDIA_DETAIL_VIEW_ALL_MEDIA_BUTTON" = "All Media";
+
+/* media picker option to take photo or video */
+"MEDIA_FROM_CAMERA_BUTTON" = "Camera";
+
+/* action sheet button title when choosing attachment type */
+"MEDIA_FROM_DOCUMENT_PICKER_BUTTON" = "Document";
+
+/* media picker option to choose from library */
+"MEDIA_FROM_LIBRARY_BUTTON" = "Photo Library";
+
+/* Confirmation button text to delete selected media from the gallery, embeds {{number of messages}} */
+"MEDIA_GALLERY_DELETE_MULTIPLE_MESSAGES_FORMAT" = "Delete %d Messages";
+
+/* Confirmation button text to delete selected media message from the gallery */
+"MEDIA_GALLERY_DELETE_SINGLE_MESSAGE" = "Delete Message";
+
+/* Short sender label for media sent by you */
+"MEDIA_GALLERY_SENDER_NAME_YOU" = "You";
+
+/* Section header in media gallery collection view */
+"MEDIA_GALLERY_THIS_MONTH_HEADER" = "This Month";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_COPY_MEDIA" = "Copy";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_COPY_TEXT" = "Copy";
+
+"MESSAGE_ACTION_TRANSLATE_TEXT" = "Translate";//翻译
+"MESSAGE_ACTION_TRANSLATE_ORIGINE" = "Off";//原文
+
+/* Action sheet button title */
+"MESSAGE_ACTION_DELETE_MESSAGE" = "Delete";
+
+/* Action sheet button subtitle */
+"MESSAGE_ACTION_DELETE_MESSAGE_SUBTITLE" = "It will be deleted on this device only";
+
+/* Action sheet button tips */
+"MESSAGE_ACTION_DELETE_MESSAGE_TIPS" = "Really want to delete this message?";
+
+/* Action sheet button OK */
+"MESSAGE_ACTION_DELETE_MESSAGE_OK" = "OK";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_DETAILS" = "More Info";
+
+"MESSAGE_ACTION_QUOTE" = "Quote";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_REPLY" = "Reply";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_FORWARD" = "Forward";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_FORWARD_TO_NOTE" = "Save";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_MULTI_SELECT" = "Select Multiple";
+
+"MESSAGE_ACTION_RECALL" = "Recall";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_SAVE_MEDIA" = "Download";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_CREATE_TASK" = "Add task";
+
+"MESSAGE_ACTION_SCHEDULE_MEETING" = "Schedule";
+
+"MESSAGE_ACTION_PIN_MESSAGE" = "Pin";
+
+"MESSAGE_ACTION_UNPIN_MESSAGE" = "Unpin";
+
+"MESSAGE_ACTION_CREATE_VOTE" = "Poll";
+
+"MESSAGE_ACTION_CONVENIENT_GROUP" = "Quick group";
+
+/* Title for the 'message approval' dialog. */
+"MESSAGE_APPROVAL_DIALOG_TITLE" = "Message";
+
+/* Label for the recipient name in the 'message approval' dialog. */
+"MESSAGE_APPROVAL_RECIPIENT_LABEL" = "To:";
+
+/* No comment provided by engineer. */
+"MESSAGE_COMPOSEVIEW_TITLE" = "Contacts";
+
+/* Label for file size of attachments in the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_ATTACHMENT_FILE_SIZE" = "File Size";
+
+/* Label for the MIME type of attachments in the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_ATTACHMENT_MIME_TYPE" = "MIME type";
+
+/* Label for 'not yet downloaded' attachments in the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_ATTACHMENT_NOT_YET_DOWNLOADED" = "Not yet downloaded";
+
+/* Status label for messages which are delivered. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_DELIVERED" = "Delivered";
+
+/* Status label for messages which are failed. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_FAILED" = "Failed";
+
+/* Status label for messages which are read. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_READ" = "Read";
+
+/*Status label for messages which are unread. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_UNREAD" = "Unread";
+
+/* Status label for messages which are sending. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SENDING" = "Sending";
+
+/* Status label for messages which are sent. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SENT" = "Sent";
+
+/* Status label for messages which were skipped. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SKIPPED" = "Skipped";
+
+/* Status label for messages which are uploading. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_UPLOADING" = "Uploading";
+
+/* Label for messages without a body or attachment in the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_NO_ATTACHMENT_OR_BODY" = "Message has no content or attachment.";
+
+/* Label for the 'received date & time' field of the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_RECEIVED_DATE_TIME" = "Received";
+
+
+/* Label for the 'received date & time' field of the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_READED_DATE_TIME" = "Read Time";
+
+"MESSAGE_METADATA_VIEW_READED_EXPIRE_DATE" = "Expire Date";
+
+"MESSAGE_METADATA_VIEW_DISAPPEARS" = "Expires";
+
+/* Label for the 'sender' field of the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_SENDER" = "Sender";
+
+/* Label for the 'sent date & time' field of the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_SENT_DATE_TIME" = "Sent";
+
+/* Label for the original filename of any attachment in the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_SOURCE_FILENAME" = "Filename";
+
+/* Title for the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_TITLE" = "Message";
+
+/* message status for message delivered to their recipient. */
+"MESSAGE_STATUS_DELIVERED" = "Delivered";
+
+/* status message for failed messages */
+"MESSAGE_STATUS_FAILED" = "Sending failed.";
+
+/* status message for failed messages */
+"MESSAGE_STATUS_FAILED_SHORT" = "Failed";
+
+/* status message for read messages */
+"MESSAGE_STATUS_READ" = "Read";
+
+/* message status if message delivery to a recipient is skipped. We skip delivering group messages to users who have left the group or unregistered their Signal account. */
+"MESSAGE_STATUS_RECIPIENT_SKIPPED" = "Skipped";
+
+/* Label indicating that a message failed to send. */
+"MESSAGE_STATUS_SEND_FAILED" = "Send Failed";
+
+/* message status while message is sending. */
+"MESSAGE_STATUS_SENDING" = "Sending...";
+
+/* status message for sent messages */
+"MESSAGE_STATUS_SENT" = "Sent";
+
+/* status message while attachment is uploading */
+"MESSAGE_STATUS_UPLOADING" = "Uploading…";
+
+/* Indicates that one member of this group conversation is no longer verified. Embeds {{user's name or phone number}}. */
+"MESSAGES_VIEW_1_MEMBER_NO_LONGER_VERIFIED_FORMAT" = "%@ is no longer marked as verified. Tap for options.";
+
+/* Indicates that this 1:1 conversation has been blocked. */
+"MESSAGES_VIEW_CONTACT_BLOCKED" = "You Blocked this User";
+
+/* Indicates that this 1:1 conversation is no longer verified. Embeds {{user's name or phone number}}. */
+"MESSAGES_VIEW_CONTACT_NO_LONGER_VERIFIED_FORMAT" = "%@ is no longer marked as verified. Tap for options.";
+
+/* Action sheet title after tapping on failed download. */
+"MESSAGES_VIEW_FAILED_DOWNLOAD_ACTIONSHEET_TITLE" = "Download Failed.";
+
+"MESSAGES_VIEW_FAILED_DOWNLOAD_ACTION" = "Download";
+
+/* Action sheet button text */
+"MESSAGES_VIEW_FAILED_DOWNLOAD_RETRY_ACTION" = "Download Again";
+
+/* Indicates that a single member of this group has been blocked. */
+"MESSAGES_VIEW_GROUP_1_MEMBER_BLOCKED" = "You Blocked 1 Member of this Group";
+
+/* Indicates that some members of this group has been blocked. Embeds {{the number of blocked users in this group}}. */
+"MESSAGES_VIEW_GROUP_N_MEMBERS_BLOCKED_FORMAT" = "You Blocked %@ Members of this Group";
+
+/* Text for banner in group conversation view that offers to share your profile with this group. */
+"MESSAGES_VIEW_GROUP_PROFILE_WHITELIST_BANNER" = "Share Your Profile With This Group?";
+
+/* Indicates that more than one member of this group conversation is no longer verified. */
+"MESSAGES_VIEW_N_MEMBERS_NO_LONGER_VERIFIED" = "More than one member of this group is no longer marked as verified. Tap for options.";
+
+/* The subtitle for the messages view title indicates that the title can be tapped to access settings for this conversation. */
+"MESSAGES_VIEW_TITLE_SUBTITLE" = "Tap here for settings";
+
+/* Indicator that separates read from unread messages. */
+"MESSAGES_VIEW_UNREAD_INDICATOR" = "New Messages";
+
+/* Messages that indicates that there are more unseen messages. */
+"MESSAGES_VIEW_UNREAD_INDICATOR_HAS_MORE_UNSEEN_MESSAGES" = "There are more unread messages.";
+
+/* Messages that indicates that there are more unseen messages including safety number changes. */
+"MESSAGES_VIEW_UNREAD_INDICATOR_HAS_MORE_UNSEEN_MESSAGES_AND_SAFETY_NUMBER_CHANGES" = "There are more unread messages (including safety number changes).";
+
+/* notification title */
+"MISSED_CALL" = "Missed call";
+
+/* notification title. Embeds {{caller's name or phone number}} */
+"MISSED_CALL_WITH_CHANGED_IDENTITY_BODY_WITH_CALLER_NAME" = "Missed call from %@ because their safety number changed.";
+
+/* notification title */
+"MISSED_CALL_WITH_CHANGED_IDENTITY_BODY_WITHOUT_CALLER_NAME" = "Missed call because the caller's safety number changed.";
+
+/* Alert body
+   Alert body when camera is not authorized */
+"MISSING_CAMERA_PERMISSION_MESSAGE" = "Chative needs access to your camera for video calls. You can grant this permission in the Settings app >> Privacy >> Camera >> Chative";
+
+/* Alert title
+   Alert title when camera is not authorized */
+"MISSING_CAMERA_PERMISSION_TITLE" = "Chative needs to access your camera.";
+
+/* Alert body when user has previously denied media library access */
+"MISSING_MEDIA_LIBRARY_PERMISSION_MESSAGE" = "Please allow Chative to access your album in Settings > Privacy > Photos.";
+
+/* Alert title when user has previously denied media library access */
+"MISSING_MEDIA_LIBRARY_PERMISSION_TITLE" = "Permission Required";
+
+/* notification title. Embeds {{caller's name or phone number}} */
+"MSGVIEW_MISSED_CALL_WITH_NAME" = "Missed call from %@.";
+
+/* No comment provided by engineer. */
+"MULTIDEVICE_PAIRING_MAX_DESC" = "You can not pair any more devices.";
+
+/* No comment provided by engineer. */
+"MULTIDEVICE_PAIRING_MAX_RECOVERY" = "You have reached the maximum of devices you can currently pair with your account. Please remove a device or try again to pair it later.";
+
+/* An explanation of the consequences of muting a thread. */
+"MUTE_BEHAVIOR_EXPLANATION" = "You will not receive notifications for muted conversations.";
+
+/* A button to skip a view. */
+"NAVIGATION_ITEM_SKIP_BUTTON" = "Skip";
+
+/* No comment provided by engineer. */
+"NETWORK_ERROR_RECOVERY" = "Please check you're online and try again.";
+
+/* Indicates to the user that censorship circumvention has been activated. */
+"NETWORK_STATUS_CENSORSHIP_CIRCUMVENTION_ACTIVE" = "Censorship Circumvention: On";
+
+/* No comment provided by engineer. */
+"NETWORK_STATUS_CONNECTED" = "Connected";
+
+/* No comment provided by engineer. */
+"NETWORK_STATUS_CONNECTING" = "Connecting";
+
+/* Error indicating that this device is no longer registered. */
+"NETWORK_STATUS_DEREGISTERED" = "No Longer Registered";
+
+/* No comment provided by engineer. */
+"NETWORK_STATUS_HEADER" = "Network Status";
+
+/* No comment provided by engineer. */
+"NETWORK_STATUS_OFFLINE" = "Offline";
+
+/* A label the cell that lets you add a new member to a group. */
+"NEW_CONVERSATION_FIND_BY_PHONE_NUMBER" = "Find by Phone Number";
+
+/* A label for the cell that lets you add a new non-contact member to a group. */
+"NEW_GROUP_ADD_NON_CONTACT" = "Add by phone number";
+
+/* Action Sheet title prompting the user for a group avatar */
+"NEW_GROUP_ADD_PHOTO_ACTION" = "Set Group Photo";
+
+/* The title for the 'create group' button. */
+"NEW_GROUP_CREATE_BUTTON" = "Create";
+
+/* Used in place of the group name when a group has not yet been named. */
+"NEW_GROUP_DEFAULT_TITLE" = "New Group";
+
+"NEW_GROUP_CONVENIENT_TITLE" = "SHARE link after creation";
+
+"NEW_GROUP_CONVENIENT_NAME" = "New group from \"%@\"";
+
+/* An indicator that a user is a member of the new group. */
+"NEW_GROUP_MEMBER_LABEL" = "Member";
+
+/* Placeholder text for group name field */
+"NEW_GROUP_NAMEGROUP_REQUEST_DEFAULT" = "Name this group chat";
+
+/* a title for the non-contacts section of the 'new group' view. */
+"NEW_GROUP_NON_CONTACTS_SECTION_TITLE" = "Other Users";
+
+/* The alert message if user tries to exit the new group view without saving changes. */
+"NEW_GROUP_VIEW_UNSAVED_CHANGES_MESSAGE" = "Would you like to discard these changes?";
+
+/* The alert title if user tries to exit the new group view without saving changes. */
+"NEW_GROUP_VIEW_UNSAVED_CHANGES_TITLE" = "Unsaved Changes";
+
+/* No comment provided by engineer. */
+"new_message" = "Message";
+
+/* No comment provided by engineer. */
+"Confidential_message" = "Confidential Message";
+
+/* A label for the 'add by phone number' button in the 'new non-contact conversation' view */
+"NEW_NONCONTACT_CONVERSATION_VIEW_BUTTON" = "Search";
+
+/* Title for the 'new non-contact conversation' view. */
+"NEW_NONCONTACT_CONVERSATION_VIEW_TITLE" = "Find User";
+
+/* Label for a button that lets users search for contacts by phone number */
+"NO_CONTACTS_SEARCH_BY_PHONE_NUMBER" = "Find Contacts by Phone Number";
+
+/* Lock screen notification text presented after user powers on their device without unlocking. Embeds {{device model}} (either 'iPad' or 'iPhone') */
+"NOTIFICATION_BODY_PHONE_LOCKED_FORMAT" = "You may have received messages while your %@ was restarting.";
+
+/* No comment provided by engineer. */
+"NOTIFICATION_SEND_FAILED" = "Your message failed to send to %@.";
+
+/* No comment provided by engineer. */
+"NOTIFICATIONS_FOOTER_WARNING" = "Due to known bugs in Apple's push framework, message previews will only be shown if the message is retrieved within 30 seconds after being sent. The application badge might be inaccurate as a result.";
+
+/* No comment provided by engineer. */
+"NOTIFICATIONS_NONE" = "No Name or Content";
+
+/* Table cell switch label. When disabled, Signal will not play notification sounds while the app is in the foreground. */
+"NOTIFICATIONS_SECTION_INAPP" = "Play While App is Open";
+
+/* Label for settings UI that allows user to change the notification sound. */
+"NOTIFICATIONS_SECTION_SOUNDS" = "Sounds";
+
+/* No comment provided by engineer. */
+"NOTIFICATIONS_SENDER_AND_MESSAGE" = "Name and Content";
+
+/* No comment provided by engineer. */
+"NOTIFICATIONS_SENDER_ONLY" = "Name Only";
+
+/* No comment provided by engineer. */
+"NOTIFICATIONS_SHOW" = "Show";
+
+/* No comment provided by engineer. */
+"OK" = "OK";
+
+/* Button text which opens the settings app */
+"OPEN_SETTINGS_BUTTON" = "Settings";
+
+/* Info Message when {{other user}} disables or doesn't support disappearing messages */
+"OTHER_DISABLED_DISAPPEARING_MESSAGES_CONFIGURATION" = "%@ disabled expiring messages.";
+
+/* Info Message when {{other user}} updates message expiration to {{time amount}}, see the *_TIME_AMOUNT strings for context. */
+"OTHER_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION" = "%@ set expiring message time to %@.";
+
+/* Label warning the user that the Signal service may be down. */
+"OUTAGE_WARNING" = "Chative is experiencing technical difficulties. We are working hard to restore service as quickly as possible.";
+
+/* No comment provided by engineer. */
+"OUTGOING_CALL" = "Outgoing call";
+
+/* No comment provided by engineer. */
+"OUTGOING_INCOMPLETE_CALL" = "Outgoing call";
+
+/* info message recorded in conversation history when local user tries and fails to call another user. */
+"OUTGOING_MISSED_CALL" = "Unanswered outgoing call";
+
+/* A display format for oversize text messages. */
+"OVERSIZE_TEXT_DISPLAY_FORMAT" = "%@…";
+
+/* A format for a label showing an example phone number. Embeds {{the example phone number}}. */
+"PHONE_NUMBER_EXAMPLE_FORMAT" = "Example: %@";
+
+/* Format for phone number label with an index. Embeds {{Phone number label (e.g. 'home')}} and {{index, e.g. 2}}. */
+"PHONE_NUMBER_TYPE_AND_INDEX_NAME_FORMAT" = "%@ %@";
+
+/* Label for 'Home' phone numbers. */
+"PHONE_NUMBER_TYPE_HOME" = "Home";
+
+/* Label for 'HomeFAX' phone numbers. */
+"PHONE_NUMBER_TYPE_HOME_FAX" = "Home Fax";
+
+/* Label for 'iPhone' phone numbers. */
+"PHONE_NUMBER_TYPE_IPHONE" = "iPhone";
+
+/* Label for 'Main' phone numbers. */
+"PHONE_NUMBER_TYPE_MAIN" = "Main";
+
+/* Label for 'Mobile' phone numbers. */
+"PHONE_NUMBER_TYPE_MOBILE" = "Mobile";
+
+/* Label for 'Other' phone numbers. */
+"PHONE_NUMBER_TYPE_OTHER" = "Other";
+
+/* Label for 'Other FAX' phone numbers. */
+"PHONE_NUMBER_TYPE_OTHER_FAX" = "Other Fax";
+
+/* Label for 'Pager' phone numbers. */
+"PHONE_NUMBER_TYPE_PAGER" = "Pager";
+
+/* Label used when we don't what kind of phone number it is (e.g. mobile/work/home). */
+"PHONE_NUMBER_TYPE_UNKNOWN" = "Unknown";
+
+/* Label for 'Work' phone numbers. */
+"PHONE_NUMBER_TYPE_WORK" = "Work";
+
+/* Label for 'Work FAX' phone numbers. */
+"PHONE_NUMBER_TYPE_WORK_FAX" = "Work Fax";
+
+/* Accessibility label for button to start media playback */
+"PLAY_BUTTON_ACCESSABILITY_LABEL" = "Play Media";
+
+/* Label indicating that the user is not verified. Embeds {{the user's name or phone number}}. */
+"PRIVACY_IDENTITY_IS_NOT_VERIFIED_FORMAT" = "You have not marked %@ as verified.";
+
+/* Badge indicating that the user is verified. */
+"PRIVACY_IDENTITY_IS_VERIFIED_BADGE" = "Verified";
+
+/* Label indicating that the user is verified. Embeds {{the user's name or phone number}}. */
+"PRIVACY_IDENTITY_IS_VERIFIED_FORMAT" = "%@ is verified.";
+
+/* Label for a link to more information about safety numbers and verification. */
+"PRIVACY_SAFETY_NUMBERS_LEARN_MORE" = "Learn More";
+
+/* Button that shows the 'scan with camera' view. */
+"PRIVACY_TAP_TO_SCAN" = "Tap to Scan";
+
+/* Button that lets user mark another user's identity as unverified. */
+"PRIVACY_UNVERIFY_BUTTON" = "Clear Verification";
+
+/* Alert body when verifying with {{contact name}} */
+"PRIVACY_VERIFICATION_FAILED_I_HAVE_WRONG_KEY_FOR_THEM" = "This doesn't look like your safety number with %@. Are you verifying the correct contact?";
+
+/* Alert body */
+"PRIVACY_VERIFICATION_FAILED_MISMATCHED_SAFETY_NUMBERS_IN_CLIPBOARD" = "The number in your clipboard doesn't look like the correct safety number for this conversation.";
+
+/* Alert body for user error */
+"PRIVACY_VERIFICATION_FAILED_NO_SAFETY_NUMBERS_IN_CLIPBOARD" = "Chative couldn't find any safety number in your clipboard. Have you copied it correctly?";
+
+/* Alert body when verifying with {{contact name}} */
+"PRIVACY_VERIFICATION_FAILED_THEY_HAVE_WRONG_KEY_FOR_ME" = "Every pair of Chative users shares a distinct safety number. Double-check that %@ is displaying *your* distinct safety number.";
+
+/* alert body */
+"PRIVACY_VERIFICATION_FAILED_WITH_OLD_LOCAL_VERSION" = "You're running an old version of Chative. You need to update before you can verify.";
+
+/* alert body */
+"PRIVACY_VERIFICATION_FAILED_WITH_OLD_REMOTE_VERSION" = "Your partner is running an old version of Chative. They need to update before you can verify.";
+
+/* alert body */
+"PRIVACY_VERIFICATION_FAILURE_INVALID_QRCODE" = "The scanned code doesn't look like a safety number code. Are you both on an up-to-date version of Chative?";
+
+/* Paragraph(s) shown alongside the safety number when verifying privacy with {{contact name}} */
+"PRIVACY_VERIFICATION_INSTRUCTIONS" = "If you wish to verify the security of your end-to-end encryption with %@, compare the numbers above with the numbers on their device.\n\nAlternatively, you can scan the code on their phone, or ask them to scan your code.";
+
+/* Navbar title */
+"PRIVACY_VERIFICATION_TITLE" = "Verify Safety Number";
+
+/* Button that lets user mark another user's identity as verified. */
+"PRIVACY_VERIFY_BUTTON" = "Mark as Verified";
+
+/* No comment provided by engineer. */
+"PROCEED_BUTTON" = "Proceed";
+
+/* Label text combining the phone number and profile name separated by a simple demarcation character. Phone number should be most prominent. '%1$@' is replaced with {{phone number}} and '%2$@' is replaced with {{profile name}} */
+"PROFILE_NAME_AND_PHONE_NUMBER_LABEL_FORMAT" = "%1$@ ~%2$@";
+
+/* Prepend a simple marker to differentiate the profile name, embeds the contact's {{profile name}}. */
+"PROFILE_NAME_LABEL_FORMAT" = "~%@";
+
+"PROFILE_NAME_TIP" = "Name";
+"PROFILE_SIGNATURE_TIP" = "Singnature";
+
+/* Action Sheet title prompting the user for a profile avatar */
+"PROFILE_VIEW_AVATAR_ACTIONSHEET_TITLE" = "Set Profile Avatar";
+
+/* Label for action that clear's the user's profile avatar */
+"PROFILE_VIEW_CLEAR_AVATAR" = "Clear Avatar";
+
+/* Error message shown when user tries to update profile with a profile name that is too long. */
+"PROFILE_VIEW_ERROR_PROFILE_NAME_TOO_LONG" = "Your profile name is too long.";
+
+/* Error message shown when a profile update fails. */
+"PROFILE_VIEW_ERROR_UPDATE_FAILED" = "Profile update failed.";
+
+"PROFILE_VIEW_ERROR_UPDATE_SUCESS" = "Profile update sucess.";
+
+/* Default text for the profile name field of the profile view. */
+"PROFILE_VIEW_NAME_DEFAULT_TEXT" = "Enter your name";
+
+/* Label for the profile avatar field of the profile view. */
+"PROFILE_VIEW_PROFILE_AVATAR_FIELD" = "Avatar";
+
+/* Description of the user profile. */
+"PROFILE_VIEW_PROFILE_DESCRIPTION" = "Your Chative Profile will be visible to your contacts, when you initiate new conversations, and when you share it with other users and groups.";
+
+/* Link to more information about the user profile. */
+"PROFILE_VIEW_PROFILE_DESCRIPTION_LINK" = "Tap here to learn more.";
+
+/* Label for the profile name field of the profile view. */
+"PROFILE_VIEW_PROFILE_NAME_FIELD" = "Profile Name";
+
+/* Button to save the profile view in the profile view. */
+"PROFILE_VIEW_SAVE_BUTTON" = "Save";
+
+"PROFILE_VIEW_DELETE_BUTTON" = "Delete";
+
+/* Alert title that indicates the user's profile view is being saved. */
+"PROFILE_VIEW_SAVING" = "Saving...";
+
+/* Title for the profile view. */
+"PROFILE_VIEW_TITLE" = "Profile";
+
+/* No comment provided by engineer. */
+"PUSH_MANAGER_MARKREAD" = "Mark as Read";
+
+/* No comment provided by engineer. */
+"PUSH_MANAGER_REPLY" = "Reply";
+
+/* Title of alert shown when push tokens sync job succeeds. */
+"PUSH_REGISTER_SUCCESS" = "Successfully re-registered for push notifications.";
+
+/* Used in table section header and alert view title contexts */
+"PUSH_REGISTER_TITLE" = "Push Notifications";
+
+/* No comment provided by engineer. */
+"QUESTIONMARK_PUNCTUATION" = "?";
+
+/* Indicates the author of a quoted message. Embeds {{the author's name or phone number}}. */
+"TOPIC_REPLY_AUTHOR_INDICATOR_FORMAT" = "Reply: %@";
+
+"TOPIC_REPLY_FROM_FORMAT" = "Topic\nFrom:";
+
+"TOPIC_TITLET" = "Topic From ";
+
+"TOPIC_CELL_HEADER_TITLET" = "Topic From: ";
+
+"TOPIC_SELF" = "You";
+
+
+"TOPIC_@BOT_SEND_TO" = "Topic sendto %@:";
+
+"TOPIC_@BOT_REPLY_FROM" = "Reply from: %@";
+
+"TOPIC_@BOT_REPLY_SEND_TO" = "Reply sendto %@:";//问题群
+
+"TOPIC_GROUPTOPIC_REPLY_TO" = "Reply to: %@";//支持群回复
+
+"TOPIC_THEME" = "Topic:";
+
+"TOPIC_EMPTY" = "No topic";
+
+"TOPIC_EMPTY_ERROR" = "Try and use “/Topic” to start a message";
+
+/* message header label when someone else is quoting you */
+"QUOTED_REPLY_AUTHOR_INDICATOR_YOU" = "Reply to You";
+
+/* message header label when quoting yourself */
+"QUOTED_REPLY_AUTHOR_INDICATOR_YOURSELF" = "Reply to Yourself";
+
+"QUOTED_AUTHOR_INDICATOR_YOURSELF" = "You";
+
+"QUOTED_AUTHOR_INDICATOR_YOU" = "You";
+
+"QUOTED_AUTHOR_INDICATOR_YOU_FORMAT" = "%@";
+
+/* Toast alert text shown when tapping on a quoted message which we cannot scroll to because the local copy of the message didn't exist when the quote was received. */
+"QUOTED_REPLY_ORIGINAL_MESSAGE_REMOTELY_SOURCED" = "Original message not found.";
+
+
+"QUOTED_REPLY_AUTHOR_INDICATOR_FORMAT_PREVIEW_REPLY" = "Reply: %@";
+
+/* message header label when someone else is quoting you */
+"QUOTED_REPLY_AUTHOR_INDICATOR_YOU_PREVIEW_REPLY" = "Reply to You";
+
+/* message header label when quoting yourself */
+"QUOTED_REPLY_AUTHOR_INDICATOR_YOURSELF_PREVIEW_REPLY" = "Reply to Yourself";
+
+
+
+/* Indicates this message is a quoted reply to an attachment of unknown type. */
+"QUOTED_REPLY_TYPE_ATTACHMENT" = "[Attachment]";
+
+/* Indicates this message is a quoted reply to an audio file. */
+"QUOTED_REPLY_TYPE_AUDIO" = "[Audio]";
+
+/* Indicates this message is a quoted reply to animated GIF file. */
+"QUOTED_REPLY_TYPE_GIF" = "[GIF]";
+
+/* Indicates this message is a quoted reply to an image file. */
+"QUOTED_REPLY_TYPE_IMAGE" = "[Image]";
+
+/* Indicates this message is a quoted reply to a video file. */
+"QUOTED_REPLY_TYPE_VIDEO" = "[Video]";
+
+"MESSAGE_PREVIEW_TYPE_HISTORY" = "[Chat History]";
+
+"MESSAGE_PREVIEW_TYPE_CONFIDENTIAL" = "[Message]";
+
+"MESSAGE_PREVIEW_TYPE_TASK" = "[Task]";
+
+"MESSAGE_PREVIEW_TYPE_CONTACT_CARD" = "[Contact Card]";
+
+"MESSAGE_PREVIEW_TYPE_POLL" = "[Poll]";
+
+/* No comment provided by engineer. */
+"RATING_MSG" = "If you enjoy using Chative to have private conversations, you can support our project by rating it. It won't take more than a minute, and will help others find some privacy.";
+
+/* No comment provided by engineer. */
+"RATING_RATE" = "Rate Chative";
+
+/* No comment provided by engineer. */
+"RATING_TITLE" = "Support Chative!";
+
+/* Label for 'I forgot my PIN' link in the 2FA registration view. */
+"REGISTER_2FA_FORGOT_PIN" = "I forgot my PIN.";
+
+/* Alert message explaining what happens if you forget your 'two-factor auth pin'. */
+"REGISTER_2FA_FORGOT_PIN_ALERT_MESSAGE" = "Registration of this phone number will be possible without your Registration Lock PIN after 7 days have passed since the phone number was last active on Chative.";
+
+/* Instructions to enter the 'two-factor auth pin' in the 2FA registration view. */
+"REGISTER_2FA_INSTRUCTIONS" = "This phone number has Registration Lock enabled. Please enter the Registration Lock PIN.\n\nYour Registration Lock PIN is separate from the automated verification code that was sent to your phone during the last step.";
+
+/* Title for alert indicating that attempt to register with 'two-factor auth' failed. */
+"REGISTER_2FA_REGISTRATION_FAILED_ALERT_TITLE" = "Registration Failed";
+
+/* Label for 'submit' button in the 2FA registration view. */
+"REGISTER_2FA_SUBMIT_BUTTON" = "Submit";
+
+/* No comment provided by engineer. */
+"REGISTER_CONTACTS_WELCOME" = "Welcome!";
+
+/* No comment provided by engineer. */
+"REGISTER_FAILED_TRY_AGAIN" = "Try Again";
+
+/* No comment provided by engineer. */
+"REGISTER_RATE_LIMITING_BODY" = "You have tried too often. Please wait a minute before trying again.";
+
+/* Title of alert shown when push tokens sync job fails. */
+"REGISTRATION_BODY" = "Failed to re-register for push notifications.";
+
+/* Label for the country code field */
+"REGISTRATION_DEFAULT_COUNTRY_NAME" = "Country Code";
+
+/* Navigation title shown when user is re-registering after having enabled registration lock */
+"REGISTRATION_ENTER_LOCK_PIN_NAV_TITLE" = "Registration Lock";
+
+/* Placeholder text for the phone number textfield */
+"REGISTRATION_ENTERNUMBER_DEFAULT_TEXT" = "Enter Number";
+
+/* No comment provided by engineer. */
+"REGISTRATION_ERROR" = "Registration Error";
+
+/* alert body during registration */
+"REGISTRATION_ERROR_BLANK_VERIFICATION_CODE" = "We can't activate your account until you verify the code we sent you.";
+
+/* alert body when registering an iPad */
+"REGISTRATION_IPAD_CONFIRM_BODY" = "Registering now will disable Chative on any other device currently registered with this phone number.";
+
+/* button text to proceed with registration when on an iPad */
+"REGISTRATION_IPAD_CONFIRM_BUTTON" = "Register this iPad";
+
+/* alert title when registering an iPad */
+"REGISTRATION_IPAD_CONFIRM_TITLE" = "Already have a Chative account?";
+
+/* one line label below submit button on registration screen, which links to an external webpage. */
+"REGISTRATION_LEGAL_TERMS_LINK" = "Terms & Privacy Policy";
+
+/* legal disclaimer, embeds a tappable {{link title}} which is styled as a hyperlink */
+"REGISTRATION_LEGAL_TOP_MATTER_FORMAT" = "By registering this device, you agree to Chative's %@";
+
+/* embedded in legal topmatter, styled as a link */
+"REGISTRATION_LEGAL_TOP_MATTER_LINK_TITLE" = "terms";
+
+/* No comment provided by engineer. */
+"REGISTRATION_NON_VALID_NUMBER" = "This phone number format is not supported, please contact support.";
+
+/* Label for the phone number textfield */
+"REGISTRATION_PHONENUMBER_BUTTON" = "Number";
+
+/* No comment provided by engineer. */
+"REGISTRATION_RESTRICTED_MESSAGE" = "Someone's excited to send their first message! You need to register before performing this action.";
+
+/* No comment provided by engineer. */
+"REGISTRATION_TITLE_LABEL" = "Your Number";
+
+/* Alert view title */
+"REGISTRATION_VERIFICATION_FAILED_TITLE" = "Verification Failed";
+
+/* Error message indicating that registration failed due to a missing or incorrect verification code. */
+"REGISTRATION_VERIFICATION_FAILED_WRONG_CODE_DESCRIPTION" = "The numbers you submitted don't match what we sent. Want to double check?";
+
+/* Error message indicating that registration failed due to a missing or incorrect 2FA PIN. */
+"REGISTRATION_VERIFICATION_FAILED_WRONG_PIN" = "Incorrect Registration Lock PIN.";
+
+/* No comment provided by engineer. */
+"REGISTRATION_VERIFY_DEVICE" = "Register";
+
+/* Message of alert indicating that users needs to enter a valid phone number to register. */
+"REGISTRATION_VIEW_INVALID_PHONE_NUMBER_ALERT_MESSAGE" = "Please enter a valid phone number to register.";
+
+/* Title of alert indicating that users needs to enter a valid phone number to register. */
+"REGISTRATION_VIEW_INVALID_PHONE_NUMBER_ALERT_TITLE" = "Invalid Phone Number";
+
+/* Message of alert indicating that users needs to enter a phone number to register. */
+"REGISTRATION_VIEW_NO_PHONE_NUMBER_ALERT_MESSAGE" = "Please enter a phone number to register.";
+
+/* Title of alert indicating that users needs to enter a phone number to register. */
+"REGISTRATION_VIEW_NO_PHONE_NUMBER_ALERT_TITLE" = "No Phone Number";
+
+/* Invite code */
+"REGISTRATION_INVITE_CODE_TITLE_LABEL" = "Your Invite Code";
+"REGISTRATION_INVITE_CODE_DEFAULT_TEXT" = "Please Enter Your Invite Code";
+"REGISTRATION_VIEW_NO_INVITE_CODE_TITLE" = "No Invite Code";
+"REGISTRATION_VIEW_NO_INVITE_CODE_MESSAGE" = "Please enter an invite code to register.";
+"REGISTRATION_VIEW_INVALID_INVITE_CODE_TITLE" = "Invalid Invite Code";
+"REGISTRATION_VIEW_INVALID_INVITE_CODE_MESSAGE" = "Please enter a valid invite code to register.";
+
+"REGISTRATION_REG_WITH_INVITE_CODE" = "With An Invite Code";
+//"REGISTRATION_REG_WITH_INVITE_CODE_NOTICE" = "If you already have an invite code:";
+
+"REGISTRATION_REG_WITH_DIFFT_NUMBER" = "With A Chative Number";
+//"REGISTRATION_REG_WITH_DIFFT_NUMBER_NOTICE" = "If you already have a Chative number:";
+
+"REGISTRATION_MAIN_TITLE_LABEL" = "Device Registration";
+"WEA_LOGIN" = "Login";
+"WEA_LOGIN_NEXT" = "Next";
+"WEA_LOGIN_SKIP" = "Skip";
+
+"CHATIVE_LOGIN_SIGN_IN_TITLE" = "Sign in to %@";
+"CHATIVE_LOGIN_SIGN_UP_TITLE" = "Sign up to %@";
+
+"CHATIVE_LOGIN_OTP_TITLE" = "Sign in to %@";
+"CHATIVE_LOGIN_OTP_CREAT_TITLE" = "Create %@ Account";
+
+"CHATIVE_LOGIN_SIGN_IN" = "Sign in";
+"CHATIVE_LOGIN_TRANSFER_TO_SIGN_UP_NOT_ACCOUNT" = "New User?";
+"CHATIVE_LOGIN_TRANSFER_TO_SIGN_IN_HAVE_ACCOUNT" = "Already have an account?";
+"CHATIVE_LOGIN_SIGN_UP" = "Sign up";
+
+"SIGN_UP_START_TO_CHAT" = "Start to Chat";
+
+"REGISTRATION_ACCOUT_WAS_DISABLED" = "Account Was Disabled";
+"REGISTRATION_ACCOUT_HAS_NO_TEAM" = "Your account has no team, please contact ITBot.";
+
+"COMMON_NOTICE_TITLE" = "Notice";
+
+"COMMON_WARNING_TITLE" = "Warning";
+
+/* No comment provided by engineer. */
+"REJECT_CALL_BUTTON_TITLE" = "Reject";
+
+/* No comment provided by engineer. */
+"RELAY_REGISTERED_ERROR_RECOVERY" = "The phone number you are trying to register has already been registered on another server, please unregister from there and try again.";
+
+/* Body text for when user is periodically prompted to enter their registration lock PIN */
+"REMINDER_2FA_BODY" = "Registration Lock is enabled for your phone number. To help you memorize your Registration Lock PIN, Chative will periodically ask you to confirm it.";
+
+/* Body header for when user is periodically prompted to enter their registration lock PIN */
+"REMINDER_2FA_BODY_HEADER" = "Reminder:";
+
+/* Alert message explaining what happens if you forget your 'two-factor auth pin' */
+"REMINDER_2FA_FORGOT_PIN_ALERT_MESSAGE" = "Registration Lock helps protect your phone number from unauthorized registration attempts. This feature can be disabled at any time in your Chative privacy settings.";
+
+/* Navbar title for when user is periodically prompted to enter their registration lock PIN */
+"REMINDER_2FA_NAV_TITLE" = "Enter Your Registration Lock PIN";
+
+/* Alert body after wrong guess for 'two-factor auth pin' reminder activity */
+"REMINDER_2FA_WRONG_PIN_ALERT_BODY" = "You can set a new PIN in your privacy settings.";
+
+/* Alert title after wrong guess for 'two-factor auth pin' reminder activity */
+"REMINDER_2FA_WRONG_PIN_ALERT_TITLE" = "That is not the correct PIN.";
+
+/* No comment provided by engineer. */
+"REREGISTER_FOR_PUSH" = "Re-register for push notifications";
+
+/* Generic text for button that retries whatever the last action was. */
+"RETRY_BUTTON_TEXT" = "Retry";
+
+/* button title to confirm adding a recipient to a group when their safety number has recently changed */
+"SAFETY_NUMBER_CHANGED_CONFIRM_ADD_TO_GROUP_ACTION" = "Add to Group Anyway";
+
+/* alert button text to confirm placing an outgoing call after the recipients Safety Number has changed. */
+"SAFETY_NUMBER_CHANGED_CONFIRM_CALL_ACTION" = "Call Anyway";
+
+/* button title to confirm sending to a recipient whose safety number recently changed */
+"SAFETY_NUMBER_CHANGED_CONFIRM_SEND_ACTION" = "Send Anyway";
+
+/* Snippet to share {{safety number}} with a friend. sent e.g. via SMS */
+"SAFETY_NUMBER_SHARE_FORMAT" = "Our Chative Safety Number:\n%@";
+
+/* Action sheet heading */
+"SAFETY_NUMBERS_ACTIONSHEET_TITLE" = "Your safety number with %@ has changed. You may wish to verify it.";
+
+/* label presented once scanning (camera) view is visible. */
+"SCAN_CODE_INSTRUCTIONS" = "Scan the QR Code on your contact's device.";
+
+/* Title for the 'scan QR code' view. */
+"SCAN_QR_CODE_VIEW_TITLE" = "Scan QR Code";
+
+"INVITECODE" = "Invite Code";
+"INVITE_JOINED" = "joined";
+"INVITE_FRIEND_BY_QRCODE_OR_LINK" = "Invite with this QR code or link";
+"INVITE_REGENERATE" = "Regenerate";
+"INVITE_SCAN" = "Scan";
+"INVITE_SHARE" = "Share";
+"INVITE_ENTER_CODE" = "Enter Code";
+"INVITE_DESC" = "Chat with me on TempTalk";
+"INVITE_CANCEL" = "Cancel";
+"INVITE_REGENERATE_ACTION" = "Regenerate";
+"INVITE_LINK_TITLE" = "Invite Link";
+"INVITE_LINK_FORBIDEN_DESC" = "The group only allows moderators to add members. Please contact the group owner for help.";
+"INVITE_LINK_NEED_OPEN_GROUP_LINK_DESC" = "This group disabled invite link.";
+"Regenerate Invite Code" = "Regenerate Invite Code";
+"The old invite code will expire. Are you sure to continue?" = "The old invite code will expire. Are you sure to continue?";
+
+"ENTER_CODE_TITLE" = "Add a new friend";
+"ENTER_CODE_TIPS" = "Enter a code to add a new friend";
+"ENTER_CODE_ERRORTIPS" = "The code is not correct, please try again";
+"ENTER_CODE_MYCODE" = "My Code";
+
+//分享二维码或链接邀请好友
+
+/* Indicates a delay of zero seconds, and that 'screen lock activity' will timeout immediately. */
+"SCREEN_LOCK_ACTIVITY_TIMEOUT_NONE" = "Instant";
+
+/* Indicates that an unknown error occurred while using Touch ID/Face ID/Phone Passcode. */
+"SCREEN_LOCK_ENABLE_UNKNOWN_ERROR" = "Authentication could not be accessed.";
+
+/* Indicates that Touch ID/Face ID/Phone Passcode authentication failed. */
+"SCREEN_LOCK_ERROR_LOCAL_AUTHENTICATION_FAILED" = "Authentication failed.";
+
+/* Indicates that Touch ID/Face ID/Phone Passcode is 'locked out' on this device due to authentication failures. */
+"SCREEN_LOCK_ERROR_LOCAL_AUTHENTICATION_LOCKOUT" = "Too many failed authentication attempts. Please try again later.";
+
+/* Indicates that Touch ID/Face ID/Phone Passcode are not available on this device. */
+"SCREEN_LOCK_ERROR_LOCAL_AUTHENTICATION_NOT_AVAILABLE" = "You must enable a passcode in your iOS Settings in order to use Screen Lock.";
+
+/* Indicates that Touch ID/Face ID/Phone Passcode is not configured on this device. */
+"SCREEN_LOCK_ERROR_LOCAL_AUTHENTICATION_NOT_ENROLLED" = "You must enable a passcode in your iOS Settings in order to use Screen Lock.";
+
+/* Indicates that Touch ID/Face ID/Phone Passcode passcode is not set. */
+"SCREEN_LOCK_ERROR_LOCAL_AUTHENTICATION_PASSCODE_NOT_SET" = "You must enable a passcode in your iOS Settings in order to use Screen Lock.";
+
+/* Description of how and why Signal iOS uses Touch ID/Face ID/Phone Passcode to unlock 'screen lock'. */
+"SCREEN_LOCK_REASON_UNLOCK_SCREEN_LOCK" = "Authenticate to open Chative.";
+
+/* Title for alert indicating that screen lock could not be unlocked. */
+"SCREEN_LOCK_UNLOCK_FAILED" = "Authentication Failed";
+
+/* Label for button on lock screen that lets users unlock Signal. */
+"SCREEN_LOCK_UNLOCK_SIGNAL" = "Unlock Chative";
+
+/* No comment provided by engineer. */
+"SEARCH_BYNAMEORNUMBER_PLACEHOLDER_TEXT" = "Search by name or number";
+
+/* section header for search results that match a contact who doesn't have an existing conversation */
+"SEARCH_SECTION_CONTACTS" = "Contacts";
+
+/* section header for search results that match existing conversations (either group or contact conversations) */
+"SEARCH_SECTION_CONVERSATIONS" = "Group";
+
+"SEARCH_SECTION_CONVERSATIONS_RECENT" = "Recent";
+
+"SEARCH_SOMETHING_CONTAIN" = "Include: ";
+
+/* section header for search results that match a message in a conversation */
+"SEARCH_SECTION_MESSAGES" = "Chat history";
+
+"ENTER_KEYWORDS_TO_SEARCH" = "Enter keywords to search";
+
+"SEARCH_SECTION_VIEW_MORE" = "View More";
+
+"SEARCH_RESULT_LIST_TITLE_CONTACTS" = "More Contacts";
+
+"SEARCH_RESULT_LIST_TITLE_GROUP" = "More Groups";
+
+"SEARCH_RESULT_LIST_TITLE_MESSAGES" = "More Chat History";
+
+"SEARCH_SECTION_TRELATED_MESSAGE" = "related messages";
+
+/* No comment provided by engineer. */
+"SECURE_SESSION_RESET" = "Secure session was reset.";
+
+/* Label for 'select GIF to attach' action sheet button */
+"SELECT_GIF_BUTTON" = "GIF";
+
+/* Table section header for conversations you haven't recently used. */
+"SELECT_THREAD_TABLE_OTHER_CHATS_TITLE" = "Other Contacts";
+
+/* Table section header for recently active conversations */
+"SELECT_THREAD_TABLE_RECENT_CHATS_TITLE" = "Recent Chats";
+
+/* No comment provided by engineer. */
+"SEND_AGAIN_BUTTON" = "Send Again";
+
+/* Label for the send button in the conversation view. */
+"SEND_BUTTON_TITLE" = "Send";
+
+/* Alert body after invite failed */
+"SEND_INVITE_FAILURE" = "Sending invite failed, please try again later.";
+
+/* Alert body after invite succeeded */
+"SEND_INVITE_SUCCESS" = "You've invited your friend to use Chative!";
+
+/* Text for button to send a Signal invite via SMS. %@ is placeholder for the recipient's phone number. */
+"SEND_INVITE_VIA_SMS_BUTTON_FORMAT" = "Invite via SMS: %@";
+
+/* No comment provided by engineer. */
+"SEND_SMS_CONFIRM_TITLE" = "Invite a friend via insecure SMS?";
+
+/* No comment provided by engineer. */
+"SEND_SMS_INVITE_TITLE" = "Would you like to invite the following number to Chative: ";
+
+/* Title for the 'block contact' section of the 'add to block list' view. */
+"SETTINGS_ADD_TO_BLOCK_LIST_BLOCK_CONTACT_TITLE" = "Block Contact";
+
+/* Title for the 'block phone number' section of the 'add to block list' view. */
+"SETTINGS_ADD_TO_BLOCK_LIST_BLOCK_PHONE_NUMBER_TITLE" = "Block Phone Number";
+
+/* Title for the 'add to block list' view. */
+"SETTINGS_ADD_TO_BLOCK_LIST_TITLE" = "Block";
+
+/* Label for the  'manual censorship circumvention' switch. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION" = "Censorship Circumvention";
+
+/* Label for the 'manual censorship circumvention' country. Embeds {{the manual censorship circumvention country}}. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_COUNTRY_FORMAT" = "Location: %@";
+
+/* Table footer for the 'censorship circumvention' section when censorship circumvention can be manually enabled. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_FOOTER" = "If enabled, Chative will attempt to circumvent censorship. Do not enable this feature unless you are in a location where Chative is censored.";
+
+/* Table footer for the 'censorship circumvention' section shown when censorship circumvention has been auto-enabled based on local phone number. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_FOOTER_AUTO_ENABLED" = "Censorship circumvention has been activated based on your account's phone number.";
+
+/* Table footer for the 'censorship circumvention' section shown when the app is not connected to the internet. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_FOOTER_NO_CONNECTION" = "Censorship circumvention can only be activated when connected to the internet.";
+
+/* Table footer for the 'censorship circumvention' section shown when the app is connected to the Signal service. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_FOOTER_WEBSOCKET_CONNECTED" = "Censorship circumvention is not necessary; you are already connected to the Chative service.";
+
+/* Table header for the 'censorship circumvention' section. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_HEADER" = "Censorship Circumvention";
+
+/* No comment provided by engineer. */
+"SETTINGS_ADVANCED_DEBUGLOG" = "Enable Debug Log";
+
+/* No comment provided by engineer. */
+"SETTINGS_ADVANCED_SUBMIT_DEBUGLOG" = "Submit Debug Log";
+
+"SETTINGS_ADVANCED_FIX_CONVERSATION_ANOMALY" = "Fix conversation anomaly";
+
+"SETTINGS_ADVANCED_FIX_COMPLETED" = "Fix conversation completed";
+
+/* No comment provided by engineer. */
+"SETTINGS_ADVANCED_THEME" = "Theme";
+
+/* No comment provided by engineer. */
+"SETTINGS_ADVANCED_TITLE" = "Advanced";
+
+/* Format string for the default 'Note' sound. Embeds the system {{sound name}}. */
+"SETTINGS_AUDIO_DEFAULT_TONE_LABEL_FORMAT" = "%@ (default)";
+
+/* Label for the backup view in app settings. */
+"SETTINGS_BACKUP" = "Backup";
+
+/* Label for 'backup now' button in the backup settings view. */
+"SETTINGS_BACKUP_BACKUP_NOW" = "Backup Now";
+
+/* Label for 'cancel backup' button in the backup settings view. */
+"SETTINGS_BACKUP_CANCEL_BACKUP" = "Cancel Backup";
+
+/* Label for switch in settings that controls whether or not backup is enabled. */
+"SETTINGS_BACKUP_ENABLING_SWITCH" = "Backup Enabled";
+
+/* Label for phase row in the in the backup settings view. */
+"SETTINGS_BACKUP_PHASE" = "Phase";
+
+/* Label for phase row in the in the backup settings view. */
+"SETTINGS_BACKUP_PROGRESS" = "Progress";
+
+/* Label for status row in the in the backup settings view. */
+"SETTINGS_BACKUP_STATUS" = "Status";
+
+/* Indicates that the last backup failed. */
+"SETTINGS_BACKUP_STATUS_FAILED" = "Backup Failed";
+
+/* Indicates that app is not backing up. */
+"SETTINGS_BACKUP_STATUS_IDLE" = "Waiting";
+
+/* Indicates that app is backing up. */
+"SETTINGS_BACKUP_STATUS_IN_PROGRESS" = "Backing Up";
+
+/* Indicates that the last backup succeeded. */
+"SETTINGS_BACKUP_STATUS_SUCCEEDED" = "Backup Successful";
+
+/* A label for the 'add phone number' button in the block list table. */
+"SETTINGS_BLOCK_LIST_ADD_BUTTON" = "Add…";
+
+/* A label that indicates the user has no Signal contacts. */
+"SETTINGS_BLOCK_LIST_NO_CONTACTS" = "You have no contacts on Chative.";
+
+/* A label that indicates the user's search has no matching results. */
+"SETTINGS_BLOCK_LIST_NO_SEARCH_RESULTS" = "No Search Results";
+
+/* Label for the block list section of the settings view */
+"SETTINGS_BLOCK_LIST_TITLE" = "Blocked";
+
+/* Table cell label */
+"SETTINGS_CALLING_HIDES_IP_ADDRESS_PREFERENCE_TITLE" = "Always Relay Calls";
+
+/* User settings section footer, a detailed explanation */
+"SETTINGS_CALLING_HIDES_IP_ADDRESS_PREFERENCE_TITLE_DETAIL" = "Relay all calls through the Chative server to avoid revealing your IP address to your contact. Enabling will reduce call quality.";
+
+/* No comment provided by engineer. */
+"SETTINGS_CLEAR_HISTORY" = "Clear Conversation History";
+
+/* No comment provided by engineer. */
+"SETTINGS_COPYRIGHT" = "Copyright Open Whisper Systems \n Licensed under the GPLv3";
+
+/* No comment provided by engineer. */
+"SETTINGS_DELETE_ACCOUNT_BUTTON" = "Delete Account";
+
+/* Label for 'delete data' button. */
+"SETTINGS_DELETE_DATA_BUTTON" = "Delete All Data";
+
+/* Alert message before user confirms clearing history */
+"SETTINGS_DELETE_HISTORYLOG_CONFIRMATION" = "Are you sure you want to delete all your history (messages, attachments, call history …) ? This action cannot be reverted.";
+
+/* Confirmation text for button which deletes all message, calling, attachments, etc. */
+"SETTINGS_DELETE_HISTORYLOG_CONFIRMATION_BUTTON" = "Delete Everything";
+
+/* No comment provided by engineer. */
+"SETTINGS_HELP_HEADER" = "Help";
+
+/* Section header */
+"SETTINGS_HISTORYLOG_TITLE" = "Clear Conversation History";
+
+/* No comment provided by engineer. */
+"SETTINGS_INFORMATION_HEADER" = "Information";
+
+/* Settings table view cell label */
+"SETTINGS_INVITE_TITLE" = "Invite Friends";
+
+/* content of tweet when inviting via twitter */
+"SETTINGS_INVITE_TWITTER_TEXT" = "You can reach me using @signalapp. Get it now: https://signal.org/download/";
+
+/* Label for settings view that allows user to change the notification sound. */
+"SETTINGS_ITEM_NOTIFICATION_SOUND" = "Message Sound";
+"SETTINGS_ITEM_NOTIFICATION_SOUND_NM" = "Sound";
+"SETTINGS_ITEM_GROUP_REMINDER" = "Reminder";
+
+"SETTINGS_ITEM_ACCOUNT" = "Account";
+"SETTINGS_ITEM_ACCOUNT_ID" = "ID";
+"SETTINGS_ITEM_ACCOUNT_EMAIL" = "Email";
+"SETTINGS_ITEM_ACCOUNT_PHONE" = "Phone number";
+"SETTINGS_ITEM_LOGOUT" = "Logout";
+"SETTINGS_ITEM_DELETE" = "Delete account";
+"SETTINGS_ITEM_UNLINK_TIP" = "Not Linked";
+
+"SETTINGS_VC_TITLE_CHANGE_EMAIL" = "Change Email";
+"SETTINGS_VC_TITLE_CHANGE_EMAIL_PLACE_HOLDER" = "New email address";
+
+"SETTINGS_VC_TITLE_CHANGE_PHONE_NUMBER" = "Change Phone Number";
+"SETTINGS_VC_TITLE_CHANGE_PHONE_NUMBER_PLACE_HOLDER" = "New phone Numbe";
+
+"Save" = "Save";
+
+/* app setting */
+"SETTINGS_ITEM_FEEDBACK" = "Help & Feedback";
+"SETTINGS_ITEM_ABOUT" = "About";
+
+"SETTINGS_ITEM_NOTIFICATION_APNS" = "Notification";
+"SETTINGS_ITEM_NOTIFICATION_APNS_HEADER" = "DEFAULT GROUP SETTING";
+"SETTINGS_ITEM_NOTIFICATION_APNS_NM" = "Notification";
+
+"SETTINGS_ITEM_NOTIFICATION_APNS_ALL_MESSAGE" = "All";
+"SETTINGS_ITEM_NOTIFICATION_APNS_AT" = "@ Only";
+"SETTINGS_ITEM_NOTIFICATION_APNS_OFF" = "Off";
+"SETTINGS_COMMON_GLOBAL" = "Default";
+"SETTINGS_COMMON_GLOBAL_NOTIFICSTION" = "Default Setting";
+"SETTINGS_COMMON_GLOBAL_NOTIFICSTION_TIP" = "Change default notification setting with\"Me/Notifications/Default Group Setting\".\nUpdate Default Group Setting";
+"SETTINGS_COMMON_GLOBAL_NOTIFICSTION_BOTTOM_TIP" = "Choose your notification preferences for your spaces here. Notifications for direct messages and calls are on by default.";
+"SETTINGS_COMMON_ONLY_@MENSION_BOTTOM_TIP" = "Receive notification only when you have been mentioned.";
+"TRANSLATE_SETTINGS_SELECTED_ENGLISH_LANGUAGE" = "English translations will be added to the new messages you receive";
+"TRANSLATE_SETTINGS_SELECTED_CHINISE_LANGUAGE" = "你收到的新消息将增加中文翻译";
+"TRANSLATE_SETTINGS_SELECTED_ORIGINAL" = "Translation is off.";
+/* table cell label */
+"SETTINGS_LEGAL_TERMS_CELL" = "Terms & Privacy Policy";
+
+/* Title for settings activity */
+"SETTINGS_NAV_BAR_TITLE" = "Me";
+
+/* table section footer */
+"SETTINGS_NOTIFICATION_CONTENT_DESCRIPTION" = "Call and Message notifications can appear while your phone is locked. You may wish to limit what is shown in these notifications.";
+
+/* table section header */
+"SETTINGS_NOTIFICATION_CONTENT_TITLE" = "Notification Content";
+
+/* No comment provided by engineer. */
+"SETTINGS_NOTIFICATIONS" = "Notification";
+
+/* Label for 'CallKit privacy' preference */
+"SETTINGS_PRIVACY_CALLKIT_PRIVACY_TITLE" = "Show Caller's Name & Number";
+
+/* Settings table section footer. */
+"SETTINGS_PRIVACY_CALLKIT_SYSTEM_CALL_LOG_PREFERENCE_DESCRIPTION" = "Show calls in the \"Recents\" list in the iOS Phone app.";
+
+/* Short table cell label */
+"SETTINGS_PRIVACY_CALLKIT_SYSTEM_CALL_LOG_PREFERENCE_TITLE" = "Show Calls in Recents";
+
+/* Short table cell label */
+"SETTINGS_PRIVACY_CALLKIT_TITLE" = "iOS Call Integration";
+
+/* Settings table view cell label */
+"SETTINGS_PRIVACY_TITLE" = "Security & Privacy";
+
+/* Label for the 'read receipts' setting. */
+"SETTINGS_READ_RECEIPT" = "Read Receipts";
+
+/* An explanation of the 'read receipts' setting. */
+"SETTINGS_READ_RECEIPTS_SECTION_FOOTER" = "See and share when messages have been read. This setting is optional and applies to all conversations.";
+
+/* Label for re-registration button. */
+"SETTINGS_REREGISTER_BUTTON" = "Re-register";
+
+/* Label for the 'screen lock activity timeout' setting of the privacy settings. */
+"SETTINGS_SCREEN_LOCK_ACTIVITY_TIMEOUT" = "Screen Lock Timeout";
+
+/* Footer for the 'screen lock' section of the privacy settings. */
+"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "Unlock TempTalk’s screen using a passcode. The passcode can be different from system’s passcode. So if somebody manage to get access to your system, he still has no access to TempTalk. It also prevents content previews from appearing in the app switcher.";
+
+"UNLOCKSCREEN_TITLE" = "Enter Screen Lock passcode";
+"UNLOCKSCREEN_DONE" = "Done";
+"SCREENLOCK_SETPASSCODE_TIPS" = "Enter a passcode (4-10 digits). You will be asked to enter this passcode the next time you unlock TempTalk.";
+"SCREENLOCK_SETPASSCODE_EXCLAMATION" = "If you forget your passcode, you’ll need to log out or reinstall the app.";
+"SCREENLOCK_SETPASSCODE_FORGOT_TIPS" = "Forgot passcode?";
+"SCREENLOCK_SETPASSCODE_FORGOT_Alert_CONTENT" = "Please delete and reinstall the app.";
+"SCREENLOCK_SETPASSCODE_FORGOT_Alert_OK" = "OK";
+"SCREENLOCK_SETPASSCODE_NEXT" = "Next";
+"SCREENLOCK_CONFIRMPASSCODE_TIPS" = "Please enter again to confirm your passcode.";
+"SCREENLOCK_CONFIRMPASSCODE_CONFIRM" = "Confirm";
+"SCREENLOCK_CONFIRMPASSCODE_ERROR_TITLE" = "Error!";
+"SCREENLOCK_CONFIRMPASSCODE_ERROR_TIPS" = "Passcode does not match.";
+"SCREENLOCK_CONFIRMPASSCODE_ERROR_OKBTN" = "OK";
+"SCREENLOCK_PASSCODESUCCESS_TITLE" = "Success!";
+"SCREENLOCK_PASSCODESUCCESS_TIPS" = "Safely save this code. If you forget your passcode, you’ll need to log out or reinstall the app.";
+"SCREENLOCK_PASSCODESUCCESS_CONFIRM" = "I understand";
+"SCREENLOCK_PASSCODESUCCESS_ATTEMPTS" = "Next attempt will be delayed by %ds.";
+"LOGIN_SUBIT_TOO_MANY_ATTEMPTS" = "Too many attempts. Please try again later.";
+
+"SCREENLOCK_UPGRADE_TITLE" = "Feature Update";
+"SCREENLOCK_UPGRADE_TIPS" = "There’s an update on Screen Lock features in Privacy. Your previous settings maybe no longer valid. You can check it out to secure your Chative.";
+"SCREENLOCK_UPGRADE_IGNORE" = "Ignore";
+"SCREENLOCK_UPGRADE_CHECK" = "Check";
+
+
+
+/* Title for the 'screen lock' section of the privacy settings. */
+"SETTINGS_SCREEN_LOCK_SECTION_TITLE" = "SECURITY";
+
+/* Label for the 'enable screen lock' switch of the privacy settings. */
+"SETTINGS_SCREEN_LOCK_SWITCH_LABEL" = "Screen Lock";
+
+/* No comment provided by engineer. */
+"SETTINGS_SCREEN_SECURITY" = "Enable Screen Security";
+
+"SETTINGS_RENEW_KEY_LABEL" = "Generate New Key";
+
+"SETTINGS_RENEW_KEY_DES" = "All your data, including messages, are encrypted with this key.";
+
+"ALERT_RENEW_KEY_TITLE" = "Generate New Key";
+
+"ALERT_RENEW_KEY_TIPS" = "The message history on your device and your friend's device will be cleared, and if you have other devices, they will be logged out and you will need to relink.";
+
+"ALERT_RENEW_KEY_GENERATE" = "Generate";
+
+/* No comment provided by engineer. */
+"SETTINGS_SCREEN_SECURITY_DETAIL" = "Prevent Chative previews from appearing in the app switcher.";
+
+/* Settings table section footer. */
+"SETTINGS_SECTION_CALL_KIT_DESCRIPTION" = "iOS Call Integration shows Chative calls on your lock screen and in the system's call history. You may optionally show your contact's name and number. If iCloud is enabled, this call history will be shared with Apple.";
+
+/* Label for the notifications section of conversation settings view. */
+"SETTINGS_SECTION_NOTIFICATIONS" = "Notifications";
+
+/* Header Label for the sounds section of settings views. */
+"SETTINGS_SECTION_SOUNDS" = "Sounds Notification";
+
+"SETTINGS_SECTION_SOUNDS_SCOPES" = "Scope Of Notice";
+
+"SETTINGS_SECTION_TIPMESSAGE" = "@ Mentions Only Notification";
+
+"SETTINGS_SECTION_TRANSLATE" = "Translate";
+
+"SETTINGS_SECTION_GROUP_LINK" = "Invite Link";
+
+"SETTINGS_SECTION_TRANSLATE_LANGUAGE_CHINESE" = "中文";
+"SETTINGS_SECTION_TRANSLATE_LANGUAGE_ENGLISH" = "English";
+"SETTINGS_SECTION_TRANSLATE_LANGUAGE_OFF" = "Off";
+"TRANSLATE_TIP_MESSAGE" = "Translating...";
+"TRANSLATE_TIP_MESSAGE_FAILED" = "Translation failed, please try again";
+"TRANSLATE_TIP_MESSAGE_LONG_TEXT" = "Unable to translate when messages over 4KB";
+"TRANSLATE_SOURCE_TEXT" = "Translated by Google";
+
+"SHARE_GROUP_LINK" = "Share Group Link";
+"SHARE_GROUP_LINK_INVITE_TEXT" = "I invite you to join the %@ group \"%@\", ";
+"SHARE_GROUP_LINK_CLICK_TO_JOIN" = "click to join the group";
+
+"SETTINGS_SECTION_MESSAGE_NOTIFYCATION" = "Notification";
+"SETTINGS_GROUP_MESSAGE_NOTIFYCATION" = "Message Notification";
+
+"SETTINGS_COMMON_TIP_MESSAGE_SUCESS" = "Successfully set";
+"SETTINGS_COMMON_TIP_MESSAGE_FAILE" = "Setup failed, please try again.";
+"SETTINGS_NOTITY_CUSTOM" = "Custom Setting";
+
+/* settings topic header for table section */
+"SETTINGS_SECTION_TITLE_CALLING" = "Calling";
+
+/* Section header */
+"SETTINGS_SECURITY_TITLE" = "Screen Security";
+
+"SETTINGS_SECURITY_METHODS_FOR_FINDING_ME_TITLE" = "Methods for Finding Me";
+"SETTINGS_SECURITY_SEARCH_ME_FROM_PHONE_NUMBER" = "Phone Number";
+"SETTINGS_SECURITY_SEARCH_ME_FROM_EMAIL" = "Email";
+
+/* No comment provided by engineer. */
+"SETTINGS_SUPPORT" = "Support";
+
+/* Indicates that 'two factor auth' is disabled in the privacy settings. */
+"SETTINGS_TWO_FACTOR_AUTH_DISABLED" = "Disabled";
+
+/* Indicates that 'two factor auth' is enabled in the privacy settings. */
+"SETTINGS_TWO_FACTOR_AUTH_ENABLED" = "Enabled";
+
+/* Label for the 'two factor auth' item of the privacy settings. */
+"SETTINGS_TWO_FACTOR_AUTH_ITEM" = "Registration Lock";
+
+/* Title for the 'two factor auth' section of the privacy settings. */
+"SETTINGS_TWO_FACTOR_AUTH_TITLE" = "Registration Lock";
+
+/* No comment provided by engineer. */
+"SETTINGS_PLATFORM" = "Platform";
+"SETTINGS_WEBSITE" = "Website";
+
+"SETTINGS_VERSION" = "Version";
+
+"BUILD_SETTINGS_VERSION" = "Build Version";
+
+/* Invitation */
+"SETTINGS_INVITATION" = "Invitation";
+/* Invite code list header */
+"SETTINGS_INVITE_CODE_LIST_HEADER" = "Invite Code List";
+/* Get invite code item title */
+"SETTINGS_GET_INVITE_CODE_TITLE" = "Get Invite Code...";
+"SETTINGS_NO_MORE_INVITE_CODE" = "No More Invite Code Avaliable!";
+
+"SETTINGS_SHARE_YOUR_CONTACT_CARD_TITLE" = "Share Contact";
+"SETTINGS_NO_PROFILE_NAME" = "Empty Name Is Not Allowed!Set It Now?";
+"CONTACT_SHARE_MYSELF_DESCRIPTION_HEADER" = "Here is my contact card";
+
+/* Check is there a new version on server. */
+"CHECK_NEW_VERSION" = "Check New Version";
+
+/* action sheet item to open native mail app */
+"SHARE_ACTION_MAIL" = "Mail";
+
+/* action sheet item to open native messages app */
+"SHARE_ACTION_MESSAGE" = "Message";
+
+/* action sheet item */
+"SHARE_ACTION_TWEET" = "Twitter";
+
+/* alert body when sharing file failed because of untrusted/changed identity keys */
+"SHARE_EXTENSION_FAILED_SENDING_BECAUSE_UNTRUSTED_IDENTITY_FORMAT" = "Your safety number with %@ has recently changed. You may wish to verify it in the main app before resending.";
+
+/* Indicates that the share extension is still loading. */
+"SHARE_EXTENSION_LOADING" = "Loading...";
+
+/* Message indicating that the share extension cannot be used until the user has registered in the main app. */
+"SHARE_EXTENSION_NOT_REGISTERED_MESSAGE" = "Launch the Chative app to register.";
+
+/* Title indicating that the share extension cannot be used until the user has registered in the main app. */
+"SHARE_EXTENSION_NOT_REGISTERED_TITLE" = "Not Registered";
+
+/* Message indicating that the share extension cannot be used until the main app has been launched at least once. */
+"SHARE_EXTENSION_NOT_YET_MIGRATED_MESSAGE" = "Launch the Chative app to update or register.";
+
+/* Title indicating that the share extension cannot be used until the main app has been launched at least once. */
+"SHARE_EXTENSION_NOT_YET_MIGRATED_TITLE" = "Not Ready";
+
+/* Alert title */
+"SHARE_EXTENSION_SENDING_FAILURE_TITLE" = "Unable to Send Attachment";
+
+/* Alert title */
+"SHARE_EXTENSION_SENDING_IN_PROGRESS_TITLE" = "Uploading…";
+
+/* Shown when trying to share content to a Signal user for the share extension. Followed by failure details. */
+"SHARE_EXTENSION_UNABLE_TO_BUILD_ATTACHMENT_ALERT_TITLE" = "Unable to Prepare Attachment";
+
+/* Title for the 'share extension' view. */
+"SHARE_EXTENSION_VIEW_TITLE" = "Share to ";
+
+/* Action sheet item */
+"SHOW_SAFETY_NUMBER_ACTION" = "Show Safety Number";
+
+/* notification action */
+"SHOW_THREAD_BUTTON_TITLE" = "Show Conversation";
+
+/* body sent to contacts when inviting to Install Signal */
+"SMS_INVITE_BODY" = "I'm inviting you to install Chative! Here is the link:";
+
+/* Label for the 'no sound' option that allows users to disable sounds for notifications, etc. */
+"SOUNDS_NONE" = "None";
+
+/* Alert body after verifying privacy with {{other user's name}} */
+"SUCCESSFUL_VERIFICATION_DESCRIPTION" = "Your safety number with %@ matches. You can mark this contact as verified.";
+
+/* No comment provided by engineer. */
+"SUCCESSFUL_VERIFICATION_TITLE" = "Safety Number Matches!";
+
+/* Label for button to verify a user's safety number. */
+"SYSTEM_MESSAGE_ACTION_VERIFY_SAFETY_NUMBER" = "Verify Safety Number";
+
+/* No comment provided by engineer. */
+"THEME_SECTION" = "Theme";
+
+/* {{number of days}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 days}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_DAYS" = "%@ days";
+
+/* Label text below navbar button, embeds {{number of days}}. Must be very short, like 1 or 2 characters, The space is intentionally omitted between the text and the embedded duration so that we get, e.g. '5d' not '5 d'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_DAYS_SHORT_FORMAT" = "%@d";
+
+/* {{number of hours}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 hours}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_HOURS" = "%@ hours";
+
+/* Label text below navbar button, embeds {{number of hours}}. Must be very short, like 1 or 2 characters, The space is intentionally omitted between the text and the embedded duration so that we get, e.g. '5h' not '5 h'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_HOURS_SHORT_FORMAT" = "%@h";
+
+/* {{number of minutes}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 minutes}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_MINUTES" = "%@ minutes";
+
+/* Label text below navbar button, embeds {{number of minutes}}. Must be very short, like 1 or 2 characters, The space is intentionally omitted between the text and the embedded duration so that we get, e.g. '5m' not '5 m'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_MINUTES_SHORT_FORMAT" = "%@m";
+
+/* {{number of seconds}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 seconds}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SECONDS" = "%@ seconds";
+
+/* Label text below navbar button, embeds {{number of seconds}}. Must be very short, like 1 or 2 characters, The space is intentionally omitted between the text and the embedded duration so that we get, e.g. '5s' not '5 s'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SECONDS_SHORT_FORMAT" = "%@s";
+
+/* {{1 day}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{1 day}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SINGLE_DAY" = "%@ day";
+
+/* {{1 hour}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{1 hour}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SINGLE_HOUR" = "%@ hour";
+
+/* {{1 minute}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{1 minute}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SINGLE_MINUTE" = "%@ minute";
+
+/* {{1 week}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{1 week}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SINGLE_WEEK" = "%@ week";
+
+/* {{number of weeks}}, embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 weeks}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_WEEKS" = "%@ weeks";
+
+/* Label text below navbar button, embeds {{number of weeks}}. Must be very short, like 1 or 2 characters, The space is intentionally omitted between the text and the embedded duration so that we get, e.g. '5w' not '5 w'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_WEEKS_SHORT_FORMAT" = "%@w";
+
+/* Label for the cancel button in an alert or action sheet. */
+"TXT_CANCEL_TITLE" = "Cancel";
+
+"TXT_CONFIRM_TITLE" = "Confirm";
+
+"TXT_CONFIRM_TITLE_Invite" = "Invite";
+
+/* No comment provided by engineer. */
+"TXT_DELETE_TITLE" = "Delete";
+
+/* Pressing this button moves an archived thread from the archive back to the inbox */
+"UNARCHIVE_ACTION" = "Unarchive";
+
+/* In Inbox view, last message label for thread with corrupted attachment. */
+"UNKNOWN_ATTACHMENT_LABEL" = "[Unknown attachment]";
+
+/* Message shown in conversation view that offers to block an unknown user. */
+"UNKNOWN_CONTACT_BLOCK_OFFER" = "User not in your contacts. Would you like to block this user?";
+
+/* Displayed if for some reason we can't determine a contacts phone number *or* name */
+"UNKNOWN_CONTACT_NAME" = "Unknown Contact";
+
+/* Indicates an unknown or unrecognizable value. */
+"UNKNOWN_VALUE" = "Unknown";
+
+/* button title for unlinking a device */
+"UNLINK_ACTION" = "Unlink";
+
+/* Alert message to confirm unlinking a device */
+"UNLINK_CONFIRMATION_ALERT_BODY" = "By unlinking this device, it will no longer be able to send or receive messages.";
+
+/* Alert title for confirming device deletion */
+"UNLINK_CONFIRMATION_ALERT_TITLE" = "Unlink \"%@\"?";
+
+/* Alert title when unlinking device fails */
+"UNLINKING_FAILED_ALERT_TITLE" = "Chative was unable to unlink your device.";
+
+/* Label text in device manager for a device with no name */
+"UNNAMED_DEVICE" = "Unnamed Device";
+
+/* No comment provided by engineer. */
+"UNREGISTER_SIGNAL_FAIL" = "Failed to logout from Chative.";
+
+"SEND_MESSAGE_FAILED_REASON" = "Operation denied. This account is already unregistered.";
+
+/* No comment provided by engineer. */
+"UNSUPPORTED_ATTACHMENT" = "Received unsupported attachment type.";
+
+/* No comment provided by engineer. */
+"UNSUPPORTED_FEATURE_ERROR" = "Your device doesn't support this feature.";
+
+/* Title for alert indicating that group members can't be removed. */
+"UPDATE_GROUP_CANT_REMOVE_MEMBERS_ALERT_MESSAGE" = "You cannot remove group members. They will either have to leave, or you can create a new group without this member.";
+
+/* Title for alert indicating that group members can't be removed. */
+"UPDATE_GROUP_CANT_REMOVE_MEMBERS_ALERT_TITLE" = "Not Allowed";
+
+"YOU" = "You";
+"UPDATE_GROUP_MESSAGE_BODY_REMOVE_MEMBER" = "%@ was removed from the group";
+"UPDATE_GROUP_MESSAGE_BODY_REMOVE_MEMBERS" = "%@ were removed from the group";
+"GROUP_REMOVE_MEMBER_REJOIN" = "Rejoin";
+"GROUP_REMOVE_MEMBER_REJOIN_TIPS" = "Really want to rejoin the group?";
+
+"UPDATE_GROUP_CONFIRM_REMOVE_MEMBERS_ALERT_TITLE" = "Remove";
+"UPDATE_GROUP_CONFIRM_REMOVE_MEMBERS_ALERT_MESSAGE" = "Are you sure you want to remove him from the group chat?";
+
+/* Description of CallKit to upgrading (existing) users */
+"UPGRADE_EXPERIENCE_CALLKIT_DESCRIPTION" = "Answering calls from your lock screen is easy with iOS call integration. We anonymize your caller by default, so it's private too.";
+
+/* button label shown once when when user upgrades app, in context of call kit */
+"UPGRADE_EXPERIENCE_CALLKIT_PRIVACY_SETTINGS_BUTTON" = "Learn more in your privacy settings.";
+
+/* Header for upgrade experience */
+"UPGRADE_EXPERIENCE_CALLKIT_TITLE" = "Just Swipe to Answer";
+
+/* Description for notification audio customization */
+"UPGRADE_EXPERIENCE_INTRODUCING_NOTIFICATION_AUDIO_DESCRIPTION" = "You can now choose default and per-conversation notification sounds, and calls will respect the ringtone you've chosen for each system contact.";
+
+/* button label shown one time, after upgrade */
+"UPGRADE_EXPERIENCE_INTRODUCING_NOTIFICATION_AUDIO_SETTINGS_BUTTON" = "Review Notification Settings";
+
+/* Header for upgrade experience */
+"UPGRADE_EXPERIENCE_INTRODUCING_NOTIFICATION_AUDIO_TITLE" = "Updated Call and Message Sounds";
+
+/* button label shown one time, after user upgrades app */
+"UPGRADE_EXPERIENCE_INTRODUCING_PROFILES_BUTTON" = "Set up Your Profile";
+
+/* Description of new profile feature for upgrading (existing) users */
+"UPGRADE_EXPERIENCE_INTRODUCING_PROFILES_DESCRIPTION" = "You can now share a profile photo and name with your friends on Chative.";
+
+/* Header for upgrade experience */
+"UPGRADE_EXPERIENCE_INTRODUCING_PROFILES_TITLE" = "Ready for Your Closeup?";
+
+/* Description of new profile feature for upgrading (existing) users */
+"UPGRADE_EXPERIENCE_INTRODUCING_READ_RECEIPTS_DESCRIPTION" = "You now have the option of seeing and sharing when messages have been read.";
+
+/* button label shown one time, after upgrade */
+"UPGRADE_EXPERIENCE_INTRODUCING_READ_RECEIPTS_PRIVACY_SETTINGS" = "Enable read receipts in your privacy settings.";
+
+/* Header for upgrade experience */
+"UPGRADE_EXPERIENCE_INTRODUCING_READ_RECEIPTS_TITLE" = "Introducing Read Receipts";
+
+/* Description of video calling to upgrading (existing) users */
+"UPGRADE_EXPERIENCE_VIDEO_DESCRIPTION" = "Chative now supports secure video calling. Just start a call like normal, tap the camera button, and wave hello.";
+
+/* Header for upgrade experience */
+"UPGRADE_EXPERIENCE_VIDEO_TITLE" = "Hello Secure Video Calls!";
+
+/* Message for the alert indicating that user should upgrade iOS. */
+"UPGRADE_IOS_ALERT_MESSAGE" = "Chative requires iOS 9 or later. Please upgrade iOS in Settings app >> General >> Software Update.";
+
+/* Title for the alert indicating that user should upgrade iOS. */
+"UPGRADE_IOS_ALERT_TITLE" = "Upgrade iOS";
+
+/* No comment provided by engineer. */
+"Upgrading Signal ..." = "Upgrading Chative ...";
+
+/* button text for back button on verification view */
+"VERIFICATION_BACK_BUTTON" = "Back";
+
+/* Text field placeholder for SMS verification code during registration */
+"VERIFICATION_CHALLENGE_DEFAULT_TEXT" = "Verification Code";
+
+/* button text during registration to request phone number verification be done via phone call */
+"VERIFICATION_CHALLENGE_SEND_VIA_VOICE" = "Call Me Instead";
+
+/* button text during registration to request another SMS code be sent */
+"VERIFICATION_CHALLENGE_SUBMIT_AGAIN" = "Resend Code by SMS";
+
+/* button text during registration to submit your SMS verification code. */
+"VERIFICATION_CHALLENGE_SUBMIT_CODE" = "Submit";
+
+/* Label indicating the phone number currently being verified. */
+"VERIFICATION_PHONE_NUMBER_FORMAT" = "Enter the verification code we sent to %@.";
+
+/* Format for info message indicating that the verification state was unverified on this device. Embeds {{user's name or phone number}}. */
+"VERIFICATION_STATE_CHANGE_FORMAT_NOT_VERIFIED_LOCAL" = "You marked %@ as not verified.";
+
+/* Format for info message indicating that the verification state was unverified on another device. Embeds {{user's name or phone number}}. */
+"VERIFICATION_STATE_CHANGE_FORMAT_NOT_VERIFIED_OTHER_DEVICE" = "You marked %@ as not verified on another device.";
+
+/* Format for info message indicating that the verification state was verified on this device. Embeds {{user's name or phone number}}. */
+"VERIFICATION_STATE_CHANGE_FORMAT_VERIFIED_LOCAL" = "You marked %@ as verified.";
+
+/* Format for info message indicating that the verification state was verified on another device. Embeds {{user's name or phone number}}. */
+"VERIFICATION_STATE_CHANGE_FORMAT_VERIFIED_OTHER_DEVICE" = "You marked %@ as verified on another device.";
+
+/* Generic message indicating that verification state changed for a given user. */
+"VERIFICATION_STATE_CHANGE_GENERIC" = "Verification state changed.";
+
+/* Label for button or row which allows users to verify the safety number of another user. */
+"VERIFY_PRIVACY" = "View Safety Number";
+
+/* Label for button or row which allows users to verify the safety numbers of multiple users. */
+"VERIFY_PRIVACY_MULTIPLE" = "Review Safety Numbers";
+
+/* Indicates how to cancel a voice message. */
+"VOICE_MESSAGE_CANCEL_INSTRUCTIONS" = "Slide to Cancel";
+
+/* Filename for voice messages. */
+"VOICE_MESSAGE_FILE_NAME" = "[Voice Message]";
+
+/* Message for the alert indicating the 'voice message' needs to be held to be held down to record. */
+"VOICE_MESSAGE_TOO_SHORT_ALERT_MESSAGE" = "Tap and hold to record a voice message.";
+
+/* Title for the alert indicating the 'voice message' needs to be held to be held down to record. */
+"VOICE_MESSAGE_TOO_SHORT_ALERT_TITLE" = "Voice Message";
+
+/* Activity indicator title, shown upon returning to the device manager, until you complete the provisioning process on desktop */
+"WAITING_TO_COMPLETE_DEVICE_LINK_TEXT" = "Complete setup on Chative Desktop.";
+
+/* Info Message when you disable disappearing messages */
+"YOU_DISABLED_DISAPPEARING_MESSAGES_CONFIGURATION" = "You disabled expiring messages.";
+
+"YOU_UPDATED_DISAPPEARING_MESSAGES_TIP_MESSAGE" = "Messages will expire after being read, they will GONE and then can NOT be viewed in any way.";
+/* Info message embedding a {{time amount}}, see the *_TIME_AMOUNT strings for context. */
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION" = "The following messages will expire within %d day after being read.";
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION_DAYS" = "The following messages will expire within %d days after being read.";
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION_HOUR" = "The following messages will expire within %d hour after being read.";
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION_HOURS" = "The following messages will expire within %d hours after being read.";
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION_MINUTE" = "The following messages will expire within %d minute after being read.";
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION_MINUTES" = "The following messages will expire within %d minutes after being read.";
+
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_DAYS" = "%@ changed the message expiry to %d days.";
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_DAY" = "%@ changed the message expiry to %d day.";
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_HOURS" = "%@ changed the message expiry to %d hours.";
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_HOUR" = "%@ changed the message expiry to %d hour.";
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_MINUTES" = "%@ changed the message expiry to %d minutes.";
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_MINUTE" = "%@ changed the message expiry to %d minute.";
+
+"ARCHIVE_NOTICE_DISAPPEARING_MESSAGES_CONFIGURATION" = "MESSAGES RECEIVED %@ DAYS AGO WILL BE ARCHIVED";
+
+// Strings Copied in from JSQMessagesViewController
+
+
+"load_earlier_messages" = "Load Earlier Messages";
+
+"send" = "Send";
+
+"text_message_accessibility_label" = "%@: %@";
+
+"media_message_accessibility_label" = "%@: media message";
+
+"accessory_button_accessibility_label" = "Share media";
+
+"new_message_received_accessibility_announcement" = "New message received";
+
+/* Action sheet that will add an unknown user to contact list. */
+"ADD_OFFER_ACTIONSHEET_ADD_ACTION" = "Add Contact";
+
+"ADD_OFFER_ACTIONSHEET_ADD_ACTION_LOWER" = "Add contact";
+"ADD_OFFER_ACTIONSHEET_BLOCK_USER" = "Block user";
+
+/* Title format for action sheet that offers to add an unknown user.Embeds {{the unknown user's name or phone number}}. */
+"ADD_OFFER_ACTIONSHEET_TITLE_FORMAT" = "Add %@ To Contacts?";
+
+"ADD_CONTACT_ADD_SUCCESS" = "Add Contact Successful.";
+"ADD_CONTACT_ADD_FAILED"  = "Failed To Add Contact.";
+
+"NEW_CONTACT_ADDED" = "New contact added.";
+
+/* Invite friends to join */
+"INVITE_FRIENDS_LINK" = "I invite you to %@, a \"secure, private & no storage\" chat app, featuring E2E encryption, no metadata, and open source. Please use this link to download the app, and use it AGAIN to add me: ";
+"CONTACT_REQUEST" = "Send a request";
+"CONTACT_ACCEPT_REQUEST_FAILE_REASON_EXPIRED" = "The request is already expired, ";
+"CONTACT_NEW_REQUEST" = "Send a new request";
+"CONTACT_REQUEST_SENTED" = "Friend request sent.";
+"CONTACT_REQUEST" = "Friend request.";
+"CONTACT_ACCEPT" = "Accept";
+"CONTACT_ADD_BY_REQUEST" = "You are not friends yet. ";
+"CONTACT_ACCEPT_ADD_FRIENDS_BY_REQUEST" = "%@ sent you a contact request. ";
+"CONTACT_SEND_MESSAGE_FAILED_REASON_NOT_FRIENDS" = "Operation denied. You are not friends yet. ";
+"CONTACT_Call_FAILED_REASON_BLOCK_UESR" = "Operation denied. You need to unblock this contact. ";
+"CONTACT_ADD_CONTACT_SUCESS_TIP" = "%@ accepted your request. Try to send a message.";
+"CONTACT_REMOVE_ALERT_REASON" = "All the messages will also be permenantly deleted from both your and the other party’s devices.";
+"CONTACT_REMOVEED" = "Removed";
+"CONTACT_DELETE" = "Delete";
+"CONTACT_DELETE_TITLE" = "Delete Contact";
+"CONTACT_NOTFRIEND_INFO_MSG" = "You can only send up to 3 messages per day to a user who is not your friend. Please wait for the other party to accept your request.";
+
+"CONTACT_BLOCK_ALERT_REASON" = "Are you sure you want to do this?";
+"CONTACT_BLOCK_AND_DELETE_THIS_CHAT" = "Block & Erase";
+"CONTACT_BLOCK_ACTION" = "Block";
+"OPREATION_SUCCESS" = "Operation successful";
+"OPREATION_FAILED" = "Operation failure";
+
+"CONTACT_EDITING_VIEW_TITLE" = "Editing";
+"CONTACT_REMARK_NAME_FIELD" = "Remark";
+"CONTACT_REMARK_NAME_DEFAULT_TEXT" = "Enter remark for the contact";
+
+"CONTACT_EDIT_NAME" = "Change the name";
+"Save failed" = "Save failed";
+
+"CONTACT_EDIT_REMARK" = "Set remark";
+"CONTACT_REMARK" = "REMARK";
+
+"UPDATENAME_OPREATION_FAILED" = "Operation denied, please contact ITBot / ChativeBot.";
+
+"CONTACT_SHARE_DESCRIPTION_HEADER" = "Share One Contact For You";
+"CONTACT_PROFILENAME_DESCRIPTION_HEADER" = "Profile Name: ";
+"CONTACT_NUMBER_DESCRIPTION_HEADER" = "Number: ";
+"CONTACT_EMAIL_DESCRIPTION_HEADER" = "Email: ";
+"CONTACT_NAME_DESCRIPTION_HEADER" = "Name";
+
+"CONTACT_SHARE_CONTACT_TO_FRIENTS" = "Share Contact";
+
+"CONTACT_DETAILS_VIEW_TITLE" = "Details";
+
+"TABBAR_HOME" = "Chats";
+"TABBAR_CONTACT" = "Contacts";
+"TABBAR_TASK" = "Tasks";
+"TABBAR_ME" = "Me";
+
+"SOMEONE_MENTION_YOU_TEXT" = "[@You] ";
+"SOMEONE_MENTION_ALL_TEXT" = "[@All] ";
+
+"SPECIAL_ACCOUNT_NAME_ALL" = "All";
+
+"LOCAL_ACCOUNT_DISPLAYNAME" = "Saved";
+
+"RECALL_INFO_MESSAGE" = "%@ recalled a message";
+"RECALL_INFO_MESSAGE_WITH_EDIT" = "%@ recalled a message. ";
+"RECALL_MESSAGE_PREVIEW" = "recalled a message";
+"RE-EDIT_MESSAGE" = "Re-edit";
+"RECALL_CONFIRM_TITLE" = "Are you sure you want to recall message?";
+"RECALL_PASSED_TIME" = "Unable to recall the message after %@";
+"RECALL_CONTAINS_BOT" = "Bot is in the session, recall is not supported temporarily.";
+
+"CONFIDENTIAL_MESSAGE_MODE_ON" = "Confidential Mode On: Messages will be expired as they are read.";
+"CONFIDENTIAL_MESSAGE_MODE_OFF" = "Confidential Mode Off";
+
+
+"TASK_MESSAGE_TITLE" = "Task";
+"TASK_MESSAGE_STATUS_Ongoing" = "Ongoing";
+"TASK_MESSAGE_STATUS_ing" = "ing";
+"TASK_MESSAGE_STATUS_Received" = "Received";
+"TASK_MESSAGE_STATUS_CREATED" = "Created";
+"TASK_MESSAGE_STATUS_Completed" = "Done";
+"TASK_MESSAGE_STATUS_Rejected" = "Rejected";
+"TASK_MESSAGE_STATUS_Canceled" = "Canceled";
+"TASK_MESSAGE_STATUS_FinalState" = "Endings";
+"TASK_MESSAGE_DISMISS_Deleted" = "This task is deleted";
+"TASK_MESSAGE_DISMISS_Archived" = "This task is archived";
+"TASK_MESSAGE_View_details" = "View details";
+"TASK_MESSAGE_View_more" = "View more in Tasks";
+
+"TASK_LIST_SORT_BY_CREATED_TIME" = "Sort by created time";
+"TASK_LIST_SORT_BY_DUE_TIME" = "Sort by due time";
+"TASK_LIST_SORT_BY_PRIORITY_TIME" = "Sort by priority";
+
+/* 通话 */
+"MEDIA_CALL_BUTTON" = "Call";
+"SINGLE_CALL_UNACCEPTED_TIMEOUT" = "Call timed out and missed";
+"SINGLE_CALL_CALLER_CANCELED" = "The caller has cancelled";
+"SINGLE_CALL_CALLEE_DECLINED" = "The callee has declined";
+"SINGLE_CALL_BUSY" = "Busy...";
+"SINGLE_CALL_TIMEOUT" = "Timed out";
+"SINGLE_CALL_CALLER_NETWORK_POOR" = "The other party's network is poor";
+"SINGLE_CALL_CALLER_NETWORK_ABNORMAL" = "The current network is abnormal, it is recommended to try again later";
+"SINGLE_CALL_APPLY_MEETING_FAIL" = "Failed to apply for meeting";
+"SINGLE_CALL_MAY_NOT_ONLINE" = "The other party is temporarily unable to answer, please try later";
+"SINGLE_CALL_CALLING" = "Calling...";
+"SINGLE_CALL_WAITING_CALEE_ANSWER" = "Waiting for the other party to answer...";
+"SINGLE_CALL_WAITING_ANSWER" = "calling";
+"GROUP_CALL_WAITING_ANSWER" = "invites you to a meeting: ";
+"CALL_REPEATING_CALL_IN_CALLING" = "The service cannot be used during a call";
+"CALL_CALLER_FAIL_ABNORMAL" = "Abnormal call";
+"GROUP_CALL_APPLY_MEETING_FAIL" = "Failed to prepare for meeting";
+"MEETING_SERVICE_NOT_READY_NOTICE" = "Meeting service is preparing, please try again later";
+"MEETING_NOTICE_FAILED_TO_SWITCH_CAMERA" = "Failed to switch camera, please try again";
+"MEETING_WATCH_SCREEN_SHARE" = "View Screen Share";
+"MEETING_SCREEN_SHARE_LIST_TITLE" = "Attendees";
+"GROUP_MEETING_DETAILS_TITLE" = "Meeting's details";
+
+"SINGLE_CALL_REREFUSED" = "Call refused";
+"SINGLE_CALL_CALL_CANCELED" = "Call cancelled";
+"SINGLE_CALL_ENDED" = "Call ended";
+"SINGLE_CALL_MISSED" = "Call missed";
+"SINGLE_CALL" = "Calling ...";
+"GROUP_CALL" = "Start a meeting ...";
+"GROUP_CALL_WITH_LINK" = "%@ has started a meeting.";
+"GROUP_CALL_WITH_LINK_JOIN" = "Join";
+"GROUP_CALL_VIEW_DETAILS" = "View details";
+"GROUP_CALL_NOT_ORIGION_GROUP" = "Meeting's details can only be opened in the original group.";
+"GROUP_CALL_CONNECTING" = "Connecting...";
+"GROUP_CALL_MAXPUSH_AUDIOSTREAM_TIP" = "Support up to %ld people to open microphone at the same time";
+"GROUP_CALL_MAXPUSH_VIDEOSTREAM_TIP" = "Support up to %ld people to open camera at the same time";
+
+"GROUP_CALL_JOIN_MEETING_TIPS_TITLE" = "Join meeting";
+"GROUP_CALL_JOIN_MEETING_TIPS_MSG" = "Are you sure to join the meeting？";
+
+"CALL_INCOMING_ALERT_IGNORE" = "Ignore";
+"CALL_INCOMING_ALERT_ACCEPT" = "Accept";
+"CALL_INCOMING_ALERT_REFUSE" = "Refuse";
+"CALL_INCOMING_ALERT_INVITE_CALL" = "Invites you to a voice call";
+"CALL_INCOMING_ALERT_ONGOING_TIP" = "A call is currently active. Disconnect from the current call to place a new call";
+
+"CALL_INVITE_MEMBERS_TITLE" = "Invite members";
+"CALL_INVITE_MEMBERS" = "Invite";
+"CALL_INVITE_MESSAGE" = "Invite meeting";
+"CALL_INVITE_INSTANT_MEETING_DEFAULT_NAME" = "Instant meeting";
+"CALL_INVITE_INSTANT_MEETING_TITLE" = "Instant meeting";
+"CALL_INVITE_INSTANT_MEETING_NAME_PLACEHOLDER" = "Name this instant meeting";
+"CALL_INVITE_INSTANT_MEETING_START" = "Start";
+
+/* meeting  */
+"MEETING_MEMBER_JOIN_INFO_MESSAGE" = " joined";
+"MEETING_MEMBER_LEFT_INFO_MESSAGE" = " left";
+"MEETING_AUTO_LEAVE_TITLE" = " second left";
+"MEETING_AUTO_LEAVE_TIP" = "Are you there? WILL CLOSE after the countdown.";
+"MEETING_REMINDER_DEFAULT_PREVIEW" = "Meeting Reminder";
+
+"ERROR_DESCRIPTION_MEETING_DOES_NOT_EXIT" = "The meeting does not exist";
+"ERROR_DESCRIPTION_MEETING_ENDED" = "The meeting has ended";
+"ERROR_DESCRIPTION_MEETING_AUTHORIZATION_FAILED" = "Authorization failed";
+"ERROR_DESCRIPTION_MEETING_SYSTEM_ERROR" = "The system is abnormal, please contact the meeting inviter";
+
+"FLOATVIEW_ACTION_CREATE_GROUP" = "Create Group";
+"FLOATVIEW_ACTION_CHAT_FOLDER" = "Chat Folders";
+"FLOATVIEW_ACTION_INSTANT_MEETING" = "Instant Meeting";
+"FLOATVIEW_ACTION_SCAN" = "Scan";
+"FLOATVIEW_ACTION_ADD_CONTACTS" = "Invite Friends";
+
+"SCREENPROTECTION_TITLE" = "Screenshot Warning";
+"SCREENPROTECTION_DESC" = "For user’s security and privacy, Chative prevents Screenshots.";
+"SCREENPROTECTION_UNDERSTAND" = "Understand";
+
+// decrypted fail
+"CALL_ERROR_ALERT_DECRYPTIONFAILED" = "The audio/video may not be played properly for the other party as they are using an older version.";
+
+/** app update */
+"APP_UPDATE_NO_NEW_VERSION" = "The current version is the latest version";
+
+//用户活跃状态相关
+"USER_STATE_ACTIVE" = "Active";
+"USER_STATE_UNACTIVE_CONDITION_MINUTES" = "Active %d minutes ago";
+"USER_STATE_UNACTIVE_CONDITION_HOUR" = "Active %d hours ago";
+"USER_STATE_UNACTIVE_CONDITION_YESTERDAY" = "Active yesterday";
+"USER_STATE_UNACTIVE_CONDITION_BEFORE_YESTERDAY" = "";
+"USER_STATE_UNACTIVE_CONDITION_DAY" = "Active %d days ago";
+"USER_STATE_UNACTIVE_CONDITION_WEEK" = "Active %d weeks ago";
+"USER_STATE_UNACTIVE_CONDITION_MONTH" = "Active 1 month ago";
+"USER_STATE_CALLING" = "Calling";
+"USER_STATE_SHAREING" = "Presenting";
+"USER_STATE_UNDISTURB" = "Do not disturb";//勿扰
+"USER_STATE_IN_THE_MEETING" = "Meeting";//会议中
+
+/** copy to pastboard */
+"COPY_TO_PASTBOARD" = " Copy successfully";
+"COPYID" = "Copied";
+
+"FORWARD_MESSAGE_CONVERSATION_MULTI_TITLE" = "Select Mutiple Chats";
+"FORWARD_MESSAGE_CONVERSATION_SINGLE_TITLE" = "Select a Chat";
+"FORWARD_MESSAGE_SELECT_CONVERSATION_MAX_COUNT" = "Up to %lu chats";
+"FORWARD_MESSAGE_SELECT_MULTI" = "Multiple";
+"FORWARD_MESSAGE_SELECT_CLOSE" = "Close";
+"FORWARD_MESSAGE_SEND_TO_SINGLE" = "Send to:";
+"FORWARD_MESSAGE_SEND_TO_MULTI" = "Send to:";
+"FORWARD_MESSAGE_LEAVE_MESSAGE" = "Leave a message";
+"FORWARD_MESSAGE_ONE_BY_ONE_TYPE" = "One-by-One Forward";
+"FORWARD_MESSAGE_COMBINE_TYPE" = "Combine and Forward";
+"FORWARD_MESSAGE_CONTACT_TYPE" = "Contact Card";
+"FORWARD_MESSAGE_ONE_BY_ONE_OVERVIEW" = " %ld items";
+"FORWARD_MESSAGE_COMBINE_GROUP_OVERVIEW" = "Group Chat History";
+"FORWARD_MESSAGE_COMBINE_CONTACT_OVERVIEW" = "Chat History for %@";
+"FORWARD_MESSAGE_OVERVIEW_AND" = " and ";
+"FORWARD_MESSAGE_FORBIDDEN_REMINDER" = "This item dosn't support forwarding";
+"FORWARD_MESSAGE_ATTACHMENT_NOT_DOWNLOADED" = "Attachment isn't downloaded";
+"FORWARD_MESSAGE_CHAT_HISTORY" = "Chat History";
+"FORWARD_MESSAGE_SELECT_MESSAGE_MAX_COUNT" = "Select up to %lu messages";
+"FORWARD_MESSAGE_SINGLE_TITLE" = "Forwarded Message %@\nFrom: ";
+
+"FORWARD_MESSAGE_CONFIDENTIAL" = "Confidential messages can not be selected.";
+
+/* The title for the theme section in the appearance settings. */
+"SETTINGS_APPEARANCE_THEME_TITLE" = "Theme";
+
+/* Name indicating that the dark theme is enabled. */
+"APPEARANCE_SETTINGS_DARK_THEME_NAME" = "Dark";
+
+/* Name indicating that the light theme is enabled. */
+"APPEARANCE_SETTINGS_LIGHT_THEME_NAME" = "Light";
+
+/* Name indicating that the system theme is enabled. */
+"APPEARANCE_SETTINGS_SYSTEM_THEME_NAME" = "System";
+
+"APPEARANCE_SETTINGS_LANGUAGE" = "Language";
+"APPEARANCE_SETTINGS_LANGUAGE_EN" = "English";
+"APPEARANCE_SETTINGS_LANGUAGE_ZH" = "中文";
+
+"TIME_AM" = "AM";
+"TIME_PM" = "PM";
+"GROUP_OWER" = "Group manager";
+"PERSON_CARD_ICON" = "Profile Picture";
+"PERSON_CARD_NAME" = "Name";
+"PERSON_CARD_GENDER" = "Gender";
+"PERSON_CARD_NONE" = "None";
+"PERSON_CARD_GENDER_MALE" = "Male";
+"PERSON_CARD_GENDER_FEMALE" = "Female";
+"PERSON_CARD_GENDER_OTHER" = "Other";
+"PERSON_CARD_STATE" = "State";
+"PERSON_CARD_ID" = "ID:";
+"PERSON_CARD_EMAIL" = "Email:";
+"PERSON_CARD_PHONE_NUMBER" = "Phone:";
+"PERSON_CARD_TIMEZONE" = "Time:";
+"PERSON_CARD_STATE_SETTING_TITLE" = "Set Do Not Disturb";
+"PERSON_CARD_STATE_SETTING_TIME" = "Set do not disturb for";
+"PERSON_CARD_STATE_CLEAR" = "Clear";
+"PERSON_CARD_STATE_UNTIL" = "Until";
+
+"PERSON_CARD_STATE_MINUTES" = "minutes";
+"PERSON_CARD_STATE_HOURS" = "hours";
+"PERSON_CARD_STATE_DAYS" = "days";
+
+"PERSON_CARD_STATE_MINUTE" = "minute";
+"PERSON_CARD_STATE_HOUR" = "hour";
+"PERSON_CARD_STATE_DAY" = "day";
+
+"CONTACT_PROFILE_SIGNATURE" = "Signature";
+"CONTACT_PROFILE_NAME" = "Name";
+"CONTACT_PROFILE_ROLES" = "Roles";
+"CONTACT_PROFILE_BUSINESS_UNIT" = "Business Unit";
+"CONTACT_PROFILE_BUSINESS_DEPARTMENT" = "Department";
+"CONTACT_PROFILE_BUSINESS_ROLE" = "Role:";
+"CONTACT_PROFILE_BUSINESS_BU" = "BU:";
+"CONTACT_PROFILE_BUSINESS_DEPT" = "Dept:";
+"CONTACT_PROFILE_BUSINESS_LEADER" = "Leader:";
+"CONTACT_PROFILE_Dot_Line_LEADER" = "Dot-line:";
+
+"CONTACT_PROFILE_BUSINESS_NAME" = "Name";
+"CONTACT_PROFILE_BUSINESS_TITLE_LEADER" = "Leader";
+"CONTACT_PROFILE_BUSINESS_TITLE_DOT_LINE_LEADER" = "Dot-line Leader";
+"CONTACT_PROFILE_BUSINESS_CONTACT_INFO" = "Contact Info";
+"CONTACT_PROFILE_BUSINESS_ORGANIZATION_INFO" = "Organization Info";
+
+
+"PERSON_CARD_SIGNATURE" = "Signature";
+"APP_ADD_SIGNATURE" = "Set a signature";
+"APP_TEXT_CLOSE" = "Close";
+"APP_WORK_SIGNATURE" = "Signature";
+
+"PERSON_CARD_REMOVE" = "Remove";
+//You removed Bob. Both of you have deleted all the historical messages./你删除了Bob，双方都删除了历史消息。
+"PERSON_CARD_REMOVE_TIP" = "%@ removed %@. All the messages have been deleted.";
+
+"PERSON_CARD_ADD" = "+Contact";
+"PERSON_CARD_LIKES" = "Likes";
+"PERSON_CARD_LIKES_MORE" = "and %d more...";
+
+"PERSON_CARD_LIKE_SUCESS" = "Liked successfully!";
+"PERSON_CARD_LIKE_FAILED" = "Liked failed!";
+"PERSON_CARD_SEND_MESSAGE" = "Message";
+"PERSON_CARD_VOICE_CALL" = "Call";
+"PERSON_CARD_SHARE_CARD" = "Share";
+
+"LOGIN_ERROR" = "Email/Code/Phone Error";
+"LOGIN_EMAIL_PLACEHOLDER" = "Enter your Email or Code";
+"LOGIN_EMAIL_PLACEHOLDER_CHATIVE" = "Email/Phone Number/Invite Code";
+"LOGIN_EMAIL_PLACEHOLDER_CHATIVE_SIGNIN" = "Enter Email/Phone Number";
+"LOGIN_EMAIL_PLACEHOLDER_CHATIVE_SIGNIN_EMAIL" = "Enter Email";
+
+"Line_NewLine" = "New Line";
+"TOAST_CAN_NOT_TO_PERSONCARD" = "You are in different fields, so you can't view each other's  profiles";
+"VERIFICATION_CODE_EMPTY" = "The verification code is empty";
+"LOGIN_EMAIL_EMPTY" = "Please enter your email or phone number";
+"MODIFY_EMAIL_EMPTY" = "Please enter your email";
+"MODIFY_PHONE_NUMBER_EMPTY" = "Please enter your phone number";
+
+"LOGIN_SKIP_ALERT_MESSAGE" = "You might lost your account without linking to a eamil account. Are you sure to skip this step ？";
+"LOGIN_SKIP_ALERT_CANCEL" = "Cancel";
+"LOGIN_SKIP_ALERT_CONTINUE" = "Continue";
+"ADVANCED_BINDEMAIL" = "Bind Email";
+
+"ACCOUNT_FORCEBIND_EMAIL_TITLE" = "Email Already Linked";
+"ACCOUNT_FORCEBIND_EMAIL_MESSAGE" = "Confirm replacing it as the current account\'s email?";
+"ACCOUNT_FORCEBIND_PHONE_TITLE" = "Phone Number Already Linked";
+"ACCOUNT_FORCEBIND_PHONE_MESSAGE" = "Confirm replacing it as the current account\'s number?";
+
+
+
+/* Light Task */
+"LIGHT_TASK_CREATE_BUTTON_TITLE" = "Create";
+"LIGHT_TASK_ADD_TASK" = "Add task";
+"LIGHT_TASK_ADD_NOTES" = "Add notes";
+"LIGHT_TASK_TITLE_OVERRUN_ALERT" = "Maximum 2000 characters";
+"LIGHT_TASK_ADD_ASSIGNEE" = "Add assignee";
+"LIGHT_TASK_ADD_DUE_TIME" = "Add due time";
+"LIGHT_TASK_ADD_PRIORITY" = "Add priority";
+"LIGHT_TASK_ASSIGNEE_TITLE" = "Assignee";
+"LIGHT_TASK_ASSIGNEE_COUNT" = "%ld assignees";
+"LIGHT_TASK_ADD_ASSIGNEE_COUNT" = "%ld people";
+"LIGHT_TASK_NO_EDITING_PERMISSION" = "View only";
+"LIGHT_TASK_PRESENT_CONVERSATION_PREFIX" = "View in chat：";
+"LIGHT_TASK_DUE_TIME" = "Due";
+"LIGHT_TASK_DUE_TIME_SELECT" = "Due on:";
+"LIGHT_TASK_DUE_TIME_TODAY" = "Today";
+"LIGHT_TASK_DUE_TIME_TOMORROW" = "Tomorrow";
+"LIGHT_TASK_DUE_TIME_YESTERDAY" = "Yesterday";
+"LIGHT_TASK_DUE_TIME_INVALID_MSG" = "The due time needs to be later than the current time, please set it again";
+"LIGHT_TASK_DUE_TIME_INVALID_ALERT_MSG" = "The alert time you set has passed.No alerts will be received for this task";
+"LIGHT_TASK_USER_HANDLE_TO_JIRA" = "To Jira";
+"LIGHT_TASK_USER_HANDLE_REJECT" = "Reject task";
+"LIGHT_TASK_USER_HANDLE_CANCEL" = "Cancel task";
+"LIGHT_TASK_USER_HANDLE_COMPLETE" = "Complete";
+"LIGHT_TASK_USER_HANDLE_RESTART" = "Restart";
+"LIGHT_TASK_USER_REMOVE_ASSIGNEE_TITLE" = "Remove assignee";
+"LIGHT_TASK_USER_REMOVE_SELF_MSG" = "You will not be able to operate this task once removed yourself";
+"LIGHT_TASK_LOG_COMPLETE" = "This task has been completed";
+"LIGHT_TASK_LOG_REJECT" = "This task has been rejected";
+"LIGHT_TASK_LOG_NOT_EXIST" = "No such task";
+"LIGHT_TASK_LOG_CANCEL" = "This task has been canceled";
+"LIGHT_TASK_ENSURE_COMPLETE_MSG" = "Are you sure to complete this task?";
+"LIGHT_TASK_ENSURE_REJECT_MSG" = "Are you sure to reject this task?";
+"LIGHT_TASK_ENSURE_DELETE_MSG" = "Are you sure to delete this task?";
+"LIGHT_TASK_ENSURE_CANCEL_MSG" = "Are you sure to cancel this task?";
+"LIGHT_TASK_ENSURE_REMOVE_MSG" = "Are you sure to remove this task?";
+"LIGHT_TASK_ENSURE_TO_JIRA_MSG" = "Are you sure to complete this task, and go to Jira?";
+"LIGHT_TASK_ALERT_BEFORE_DUE_MSG" = "A task is due in %@ minutes";
+
+"LIGHT_TASK_LOG_TABLE_CREATE" = "%@\n%@ created this task";
+"LIGHT_TASK_LOG_TABLE_COMPLETE" = "%@\nThe task has been completed by %@";
+"LIGHT_TASK_LOG_TABLE_REJECT" = "%@  The task has been rejected by %@";
+"LIGHT_TASK_LOG_TABLE_CANCEL" = "%@  The task has been cancelled by %@";
+"LIGHT_TASK_LOG_TABLE_ASSIGNEE" = "%@  %@ changed assignees";
+"LIGHT_TASK_LOG_TABLE_PRIORITY" = "%@  %@ changed priority to %@";
+"LIGHT_TASK_LOG_TABLE_DUE" = "%@  %@ changed due time to %@";
+"LIGHT_TASK_LOG_TABLE_NAME" = "%@  %@ changed name";
+"LIGHT_TASK_LOG_RECORD_TITLE" = "Change Records";
+"LIGHT_TASK_DUE_TIME_PREFIX" = "Due on ";
+"LIGHT_TASK_DONE_TIME_PREFIX" = "Completed on ";
+"LIGHT_TASK_REJECT_TIME_PREFIX" = "Rejected on ";
+"LIGHT_TASK_CANCEL_TIME_PREFIX" = "Canceled on ";
+"LIGHT_TASK_MAX_ASSIGNEE_COUNT" = "Up to %ld assignees";
+
+"VOTE_LIST_TITLE"= "Vote detail";
+"VOTE_CREAT_TITLE"= "Creating poll";
+"VOTE_CREAT_THTEM_TITLE"= "Enter your question(up to 30 characters)";
+"VOTE_CREAT_ENTER_OPTION"= "Enter option";
+"VOTE_CREAT_ADD_OPTION"= "Add option";
+"VOTE_CREAT_ALLOW_MULTIPLE"= "Allow multiple votes";
+"VOTE_CREAT_ALLOW_ANONYMOUS"= "Anonymous";
+"VOTE_CREAT_CREATE_Poll"= "Create Poll";
+"VOTE_CREAT_ALLOW_MAX_OPTION"= "Up to 6 options";
+"VOTE_CREAT_OPTION_CANNOT_SAME"= "Options can not be same";
+"VOTE_CREAT_DEADLINE"= "Due time";
+"VOTE_CREAT_DEADLINE_DATE"= "End at ";
+"VOTE_CREAT_FAILED"= "Creation failed, please try again";
+"VOTE_CREAT_OPTION_CANNOT_EMPTY"= "Option can not be empty";
+"VOTE_CREAT_VOTE_NOW"= "Vote now";
+"VOTE_CREAT_SIGNAL"= "[Single]";
+"VOTE_CREAT_MULTIPLE"= "[Multiple]";
+"VOTE_CREAT_NAMED"= "[Named]";
+"VOTE_CREAT_PARTICIPANT" = "Participant number";
+"VOTE_CREAT_TOTALIVOTES" = "Total votes";
+"VOTE_CREAT_VOTE" = "vote";
+"VOTE_CREAT_VOTE_ENDED" = "Vote ended";
+"VOTE_CREAT_View_RESULTS" = "View Results";
+"VOTE_CREAT_POLL_RESULTS" = "Poll Results";
+"VOTE_CREAT_VOTING" = "Voting...";
+"VOTE_CREAT_VOTING_THEME_NOEMPTY" = "Question can not be empty";
+"VOTING_HAS_ENDED" = "Voting has ended";
+"VOTING_HAS_VOTED" = "You have voted, can not repeat the vote";
+
+"REQUEST_FAILED_TRY_AGAIN" = "The request failed. Please try again";
+"REQUEST_JUMP_FAILED" = "Jump failed";
+
+"VOTE_CREAT_VOTE_DURATION_MINUTES" = "minutes";
+"VOTE_CREAT_VOTE_DURATION_HOURS" = "hours";
+"VOTE_CREAT_VOTE_DURATION_DAYS" = "days";
+"VOTE_CREAT_VOTE_DURATION_WEEKS" = "weeks";
+
+//单数
+"VOTE_CREAT_VOTE_DURATION_MINUTE" = "minute";
+"VOTE_CREAT_VOTE_DURATION_HOUR" = "hour";
+"VOTE_CREAT_VOTE_DURATION_DAY" = "day";
+"VOTE_CREAT_VOTE_DURATION_WEEK" = "week";
+
+"PINNED_MESSAGES_VC_TITLE" = "Pinned messages";
+"UNPIN_ONE_MESSAGE_NOTICE" = "Would you like to unpin this message?";
+"UNPIN_MESSAGES_NOTICE" = "Would you like to unpin this %ld messages?";
+"PIN_MESSAGE_FAILED" = "Pin message failed";
+"UNPIN_MESSAGE_FAILED" = "Unpin message failed";
+"PIN_MESSAGE_FAILED_LENGTH_LIMIT" = "length limit, operation failed";
+"PIN_MESSAGE_ORIGION_NOT_EXIST" = "The original message does't exist";
+"PINNED_SYSTEM_INFO_MESSAGE" = " pinned ";
+"PINNED_INFO_MESSAGE_DEFAULT_PREVIEW" = "You've got a new pin message";
+
+"HOMEVIEWCELL_DRAFT" = "[Draft]";
+
+/* Chat Folder */
+"CHAT_FOLDER_VC_TITLE" = "Chat Folders";
+"CHAT_FOLDER_VC_SELECT_TITLE" = "Select Folder";
+"CHAT_FOLDER_ADD_FOLDER" = "Add Folder";
+"CHAT_FOLDER_CREATE_FOLDER" = "Create Folder";
+"CHAT_FOLDER_EDIT_FOLDER" = "Edit Folder";
+"CHAT_FOLDER_FOLDER_NAME" = "Folder Name";
+"CHAT_FOLDER_ADD_CHATS" = "Add Chats";
+"CHAT_FOLDER_MINE_TITLE" = "My Folders";
+"CHAT_FOLDER_RECOMMEND_TITLE" = "Recommend";
+"CHAT_FOLDER_INCLUDED_CHATS" = "Included Chats";
+"CHAT_FOLDER_INCLUDED_CONDITIONS" = "Included Conditions";
+"CHAT_FOLDER_ADD_CONDITIONS" = "Add Conditions";
+"CHAT_FOLDER_KEYWORDS" = "Keywords";
+"CHAT_FOLDER_ADD_CHATS_TIPS" = "Choose chats that will appear in this folder";
+"CHAT_FOLDER_EMPTY_FOLDER_TIPS" = "Please add some chats to the folder";
+"CHAT_FOLDER_ADD_FOLDER_TIPS" = "Create folders for different chats and quickly switch between them";
+"CHAT_FOLDER_CHANGER_ORDER_TIPS" = "Drag and drop folders to change order";
+"CHAT_FOLDER_CREATE_SUCCESS_TIP" = "Create success";
+"CHAT_FOLDER_CREATE_FAILED_TIP" = "Create failed, please try again";
+"CHAT_FOLDER_SAVE_SUCCESS_TIP" = "Save success";
+"CHAT_FOLDER_SAVE_FAILED_TIP" = "Save failed, please try again";
+"CHAT_FOLDER_UPDATE_SUCCESS_TIP" = "Update success";
+"CHAT_FOLDER_UPDATE_FAILED_TIP" = "Update failed, please try again";
+"CHAT_FOLDER_DELETE_TIP" = "Are you sure you want to delete this folder? Chats inside will not be deleted.";
+"CHAT_FOLDER_ADD_TO_FOLDER_TIP" = "Are you sure to add to this folder?";
+"CHAT_FOLDER_REMOVE_FROM_FOLDER_TIP" = "Remove the conversation from the folder?";
+"CHAT_FOLDER_REMOVE_LAST_TIP" = "At least one chat or condition needs to be added";
+"CHAT_FOLDER_FOLDER_NAME_EXIST_TIP" = "The folder name already exists";
+"CHAT_FOLDER_EMPTY_MESSAGE_TIP" = "There is no conversation.";
+"CHAT_FOLDER_CONVERSATION_EXIST_TIP" = "This folder already contains the selected conversation";
+"CHAT_FOLDER_NAME_ALL" = "All";
+"CHAT_FOLDER_DISCARD_UPDATE_TIP" = "Are you sure you want to discard changes?";
+"CHAT_FOLDER_DISCARD_CONFIRM" = "Discard";
+"CHAT_FOLDER_DISCARD_CANCEL" = "No";
+"CHAT_FOLDER_ITEM_REMOVE" = "Remove";
+"CHAT_FOLDER_NOT_ALLOW_EDIT" = "Recommend folder cannot be edited";
+"CHAT_FOLDER_RECOMMEDN_PRIVATE" = "Private";
+"CHAT_FOLDER_RECOMMEDN_UNREAD" = "Unread";
+"CHAT_FOLDER_RECOMMEDN_ATME" = "@Me";
+"CHAT_FOLDER_NAME_CONFLICT" = "Conflicts with the recommended folder name";
+"CHAT_FOLDER_REMOVE_TIP" = "Are you sure you want to remove this folder? You can add it back to the display later.";
+"CHAT_FOLDER_ADD_RECOMMEND_EXIST_NAME_TIPS" = "There is already a folder with the same name, addition failed";
+"CHAT_FOLDER_ALL_DELETE_THREAD_TIPS" = "Confirm to delete the selected chat/conversation. Note that this will only be deleted in this device.";
+"CHAT_FOLDER_ADD_CONDITIONS_VC_TITLE" = "Conditions";
+"CHAT_FOLDER_ADD_CONDITIONS_PLACEHOLDER" = "Please enter %ld to %ld characters";
+"CHAT_FOLDER_REMOVE_CONDITIONS_THREAD_TIPS" = "This chat was automatically added to the group by conditional filtering. Do you want to change the conditions?";
+"CHAT_FOLDER_GROUP_OWNER_MAX_COUNT_TIPS" = "Up to %lu contacts";
+
+"SENSITIVE_WORDS_WARNING_TEXT" = "The content includes \"%@\", do you confirm to send it?";
+
+"WEBVIEW_LOAD_FAILED" = "Page failed to load, please try again later";
+"WEBVIEW_LOAD_TRY_AGAIN" = "Try again";
+"WEBVIEW_LOAD_URL_ILLEGAL" = "URL is not valid";
+"WEBVIEW_LOAD_NETWORK_ERROR" = "Network error, please try again";
+
+/* markdown card */
+
+"FETCH_APP_INFO_ERROR" = "Failed to get app info";
+"CARD_SUBMIT_SUCCESS" = "Operation successful";
+"CARD_SUBMIT_FAILURE" = "Operation failed";
+"URL_NOT_ALLOWED" = "URL not allowed";
+"CONVERSATION_DOES_NOT_EXIST" = "Conversation does not exist";
+"USER_DOES_NOT_EXIST" = "User does not exist";
+"MARKDOWN_CODE" = "View Code";
+
+/* call end feedback */
+"CALL_END_INFO_MESSAGE_DEFAULT_PREVIEW" = "The meeting has ended";
+"CALL_END_TEXTVIEW_PLACEHOLDER" = "Send your feedback here";
+
+/* RAPID system message */
+"RAPID_SET_SYSTEM_MESSAGE" = "%@ marked %@ as %@";
+"RAPID_REMOVE_SYSTEM_MESSAGE" = "%@ removed group role for %@";
+"SEARCH_PEOPLE_TITLE" = "does not exist";
+
+/* group reminder */
+"MONDAY" = "Monday";
+"TUESDAY" = "Tuesday";
+"WEDNESDAY" = "Wednesday";
+"THURSDAY" = "Thursday";
+"FRIDAY" = "Friday";
+"SATURDAY" = "Saturday";
+"SUNDAY" = "Sunday";
+"LAST_DAY_OF_MONTH" = "Last";
+"GROUP_REMINDER_MONTHLY" = "%@ day of month";
+"GROUP_REMINDER_FIRST_DAY" = "1st";
+"GROUP_REMINDER_SECOND_DAY" = "2nd";
+"GROUP_REMINDER_THIRD_DAY" = "3rd";
+"GROUP_REMINDER_SUFFIX_TH" = "%ldth";
+"GROUP_REMINDER_EVERY" = "Every %@";
+"GROUP_REMINDER_OFF" = "Off";
+"GROUP_REMINDER_TIME_AM" = "am";
+"GROUP_REMINDER_TIME_PM" = "pm";
+"GROUP_REMINDER_OFF_TIPS" = " turned off group periodic reminders";
+"GROUP_REMINDER_DAILY" = "Every day";
+"GROUP_REMINDER_CYCLE_WEEKLY" = "Weekly group reminder: ";
+"GROUP_REMINDER_CYCLE_MONTHLY" = "Monthly group reminder: ";
+"GROUP_REMINDER_CYCLE_DAILY" = "Daily group reminder: ";
+"GROUP_REMINDER_CYCLE_DEFAULT" = "Group reminder: ";
+"GROUP_REMINDER_TIME_FORMAT_WEEKLY" = "every %1$@ at %3$ld:00 %2$@ (UTC+8)";
+"GROUP_REMINDER_TIME_FORMAT_MONTHLY" = "%3$ld:00 %2$@ (UTC+8) on the %1$@ day of month";
+"GROUP_REMINDER_TIME_FORMAT_DAILY" = "every day at %2$ld:00 %1$@ (UTC+8)";
+"GROUP_REMINDER_SET_SUCCEED_WEEKLY_TIPS" = "%@ set a weekly group reminder: %@\nThere will be a reminder %@";
+"GROUP_REMINDER_SET_SUCCEED_MONTHLY_TIPS" = "%@ has set a monthly group reminder: %@\nThere will be a reminder at %@";
+"GROUP_REMINDER_SET_SUCCEED_DAILY_TIPS" = "%@ set a daily group reminder: %@\nThere will be a reminder %@";
+"GROUP_REMINDER_DEFAULT_PREVIEW" = "group reminder update";
+"GROUP_REMINDER_MODIFY_DEFAULT_TIPS" = " changed reminder settings";
+
+"SHOW_PERSONAL_CARD_FAILED" = "Failed to view profile";
+
+/* group commnon */
+"GROUP_COMMEN_ERROR_INVALID_ARGUMENT" = "Invalid argument";
+"GROUP_COMMEN_ERROR_INVITER_EXCEPTION" = "Inviter permission exception";
+"GROUP_COMMEN_ERROR_GROUP_EXCEPTION" = "The group does not exist or the status is abnormal";
+"GROUP_COMMEN_ERROR_INVITATION_EXCEPTION" = "Invitation has expired";
+"GROUP_COMMEN_ERROR_GROUP_FULL" = "Group is full";
+"GROUP_COMMEN_ERROR_INVITER_NOT_EXIST" = "Inviter does not exist";
+"GROUP_COMMEN_ERROR_ALREADY_IN_GROUP" = "you are already in the group";
+"GROUP_COMMEN_REJOIN_CONFLICT_TIPS" = "- Removed members can rejoin themselves within 48 hours\n- Only members removed by a user with invite privileges can choose to rejoin themselves";
+
+"GROUP_COMMEN_ERROR_INVITER_INVALID_INVITE_CODE" = "Invalid group invite link.";
+"GROUP_COMMEN_ERROR_INVITER_LINK_INVITATION_DISABLED" = "Failed to join the group. This group disabled invite link.";
+"GROUP_COMMEN_ERROR_INVITER_ONLY_MODERATORS_CAN_ADD_MEMBERS" = "Failed to join the group. This group only allows moderators to invite.";
+"GROUP_COMMEN_ERROR_INVITER_FAILED_TO_JOIN_GROUP_GROUP_DISBANDED" = "Failed to join the group. This group has already been disbanded.";
+"GROUP_COMMEN_ERROR_INVITER_FAILED_TO_JOIN_GROUP_GROUP_INVALID" = "Failed to join the group. This group is invalid.";
+
+"GROUP_INVITE_TO_GROUP_VIA_LINK" = "Invite to Group via Link";
+
+"MENTIONS_GROUP_MEMBERS_LIST_TITLE" = "Group members";
+"MENTIONS_GROUP_MEMBERS_LIST_SUBTITLE" = " - Users will be notified";
+"MENTIONS_OTHER_CONTACTS_LIST_TITLE" = "Other contacts";
+"MENTIONS_OTHER_CONTACTS_LIST_SUBTITLE" = " - Users will NOT be notified";
+
+"UNSUPPORTED_SCHEME_LINK" = "Not supported link. Please upgrade the client and try again.";
+"SCHEME_LINK_ARG_ERROR" = "Invalid Link";
+
+"OPEN_EMAIL_REMINDER" = "Open\n%@?";
+
+"PROFILE_STATUS_ONFO" = "Profile info";
+"PROFILE_STATUS_EDIT_ONFO" = "Profile";
+
+"PROFILE_STATUS_DELETE_ACCOUNT" = "Detele account";
+
+"PROFILE_STATUS_DELETE_ACCOUNT_TOP_TIP" = "This will completely delete all your data on both client and server, such as your profile, contacts, and messages, and they will never be recovered.";
+
+"PROFILE_STATUS_DELETE_ACCOUNT_CONFIRM_TIP" = "To confirm, please enter “%@” in the box below.";
+
+"Add Contact" = "Add Contact";
+
+"Remove Contact" = "Remove";
+
+"Request sent" = "Request sent";
+
+"CONTACT_SET_NAME" = "Set name";
+
+"NAME" = "NAME";
+
+"INPUT_TEXT_VIEW_TOASTER_LIMIT_LENGTH" = "Exceed 4096 bytes limit";
+
+
+"Transfer Data" = "Transfer Data";
+
+"Do you want to clear old data" = "Do you want to clear old data";
+
+"Please restart Chative" = "Please restart Chative";
+
+"TXT_OK_TITLE" = "ok";
+
+"For security reasons, your data is only stored on your devices. If you have your old device, you can securely transfer it to this device." = "For security reasons, your data is only stored on your devices. If you have your old device, you can securely transfer it to this device.";
+
+"Continue" = "Continue";
+
+"Transfer" = "Transfer";
+
+"Login without Transferring" = "Login without Transferring";
+
+"Delete And Login failed, please try again" = "Delete And Login failed, please try again";
+
+"Continuing will disable your account on other devices." = "Continuing will disable your account on other devices.";
+
+"All the messages on your old device will be deleted permanently. Are you sure to continue?" = "All the messages on your old device will be deleted permanently. Are you sure to continue?";
+
+"Delete and Login" = "Delete and Login";
+
+"Cancel" = "Cancel";
+
+"Waiting for the Old Device…" = "Waiting for the Old Device…";
+
+"Open Chative on your old device, bring it nearby, and make sure Wi-Fi and Bluetooth are enabled on both devices. Then, Scan the following QR code with the old device." = "Open Chative on your old device, bring it nearby, and make sure Wi-Fi and Bluetooth are enabled on both devices. Then, Scan the following QR code with the old device.";
+
+"Receiving Data" = "Receiving Data";
+
+"Keep both devices on and near each other." = "Keep both devices on and near each other.";
+
+"About %1$@ second remaining" = "About %1$@ second remaining";
+
+"Transfer Success" = "Transfer Success";
+
+"Successfully Transferred All Your Data" = "Successfully Transferred All Your Data";
+
+"OK" = "OK";
+
+"Transfer Failed" = "Transfer Failed";
+
+"The transfer failed. %1$@.Please try again." = "The transfer failed. %1$@.Please try again.";
+
+"Are you sure to transfer all your data to this device: %1$@'s iPhone?" = "Are you sure to transfer all your data to this device: %1$@'s iPhone?";
+
+"Yes" = "Yes";
+
+"Transferring Data" = "Transferring Data";
+
+"DEVICE_TRANSFER_ERROR_GENERIC" = "The transfer couldn't complete, please ensure your devices are near each other";
+
+"DEVICE_TRANSFER_ERROR_CERTIFICATE_MISMATCH" = "Unable to verify your new device";
+
+"DEVICE_TRANSFER_ERROR_UNSUPPORTED_VERSION" = "Update to the latest version";
+
+"DEVICE_TRANSFER_ERROR_MODE_MISMATCH_LINKED" = "To set up this iPad as a linked device, you must scan with your old iPad";
+
+"DEVICE_TRANSFER_ERROR_MODE_MISMATCH_PRIMARY" = "To transfer your account, you must scan with your iPhone";
+
+"Leave" = "Leave";
+
+"Disband" = "Disband";
+
+"Link this device?" = "Link this device?";
+
+"This device will be able to see your groups and contacts, read all your messages, and send messages in your name." = "This device will be able to see your groups and contacts, read all your messages, and send messages in your name.";
+
+"Link New Device" = "Link New Device";
+
+"%@ took a screenshot!" = "%@ took a screenshot!";
+
+"took a screenshot!" = "took a screenshot!";
+
+"Translation Leaks Your Message" = "Translation Leaks Your Message";
+
+"Your messages will be sent to Google in plaintext for the translation. Are you sure to continue?" = "Your messages will be sent to Google in plaintext for the translation. Are you sure to continue?";
+
+"STATUS_PLEASE_LOGIN" = "Please login";
+
+"PASSKEYS_SET_UP_TITLE" = "Set up a Passkey";
+
+"PASSKEYS_SAFE_TITLE" = "Keep your account safe";
+"PASSKEYS_SAFE_DESC" = "Passkeys offer state-of-the-art phishing resistance.";
+
+"PASSKEYS_PASSWORDLESS_TITLE" = "Passwordless";
+"PASSKEYS_PASSWORDLESS_DESC" = "You will be able to sign in using your Face ID, Touch ID, or hardware security key. No need to remember a password.";
+
+"PASSKEYS_SET_UP" = "Set up";
+
+"NAV_SKIP" = "Skip";
+
+
+"PASSKEYS_VERIFY_TITLE" = "Verify with Passkey";
+"PASSKEYS_VERIFY_DESC" = "Your device will ask for your face,\n fingerprint, or hardware security key";
+"PASSKEYS_VERIFY_TEXT" = "Verify";
+"PASSKEYS_OTHER_WAY" = "Try another way";
+
+"PASSKEYS_ENABLE" = "Enable Passkey";
+"PASSKEYS_ENABLE_TIP" = "Passkeys enables you to securely and smoothly sign in to your account with Touch ID, Face ID, or hardware security key. To change the passkey, turn it off and turn it on again.";
+
+"DELETE_ACCOUNT_TIP" = "Your account, along with all data including contacts, groups, and messages, will be automatically deleted after 90 days of inactivity. You can re-register at any time if you need.";
+
+"CHECK_USER_IS_NOT_EXITS" = "Account is not registered, please register";
+"CHECK_USER_IS_AREADY_EXITS" = "Account has been registered, please sign in";
+
+"BLOCK" = "Block";
+"BLOCKED" = "Blocked";
+"UNBLOCK" = "Unblock";
+"IGNORE" = "Ignore";
+"ACCEPT" = "Accept";
+"BLOCK&REPORT" = "Block & Report";
+"BLOCK_REPORT_TITLE" = "Are you sure you want to do this?";
+
+"JOINED" = "Joined:";
+"MET_METHOD" = "How you met:";
+"GROUPS" = "Groups:";
+"NOT_RECODED" = "Not recorded";
+"UNABLE_TO_CALL" = "Unable to call";
+"UNABLE_TO_CALL_DESC" = "You cannot call because of their privacy settings.";
+
+"REMOVE_CONTACT" = "Delete Contact";
+"SELECTED_ERROR_PASSKEY" = "You authenticated with a wrong passkey. Please try again and select the right one.";
+
+/* notification title indicating the user generically has a new message */
+"GENERIC_INCOMING_MESSAGE_NOTIFICATION" = "New Message!";
+"CONTACT_ALL" = "All";
+"CONTACT_GROUPS" = "Groups";
+"CONTACT_MOBILE_CONTACTS" = "Mobile Contacts";
+"GROUPM_MEETING_UNMATCH_VERSION" = "Their device doesn't support the security features of this meeting. Please invite them to a group and restart the meeting in the group to make it compatible. This issue will be solved soon.";
+
+"GROUP_IN_COMMON_TITLE_GROUPS" = "Groups";
+"GROUP_IN_COMMON_TITLE_GROUP" = "Group";
+
+"ALLOWN_ACCESS_YOUR_PHONE_BOOK" = "Allow Chative access to your phonebook to find your friends.";
+"ALLOWN" = "Allow";
+
+"CALL_ALERT_ERROR_106" = "You don't have the encryption key for the call. Please ask others who are in the meeting to invite you to the call.";
+
+"Create" = "Create";
+
+"Never Repeat" = "Never Repeat";
+"Daily" = "Daily";
+"Weekly" = "Weekly";
+"Biweekly" = "Biweekly";
+"Monthly" = "Monthly";
+"Weekdays" = "Weekdays";
+"Choose a weekday time first." = "Choose a weekday time first.";
+
+"created a reminder" = "%@ created a ";
+"changed a reminder" = "%@ changed a ";
+"deleted a reminder" = "%@ deleted a ";
+
+"reminder" = "reminder";
+"Reminder:" = "Reminder by @%@:";
+
+"Write some message" = "Write some message";
+"Please fill in the Desc." = "Please fill in the Desc.";
+"up to max characters" = " up to %ld characters";
+
+"Description" = "Description";
+"Repeat" = "Repeat";
+"Time" = "Time";
+"Desc" = "Desc";
+"Close" = "Close";
+"Delete Reminder" = "Delete Reminder？";
+"Delete failed" = "Delete failed!";
+"Maximum 200 characters" = "Maximum 200 characters";
+"REMOVE_CONTACT_TIP" = "%@ are not your friend yet, you cannot invite them to join a group. Please ask them to accept you first.";
+
+/* input bar action button title when choosing Photos */
+"INPUTTOOL_ATTACHMENT_PHOTO_BUTTON" = "Photos";
+
+/* input bar action button title when open Camera */
+"INPUTTOOL_ATTACHMENT_CAMERA_BUTTON" = "Camera";
+
+/* input bar action button title when start Voice Call */
+"INPUTTOOL_ATTACHMENT_VOICE_CALL_BUTTON" = "Voice Call";
+
+/* input bar action button title when start Video Call */
+"INPUTTOOL_ATTACHMENT_VIDEO_CALL_BUTTON" = "Video Call";
+
+/* input bar action button title when send Contact */
+"INPUTTOOL_ATTACHMENT_CONTACT_BUTTON" = "Contact";
+
+/* input bar action button title when send File */
+"INPUTTOOL_ATTACHMENT_FILE_BUTTON" = "File";
+
+/* input bar action button title when open Confidential Mode */
+"INPUTTOOL_ATTACHMENT_CONFIDENTIAL_BUTTON" = "Confidential Mode";
+
+/* input bar action button title when open Mention */
+"INPUTTOOL_ATTACHMENT_MENTION" = "Mention";
+
+"INPUTTOOL_VOICE_HOLD_TO_TALK" = "Hold to talk";
+
+"INPUTTOOL_VOICE_RELEASE_TO_SEND" = "Release to send";
+
+"INPUTTOOL_VOICE_RELEASE_TO_CANCEL" = "Release to Cancel";
+
+"MENU_ACTION_MORE_ACTION" = "More";
+
+"WORKSPACE_WARNING_TITLE" = "Safety Tip";
+"WORKSPACE_WARNING_DESC" = "Not sure if this link is safe. Are you sure to open it?\n%@";
+"OPEN" = "Open";
+"CANCEL" = "Cancel";
+
+/* accessibility label for the button which records voice memos */
+"INPUT_TOOLBAR_VOICE_MEMO_BUTTON_ACCESSIBILITY_LABEL" = "Voice Message";
+
+/* accessibility label for the button which open confidential mode */
+"INPUT_TOOLBAR_CONFIDE_BUTTON_ACCESSIBILITY_LABEL" = "Confidential Message";
+
+
+"IMAGE_PREVIEW_ADD_MESSAGE" = "Add Message";
+"CONFIRM_DISBAND_GROUP_DESCRIPTION" = "The data of this group will be deleted and all of the members in this group will be removed at the same time.";
+"MESSAGE_ACTION_COMBINE_FORWARD" = "Combine & Forward";
+"MESSAGE_ACTION_SAVE" = "Save";
+
+"DEVICE_INACTIVE_POPVIEW_TITLE" = "Device Active";
+"DEVICE_INACTIVE_POPVIEW_CONTENT" = "Due to prolonged inactivity, your device has been temporarily disabled for security reasons, and any unreceived messages have been cleared. Please activate your device to resume use.";
+"DEVICE_INACTIVE_POPVIEW_BUTTON" = "Activate Now";
+"DEVICE_INACTIVE_POPVIEW_SUCCESS_TOAST" = "Device Activated";
+
+"APN_SOMEONE_MENTION_YOU_TEXT" = "@You ";
+"APN_SOMEONE_MENTION_ALL_TEXT" = "@All ";
+
+"INVITE_FRIEND_FULL_TIPS" = "Invites full. Please try later!";
+
+"TTCALL_STREAM_LIMIT" = "The current server has reached the publish streaming limit. Please try again later.";
+
+"MEETING_GROUP_AUTO_LEAVE_DESC" = "No one has been speaking for a while. Would you like to leave the meeting?";
+"MEETING_CONTACT_AUTO_LEAVE_DESC" = "No other participants are in the meeting. Would you like to leave?";
+
+"GROUP_NAME_CHANGED_SYSTEM_MSG" = "%@ has changed the group name to %@";
+
+"CONFIRM_NEW_ACCOUNT_LOGIN_TITLE" = "Security Alert";
+"CONFIRM_NEW_ACCOUNT_LOGIN_TIP_MESSAGE" = "A different account has logged in. Previous account data will be deleted.";
+"CONFIRM_NEW_ACCOUNT_LOGIN_CONFIRM" = "Delete & Relogin";
+
+"IMAGE_RECOGNIZATION_ACTION_OPEN_URL" = "Open URL";
+"IMAGE_RECOGNIZATION_ACTION_COPY_URL" = "Copy URL";
+"GROUP_COMMEN_ERROR_SCHEME_ERROR" = "Unsupported link";
+
+"HANGUP_END_MEETING" = "End for all";
+"HANGUP_LEAVE_MEETING" = "Leave";
+"HANGUP_CANCEL_MEETING" = "Cancel";
+
+"GROUP_MEETING_EXIT" = "Exit";
+"GROUP_MEETING_END_CALL" = "End call for all";
+"GROUP_MEETING_OTHER_END_CALL" = "call ended";
+
+"MESSAGE_ACTION_SPEECHTOTEXT" = "Voice to text";
+"MESSAGE_ACTION_SPEECHTOTEXT_ORIGIN" = "Discard Convert";
+
+"SPEECHTOTEXT_CONVERT_TIP_MESSAGE" = "Converting...";
+"SPEECHTOTEXT_CONVERT_TIP_MESSAGE_FAILED" = "Unable to convert to text";
+
+"CONVERT_SOURCE_TEXT" = "Voice-to-Text converted by TempTalk server";
+
+"SPEECHTOTEXT_NO_TEXT_RECOGNIZE" = "No text recognized";
+
+"SETTINGS_CHAT" = "Chat";
+
+"SETTINGS_CHAT_SAVE_PHOTOS" = "Save to Photos";
+"SETTINGS_CHAT_SAVE_PHOTOS_DESCRIPTION" = "Automatically save received photos and videos to Photos; items won’t be saved in Confidential Mode.";
+
+"MEETING_NAVAGATION_RECONNECTING_FAILURE" = "Reconnection failed";
+"MEETING_NAVAGATION_CONNECTING" = "connecting...";
+
+"MEETING_SEND_ALL" = "Send to all";
+"METTING_CONNECT_EXCEPTION_TIPS" = "Unable to connect to the meeting. Please try again";
+"MEETING_DOING_FREQUENTLY_TIPS" = "Too many requests. Please try again later";
+"MEETING_JOINED_FAILURE_TIPS" = "Failed to request the meeting";
+
+"PERSONAL_CARD_ADD_FRIEND_ERROR_TOAST" = "This account has logged out and messages can not be reached.";
+
+"LOGIN_BOTTOM_TIPS_FRONT" = "By signing up, you agree to our ";
+"LOGIN_BOTTOM_TIPS_BACKEND" = "Terms & Privacy Policy.";
+"REPORT_CONTACT_TITLE" = "Report spam";
+"REPORT_CONTACT_TIPS_DESCRIPTION" = "TT will be notified that this user may be sending spam, but cannot view any chat content.";
+"REPORT_CONTACT_TIPS_CONFIRM" = "Report";
+"REPORT_CONTACT_TIPS_CANCEL" = "Cancel";
+"REPORT_INFO_TIPS_TITLE" = "Spam Reported";
+"REPORT_INFO_TIPS_DESCRIPTION" = "For more options, go to the Me tab, tap Help & Feedback to contact customer service.";
+"REPORT_INFO_TIPS_OK" = "OK";
+"REPORT_INFO_REPORTED_SUCCESS" = "Report submitted successfully";
+
+"RAISE_HANDS_TITLE" = "Raise Hand";
+
+"CALLING_NOISE_TITLE" = "Mic Noise Suppression";
+
+"BLOCK_USER_TITLE" = "Block user";
+"BLOCK_USER_DESCRIPTION" = "Block this user from messaging and calling you on Temptalk?";
+"BLOCK_USER_CONFIRM" = "Block";
+"BLOCK_USER_CANCEL" = "Cancel";
+"BLOCK_USER_UNBLOCK" = "Unblock";
+"BLOCK_USER_BLOCK_SUCCESS_TIPS" = "Block Success";
+"BLOCK_USER_BLOCK_FAILURE_TIPS" = "Block Failed";
+"UNBLOCK_USER_BLOCK_FAILURE_TIPS" = "Unblock failed";
+
+"RESET_IDENTITY_KEY_TIPS" = " reset the identity key and the history messages were cleared.";
+
+"CALL_MORE_SWITCH_CAMERA" = "Switch";
+
+"EXPIRE_EXTEND_TITLE" = "Extend timer?";
+"EXPIRE_EXTEND_DESCRIPTION" = "Previously deleted messages can’t be recovered.";
+"EXPIRE_EXTEND_CONFIRM" = "OK";
+"EXPIRE_EXTEND_CANCEL" = "Cancel";
+"EXPIRE_SHORTEN_TITLE" = "Shorten timer?";
+"EXPIRE_SHORTEN_DESCRIPTION" = "More messages may be deleted and won’t be recoverable. This change applies to all your devices.";
+"EXPIRE_SHORTEN_CONFIRM" = "OK";
+"EXPIRE_SHORTEN_CANCEL" = "Cancel";
+"EXPIRE_SYSTEM_MESSAGE" = "Earlier messages are no longer available";
+
+"MESSAGE_ACTION_SELECT_ALL" = "Select All";
+
+"CONVERSATION_JOIN_BAR_PRIVATE_CALLING" = " is calling";
+"CONVERSATION_JOIN_BAR_PRIVATE_ANOTHER_DEVICE" = "In call on another device.";
+
+"CALL_LIVEKIT_ERROR_TOAST" = "Call Connection Issue";

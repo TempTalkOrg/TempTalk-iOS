@@ -1,0 +1,3791 @@
+/* Button text to dismiss missing contacts permission alert */
+"AB_PERMISSION_MISSING_ACTION_NOT_NOW" = "以后再说";
+
+/* Action sheet item */
+"ACCEPT_NEW_IDENTITY_ACTION" = "接受新的安全码";
+
+/* Label for 'audio call' button in contact view. */
+"ACTION_AUDIO_CALL" = "Chative 通话";
+
+/* Label for 'invite' button in contact view. */
+"ACTION_INVITE" = "邀请其使用 Chative";
+
+/* Label for 'send message' button in contact view.
+   Label for button that lets you send a message to a contact. */
+"ACTION_SEND_MESSAGE" = "发送消息";
+
+/* Label for 'share contact' button. */
+"ACTION_SHARE_CONTACT" = "分享联系人";
+
+/* Label for 'video call' button in contact view. */
+"ACTION_VIDEO_CALL" = "视频通话";
+
+/* A label for the 'add by phone number' button in the 'add group member' view */
+"ADD_GROUP_MEMBER_VIEW_BUTTON" = "添加";
+
+/* Title for the 'add contact' section of the 'add group member' view. */
+"ADD_GROUP_MEMBER_VIEW_CONTACT_TITLE" = "添加联系人";
+
+/* Title for the 'add by phone number' section of the 'add group member' view. */
+"ADD_GROUP_MEMBER_VIEW_PHONE_NUMBER_TITLE" = "通过电话号码添加";
+
+/* Title for the 'add group member' view. */
+"ADD_GROUP_MEMBER_VIEW_TITLE" = "添加新成员";
+
+/* Message shown in conversation view that offers to share your profile with a group. */
+"ADD_GROUP_TO_PROFILE_WHITELIST_OFFER" = "是否与该群组共享您的资料？";
+
+/* Message shown in conversation view that offers to add an unknown user to your phone's contacts. */
+"ADD_TO_CONTACTS_OFFER" = "您希望将此用户添加为联系人吗？";
+
+/* Message shown in conversation view that offers to share your profile with a user. */
+"ADD_USER_TO_PROFILE_WHITELIST_OFFER" = "是否与该用户共享您的资料？";
+
+/* The label for the 'discard' button in alerts and action sheets. */
+"ALERT_DISCARD_BUTTON" = "放弃";
+
+/* The label for the 'don't save' button in action sheets. */
+"ALERT_DONT_SAVE" = "不要保存";
+
+/* No comment provided by engineer. */
+"ALERT_ERROR_TITLE" = "错误";
+
+/* The label for the 'save' button in action sheets. */
+"ALERT_SAVE" = "保存";
+
+/* No comment provided by engineer. */
+"ANSWER_CALL_BUTTON_TITLE" = "接听";
+
+/* No comment provided by engineer. */
+"APN_Message" = "新消息！";
+
+/* No comment provided by engineer. */
+"APN_MESSAGE_FROM" = "消息来自";
+
+/* No comment provided by engineer. */
+"APN_MESSAGE_IN_GROUP" = "群消息";
+
+/* No comment provided by engineer. */
+"APN_MESSAGE_IN_GROUP_DETAILED" = "%@ 在 %@ 群组中：%@";
+
+/* Message for the 'app launch failed' alert. */
+"APP_LAUNCH_FAILURE_ALERT_MESSAGE" = "Chative 无法正常启动。请将您的调试日志发送给我们的开发团队，以让我们帮助您解决这个问题。";
+
+/* Title for the 'app launch failed' alert. */
+"APP_LAUNCH_FAILURE_ALERT_TITLE" = "错误";
+
+/* Text prompting user to edit their profile name. */
+"APP_SETTINGS_EDIT_PROFILE_NAME_PROMPT" = "输入您的名字";
+
+/* Message format for the 'new app version available' alert. Embeds: {{The latest app version number.}}. */
+"APP_UPDATE_NAG_ALERT_MESSAGE_FORMAT" = "%@ 版已在 App Store 上线。";
+
+/* Title for the 'new app version available' alert. */
+"APP_UPDATE_NAG_ALERT_TITLE" = "新版本TempTalk发布了";
+
+/* Label for the 'update' button in the 'new app version available' alert. */
+"APP_UPDATE_NAG_ALERT_UPDATE_BUTTON" = "更新";
+
+/* Name of application */
+"APPLICATION_NAME" = "Chative";
+
+/* Pressing this button moves a thread from the inbox to the archive */
+"ARCHIVE_ACTION" = "存档";
+
+/* One line label indicating the user can add no more text to the attachment caption. */
+"ATTACHMENT_APPROVAL_CAPTION_LENGTH_LIMIT_REACHED" = "消息字数已满。";
+
+/* Format string for file extension label in call interstitial view */
+"ATTACHMENT_APPROVAL_FILE_EXTENSION_FORMAT" = "文件类型: %@";
+
+/* Format string for file size label in call interstitial view. Embeds: {{file size as 'N mb' or 'N kb'}}. */
+"ATTACHMENT_APPROVAL_FILE_SIZE_FORMAT" = "大小: %@";
+
+/* Label for 'send' button in the 'attachment approval' dialog. */
+"ATTACHMENT_APPROVAL_SEND_BUTTON" = "发送";
+
+/* Generic filename for an attachment with no known name */
+"ATTACHMENT_DEFAULT_FILENAME" = "附件";
+
+/* Status label when an attachment download has failed. */
+"ATTACHMENT_DOWNLOADING_STATUS_FAILED" = "失败。点击重试。";
+
+/* Status label when an attachment is currently downloading */
+"ATTACHMENT_DOWNLOADING_STATUS_IN_PROGRESS" = "下载中...";
+
+/* Status label when an attachment is enqueued, but hasn't yet started downloading */
+"ATTACHMENT_DOWNLOADING_STATUS_QUEUED" = "点击下载";
+
+/* The title of the 'attachment error' alert. */
+"ATTACHMENT_ERROR_ALERT_TITLE" = "附件发送错误";
+
+/* Attachment error message for image attachments which could not be converted to JPEG */
+"ATTACHMENT_ERROR_COULD_NOT_CONVERT_TO_JPEG" = "无法调整图像附件大小。";
+
+/* Attachment error message for video attachments which could not be converted to MP4 */
+"ATTACHMENT_ERROR_COULD_NOT_CONVERT_TO_MP4" = "无法解析该视频。";
+
+/* Attachment error message for image attachments which cannot be parsed */
+"ATTACHMENT_ERROR_COULD_NOT_PARSE_IMAGE" = "无法读取图像附件。";
+
+/* Attachment error message for image attachments in which metadata could not be removed */
+"ATTACHMENT_ERROR_COULD_NOT_REMOVE_METADATA" = "无法清除图片的元数据。";
+
+/* Attachment error message for image attachments which could not be resized */
+"ATTACHMENT_ERROR_COULD_NOT_RESIZE_IMAGE" = "无法调整图像大小。";
+
+/* Attachment error message for attachments whose data exceed file size limits */
+"ATTACHMENT_ERROR_FILE_SIZE_TOO_LARGE" = "附件过大。";
+
+/* Attachment error message for attachments with invalid data */
+"ATTACHMENT_ERROR_INVALID_DATA" = "附件包含无效的内容。";
+
+/* Attachment error message for attachments with an invalid file format */
+"ATTACHMENT_ERROR_INVALID_FILE_FORMAT" = "附件格式无效。";
+
+/* Attachment error message for attachments without any data */
+"ATTACHMENT_ERROR_MISSING_DATA" = "无附件。";
+
+/* Accessibility hint describing what you can do with the attachment button */
+"ATTACHMENT_HINT" = "选择或者新拍摄图片并发送";
+
+/* Accessibility label for attaching photos */
+"ATTACHMENT_LABEL" = "附件";
+
+/* attachment menu option to send contact */
+"ATTACHMENT_MENU_CONTACT_BUTTON" = "联系人";
+
+/* Alert title when picking a document fails for an unknown reason */
+"ATTACHMENT_PICKER_DOCUMENTS_FAILED_ALERT_TITLE" = "文件选取失败。";
+
+/* Alert body when picking a document fails because user picked a directory/bundle */
+"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_BODY" = "Chative 不能处理此文件，请尝试压缩后重试。";
+
+/* Alert title when picking a document fails because user picked a directory/bundle */
+"ATTACHMENT_PICKER_DOCUMENTS_PICKED_DIRECTORY_FAILED_ALERT_TITLE" = "不支持的文件";
+
+/* Short text label for a voice message attachment, used for thread preview and on the lock screen */
+"ATTACHMENT_TYPE_VOICE_MESSAGE" = "[语音消息]";
+
+"UNSUPPORTED_MESSAGE_TIP" = "不支持的消息类型，请升级到最新版本。";
+"CANNOT_DISPLAYED_MESSAGE_TIP" = "该消息类型不能展示";
+
+/* action sheet button title to enable built in speaker during a call */
+"AUDIO_ROUTE_BUILT_IN_SPEAKER" = "扬声器";
+
+/* button text for back button */
+"BACK_BUTTON" = "返回";
+
+/* Error indicating the backup export could not export the user's data. */
+"BACKUP_EXPORT_ERROR_COULD_NOT_EXPORT" = "无法导出要备份的数据。";
+
+/* Error indicating that the app received an invalid response from CloudKit. */
+"BACKUP_EXPORT_ERROR_INVALID_CLOUDKIT_RESPONSE" = "服务端返回无效响应";
+
+/* Error indicating the backup export failed to save a file to the cloud. */
+"BACKUP_EXPORT_ERROR_SAVE_FILE_TO_CLOUD_FAILED" = "无法上传要备份的数据。";
+
+/* Indicates that the cloud is being cleaned up. */
+"BACKUP_EXPORT_PHASE_CLEAN_UP" = "正在清除备份";
+
+/* Indicates that the backup export is being configured. */
+"BACKUP_EXPORT_PHASE_CONFIGURATION" = "正在准备备份";
+
+/* Indicates that the database data is being exported. */
+"BACKUP_EXPORT_PHASE_DATABASE_EXPORT" = "正在导出数据";
+
+/* Indicates that the backup export data is being exported. */
+"BACKUP_EXPORT_PHASE_EXPORT" = "正在导出备份";
+
+/* Indicates that the backup export data is being uploaded. */
+"BACKUP_EXPORT_PHASE_UPLOAD" = "正在上传备份";
+
+/* Error indicating the backup import could not import the user's data. */
+"BACKUP_IMPORT_ERROR_COULD_NOT_IMPORT" = "无法导入备份。";
+
+/* Indicates that the backup import is being configured. */
+"BACKUP_IMPORT_PHASE_CONFIGURATION" = "正在准备备份";
+
+/* Indicates that the backup import data is being downloaded. */
+"BACKUP_IMPORT_PHASE_DOWNLOAD" = "正在下载备份数据";
+
+/* Indicates that the backup import data is being finalized. */
+"BACKUP_IMPORT_PHASE_FINALIZING" = "备份准备即将完成";
+
+/* Indicates that the backup import data is being imported. */
+"BACKUP_IMPORT_PHASE_IMPORT" = "正在导入备份。";
+
+/* Indicates that the backup database is being restored. */
+"BACKUP_IMPORT_PHASE_RESTORING_DATABASE" = "正在恢复数据库";
+
+/* Indicates that the backup import data is being restored. */
+"BACKUP_IMPORT_PHASE_RESTORING_FILES" = "正在恢复文件";
+
+/* An explanation of the consequences of blocking another user. */
+"BLOCK_BEHAVIOR_EXPLANATION" = "黑名单中的用户将不能呼叫您或给你发送消息。";
+
+/* Button label for the 'block' button */
+"BLOCK_LIST_BLOCK_BUTTON" = "加入黑名单";
+
+/* A format for the 'block user' action sheet title. Embeds {{the blocked user's name or phone number}}. */
+"BLOCK_LIST_BLOCK_TITLE_FORMAT" = "把 %@ 加入黑名单？";
+
+/* Button label for the 'unblock' button */
+"BLOCK_LIST_UNBLOCK_BUTTON" = "从黑名单中移除";
+
+/* A format for the 'unblock user' action sheet title. Embeds {{the blocked user's name or phone number}}. */
+"BLOCK_LIST_UNBLOCK_TITLE_FORMAT" = "从黑名单中移除 %@ 吗？";
+
+/* A label for the block button in the block list view */
+"BLOCK_LIST_VIEW_BLOCK_BUTTON" = "加入黑名单";
+
+/* The title of the 'block user failed' alert. */
+"BLOCK_LIST_VIEW_BLOCK_FAILED_ALERT_MESSAGE" = "无法加入黑名单。";
+
+/* The title of the 'block user failed' alert. */
+"BLOCK_LIST_VIEW_BLOCK_FAILED_ALERT_TITLE" = "错误";
+
+/* The message format of the 'user blocked' alert. Embeds {{the blocked user's name or phone number}}. */
+"BLOCK_LIST_VIEW_BLOCKED_ALERT_MESSAGE_FORMAT" = "%@ 已经在黑名单里了。";
+
+/* The title of the 'user blocked' alert. */
+"BLOCK_LIST_VIEW_BLOCKED_ALERT_TITLE" = "用户加入黑名单了";
+
+/* The message of the 'You can't block yourself' alert. */
+"BLOCK_LIST_VIEW_CANT_BLOCK_SELF_ALERT_MESSAGE" = "不能将自己加入黑名单";
+
+/* The title of the 'You can't block yourself' alert. */
+"BLOCK_LIST_VIEW_CANT_BLOCK_SELF_ALERT_TITLE" = "错误";
+
+/* The title of the 'unblock user failed' alert. */
+"BLOCK_LIST_VIEW_UNBLOCK_FAILED_ALERT_MESSAGE" = "无法从黑名单中移除。";
+
+/* The title of the 'unblock user failed' alert. */
+"BLOCK_LIST_VIEW_UNBLOCK_FAILED_ALERT_TITLE" = "错误";
+
+/* The message format of the 'user unblocked' alert. Embeds {{the blocked user's name or phone number}}. */
+"BLOCK_LIST_VIEW_UNBLOCKED_ALERT_MESSAGE_FORMAT" = "%@ 不在黑名单中。";
+
+/* The title of the 'user unblocked' alert. */
+"BLOCK_LIST_VIEW_UNBLOCKED_ALERT_TITLE" = "用户从黑名单中移除了";
+
+/* Action sheet that will block an unknown user. */
+"BLOCK_OFFER_ACTIONSHEET_BLOCK_ACTION" = "加入黑名单";
+
+/* Title format for action sheet that offers to block an unknown user.Embeds {{the unknown user's name or phone number}}. */
+"BLOCK_OFFER_ACTIONSHEET_TITLE_FORMAT" = "将 %@ 加入黑名单";
+
+/* Label for 'continue' button. */
+"BUTTON_CONTINUE" = "继续";
+
+/* Label for generic done button. */
+"BUTTON_DONE" = "完成";
+
+"BUTTON_OK" = "好的";
+
+/* Button text to enable batch selection mode */
+"BUTTON_SELECT" = "选择";
+
+/* Label for button that lets users call a contact again. */
+"CALL_AGAIN_BUTTON_TITLE" = "重拨";
+
+/* Alert message when calling and permissions for microphone are missing */
+"CALL_AUDIO_PERMISSION_MESSAGE" = "Chative 需要访问您的麦克风用于通话和录取语音消息。您可以在系统设置中授予访问权限。";
+
+/* Alert title when calling and permissions for microphone are missing */
+"CALL_AUDIO_PERMISSION_TITLE" = "请求访问麦克风";
+
+/* Accessibility label for placing call button */
+"CALL_LABEL" = "打电话";
+
+/* Call setup status label after outgoing call times out */
+"CALL_SCREEN_STATUS_NO_ANSWER" = "没有应答。";
+
+/* embeds {{Call Status}} in call screen label. For ongoing calls, {{Call Status}} is a seconds timer like 01:23, otherwise {{Call Status}} is a short text like 'Ringing', 'Busy', or 'Failed Call' */
+"CALL_STATUS_FORMAT" = "Chative %@";
+
+/* Label for call button for alert offering to call a user. */
+"CALL_USER_ALERT_CALL_BUTTON" = "拨号";
+
+/* Message format for alert offering to call a user. Embeds {{the user's display name or phone number}}. */
+"CALL_USER_ALERT_MESSAGE_FORMAT" = "您要打电话给 %@ 吗？";
+
+/* Title for alert offering to call a user. */
+"CALL_USER_ALERT_TITLE" = "打电话？";
+
+/* Accessibility label for accepting incoming calls */
+"CALL_VIEW_ACCEPT_INCOMING_CALL_LABEL" = "接听来电";
+
+/* Accessibility label for selection the audio source */
+"CALL_VIEW_AUDIO_SOURCE_LABEL" = "音频";
+
+/* Accessibility label for declining incoming calls */
+"CALL_VIEW_DECLINE_INCOMING_CALL_LABEL" = "拒接来电";
+
+/* Accessibility label for hang up call */
+"CALL_VIEW_HANGUP_LABEL" = "结束通话";
+
+/* Accessibility label for muting the microphone */
+"CALL_VIEW_MUTE_LABEL" = "静音";
+
+/* Reminder to the user of the benefits of enabling CallKit and disabling CallKit privacy. */
+"CALL_VIEW_SETTINGS_NAG_DESCRIPTION_ALL" = "如果您改变设置，您将可以直接在锁屏界面上看到来电人的名称与号码并且应答来电。\n\n更多信息请见隐私设置。";
+
+/* Reminder to the user of the benefits of disabling CallKit privacy. */
+"CALL_VIEW_SETTINGS_NAG_DESCRIPTION_PRIVACY" = "如果您改变设置，您将可以看到来电人的名称与电话号码。\n\n更多信息请见隐私设置。";
+
+/* Label for button that dismiss the call view's settings nag. */
+"CALL_VIEW_SETTINGS_NAG_NOT_NOW_BUTTON" = "以后";
+
+/* Label for button that shows the privacy settings. */
+"CALL_VIEW_SETTINGS_NAG_SHOW_CALL_SETTINGS" = "显示隐私设置";
+
+/* Accessibility label to toggle front vs. rear facing camera */
+"CALL_VIEW_SWITCH_CAMERA_DIRECTION" = "切换前后摄像头";
+
+/* Accessibility label to switch to audio only */
+"CALL_VIEW_SWITCH_TO_AUDIO_LABEL" = "转为语音通话";
+
+/* Accessibility label to switch to video call */
+"CALL_VIEW_SWITCH_TO_VIDEO_LABEL" = "转为视频通话";
+
+/* Label for the 'return to call' banner. */
+"CALL_WINDOW_RETURN_TO_CALL" = "点击回到通话";
+
+/* notification action */
+"CALLBACK_BUTTON_TITLE" = "回拨";
+
+/* The generic name used for calls if CallKit privacy is enabled */
+"CALLKIT_ANONYMOUS_CONTACT_NAME" = "Chative 用户";
+
+/* Message for alert explaining that a user cannot be verified. */
+"CANT_VERIFY_IDENTITY_ALERT_MESSAGE" = "此用户在您和他通信之前将不能被验证。";
+
+/* Title for alert explaining that a user cannot be verified. */
+"CANT_VERIFY_IDENTITY_ALERT_TITLE" = "错误";
+
+/* Title for the 'censorship circumvention country' view. */
+"CENSORSHIP_CIRCUMVENTION_COUNTRY_VIEW_TITLE" = "选择国家";
+
+/* Error indicating that the app could not determine that user's CloudKit account status */
+"CLOUDKIT_STATUS_COULD_NOT_DETERMINE" = "连接 iCloud 备份时有错误发生。";
+
+/* Error indicating that user does not have an iCloud account. */
+"CLOUDKIT_STATUS_NO_ACCOUNT" = "您没有可用于备份的 iCloud 账户。";
+
+/* Error indicating that the app was prevented from accessing the user's CloudKit account. */
+"CLOUDKIT_STATUS_RESTRICTED" = "Chative 没有访问您 iCloud 账户的权限。";
+
+/* Activity Sheet label */
+"COMPARE_SAFETY_NUMBER_ACTION" = "和剪切版比较";
+
+/* Table section header for contact listing when composing a new message */
+"COMPOSE_MESSAGE_CONTACT_SECTION_TITLE" = "联系人";
+
+/* Table section header for group listing when composing a new message */
+"COMPOSE_MESSAGE_GROUP_SECTION_TITLE" = "我的群组";
+
+/* Table section header for invite listing when composing a new message */
+"COMPOSE_MESSAGE_INVITE_SECTION_TITLE" = "邀请";
+
+/* Multi-line label explaining why compose-screen contact picker is empty. */
+"COMPOSE_SCREEN_MISSING_CONTACTS_PERMISSION" = "如果想查看您的哪些联系人是 Chative 用户，请在系统设置中允许 Chative 访问联系人。";
+
+/* No comment provided by engineer. */
+"CONFIRM_ACCOUNT_DESTRUCTION_TEXT" = "此操作将会重置程序，删除您的所有信息并将您从服务器注销。在删除所有数据后，此程序将会自动关闭。";
+
+/* No comment provided by engineer. */
+"CONFIRM_ACCOUNT_DESTRUCTION_TITLE" = "您确定要删除您的账号吗？";
+
+"CONFIRM_ACCOUNT_LOGOUT_TITLE" = "登出";
+
+"CONFIRM_ACCOUNT_LOGOUT_TIP_MESSAGE" = "安全起见，所有消息将被删除。";
+
+"CONFIRM_ACCOUNT_ACTION_DELETE_AND_LOGOUT" = "登出";
+
+"CONFIRM_ACCOUNT_DELETE_TITLE" = "删除账号";
+
+"CONFIRM_ACCOUNT_DELETE_DESC" = "您的账号将被永久删除。";
+
+"CONFIRM_ACCOUNT_ACTION_DELETE_ACCOUNT" = "删除";
+
+/* Logout not linked body */
+"ACCOUNT_LOGOUT_NOT_LINK_DESCRIPTION" = "未绑定邮箱或手机号，继续操作将删除您的帐户。";
+
+/* Alert body */
+"CONFIRM_LEAVE_GROUP_DESCRIPTION" = "离开此群将从您的设备上删除所有相关数据。";
+
+/* Alert title */
+"CONFIRM_LEAVE_GROUP_TITLE" = "离开群组";
+
+/* Button text */
+"CONFIRM_LINK_NEW_DEVICE_ACTION" = "连接新设备";
+
+/* Action sheet body presented when a user's SN has recently changed. Embeds {{contact's name or phone number}} */
+"CONFIRM_SENDING_TO_CHANGED_IDENTITY_BODY_FORMAT" = "%@ 可能重新安装了程序或者更换了设备。让他们验证您的安全码以确保安全。";
+
+/* Action sheet title presented when a user's SN has recently changed. Embeds {{contact's name or phone number}} */
+"CONFIRM_SENDING_TO_CHANGED_IDENTITY_TITLE_FORMAT" = "%@ 的安全码改变了";
+
+/* Generic button text to proceed with an action */
+"CONFIRMATION_TITLE" = "确认";
+
+/* Label for a contact's postal address. */
+"CONTACT_ADDRESS" = "地址";
+
+/* An indicator that a contact has been blocked. */
+"CONTACT_CELL_IS_BLOCKED" = "已加入黑名单";
+
+/* An indicator that a contact is no longer verified. */
+"CONTACT_CELL_IS_NO_LONGER_VERIFIED" = "未验证";
+
+/* No comment provided by engineer. */
+"CONTACT_DETAIL_COMM_TYPE_INSECURE" = "该用户不存在";
+
+"CONTACT_DETAIL_COMM_TYPE_UNLOGIN" = "对方账号已登出，消息无法送达";
+
+"CONTACT_DETAIL_COMM_TYPE_FORBIDDEN" = "操作被禁止";
+
+/* Inactive（60天）用户会被进行“Inactive处理”. */
+"CONTACT_DETAIL_COMM_TYPE_INACTIVE" = "用户不活跃，无法接收消息";
+
+/* Label for the 'edit name' button in the contact share approval view. */
+"CONTACT_EDIT_NAME_BUTTON" = "编辑";
+
+/* Label for a contact's email address. */
+"CONTACT_EMAIL" = "邮箱";
+
+/* Label for the 'city' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_CITY" = "城市";
+
+/* Label for the 'country' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_COUNTRY" = "国家";
+
+/* Label for the 'neighborhood' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_NEIGHBORHOOD" = "邻居";
+
+/* Label for the 'pobox' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_POBOX" = "邮政信箱";
+
+/* Label for the 'postcode' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_POSTCODE" = "邮编";
+
+/* Label for the 'region' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_REGION" = "地区";
+
+/* Label for the 'street' field of a contact's address. */
+"CONTACT_FIELD_ADDRESS_STREET" = "街道";
+
+/* Label for the 'family name' field of a contact. */
+"CONTACT_FIELD_FAMILY_NAME" = "姓氏";
+
+/* Label for the 'given name' field of a contact. */
+"CONTACT_FIELD_GIVEN_NAME" = "名字";
+
+/* Label for the 'middle name' field of a contact. */
+"CONTACT_FIELD_MIDDLE_NAME" = "中间名";
+
+/* Label for the 'name prefix' field of a contact. */
+"CONTACT_FIELD_NAME_PREFIX" = "称谓（姓名前）";
+
+/* Label for the 'name suffix' field of a contact. */
+"CONTACT_FIELD_NAME_SUFFIX" = "称谓（姓名后）";
+
+/* Label for the 'organization' field of a contact. */
+"CONTACT_FIELD_ORGANIZATION" = "机构";
+
+/* Label for a contact's phone number. */
+"CONTACT_PHONE" = "电话";
+
+/* table cell subtitle when contact card has no email */
+"CONTACT_PICKER_NO_EMAILS_AVAILABLE" = "无可用 E-mail";
+
+/* table cell subtitle when contact card has no known phone number */
+"CONTACT_PICKER_NO_PHONE_NUMBERS_AVAILABLE" = "无可用电话号码";
+
+/* navbar title for contact picker when sharing a contact */
+"CONTACT_PICKER_TITLE" = "选择联系人";
+
+/* Title for the 'Approve contact share' view. */
+"CONTACT_SHARE_APPROVAL_VIEW_TITLE" = "分享联系人";
+
+/* Title for the 'edit contact share name' view. */
+"CONTACT_SHARE_EDIT_NAME_VIEW_TITLE" = "编辑名称";
+
+/* Error indicating that an invalid contact cannot be shared. */
+"CONTACT_SHARE_INVALID_CONTACT" = "无效联系人。";
+
+/* Error indicating that at least one contact field must be selected before sharing a contact. */
+"CONTACT_SHARE_NO_FIELDS_SELECTED" = "没有选中任何联系人字段。";
+
+/* Label for 'open address in maps app' button in contact view. */
+"CONTACT_VIEW_OPEN_ADDRESS_IN_MAPS_APP" = "在地图中打开";
+
+/* Label for 'open email in email app' button in contact view. */
+"CONTACT_VIEW_OPEN_EMAIL_IN_EMAIL_APP" = "发送邮件";
+
+/* Indicates that a contact has no name. */
+"CONTACT_WITHOUT_NAME" = "未命名的联系人";
+
+"CONVERSATION_TITLE_TO" = "Topic from";
+"CONVERSATION_TITLE_TO_SELF" = "自己";
+"SOURCE_FROM_GROUP" = "群组";
+"CONVERSATION_THREAD_CONTEXY_REPLAY" = "回复";
+"TOPICLIST_TITLE" = "主题列表";
+/* title for conversation settings screen */
+"CONVERSATION_SETTINGS" = "会话设置";
+
+/* Label for 'new contact' button in conversation settings view. */
+"CONVERSATION_SETTINGS_ADD_TO_EXISTING_CONTACT" = "添加已有的联系人";
+
+/* table cell label in conversation settings */
+"CONVERSATION_SETTINGS_BLOCK_THIS_USER" = "将用户加入黑名单";
+
+"CONVERSATION_SETTINGS_STICKY_ON_TOP" = "置顶聊天";
+
+"CONVERSATION_SETTINGS_MUTE" = "免打扰";
+
+"CONVERSATION_SETTINGS_STICKY_BLOCK" = "屏蔽";
+
+"CONVERSATION_SETTINGS_STICKY_BLOCK_HEADER_TIP" = "您已经屏蔽了来自这个机器人的私聊消息，请在会话设置中进行更改。";
+"CONVERSATION_SETTINGS_STICKY_BLOCK_TIP" = "已设置屏蔽";
+"CONVERSATION_SETTINGS_STICKY_UNBLOCK_TIP" = "已取消屏蔽";
+
+"CONVERSATION_SETTINGS_ARCHIVE" = "倒计时";
+"CONVERSATION_SETTINGS_NEVER_ARCHIVE" = "不过期";
+
+"CONVERSATION_SETTINGS_ARCHIVE_MINUTERS" = "分钟";
+"CONVERSATION_SETTINGS_ARCHIVE_MINUTER" = "分钟";
+"CONVERSATION_SETTINGS_ARCHIVE_HOURS" = "小时";
+"CONVERSATION_SETTINGS_ARCHIVE_HOUR" = "小时";
+"CONVERSATION_SETTINGS_ARCHIVE_DAYS" = "天";
+"CONVERSATION_SETTINGS_ARCHIVE_DAY" = "天";
+"CONVERSATION_SETTINGS_ARCHIVE_DEFAULT" = "默认";
+
+"CONVERSATION_SETTINGS_SEARCH_HISTORY" = "查找聊天内容";
+
+"CONVERSATION_SETTINGS_GROUP_IN_COMMON" = "共同群组";
+
+/* Navbar title when viewing settings for a 1-on-1 thread */
+"CONVERSATION_SETTINGS_CONTACT_INFO_TITLE" = "联系人信息";
+
+/* Label for table cell which leads to picking a new conversation color */
+"CONVERSATION_SETTINGS_CONVERSATION_COLOR" = "颜色";
+
+/* Navbar title when viewing settings for a group thread */
+"CONVERSATION_SETTINGS_GROUP_INFO_TITLE" = "组信息";
+
+/* Title of the 'mute this thread' action sheet. */
+"CONVERSATION_SETTINGS_MUTE_ACTION_SHEET_TITLE" = "静音";
+
+/* label for 'mute thread' cell in conversation settings */
+"CONVERSATION_SETTINGS_MUTE_LABEL" = "静音";
+
+/* Indicates that the current thread is not muted. */
+"CONVERSATION_SETTINGS_MUTE_NOT_MUTED" = "未被静音";
+
+/* Label for button to mute a thread for a day. */
+"CONVERSATION_SETTINGS_MUTE_ONE_DAY_ACTION" = "静音一天";
+
+/* Label for button to mute a thread for a hour. */
+"CONVERSATION_SETTINGS_MUTE_ONE_HOUR_ACTION" = "静音一小时";
+
+/* Label for button to mute a thread for a minute. */
+"CONVERSATION_SETTINGS_MUTE_ONE_MINUTE_ACTION" = "静音一分钟";
+
+/* Label for button to mute a thread for a week. */
+"CONVERSATION_SETTINGS_MUTE_ONE_WEEK_ACTION" = "静音一星期";
+
+/* Label for button to mute a thread for a year. */
+"CONVERSATION_SETTINGS_MUTE_ONE_YEAR_ACTION" = "静音一年";
+
+/* Indicates that this thread is muted until a given date or time. Embeds {{The date or time which the thread is muted until}}. */
+"CONVERSATION_SETTINGS_MUTED_UNTIL_FORMAT" = "直到 %@";
+
+/* Label for 'new contact' button in conversation settings view. */
+"CONVERSATION_SETTINGS_NEW_CONTACT" = "添加为联系人";
+
+/* Label for button that opens conversation settings. */
+"CONVERSATION_SETTINGS_TAP_TO_CHANGE" = "点击更改";
+
+/* Label for button to unmute a thread. */
+"CONVERSATION_SETTINGS_UNMUTE_ACTION" = "取消静音";
+
+/* Indicates that user's profile has been shared with a group. */
+"CONVERSATION_SETTINGS_VIEW_PROFILE_IS_SHARED_WITH_GROUP" = "该群组可查看您的资料";
+
+/* Indicates that user's profile has been shared with a user. */
+"CONVERSATION_SETTINGS_VIEW_PROFILE_IS_SHARED_WITH_USER" = "该用户可查看您的资料";
+
+/* Button to confirm that user wants to share their profile with a user or group. */
+"CONVERSATION_SETTINGS_VIEW_SHARE_PROFILE" = "共享资料";
+
+/* Action that shares user profile with a group. */
+"CONVERSATION_SETTINGS_VIEW_SHARE_PROFILE_WITH_GROUP" = "共享您的资料";
+
+/* Action that shares user profile with a user. */
+"CONVERSATION_SETTINGS_VIEW_SHARE_PROFILE_WITH_USER" = "共享您的资料";
+
+/* Message shown in conversation view that offers to add an unknown user to your phone's contacts. */
+"CONVERSATION_VIEW_ADD_TO_CONTACTS_OFFER" = "添加为联系人";
+
+/* Message shown in conversation view that offers to share your profile with a user. */
+"CONVERSATION_VIEW_ADD_USER_TO_PROFILE_WHITELIST_OFFER" = "与该用户共享您的资料";
+
+/* Title for the group of buttons show for unknown contacts offering to add them to contacts, etc. */
+"CONVERSATION_VIEW_CONTACTS_OFFER_TITLE" = "该用户不在您的联系人列表中。";
+
+/* Indicates that the app is loading more messages in this conversation. */
+"CONVERSATION_VIEW_LOADING_MORE_MESSAGES" = "正在加载消息";
+
+/* Indicator on truncated text messages that they can be tapped to see the entire text message. */
+"CONVERSATION_VIEW_OVERSIZE_TEXT_TAP_FOR_MORE" = "点击查看详情";
+
+/* Message shown in conversation view that offers to block an unknown user. */
+"CONVERSATION_VIEW_UNKNOWN_CONTACT_BLOCK_OFFER" = "屏蔽该用户";
+
+/* ActionSheet title */
+"CORRUPTED_SESSION_DESCRIPTION" = "重置此 session 后可以收到来自 %@的消息, 但是无法恢复已经被破坏的消息.";
+
+/* No comment provided by engineer. */
+"COUNTRYCODE_SELECT_TITLE" = "选择国家编码";
+
+/* Accessibility label for the create group new group button */
+"CREATE_NEW_GROUP" = "创建新的组群";
+
+/* Title for the 'crop/scale image' dialog. */
+"CROP_SCALE_IMAGE_VIEW_TITLE" = "移动与缩放";
+
+/* Subtitle shown while the app is updating its database. */
+"DATABASE_VIEW_OVERLAY_SUBTITLE" = "这需要耗费 1 分钟左右。";
+
+/* Title shown while the app is updating its database. */
+"DATABASE_VIEW_OVERLAY_TITLE" = "正在优化数据库";
+
+/* Format string for a relative time, expressed as a certain number of hours in the past. Embeds {{The number of hours}}. */
+"DATE_HOURS_AGO_FORMAT" = "%@小时前";
+
+/* Format string for a relative time, expressed as a certain number of minutes in the past. Embeds {{The number of minutes}}. */
+"DATE_MINUTES_AGO_FORMAT" = "%@分钟前";
+
+/* The present; the current time. */
+"DATE_NOW" = "此刻";
+
+/* The current day. */
+"DATE_TODAY" = "今日";
+
+/* The day before today. */
+"DATE_YESTERDAY" = "昨日";
+
+/* Error indicating that the debug logs could not be copied. */
+"DEBUG_LOG_ALERT_COULD_NOT_COPY_LOGS" = "无法复制日志。";
+
+/* Error indicating that the debug logs could not be packaged. */
+"DEBUG_LOG_ALERT_COULD_NOT_PACKAGE_LOGS" = "无法打包日志。";
+
+/* Error indicating that a debug log could not be uploaded. */
+"DEBUG_LOG_ALERT_ERROR_UPLOADING_LOG" = "无法上传日志。";
+
+/* Message of the debug log alert. */
+"DEBUG_LOG_ALERT_MESSAGE" = "上传日志成功";
+
+/* Error indicating that no debug logs could be found. */
+"DEBUG_LOG_ALERT_NO_LOGS" = "未找到日志。";
+
+/* Label for the 'Open a Bug Report' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_BUG_REPORT" = "打开调试报告";
+
+/* Label for the 'copy link' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_COPY_LINK" = "复制链接";
+
+/* Label for the 'email debug log' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_EMAIL" = "邮件支持";
+
+/* Label for the 'send to last thread' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_SEND_TO_LAST_THREAD" = "发送到最后一个线程";
+
+/* Label for the 'send to self' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_SEND_TO_SELF" = "发送给自己";
+
+/* Label for the 'Share' option of the debug log alert. */
+"DEBUG_LOG_ALERT_OPTION_SHARE" = "分享";
+
+/* Title of the alert shown for failures while uploading debug logs.
+   Title of the debug log alert. */
+"DEBUG_LOG_ALERT_TITLE" = "日志上传成功";
+
+/* Message of the alert before redirecting to GitHub Issues. */
+"DEBUG_LOG_GITHUB_ISSUE_ALERT_MESSAGE" = "本连结已复製至剪贴板。你现在将重新导向到 GitHub 错误回馈列表。";
+
+/* Title of the alert before redirecting to GitHub Issues. */
+"DEBUG_LOG_GITHUB_ISSUE_ALERT_TITLE" = "重新定向到GitHub";
+
+/* Label for button that lets users re-register using the same phone number. */
+"DEREGISTRATION_REREGISTER_WITH_RE_LOGIN" = "点击重新登录";
+
+/* Label warning the user that they have been de-registered. */
+"DEREGISTRATION_WARNING" = "此设备已经登出，您的账号可能已在其他设备上登录。点此重新登录。";
+
+/* {{Short Date}} when device last communicated with Chative Server. */
+"DEVICE_LAST_ACTIVE_AT_LABEL" = "最新活动设备: %@";
+
+/* {{Short Date}} when device was linked. */
+"DEVICE_LINKED_AT_LABEL" = "已绑定: %@";
+
+/* Alert title that can occur when viewing device manager. */
+"DEVICE_LIST_UPDATE_FAILED_TITLE" = "设备列表更新失败。";
+
+/* table cell label in conversation settings */
+"DISAPPEARING_MESSAGES" = "阅后即焚";
+
+/* Info Message when added to a group which has enabled disappearing messages. Embeds {{time amount}} before messages disappear, see the *_TIME_AMOUNT strings for context. */
+"DISAPPEARING_MESSAGES_CONFIGURATION_GROUP_EXISTING_FORMAT" = "此对话中的消息将在%@后过期。";
+
+/* subheading in conversation settings */
+"DISAPPEARING_MESSAGES_DESCRIPTION" = "如果设置了该选项，该群聊里面发送和接收的消息将在阅读后过期。";
+
+/* Accessibility hint that contains current timeout information */
+"DISAPPEARING_MESSAGES_HINT" = "当前消息会在 %@ 之后过期";
+
+/* Accessibility label for disappearing messages */
+"DISAPPEARING_MESSAGES_LABEL" = "阅后即焚消息设置";
+
+/* Short text to dismiss current modal / actionsheet / screen */
+"DISMISS_BUTTON_TEXT" = "清除";
+
+/* Section title for the 'domain fronting country' view. */
+"DOMAIN_FRONTING_COUNTRY_VIEW_SECTION_HEADER" = "执行审查规避的地点";
+
+/* Alert body for when the user has just tried to edit a contacts after declining to give Chative contacts permissions */
+"EDIT_CONTACT_WITHOUT_CONTACTS_PERMISSION_ALERT_BODY" = "您可以在系统设置中授予访问权限。";
+
+/* Alert title for when the user has just tried to edit a contacts after declining to give Chative contacts permissions */
+"EDIT_CONTACT_WITHOUT_CONTACTS_PERMISSION_ALERT_TITLE" = "Chative 需要联系人访问权限来修改联系人信息";
+
+/* table cell label in conversation settings */
+"EDIT_GROUP_ACTION" = "编辑群聊";
+
+"ENTER_GROUP_ACTION" = "加入群聊";
+
+"ENTER_GROUP_FAILURE" = "加入群聊失败";
+
+"ENTER_GROUP_FAILURE_EXPIRED" = "此邀请已失效";
+
+"ENTER_GROUP_FAILURE_NOT_EXIST" = "群组不存在";
+
+"ENTER_GROUP_FAILURE_FULL" = "群人数已满，无法加入";
+
+"ADD_MEMBER_GROUP_ACTION" = "添加成员";
+
+"REMOVE_MEMBER_GROUP_ACTION" = "移出成员";
+
+"DISMISS_GROUP_ACTION" = "解散群组";
+
+"DISMISS_GROUP_MESSAGE" = "%@解散了群";
+
+"GROUP_DISMISSED" = "群组已解散";
+
+"DISMISS_GROUP_MESSAGE_FOR_OWER" = "你解散了群，所有消息已被删除。";
+
+"DISMISS_GROUP_MESSAGE_FOR_OTHER" = "此群已被解散，所有消息已被删除。";
+
+"REMOVE_FROM_GROUP_ALL_GROUP_MESSAGE" = "你被移出了群，所有消息已被删除。";
+
+"CONFIRM_DISMISS_GROUP_TITLE" = "解散群组";
+
+"CONFIRM_DISBAND" = "解散";
+
+/* a title for the contacts section of the 'new/update group' view. */
+"EDIT_GROUP_CONTACTS_SECTION_TITLE" = "联系人";
+
+/* The navbar title for the 'update group' view. */
+"EDIT_GROUP_DEFAULT_TITLE" = "编辑群组";
+
+/* Label for the cell that lets you add a new member to a group. */
+"EDIT_GROUP_MEMBERS_ADD_MEMBER" = "添加...";
+
+/* a title for the members section of the 'new/update group' view. */
+"EDIT_GROUP_MEMBERS_SECTION_TITLE" = "成员";
+
+/* An indicator that a user is a new member of the group. */
+"EDIT_GROUP_NEW_MEMBER_LABEL" = "已添加";
+
+/* The title for the 'update group' button. */
+"EDIT_GROUP_UPDATE_BUTTON" = "更新";
+
+/* The alert message if user tries to exit update group view without saving changes. */
+"EDIT_GROUP_VIEW_UNSAVED_CHANGES_MESSAGE" = "您已修改该群组。您想要保存这些修改吗？";
+
+/* The alert title if user tries to exit update group view without saving changes. */
+"EDIT_GROUP_VIEW_UNSAVED_CHANGES_TITLE" = "未保存的修改";
+
+/* Short name for edit menu item to copy contents of media message. */
+"EDIT_ITEM_COPY_ACTION" = "复制";
+
+/* No comment provided by engineer. */
+"EDIT_TXT" = "编辑";
+
+/* body of email sent to contacts when inviting to install Chative. Embeds {{link to install Chative}} and {{link to the Chative home page}} */
+"EMAIL_INVITE_BODY" = "你好,\n\n最近我在使用 Chative 以保持 iPhone 上的对话私密. 我希望你也能装上, 这样我们可以有信心只有我和你可以看到我们发的消息或者听到我们打的电话.\n\nChative可以在iPhone和Android上使用. 可以在以下的链接下载: %@\n\nChative像你用过的聊天软件一样工作. 我们可以发照片或者视频, 打电话, 也可以群聊. 最好的地方在于, 没任何其它人可以看到这些内容, 即使是做出Chative软件的人!\n\n你可以在以下的链接了解更多关于制作 Chative 的 Open Whisper Systems:  %@";
+
+/* subject of email sent to contacts when inviting to install Chative */
+"EMAIL_INVITE_SUBJECT" = "切换到 Chative";
+
+/* Second part of the label that shows up when there are neither active nor archived conversations */
+"EMPTY_ARCHIVE_FIRST_TEXT" = "点击编辑按钮。";
+
+/* First (bolded) part of the label that shows up when there are neither active nor archived conversations */
+"EMPTY_ARCHIVE_FIRST_TITLE" = "开始您的首个%@对话！";
+
+/* No comment provided by engineer. */
+"EMPTY_ARCHIVE_TEXT" = "您可以将收件箱中不活跃的会话移至存档。";
+
+/* No comment provided by engineer. */
+"EMPTY_ARCHIVE_TITLE" = "请整理您的收件箱。";
+
+/* Full width label displayed when attempting to compose message */
+"EMPTY_CONTACTS_LABEL_LINE1" = "暂时没有联系人使用 Chative.";
+
+/* Full width label displayed when attempting to compose message */
+"EMPTY_CONTACTS_LABEL_LINE2" = "为什么不邀请你的朋友?";
+
+/* No comment provided by engineer. */
+"EMPTY_INBOX_FIRST_TEXT" = "提示：请开始一个新的对话！";
+
+/* No comment provided by engineer. */
+"EMPTY_INBOX_FIRST_TITLE" = "完成。完成。完成。";
+
+/* No comment provided by engineer. */
+"EMPTY_INBOX_TEXT" = "没有新消息。";
+
+/* No comment provided by engineer. */
+"EMPTY_INBOX_TITLE" = "空";
+
+/* Indicates that user should confirm their 'two factor auth pin'. */
+"ENABLE_2FA_VIEW_CONFIRM_PIN_INSTRUCTIONS" = "确认您的PIN码。";
+
+/* Error indicating that attempt to disable 'two-factor auth' failed. */
+"ENABLE_2FA_VIEW_COULD_NOT_DISABLE_2FA" = "无法禁用注册锁。";
+
+/* Error indicating that attempt to enable 'two-factor auth' failed. */
+"ENABLE_2FA_VIEW_COULD_NOT_ENABLE_2FA" = "无法启用注册锁。";
+
+/* Label for the 'enable two-factor auth' item in the settings view */
+"ENABLE_2FA_VIEW_DISABLE_2FA" = "关闭";
+
+/* Label for the 'enable two-factor auth' item in the settings view */
+"ENABLE_2FA_VIEW_ENABLE_2FA" = "开启";
+
+/* Label for the 'next' button in the 'enable two factor auth' views. */
+"ENABLE_2FA_VIEW_NEXT_BUTTON" = "下一步";
+
+/* Error indicating that the entered 'two-factor auth PINs' do not match. */
+"ENABLE_2FA_VIEW_PIN_DOES_NOT_MATCH" = "PIN 码不正确。";
+
+/* Indicates that user should select a 'two factor auth pin'. */
+"ENABLE_2FA_VIEW_SELECT_PIN_INSTRUCTIONS" = "请输入注册锁的 PIN 码。以后您使用此号码注册 Chative 时，将需要输入这个 PIN 码。";
+
+/* Indicates that user has 'two factor auth pin' disabled. */
+"ENABLE_2FA_VIEW_STATUS_DISABLED_INSTRUCTIONS" = "为了加强账户安全，请启用 PIN 码注册锁。打开后，再次使用此号码注册 Chative 时，您将需要输入这个 PIN 码。";
+
+/* Indicates that user has 'two factor auth pin' enabled. */
+"ENABLE_2FA_VIEW_STATUS_ENABLED_INSTRUCTIONS" = "注册锁已启用。您只有输入正确的 PIN 码后，才能重新使用这个号码注册 Chative。";
+
+/* Title for the 'enable two factor auth PIN' views. */
+"ENABLE_2FA_VIEW_TITLE" = "注册锁";
+
+"ENTER_2FA_ALERT_MESSAGE" = "请输入注册锁,如果忘记请联系管理员";
+
+/* Call setup status label */
+"END_CALL_RESPONDER_IS_BUSY" = "忙。";
+
+/* Call setup status label */
+"END_CALL_UNCATEGORIZED_FAILURE" = "呼叫失败。";
+
+/* Error indicating that the phone's contacts could not be retrieved. */
+"ERROR_COULD_NOT_FETCH_CONTACTS" = "无法访问联系人列表。";
+
+/* Generic notice when message failed to send. */
+"ERROR_DESCRIPTION_CLIENT_SENDING_FAILURE" = "未能发送消息。";
+
+"ERROR_ATTACHMENT_EXCEEDS_LIMIT" = "文件大小超限！";
+
+/* Error message indicating that message send is disabled due to prekey update failures */
+"ERROR_DESCRIPTION_MESSAGE_SEND_DISABLED_PREKEY_UPDATE_FAILURES" = "由于隐私信息过时，无法发送。";
+
+/* Error message indicating that message send failed due to block list */
+"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_BLOCK_LIST" = "无法向黑名单用户发送消息";
+
+/* Error message indicating that message send failed due to failed attachment write */
+"ERROR_DESCRIPTION_MESSAGE_SEND_FAILED_DUE_TO_FAILED_ATTACHMENT_WRITE" = "因无法写附件而失败。";
+
+/* Generic error used whenever Chative can't contact the server */
+"ERROR_DESCRIPTION_NO_INTERNET" = "Chative 无法联网. 请尝试使用其它网络或者使用移动数据.";
+
+/* Error indicating that an outgoing message had no valid recipients. */
+"ERROR_DESCRIPTION_NO_VALID_RECIPIENTS" = "缺少有效接收人，消息发送失败。";
+
+/* Error indicating that a socket request failed. */
+"ERROR_DESCRIPTION_REQUEST_FAILED" = "网络请求失败。";
+
+/* Error indicating that a socket request timed out. */
+"ERROR_DESCRIPTION_REQUEST_TIMED_OUT" = "网络请求超时。";
+
+/* Error indicating that a socket response failed. */
+"ERROR_DESCRIPTION_RESPONSE_FAILED" = "服务返回无效响应。";
+
+/* Error message when attempting to send message */
+"ERROR_DESCRIPTION_SENDING_UNAUTHORIZED" = "你的设备已经不再注册你的电话. 你必须卸载并重装Chative.";
+
+"ERROR_DESCRIPTION_PERMISSION_DENIED" = "没有权限";
+
+/* Generic server error */
+"ERROR_DESCRIPTION_SERVER_FAILURE" = "服务器出错。请稍候再试。";
+
+/* Worst case generic error message */
+"ERROR_DESCRIPTION_UNKNOWN_ERROR" = "发生了未知错误。";
+
+/* Error message when attempting to send message */
+"ERROR_DESCRIPTION_UNREGISTERED_RECIPIENT" = "联系人不是 Chative 用户。";
+
+/* Error message when unable to receive an attachment because the sending client is too old. */
+"ERROR_MESSAGE_ATTACHMENT_FROM_OLD_CLIENT" = "失败：请告知发送人升级 Chative 后重新发送。";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_DUPLICATE_MESSAGE" = "收到了一个重复的消息。";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_INVALID_KEY_EXCEPTION" = "对方的密钥无效。";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_INVALID_MESSAGE" = "无法解密消息。请联系@ChativeBot 寻求帮助。";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_INVALID_VERSION" = "收到了一个此版本无法读取的消息。";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_NO_SESSION" = "没有对方可用的会话。";
+
+/* Shown when signal users safety numbers changed */
+"ERROR_MESSAGE_NON_BLOCKING_IDENTITY_CHANGE" = "安全码已经改变.";
+
+/* Shown when signal users safety numbers changed, embeds the user's {{name or phone number}} */
+"ERROR_MESSAGE_NON_BLOCKING_IDENTITY_CHANGE_FORMAT" = "您与%@的安全码已经改变。";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_UNKNOWN_ERROR" = "发生未知错误。";
+
+/* No comment provided by engineer. */
+"ERROR_MESSAGE_WRONG_TRUSTED_IDENTITY_KEY" = "安全码已改变。";
+
+/* Format string for 'unregistered user' error. Embeds {{the unregistered user's name or signal id}}. */
+"ERROR_UNREGISTERED_USER_FORMAT" = "用户未注册：%@";
+
+/* action sheet header when re-sending message which failed because of too many attempts */
+"FAILED_SENDING_BECAUSE_RATE_LIMIT" = "当前联系人失败太多次. 请稍候再试.";
+
+/* action sheet header when re-sending message which failed because of untrusted identity keys */
+"FAILED_SENDING_BECAUSE_UNTRUSTED_IDENTITY_KEY" = "您与%@的安全码最近发生了改变。您可能想要在重新发送消息前进行验证。";
+
+/* alert title */
+"FAILED_VERIFICATION_TITLE" = "验证安全码失败!";
+
+/* Button that marks user as verified after a successful fingerprint scan. */
+"FINGERPRINT_SCAN_VERIFY_BUTTON" = "标记为已验证";
+
+/* No comment provided by engineer. */
+"FINGERPRINT_SHRED_KEYMATERIAL_BUTTON" = "重置会话";
+
+/* Accessibility label for finishing new group */
+"FINISH_GROUP_CREATION_LABEL" = "完成组群创建";
+
+/* Label indicating media gallery is empty */
+"GALLERY_TILES_EMPTY_GALLERY" = "此对话中没有您的媒体数据。";
+
+/* Label indicating loading is in progress */
+"GALLERY_TILES_LOADING_MORE_RECENT_LABEL" = "正在加载新的媒体...";
+
+/* Label indicating loading is in progress */
+"GALLERY_TILES_LOADING_OLDER_LABEL" = "正在加载较早的媒体...";
+
+/* A label for generic attachments. */
+"GENERIC_ATTACHMENT_LABEL" = "附件";
+
+/* Error displayed when there is a failure fetching a GIF from the remote service. */
+"GIF_PICKER_ERROR_FETCH_FAILURE" = "无法读取所请求的 GIF。请确认您是否处于在线状态。";
+
+/* Generic error displayed when picking a GIF */
+"GIF_PICKER_ERROR_GENERIC" = "发生了未知错误。";
+
+/* Shown when selected GIF couldn't be fetched */
+"GIF_PICKER_FAILURE_ALERT_TITLE" = "无法选择 GIF";
+
+/* Alert message shown when user tries to search for GIFs without entering any search terms. */
+"GIF_PICKER_VIEW_MISSING_QUERY" = "请输入您的搜索词。";
+
+/* Title for the 'GIF picker' dialog. */
+"GIF_PICKER_VIEW_TITLE" = "GIF 查找";
+
+/* Indicates that an error occurred while searching. */
+"GIF_VIEW_SEARCH_ERROR" = "错误。点击重试。";
+
+/* Indicates that the user's search had no results. */
+"GIF_VIEW_SEARCH_NO_RESULTS" = "无结果。";
+
+/* Placeholder text for the search field in GIF view */
+"GIF_VIEW_SEARCH_PLACEHOLDER_TEXT" = "输入您的搜索词";
+
+/* No comment provided by engineer. */
+"GROUP_AVATAR_CHANGED" = "群组头像变更成功。";
+
+/* No comment provided by engineer. */
+"GROUP_CREATED" = "创建了此群。";
+
+/* Message shown in conversation view that indicates there were issues with group creation. */
+"GROUP_CREATION_FAILED" = "不是所有成员都能被添加到群组中。点击重试。";
+
+/* Conversation settings table section title */
+"GROUP_MANAGEMENT_SECTION" = "群成员";
+
+"GROUP_MANAGEMENT_ADD_ADDMIN" = "添加群管理员";
+
+/* No comment provided by engineer. */
+"GROUP_MEMBER_JOINED" = "%@ 加入了群组";
+
+"GROUP_MEMBER_INTITED_TO_JOIN" = "%@ 添加了 %@ 进入群聊.";
+
+"GROUP_INVITE_SOME_BODY_JOIN_GROUP" = "%@通过%@的邀请链接加入了群组";
+
+"GROUP_MEMBER_NOTIFY_TO_REMOVE" = "%@将%@移出了群组";
+
+"GROUP_MEMBER_NOTIFY_TO_CHANGE_NAME" = "%@修改了群名称";
+
+"GROUP_MEMBER_NOTIFY_TO_CHANGE_AVATAR" = "%@ 更新了群头像";
+
+/* No comment provided by engineer. */
+"GROUP_MEMBER_LEFT" = "%@ 已退出群组";
+
+"GROUP_MEMBER_INFO_UPDATE_BECOME_OWER" = " %@ 已成为新的群主";//某某成为群主
+
+"GROUP_MEMBER_INFO_UPDATE_BECOME_ADMIN" = " %@ 已成为协调人";//某某成为新的管理员
+
+"GROUP_MEMBER_INFO_UPDATE_DELETE_ADMIN" = " %@ 从群协调人中移除";//某某将XXXXX从群协调人中移除
+
+
+"GROUP_MEMBER_INFO_UPDATE_ADMIN_RESET" = " %@ 设置了 %@ 为管理员";
+"GROUP_MEMBER_INFO_UPDATE_ADMIN_CANCEL" = " %@ 取消了 %@ 的管理员身份";
+"GROUP_MEMBER_INFO_UPDATE_BECOME_ADMIN_TRANSFER" = " %@ 将群主身份移交给了 %@ ";
+
+
+/* Button label to add information to an unknown contact */
+"GROUP_MEMBERS_ADD_CONTACT_INFO" = "添加联系人";
+
+/* Button label for the 'call group member' button */
+"GROUP_MEMBERS_CALL" = "呼叫";
+
+/* Label for the button that clears all verification errors in the 'group members' view. */
+"GROUP_MEMBERS_RESET_NO_LONGER_VERIFIED" = "清除所有人的验证信息";
+
+/* Label for the 'reset all no-longer-verified group members' confirmation alert. */
+"GROUP_MEMBERS_RESET_NO_LONGER_VERIFIED_ALERT_MESSAGE" = "这会清除群组中所有自最后一次验证以来安全码发生改变的成员的验证信息。";
+
+/* Title for the 'members' section of the 'group members' view. */
+"GROUP_MEMBERS_SECTION_TITLE_MEMBERS" = "成员";
+
+/* Title for the 'no longer verified' section of the 'group members' view. */
+"GROUP_MEMBERS_SECTION_TITLE_NO_LONGER_VERIFIED" = "不再标记为已验证";
+
+/* Button label for the 'send message to group member' button */
+"GROUP_MEMBERS_SEND_MESSAGE" = "发送消息";
+
+/* Button label for the 'show contact info' button */
+"GROUP_MEMBERS_VIEW_CONTACT_INFO" = "联系人信息";
+
+/* No comment provided by engineer. */
+"GROUP_REMOVING" = "离开组群 %@";
+
+/* Title of alert indicating that group deletion failed. */
+"GROUP_REMOVING_FAILED" = "无法退出组群";
+
+/* No comment provided by engineer. */
+"GROUP_TITLE_CHANGED" = "群组名称已改为 '%@'。";
+
+/* No comment provided by engineer. */
+"GROUP_UPDATED" = "群组更新完成。";
+
+/* No comment provided by engineer. */
+"GROUP_YOU_LEFT" = "你离开了群，所有消息已被删除。";
+
+/* Label for 'archived conversations' button. */
+"HOME_VIEW_ARCHIVED_CONVERSATIONS" = "已归档对话";
+
+"CONVERSATION_VIEW_CONFIDETIAL_TAP_TO_VIEW" = "点击查看";
+
+/* A label for conversations with blocked users. */
+"HOME_VIEW_BLOCKED_CONTACT_CONVERSATION" = "已加入黑名单";
+
+/* Placeholder text for search bar which filters conversations. */
+"HOME_VIEW_CONVERSATION_SEARCHBAR_PLACEHOLDER" = "搜索";
+
+"HOME_AND_CONVERSATION_SEARCHBAR_PLACEHOLDER" = "搜索消息或者联系人";
+
+/* Format string when search returns no results. Embeds {{search term}} */
+"HOME_VIEW_SEARCH_NO_RESULTS_FORMAT" = "没有搜索到相关结果";
+
+/* Title for the home view's 'archive' mode. */
+"HOME_VIEW_TITLE_ARCHIVE" = "归档";
+
+/* Title for the home view's default mode. */
+"HOME_VIEW_TITLE_INBOX" = "消息";
+
+/* Title for the home list action 'sticky on top'. */
+"HOME_TABLE_ACTION_STICK" = "置顶";
+
+"HOME_TABLE_ACTION_UNSTICK" = "取消置顶";
+
+"HOME_TABLE_ACTION_READ" = "已读";
+
+"HOME_TABLE_ACTION_UNREAD" = "未读";
+
+"HOME_TABLE_ACTION_ARCHIVE" = "归档";
+
+"HOME_TABLE_ACTION_UNARCHIVE" = "未存档";
+
+"NUMBER_OF_STICK_THREAD_MAX" = "最多可置顶%lu个会话";
+
+/* Call setup status label */
+"IN_CALL_CONNECTING" = "链接中...";
+
+/* Call setup status label */
+"IN_CALL_RECONNECTING" = "正在重新连接...";
+
+/* Call setup status label */
+"IN_CALL_RINGING" = "响铃中...";
+
+/* Call setup status label */
+"IN_CALL_SECURING" = "已接通。确保安全中...";
+
+/* Call setup status label */
+"IN_CALL_TERMINATED" = "通话结束。";
+
+/* Label reminding the user that they are in archive mode. */
+"INBOX_VIEW_ARCHIVE_MODE_REMINDER" = "这些会话已经被归档。当您收到新消息时，它们会重新显示在您的会话列表中。";
+
+/* Multi-line label explaining how to show names instead of phone numbers in your inbox */
+"INBOX_VIEW_MISSING_CONTACTS_PERMISSION" = "要查看您的联系人名称，请在系统设置中允许访问联系人。";
+
+/* notification body */
+"INCOMING_CALL" = "来电";
+
+/* notification body */
+"INCOMING_CALL_FROM" = "来自 %@ 的来电";
+
+/* info message recorded in conversation history when local user declined a call */
+"INCOMING_DECLINED_CALL" = "您拒接了一个来电";
+
+/* No comment provided by engineer. */
+"INCOMING_INCOMPLETE_CALL" = "来电";
+
+/* info message text shown in conversation view */
+"INFO_MESSAGE_MISSED_CALL_DUE_TO_CHANGED_IDENITY" = "来电未接，因为他们的安全码已改变。";
+
+/* Message for the alert indicating that an audio file is invalid. */
+"INVALID_AUDIO_FILE_ALERT_ERROR_MESSAGE" = "语音文件无效";
+
+/* Alert body when contacts disabled while trying to invite contacts to signal */
+"INVITE_FLOW_REQUIRES_CONTACT_ACCESS_BODY" = "要邀请您的联系人，您需要在系统设置中允许Chative访问您的联系人列表。";
+
+/* Alert title when contacts disabled while trying to invite contacts to signal */
+"INVITE_FLOW_REQUIRES_CONTACT_ACCESS_TITLE" = "允许访问联系人";
+
+/* Label for the cell that presents the 'invite contacts' workflow. */
+"INVITE_FRIENDS_CONTACT_TABLE_BUTTON" = "邀请朋友使用 Chative";
+
+/* Search */
+"INVITE_FRIENDS_PICKER_SEARCHBAR_PLACEHOLDER" = "搜索";
+
+/* Navbar title */
+"INVITE_FRIENDS_PICKER_TITLE" = "邀请朋友";
+
+/* Alert warning that sending an invite to multiple users will create a group message whose recipients will be able to see each other. */
+"INVITE_WARNING_MULTIPLE_INVITES_BY_TEXT" = "一次邀请多个用户时将群发一条消息，群成员将能看到彼此。";
+
+/* Slider label embeds {{TIME_AMOUNT}}, e.g. '2 hours'. See *_TIME_AMOUNT strings for examples. */
+"KEEP_MESSAGES_DURATION" = "消息在 %@ 后过期。";
+
+/* Slider label when disappearing messages is off */
+"KEEP_MESSAGES_FOREVER" = "取消阅后即焚";
+
+/* Confirmation button within contextual alert */
+"LEAVE_BUTTON_TITLE" = "离开群组";
+
+/* table cell label in conversation settings */
+"LEAVE_GROUP_ACTION" = "离开群聊";
+
+/* report an invalid linking code */
+"LINK_DEVICE_INVALID_CODE_BODY" = "QR码无效, 请确保你扫描的设备上的QR码是你想要连接的.";
+
+/* report an invalid linking code */
+"LINK_DEVICE_INVALID_CODE_TITLE" = "绑定设备失败";
+
+/* confirm the users intent to link a new device */
+"LINK_DEVICE_PERMISSION_ALERT_BODY" = "这台设备可以看到你所有的群聊和联系人，可以读所有消息，还可以以你的名义发送消息。";
+
+/* confirm the users intent to link a new device */
+"LINK_DEVICE_PERMISSION_ALERT_TITLE" = "绑定当前设备？";
+
+/* attempt another linking */
+"LINK_DEVICE_RESTART" = "重试";
+
+/* QR Scanning screen instructions, placed alongside a camera view for scanning QR Codes */
+"LINK_DEVICE_SCANNING_INSTRUCTIONS" = "请扫描设备上面的二维码进行绑定。";
+
+/* Subheading for 'Link New Device' navigation */
+"LINK_NEW_DEVICE_SUBTITLE" = "扫描二维码";
+
+/* Navigation title when scanning QR code to add new device. */
+"LINK_NEW_DEVICE_TITLE" = "绑定新设备";
+
+/* Menu item and navbar title for the device manager */
+"LINKED_DEVICES_TITLE" = "已绑定的设备";
+
+/* Alert Title */
+"LINKING_DEVICE_FAILED_TITLE" = "绑定设备失败";
+
+/* table cell label in conversation settings */
+"LIST_GROUP_MEMBERS_ACTION" = "成员列表";
+
+"LIST_GROUP_MEMBERS_MANAGER" = "群管理";
+
+"LIST_GROUP_MEMBERS_ADMIN" = "群协调人";
+
+"LIST_GROUP_MEMBERS_TRANSFER" = "转让群主";
+"LIST_GROUP_INVITE_RULE" = "仅协调人可添加成员";
+"LIST_GROUP_REMOVE_RULE" = "任何人都可以移除成员";
+"LIST_GROUP_REJOIN_RULE" = "被移除成员可以重新加入";
+"LIST_GROUP_PUBLISH_GROUP" = "仅群主和管理员可发言";
+"ENABLE_GROUP_INVITE_LINK" = "启用群邀请链接";
+
+"TOAST_ONLY_MODETATORS_CAN_SPEAK" = "仅协调人可发言";
+"TOAST_ONLY_FOR_UNBLOCK_USER" = "请取消拉黑";
+"INFO_MESSAGE_ONLY_OWNER_CAN_SPEAK" = "群组已被设置仅群主可发言";
+"INFO_MESSAGE_ONLY_MODERATORS_CAN_SPEAK" = "群组已被设置仅协调人可发言";
+"INFO_MESSAGE_EVERYONE_CAN_SPEAK" = "群组已被设置为所有人可发言";
+
+"LIST_GROUP_MEMBERS_MODERATORS" = "协调人";
+"LIST_GROUP_MEMBERS_PARTICIPANTS" = "参加者";
+
+"LIST_GROUP_MEMBERS_ADD_MANAGER" = "添加协调人";
+"LIST_GROUP_MEMBERS_DELETE_MANAGER" = "删除群协调人";
+"LIST_GROUP_MEMBERS_TRADSFAR_OWER" = "转让群主";
+"LIST_GROUP_MEMBERS_TRADSFAR_OWER_TIP" = "确定选择%@为新群主，你将自动放弃群主身份";
+"LIST_GROUP_MEMBERS_TRADSFAR_OWER_SUCESS_TIP" = "转让群主成功";
+"LIST_GROUP_MEMBERS_TRADSFAR_OWER_FAILED_TIP" = "转让失败，请重试";
+
+
+
+/* No comment provided by engineer. */
+"LOGGING_SECTION" = "信息记录日志";
+
+/* Title for the 'long text message' view. */
+"LONG_TEXT_VIEW_TITLE" = "消息";
+
+/* nav bar button item */
+"MEDIA_DETAIL_VIEW_ALL_MEDIA_BUTTON" = "所有媒体";
+
+/* media picker option to take photo or video */
+"MEDIA_FROM_CAMERA_BUTTON" = "相机";
+
+/* action sheet button title when choosing attachment type */
+"MEDIA_FROM_DOCUMENT_PICKER_BUTTON" = "文档";
+
+/* media picker option to choose from library */
+"MEDIA_FROM_LIBRARY_BUTTON" = "相册";
+
+/* Confirmation button text to delete selected media from the gallery, embeds {{number of messages}} */
+"MEDIA_GALLERY_DELETE_MULTIPLE_MESSAGES_FORMAT" = "删除%d条消息";
+
+/* Confirmation button text to delete selected media message from the gallery */
+"MEDIA_GALLERY_DELETE_SINGLE_MESSAGE" = "删除消息";
+
+/* Short sender label for media sent by you */
+"MEDIA_GALLERY_SENDER_NAME_YOU" = "您";
+
+/* Section header in media gallery collection view */
+"MEDIA_GALLERY_THIS_MONTH_HEADER" = "这个月";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_COPY_MEDIA" = "复制";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_COPY_TEXT" = "复制";
+
+"MESSAGE_ACTION_TRANSLATE_TEXT" = "翻译";//翻译
+"MESSAGE_ACTION_TRANSLATE_ORIGINE" = "关闭";//原文
+
+/* Action sheet button title */
+"MESSAGE_ACTION_DELETE_MESSAGE" = "删除";
+
+/* Action sheet button subtitle */
+"MESSAGE_ACTION_DELETE_MESSAGE_SUBTITLE" = "仅在本设备将其删除";
+
+/* Action sheet button tips */
+"MESSAGE_ACTION_DELETE_MESSAGE_TIPS" = "是否删除这条消息?";
+
+/* Action sheet button OK */
+"MESSAGE_ACTION_DELETE_MESSAGE_OK" = "确认";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_DETAILS" = "更多信息";
+
+"MESSAGE_ACTION_QUOTE" = "引用";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_REPLY" = "回复";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_FORWARD" = "转发";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_FORWARD_TO_NOTE" = "保存";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_MULTI_SELECT" = "多选";
+
+"MESSAGE_ACTION_RECALL" = "撤回";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_SAVE_MEDIA" = "下载";
+
+/* Action sheet button title */
+"MESSAGE_ACTION_CREATE_TASK" = "添加任务";
+
+"MESSAGE_ACTION_SCHEDULE_MEETING" = "预约";
+
+"MESSAGE_ACTION_PIN_MESSAGE" = "Pin";
+
+"MESSAGE_ACTION_UNPIN_MESSAGE" = "取消Pin";
+
+"MESSAGE_ACTION_CREATE_VOTE" = "投票";
+
+"MESSAGE_ACTION_CONVENIENT_GROUP" = "快速建群";
+
+/* Title for the 'message approval' dialog. */
+"MESSAGE_APPROVAL_DIALOG_TITLE" = "消息";
+
+/* Label for the recipient name in the 'message approval' dialog. */
+"MESSAGE_APPROVAL_RECIPIENT_LABEL" = "致：";
+
+/* No comment provided by engineer. */
+"MESSAGE_COMPOSEVIEW_TITLE" = "通讯录";
+
+/* Label for file size of attachments in the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_ATTACHMENT_FILE_SIZE" = "文件大小";
+
+/* Label for the MIME type of attachments in the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_ATTACHMENT_MIME_TYPE" = "MIME 类型";
+
+/* Label for 'not yet downloaded' attachments in the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_ATTACHMENT_NOT_YET_DOWNLOADED" = "未下载";
+
+/* Status label for messages which are delivered. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_DELIVERED" = "已投递";
+
+/* Status label for messages which are failed. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_FAILED" = "失败";
+
+/* Status label for messages which are read. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_READ" = "已读";
+
+/*Status label for messages which are unread. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_UNREAD" = "未读";
+
+/* Status label for messages which are sending. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SENDING" = "正在发送";
+
+/* Status label for messages which are sent. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SENT" = "已发送";
+
+/* Status label for messages which were skipped. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SKIPPED" = "已跳过";
+
+/* Status label for messages which are uploading. */
+"MESSAGE_METADATA_VIEW_MESSAGE_STATUS_UPLOADING" = "正在上传";
+
+/* Label for messages without a body or attachment in the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_NO_ATTACHMENT_OR_BODY" = "该消息没有内容或附件";
+
+/* Label for the 'received date & time' field of the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_RECEIVED_DATE_TIME" = "已接收";
+
+"MESSAGE_METADATA_VIEW_READED_DATE_TIME" = "阅读时间";
+
+"MESSAGE_METADATA_VIEW_READED_EXPIRE_DATE" = "过期时间";
+
+"MESSAGE_METADATA_VIEW_DISAPPEARS" = "过期时间";
+
+/* Label for the 'sender' field of the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_SENDER" = "发送人";
+
+/* Label for the 'sent date & time' field of the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_SENT_DATE_TIME" = "已发送";
+
+/* Label for the original filename of any attachment in the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_SOURCE_FILENAME" = "文件名";
+
+/* Title for the 'message metadata' view. */
+"MESSAGE_METADATA_VIEW_TITLE" = "消息";
+
+/* message status for message delivered to their recipient. */
+"MESSAGE_STATUS_DELIVERED" = "已传达";
+
+/* status message for failed messages */
+"MESSAGE_STATUS_FAILED" = "发送失败。";
+
+/* status message for failed messages */
+"MESSAGE_STATUS_FAILED_SHORT" = "失败";
+
+/* status message for read messages */
+"MESSAGE_STATUS_READ" = "已读";
+
+/* message status if message delivery to a recipient is skipped. We skip delivering group messages to users who have left the group or unregistered their Chative account. */
+"MESSAGE_STATUS_RECIPIENT_SKIPPED" = "已跳过";
+
+/* Label indicating that a message failed to send. */
+"MESSAGE_STATUS_SEND_FAILED" = "发送失败。";
+
+/* message status while message is sending. */
+"MESSAGE_STATUS_SENDING" = "正在发送...";
+
+/* status message for sent messages */
+"MESSAGE_STATUS_SENT" = "已发送";
+
+/* status message while attachment is uploading */
+"MESSAGE_STATUS_UPLOADING" = "上传中...";
+
+/* Indicates that one member of this group conversation is no longer verified. Embeds {{user's name or phone number}}. */
+"MESSAGES_VIEW_1_MEMBER_NO_LONGER_VERIFIED_FORMAT" = "%@不再标记为已验证。点击打开选项。";
+
+/* Indicates that this 1:1 conversation has been blocked. */
+"MESSAGES_VIEW_CONTACT_BLOCKED" = "该用户在您的黑名单中";
+
+/* Indicates that this 1:1 conversation is no longer verified. Embeds {{user's name or phone number}}. */
+"MESSAGES_VIEW_CONTACT_NO_LONGER_VERIFIED_FORMAT" = "%@不再标记为已验证。点击打开选项。";
+
+/* Action sheet title after tapping on failed download. */
+"MESSAGES_VIEW_FAILED_DOWNLOAD_ACTIONSHEET_TITLE" = "下载失败";
+
+"MESSAGES_VIEW_FAILED_DOWNLOAD_ACTION" = "下载";
+
+/* Action sheet button text */
+"MESSAGES_VIEW_FAILED_DOWNLOAD_RETRY_ACTION" = "重试";
+
+/* Indicates that a single member of this group has been blocked. */
+"MESSAGES_VIEW_GROUP_1_MEMBER_BLOCKED" = "群组中的 1 个成员在您的黑名单中";
+
+/* Indicates that some members of this group has been blocked. Embeds {{the number of blocked users in this group}}. */
+"MESSAGES_VIEW_GROUP_N_MEMBERS_BLOCKED_FORMAT" = "群组中%@个成员已在您的黑名单中";
+
+/* Text for banner in group conversation view that offers to share your profile with this group. */
+"MESSAGES_VIEW_GROUP_PROFILE_WHITELIST_BANNER" = "是否与该群组共享您的资料?";
+
+/* Indicates that more than one member of this group conversation is no longer verified. */
+"MESSAGES_VIEW_N_MEMBERS_NO_LONGER_VERIFIED" = "该群组多个成员不再标记为已验证。点击打开选项。";
+
+/* The subtitle for the messages view title indicates that the title can be tapped to access settings for this conversation. */
+"MESSAGES_VIEW_TITLE_SUBTITLE" = "点击此处前往查看和设置";
+
+/* Indicator that separates read from unread messages. */
+"MESSAGES_VIEW_UNREAD_INDICATOR" = "新消息";
+
+/* Messages that indicates that there are more unseen messages. */
+"MESSAGES_VIEW_UNREAD_INDICATOR_HAS_MORE_UNSEEN_MESSAGES" = "还有更多未读消息。";
+
+/* Messages that indicates that there are more unseen messages including safety number changes. */
+"MESSAGES_VIEW_UNREAD_INDICATOR_HAS_MORE_UNSEEN_MESSAGES_AND_SAFETY_NUMBER_CHANGES" = "还有更多未读消息（包含安全码更变）。";
+
+/* notification title */
+"MISSED_CALL" = "未接来电";
+
+/* notification title. Embeds {{caller's name or phone number}} */
+"MISSED_CALL_WITH_CHANGED_IDENTITY_BODY_WITH_CALLER_NAME" = "来自%@的来电未接，因为他们的安全码已改变。";
+
+/* notification title */
+"MISSED_CALL_WITH_CHANGED_IDENTITY_BODY_WITHOUT_CALLER_NAME" = "来电未接，因为拨打人的安全码已改变。";
+
+/* Alert body
+   Alert body when camera is not authorized */
+"MISSING_CAMERA_PERMISSION_MESSAGE" = "Chative 视频通话需要访问您的相机。请您到 设置 >> 隐私 >> 相机 >> Chative 授予访问权限。";
+
+/* Alert title
+   Alert title when camera is not authorized */
+"MISSING_CAMERA_PERMISSION_TITLE" = "Chative需要访问您的摄像头";
+
+/* Alert body when user has previously denied media library access */
+"MISSING_MEDIA_LIBRARY_PERMISSION_MESSAGE" = "请在“设置>隐私>相册”中允许Chative访问相册。";
+
+/* Alert title when user has previously denied media library access */
+"MISSING_MEDIA_LIBRARY_PERMISSION_TITLE" = "需要权限";
+
+/* notification title. Embeds {{caller's name or phone number}} */
+"MSGVIEW_MISSED_CALL_WITH_NAME" = "来自 %@ 的未接来电。";
+
+/* No comment provided by engineer. */
+"MULTIDEVICE_PAIRING_MAX_DESC" = "您无法匹配更多的设备。";
+
+/* No comment provided by engineer. */
+"MULTIDEVICE_PAIRING_MAX_RECOVERY" = "您已经匹配使用的设备到达当前账号的上限。请移除一个设备后重新尝试匹配。";
+
+/* An explanation of the consequences of muting a thread. */
+"MUTE_BEHAVIOR_EXPLANATION" = "您将不会收到来自静音对话的通知。";
+
+/* A button to skip a view. */
+"NAVIGATION_ITEM_SKIP_BUTTON" = "跳过";
+
+/* No comment provided by engineer. */
+"NETWORK_ERROR_RECOVERY" = "请检查您的网络连接并重试。";
+
+/* Indicates to the user that censorship circumvention has been activated. */
+"NETWORK_STATUS_CENSORSHIP_CIRCUMVENTION_ACTIVE" = "审查规避：打开";
+
+/* No comment provided by engineer. */
+"NETWORK_STATUS_CONNECTED" = "已连接";
+
+/* No comment provided by engineer. */
+"NETWORK_STATUS_CONNECTING" = "正在连接";
+
+/* Error indicating that this device is no longer registered. */
+"NETWORK_STATUS_DEREGISTERED" = "未注册";
+
+/* No comment provided by engineer. */
+"NETWORK_STATUS_HEADER" = "网络状态";
+
+/* No comment provided by engineer. */
+"NETWORK_STATUS_OFFLINE" = "离线";
+
+/* A label the cell that lets you add a new member to a group. */
+"NEW_CONVERSATION_FIND_BY_PHONE_NUMBER" = "通过电话号码寻找";
+
+/* A label for the cell that lets you add a new non-contact member to a group. */
+"NEW_GROUP_ADD_NON_CONTACT" = "通过电话号码添加";
+
+/* Action Sheet title prompting the user for a group avatar */
+"NEW_GROUP_ADD_PHOTO_ACTION" = "设置组群照片";
+
+/* The title for the 'create group' button. */
+"NEW_GROUP_CREATE_BUTTON" = "新建";
+
+/* Used in place of the group name when a group has not yet been named. */
+"NEW_GROUP_DEFAULT_TITLE" = "新群组";
+
+"NEW_GROUP_CONVENIENT_TITLE" = "【发送】新群链接到会话";
+
+"NEW_GROUP_CONVENIENT_NAME" = "来自\"%@\"的新群组";
+
+/* An indicator that a user is a member of the new group. */
+"NEW_GROUP_MEMBER_LABEL" = "成员";
+
+/* Placeholder text for group name field */
+"NEW_GROUP_NAMEGROUP_REQUEST_DEFAULT" = "为此群组命名";
+
+/* a title for the non-contacts section of the 'new group' view. */
+"NEW_GROUP_NON_CONTACTS_SECTION_TITLE" = "其他用户";
+
+/* The alert message if user tries to exit the new group view without saving changes. */
+"NEW_GROUP_VIEW_UNSAVED_CHANGES_MESSAGE" = "您是否要撤销这些修改？";
+
+/* The alert title if user tries to exit the new group view without saving changes. */
+"NEW_GROUP_VIEW_UNSAVED_CHANGES_TITLE" = "未保存的修改";
+
+/* No comment provided by engineer. */
+"new_message" = "消息";
+
+/* No comment provided by engineer. */
+"Confidential_message" = "机密消息";
+
+/* A label for the 'add by phone number' button in the 'new non-contact conversation' view */
+"NEW_NONCONTACT_CONVERSATION_VIEW_BUTTON" = "搜索";
+
+/* Title for the 'new non-contact conversation' view. */
+"NEW_NONCONTACT_CONVERSATION_VIEW_TITLE" = "查找用户";
+
+/* Label for a button that lets users search for contacts by phone number */
+"NO_CONTACTS_SEARCH_BY_PHONE_NUMBER" = "用电话号码搜索联系人";
+
+/* Lock screen notification text presented after user powers on their device without unlocking. Embeds {{device model}} (either 'iPad' or 'iPhone') */
+"NOTIFICATION_BODY_PHONE_LOCKED_FORMAT" = "您可能在%@重启时收到了新消息。";
+
+/* No comment provided by engineer. */
+"NOTIFICATION_SEND_FAILED" = "给 %@ 的消息发送失败。";
+
+/* No comment provided by engineer. */
+"NOTIFICATIONS_FOOTER_WARNING" = "由于苹果通知推送系统的已知缺陷，消息只有在发送的30秒之内被接收才会显示预览。因此，应用图标上的显示可能并不准确。";
+
+/* No comment provided by engineer. */
+"NOTIFICATIONS_NONE" = "没有名字或者内容";
+
+/* Table cell switch label. When disabled, Chative will not play notification sounds while the app is in the foreground. */
+"NOTIFICATIONS_SECTION_INAPP" = "应用内播放提示音";
+
+/* Label for settings UI that allows user to change the notification sound. */
+"NOTIFICATIONS_SECTION_SOUNDS" = "声音";
+
+/* No comment provided by engineer. */
+"NOTIFICATIONS_SENDER_AND_MESSAGE" = "名字和内容";
+
+/* No comment provided by engineer. */
+"NOTIFICATIONS_SENDER_ONLY" = "只显示名称";
+
+/* No comment provided by engineer. */
+"NOTIFICATIONS_SHOW" = "显示";
+
+/* No comment provided by engineer. */
+"OK" = "好";
+
+/* Button text which opens the settings app */
+"OPEN_SETTINGS_BUTTON" = "设置";
+
+/* Info Message when {{other user}} disables or doesn't support disappearing messages */
+"OTHER_DISABLED_DISAPPEARING_MESSAGES_CONFIGURATION" = "%@ 取消了阅后即焚。";
+
+/* Info Message when {{other user}} updates message expiration to {{time amount}}, see the *_TIME_AMOUNT strings for context. */
+"OTHER_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION" = "%@ 设置了消息 %@ 后过期。";
+
+/* Label warning the user that the Chative service may be down. */
+"OUTAGE_WARNING" = "Chative 遇到了一些技术故障。我们正努力使服务尽快恢复。";
+
+/* No comment provided by engineer. */
+"OUTGOING_CALL" = "去电";
+
+/* No comment provided by engineer. */
+"OUTGOING_INCOMPLETE_CALL" = "呼叫";
+
+/* info message recorded in conversation history when local user tries and fails to call another user. */
+"OUTGOING_MISSED_CALL" = "未接呼叫";
+
+/* A display format for oversize text messages. */
+"OVERSIZE_TEXT_DISPLAY_FORMAT" = "%@…";
+
+/* A format for a label showing an example phone number. Embeds {{the example phone number}}. */
+"PHONE_NUMBER_EXAMPLE_FORMAT" = "范例：%@";
+
+/* Format for phone number label with an index. Embeds {{Phone number label (e.g. 'home')}} and {{index, e.g. 2}}. */
+"PHONE_NUMBER_TYPE_AND_INDEX_NAME_FORMAT" = "%@ %@";
+
+/* Label for 'Home' phone numbers. */
+"PHONE_NUMBER_TYPE_HOME" = "住宅";
+
+/* Label for 'HomeFAX' phone numbers. */
+"PHONE_NUMBER_TYPE_HOME_FAX" = "住宅传真";
+
+/* Label for 'iPhone' phone numbers. */
+"PHONE_NUMBER_TYPE_IPHONE" = "iPhone";
+
+/* Label for 'Main' phone numbers. */
+"PHONE_NUMBER_TYPE_MAIN" = "主要";
+
+/* Label for 'Mobile' phone numbers. */
+"PHONE_NUMBER_TYPE_MOBILE" = "电话";
+
+/* Label for 'Other' phone numbers. */
+"PHONE_NUMBER_TYPE_OTHER" = "其他";
+
+/* Label for 'Other FAX' phone numbers. */
+"PHONE_NUMBER_TYPE_OTHER_FAX" = "其他传真";
+
+/* Label for 'Pager' phone numbers. */
+"PHONE_NUMBER_TYPE_PAGER" = "寻呼机";
+
+/* Label used when we don't what kind of phone number it is (e.g. mobile/work/home). */
+"PHONE_NUMBER_TYPE_UNKNOWN" = "未知";
+
+/* Label for 'Work' phone numbers. */
+"PHONE_NUMBER_TYPE_WORK" = "工作";
+
+/* Label for 'Work FAX' phone numbers. */
+"PHONE_NUMBER_TYPE_WORK_FAX" = "工作传真";
+
+/* Accessibility label for button to start media playback */
+"PLAY_BUTTON_ACCESSABILITY_LABEL" = "播放媒体";
+
+/* Label indicating that the user is not verified. Embeds {{the user's name or phone number}}. */
+"PRIVACY_IDENTITY_IS_NOT_VERIFIED_FORMAT" = "您未将%@标记为已验证。";
+
+/* Badge indicating that the user is verified. */
+"PRIVACY_IDENTITY_IS_VERIFIED_BADGE" = "已验证";
+
+/* Label indicating that the user is verified. Embeds {{the user's name or phone number}}. */
+"PRIVACY_IDENTITY_IS_VERIFIED_FORMAT" = "已验证%@。";
+
+/* Label for a link to more information about safety numbers and verification. */
+"PRIVACY_SAFETY_NUMBERS_LEARN_MORE" = "了解更多";
+
+/* Button that shows the 'scan with camera' view. */
+"PRIVACY_TAP_TO_SCAN" = "点击扫描";
+
+/* Button that lets user mark another user's identity as unverified. */
+"PRIVACY_UNVERIFY_BUTTON" = "清除验证信息";
+
+/* Alert body when verifying with {{contact name}} */
+"PRIVACY_VERIFICATION_FAILED_I_HAVE_WRONG_KEY_FOR_THEM" = "这看起来不是关于 %@ 的安全码. 你在验证正确的联系人吗?";
+
+/* Alert body */
+"PRIVACY_VERIFICATION_FAILED_MISMATCHED_SAFETY_NUMBERS_IN_CLIPBOARD" = "剪贴板中的数字不是当前会话的正确的安全码.";
+
+/* Alert body for user error */
+"PRIVACY_VERIFICATION_FAILED_NO_SAFETY_NUMBERS_IN_CLIPBOARD" = "Chative 无法在剪贴板中找到安全码. 你正确的复制了吗?";
+
+/* Alert body when verifying with {{contact name}} */
+"PRIVACY_VERIFICATION_FAILED_THEY_HAVE_WRONG_KEY_FOR_ME" = "每一组Chative用户共享一个不同的安全码. 重复检查 %@ 显示你的安全码.";
+
+/* alert body */
+"PRIVACY_VERIFICATION_FAILED_WITH_OLD_LOCAL_VERSION" = "您的版本过低。升级后才可以继续校验。";
+
+/* alert body */
+"PRIVACY_VERIFICATION_FAILED_WITH_OLD_REMOTE_VERSION" = "您的好友版本过低。请对方升级后继续验证。";
+
+/* alert body */
+"PRIVACY_VERIFICATION_FAILURE_INVALID_QRCODE" = "您扫描的看起来不是安全码。请确保双方使用的是最新版的 Chative 。";
+
+/* Paragraph(s) shown alongside the safety number when verifying privacy with {{contact name}} */
+"PRIVACY_VERIFICATION_INSTRUCTIONS" = "如需确认你和 %@ 的端对端加密安全性，请在双方设备上面比较上述数字。\n\n或者可以通过扫描上述二维码进行验证。";
+
+/* Navbar title */
+"PRIVACY_VERIFICATION_TITLE" = "验证安全码";
+
+/* Button that lets user mark another user's identity as verified. */
+"PRIVACY_VERIFY_BUTTON" = "标记为已验证";
+
+/* No comment provided by engineer. */
+"PROCEED_BUTTON" = "继续";
+
+/* Label text combining the phone number and profile name separated by a simple demarcation character. Phone number should be most prominent. '%1$@' is replaced with {{phone number}} and '%2$@' is replaced with {{profile name}} */
+"PROFILE_NAME_AND_PHONE_NUMBER_LABEL_FORMAT" = "%1$@ ~%2$@";
+
+/* Prepend a simple marker to differentiate the profile name, embeds the contact's {{profile name}}. */
+"PROFILE_NAME_LABEL_FORMAT" = "~%@";
+
+"PROFILE_NAME_TIP" = "名字";
+"PROFILE_SIGNATURE_TIP" = "签名";
+
+/* Action Sheet title prompting the user for a profile avatar */
+"PROFILE_VIEW_AVATAR_ACTIONSHEET_TITLE" = "设置头像";
+
+/* Label for action that clear's the user's profile avatar */
+"PROFILE_VIEW_CLEAR_AVATAR" = "清除头像";
+
+/* Error message shown when user tries to update profile with a profile name that is too long. */
+"PROFILE_VIEW_ERROR_PROFILE_NAME_TOO_LONG" = "您的资料名称太长。";
+
+/* Error message shown when a profile update fails. */
+"PROFILE_VIEW_ERROR_UPDATE_FAILED" = "资料更新失败。";
+
+"PROFILE_VIEW_ERROR_UPDATE_SUCESS" = "资料更新成功。";
+
+/* Default text for the profile name field of the profile view. */
+"PROFILE_VIEW_NAME_DEFAULT_TEXT" = "输入您的名称";
+
+/* Label for the profile avatar field of the profile view. */
+"PROFILE_VIEW_PROFILE_AVATAR_FIELD" = "头像";
+
+/* Description of the user profile. */
+"PROFILE_VIEW_PROFILE_DESCRIPTION" = "您的 Chative 资料将对您的联系人可见，包括：建立新对话，或您与其它用户群组共享资料时。";
+
+/* Link to more information about the user profile. */
+"PROFILE_VIEW_PROFILE_DESCRIPTION_LINK" = "点击了解更多资讯。";
+
+/* Label for the profile name field of the profile view. */
+"PROFILE_VIEW_PROFILE_NAME_FIELD" = "昵称";
+
+/* Button to save the profile view in the profile view. */
+"PROFILE_VIEW_SAVE_BUTTON" = "保存";
+
+"PROFILE_VIEW_DELETE_BUTTON" = "删除";
+
+/* Alert title that indicates the user's profile view is being saved. */
+"PROFILE_VIEW_SAVING" = "正在保存...";
+
+/* Title for the profile view. */
+"PROFILE_VIEW_TITLE" = "个人信息";
+
+/* No comment provided by engineer. */
+"PUSH_MANAGER_MARKREAD" = "标记为已读";
+
+/* No comment provided by engineer. */
+"PUSH_MANAGER_REPLY" = "回复";
+
+/* Title of alert shown when push tokens sync job succeeds. */
+"PUSH_REGISTER_SUCCESS" = "成功重新注册了推送.";
+
+/* Used in table section header and alert view title contexts */
+"PUSH_REGISTER_TITLE" = "推送通知";
+
+/* No comment provided by engineer. */
+"QUESTIONMARK_PUNCTUATION" = "？";
+
+/* Indicates the author of a quoted message. Embeds {{the author's name or phone number}}. */
+"TOPIC_REPLY_AUTHOR_INDICATOR_FORMAT" = "回复: %@";
+
+"TOPIC_REPLY_FROM_FORMAT" = "主题\n来自:";
+
+"TOPIC_TITLET" = "主题来自 ";
+
+"TOPIC_CELL_HEADER_TITLET" = "主题来自: ";
+
+"TOPIC_SELF" = "您";
+
+"TOPIC_@BOT_SEND_TO" = "发主题给%@:";
+
+"TOPIC_@BOT_REPLY_FROM" = "回复来自: %@";
+
+"TOPIC_@BOT_REPLY_SEND_TO" = "回复给%@:";
+
+"TOPIC_GROUPTOPIC_REPLY_TO" = "回复: %@";
+
+"TOPIC_THEME" = "主题:";
+
+"TOPIC_EMPTY" = "暂无主题";
+
+"TOPIC_EMPTY_ERROR" = "试试用“/Topic ”来开启一个主题";
+
+/* message header label when someone else is quoting you */
+"QUOTED_REPLY_AUTHOR_INDICATOR_YOU" = "给您的回复";
+
+/* message header label when quoting yourself */
+"QUOTED_REPLY_AUTHOR_INDICATOR_YOURSELF" = "给您自己的回复";
+
+"QUOTED_AUTHOR_INDICATOR_YOURSELF" = "您";
+
+"QUOTED_AUTHOR_INDICATOR_YOU" = "您的消息";
+
+"QUOTED_AUTHOR_INDICATOR_YOU_FORMAT" = "%@";
+
+/* Toast alert text shown when tapping on a quoted message which we cannot scroll to because the local copy of the message didn't exist when the quote was received. */
+"QUOTED_REPLY_ORIGINAL_MESSAGE_REMOTELY_SOURCED" = "未找到原始消息。";
+
+
+"QUOTED_REPLY_AUTHOR_INDICATOR_FORMAT_PREVIEW_REPLY" = "回复: %@";
+
+/* message header label when someone else is quoting you */
+"QUOTED_REPLY_AUTHOR_INDICATOR_YOU_PREVIEW_REPLY" = "给您的回复";
+
+/* message header label when quoting yourself */
+"QUOTED_REPLY_AUTHOR_INDICATOR_YOURSELF_PREVIEW_REPLY" = "给您自己的回复";
+
+
+
+/* Indicates this message is a quoted reply to an attachment of unknown type. */
+"QUOTED_REPLY_TYPE_ATTACHMENT" = "[附件]";
+
+/* Indicates this message is a quoted reply to an audio file. */
+"QUOTED_REPLY_TYPE_AUDIO" = "[音频]";
+
+/* Indicates this message is a quoted reply to animated GIF file. */
+"QUOTED_REPLY_TYPE_GIF" = "[GIF]";
+
+/* Indicates this message is a quoted reply to an image file. */
+"QUOTED_REPLY_TYPE_IMAGE" = "[图片]";
+
+/* Indicates this message is a quoted reply to a video file. */
+"QUOTED_REPLY_TYPE_VIDEO" = "[视频]";
+
+"MESSAGE_PREVIEW_TYPE_HISTORY" = "[聊天记录]";
+
+"MESSAGE_PREVIEW_TYPE_CONFIDENTIAL" = "[消息]";
+
+"MESSAGE_PREVIEW_TYPE_TASK" = "[任务]";
+
+"MESSAGE_PREVIEW_TYPE_CONTACT_CARD" = "[个人名片]";
+
+"MESSAGE_PREVIEW_TYPE_POLL" = "[投票]";
+
+/* No comment provided by engineer. */
+"RATING_MSG" = "如果您喜欢用 Chative 进行私人会话，你可以通过评分的方式来支持我们。这将不会花费您很长时间，而且也将对保护其他人的隐私有所帮助。";
+
+/* No comment provided by engineer. */
+"RATING_RATE" = "给 Chative 评分";
+
+/* No comment provided by engineer. */
+"RATING_TITLE" = "支持 Chative";
+
+/* Label for 'I forgot my PIN' link in the 2FA registration view. */
+"REGISTER_2FA_FORGOT_PIN" = "我忘记了我的PIN码。";
+
+/* Alert message explaining what happens if you forget your 'two-factor auth pin'. */
+"REGISTER_2FA_FORGOT_PIN_ALERT_MESSAGE" = "从上一次此号码成功激活 Chative 开始，7日之后，您无需输入注册锁 PIN 码就能用这个电话号码重新注册 Chative。";
+
+/* Instructions to enter the 'two-factor auth pin' in the 2FA registration view. */
+"REGISTER_2FA_INSTRUCTIONS" = "这个电话号码已启用注册锁。请输入注册锁 PIN 码。\n\n注意，您的注册锁 PIN 码，与最后一步时发送给您的自动验证码是不同的。";
+
+/* Title for alert indicating that attempt to register with 'two-factor auth' failed. */
+"REGISTER_2FA_REGISTRATION_FAILED_ALERT_TITLE" = "注册失败";
+
+/* Label for 'submit' button in the 2FA registration view. */
+"REGISTER_2FA_SUBMIT_BUTTON" = "提交";
+
+/* No comment provided by engineer. */
+"REGISTER_CONTACTS_WELCOME" = "欢迎！";
+
+/* No comment provided by engineer. */
+"REGISTER_FAILED_TRY_AGAIN" = "重试";
+
+/* No comment provided by engineer. */
+"REGISTER_RATE_LIMITING_BODY" = "您的尝试过于频繁。请等待一分钟后再重试。";
+
+/* Title of alert shown when push tokens sync job fails. */
+"REGISTRATION_BODY" = "重新注册推送失败.";
+
+/* Label for the country code field */
+"REGISTRATION_DEFAULT_COUNTRY_NAME" = "国家编码";
+
+/* Navigation title shown when user is re-registering after having enabled registration lock */
+"REGISTRATION_ENTER_LOCK_PIN_NAV_TITLE" = "注册锁";
+
+/* Placeholder text for the phone number textfield */
+"REGISTRATION_ENTERNUMBER_DEFAULT_TEXT" = "输入电话号码";
+
+/* No comment provided by engineer. */
+"REGISTRATION_ERROR" = "注册错误";
+
+/* alert body during registration */
+"REGISTRATION_ERROR_BLANK_VERIFICATION_CODE" = "在验证发给你的验证码之前，我们无法激活你的帐户.";
+
+/* alert body when registering an iPad */
+"REGISTRATION_IPAD_CONFIRM_BODY" = "此次注册将会使已和此电话关联的其他设备无法使用。";
+
+/* button text to proceed with registration when on an iPad */
+"REGISTRATION_IPAD_CONFIRM_BUTTON" = "注册此 iPad";
+
+/* alert title when registering an iPad */
+"REGISTRATION_IPAD_CONFIRM_TITLE" = "已有 Chative 帐号？";
+
+/* one line label below submit button on registration screen, which links to an external webpage. */
+"REGISTRATION_LEGAL_TERMS_LINK" = "条款和隐私政策";
+
+/* legal disclaimer, embeds a tappable {{link title}} which is styled as a hyperlink */
+"REGISTRATION_LEGAL_TOP_MATTER_FORMAT" = "注册本设备即表示您同意 Chative 的 %@";
+
+/* embedded in legal topmatter, styled as a link */
+"REGISTRATION_LEGAL_TOP_MATTER_LINK_TITLE" = "条款";
+
+/* No comment provided by engineer. */
+"REGISTRATION_NON_VALID_NUMBER" = "不支持这个电话号码格式，请联系支持。";
+
+/* Label for the phone number textfield */
+"REGISTRATION_PHONENUMBER_BUTTON" = "号码";
+
+/* No comment provided by engineer. */
+"REGISTRATION_RESTRICTED_MESSAGE" = "有人给你发了TA的第一条信息！你只需要注册也能发送！";
+
+/* No comment provided by engineer. */
+"REGISTRATION_TITLE_LABEL" = "您的号码";
+
+/* Alert view title */
+"REGISTRATION_VERIFICATION_FAILED_TITLE" = "验证失败";
+
+/* Error message indicating that registration failed due to a missing or incorrect verification code. */
+"REGISTRATION_VERIFICATION_FAILED_WRONG_CODE_DESCRIPTION" = "你提交的数字和我们发给你的数字不匹配. 想要再次检查?";
+
+/* Error message indicating that registration failed due to a missing or incorrect 2FA PIN. */
+"REGISTRATION_VERIFICATION_FAILED_WRONG_PIN" = "注册锁 PIN 码不正确。";
+
+/* No comment provided by engineer. */
+"REGISTRATION_VERIFY_DEVICE" = "注册";
+
+/* Message of alert indicating that users needs to enter a valid phone number to register. */
+"REGISTRATION_VIEW_INVALID_PHONE_NUMBER_ALERT_MESSAGE" = "请输入一个有效的电话号码来注册。";
+
+/* Title of alert indicating that users needs to enter a valid phone number to register. */
+"REGISTRATION_VIEW_INVALID_PHONE_NUMBER_ALERT_TITLE" = "电话号码无效";
+
+/* Message of alert indicating that users needs to enter a phone number to register. */
+"REGISTRATION_VIEW_NO_PHONE_NUMBER_ALERT_MESSAGE" = "请输入电话号码进行注册。";
+
+/* Title of alert indicating that users needs to enter a phone number to register. */
+"REGISTRATION_VIEW_NO_PHONE_NUMBER_ALERT_TITLE" = "无电话号码";
+
+
+/* Invite code */
+"REGISTRATION_INVITE_CODE_TITLE_LABEL" = "您的邀请码";
+"REGISTRATION_INVITE_CODE_DEFAULT_TEXT" = "输入邀请码";
+"REGISTRATION_REG_WITH_DIFFT_NUMBER" = "使用Chative号码注册";
+"REGISTRATION_REG_WITH_DIFFT_NUMBER_NOTICE" = "如果您已经拥有了一个Chative号码：";
+"REGISTRATION_VIEW_NO_INVITE_CODE_TITLE" = "无邀请码";
+"REGISTRATION_VIEW_NO_INVITE_CODE_MESSAGE" = "请输入邀请码进行注册。";
+"REGISTRATION_VIEW_INVALID_INVITE_CODE_TITLE" = "邀请码无效";
+"REGISTRATION_VIEW_INVALID_INVITE_CODE_MESSAGE" = "请输入一个有效的邀请码来注册。";
+
+"REGISTRATION_REG_WITH_INVITE_CODE" = "使用邀请码注册";
+"REGISTRATION_REG_WITH_DIFFT_NUMBER" = "使用Chative号码注册";
+
+"REGISTRATION_MAIN_TITLE_LABEL" = "设备注册";
+"WEA_LOGIN" = "登录";
+"WEA_LOGIN_NEXT" = "下一步";
+"WEA_LOGIN_SKIP" = "跳过";
+
+"CHATIVE_LOGIN_SIGN_IN_TITLE" = "登录%@";
+"CHATIVE_LOGIN_SIGN_UP_TITLE" = "注册%@";
+
+"CHATIVE_LOGIN_OTP_TITLE" = "登录%@账号";
+"CHATIVE_LOGIN_OTP_CREAT_TITLE" = "创建%@账号";
+
+"CHATIVE_LOGIN_SIGN_IN" = "登录";
+"CHATIVE_LOGIN_TRANSFER_TO_SIGN_UP_NOT_ACCOUNT" = "没有账号？";
+"CHATIVE_LOGIN_TRANSFER_TO_SIGN_IN_HAVE_ACCOUNT" = "已经有一个账号？";
+"CHATIVE_LOGIN_SIGN_UP" = "注册";
+
+"SIGN_UP_START_TO_CHAT" = "开始聊天";
+
+"REGISTRATION_ACCOUT_WAS_DISABLED" = "账号被禁用";
+"REGISTRATION_ACCOUT_HAS_NO_TEAM" = "你的账户不在任何组织，请联系ITBot。";
+
+"COMMON_NOTICE_TITLE" = "提示";
+
+"COMMON_WARNING_TITLE" = "警告";
+
+/* No comment provided by engineer. */
+"REJECT_CALL_BUTTON_TITLE" = "拒绝";
+
+/* No comment provided by engineer. */
+"RELAY_REGISTERED_ERROR_RECOVERY" = "您要注册的电话号码已经在别的服务器被注册，请注销该号码后再次尝试。";
+
+/* Body text for when user is periodically prompted to enter their registration lock PIN */
+"REMINDER_2FA_BODY" = "已为您的号码启用了注册锁。为了帮助您记住注册锁 PIN 码，Chative 会定期向您确认 PIN 码。";
+
+/* Body header for when user is periodically prompted to enter their registration lock PIN */
+"REMINDER_2FA_BODY_HEADER" = "提醒：";
+
+/* Alert message explaining what happens if you forget your 'two-factor auth pin' */
+"REMINDER_2FA_FORGOT_PIN_ALERT_MESSAGE" = "注册锁能防范他人在没有您许可的情况下，使用您的号码进行注册。您随时可在 Chative 隐私设置里关闭该功能。";
+
+/* Navbar title for when user is periodically prompted to enter their registration lock PIN */
+"REMINDER_2FA_NAV_TITLE" = "请输入您的注册锁 PIN 码";
+
+/* Alert body after wrong guess for 'two-factor auth pin' reminder activity */
+"REMINDER_2FA_WRONG_PIN_ALERT_BODY" = "您可以在隐私设置里设置一个新的PIN码。";
+
+/* Alert title after wrong guess for 'two-factor auth pin' reminder activity */
+"REMINDER_2FA_WRONG_PIN_ALERT_TITLE" = "不正确的PIN码。";
+
+/* No comment provided by engineer. */
+"REREGISTER_FOR_PUSH" = "重新注册推送通知服务";
+
+/* Generic text for button that retries whatever the last action was. */
+"RETRY_BUTTON_TEXT" = "重试";
+
+/* button title to confirm adding a recipient to a group when their safety number has recently changed */
+"SAFETY_NUMBER_CHANGED_CONFIRM_ADD_TO_GROUP_ACTION" = "依然添加到群组";
+
+/* alert button text to confirm placing an outgoing call after the recipients Safety Number has changed. */
+"SAFETY_NUMBER_CHANGED_CONFIRM_CALL_ACTION" = "依然呼叫";
+
+/* button title to confirm sending to a recipient whose safety number recently changed */
+"SAFETY_NUMBER_CHANGED_CONFIRM_SEND_ACTION" = "依然发送";
+
+/* Snippet to share {{safety number}} with a friend. sent e.g. via SMS */
+"SAFETY_NUMBER_SHARE_FORMAT" = "我们的 Chative 安全码:\n%@";
+
+/* Action sheet heading */
+"SAFETY_NUMBERS_ACTIONSHEET_TITLE" = "你的安全码 %@ 被改变了. 你可以想要验证它.";
+
+/* label presented once scanning (camera) view is visible. */
+"SCAN_CODE_INSTRUCTIONS" = "在你联系人设备上扫描QR码";
+
+/* Title for the 'scan QR code' view. */
+"SCAN_QR_CODE_VIEW_TITLE" = "扫描二维码";
+"INVITECODE" = "邀请码";
+"INVITE_JOINED" = "加入";
+"INVITE_FRIEND_BY_QRCODE_OR_LINK" = "分享二维码或链接邀请好友";
+"INVITE_REGENERATE" = "刷新";
+"INVITE_SCAN" = "扫一扫";
+"INVITE_SHARE" = "分享";
+"INVITE_ENTER_CODE" = "输入邀请码";
+"INVITE_DESC" = "在 TempTalk 上跟我聊天";
+"INVITE_CANCEL" = "取消";
+"INVITE_REGENERATE_ACTION" = "重新生成";
+"INVITE_LINK_TITLE" = "邀请链接";
+"INVITE_LINK_FORBIDEN_DESC" = "此群只允许管理员添加成员，请联系群主解决。";
+"INVITE_LINK_NEED_OPEN_GROUP_LINK_DESC" = "此群已关闭群邀请链接功能。";
+"Regenerate Invite Code" = "重新生成邀请码";
+"The old invite code will expire. Are you sure to continue?" = "旧邀请码会失效，您确定继续吗？";
+
+"ENTER_CODE_TITLE" = "添加新朋友";
+"ENTER_CODE_TIPS" = "输入邀请码添加新朋友";
+"ENTER_CODE_ERRORTIPS" = "邀请码不正确，请再试一次";
+"ENTER_CODE_MYCODE" = "我的邀请码";
+
+/* Indicates a delay of zero seconds, and that 'screen lock activity' will timeout immediately. */
+"SCREEN_LOCK_ACTIVITY_TIMEOUT_NONE" = "立即";
+
+/* Indicates that an unknown error occurred while using Touch ID/Face ID/Phone Passcode. */
+"SCREEN_LOCK_ENABLE_UNKNOWN_ERROR" = "无法访问认证数据。";
+
+/* Indicates that Touch ID/Face ID/Phone Passcode authentication failed. */
+"SCREEN_LOCK_ERROR_LOCAL_AUTHENTICATION_FAILED" = "认证失败。";
+
+/* Indicates that Touch ID/Face ID/Phone Passcode is 'locked out' on this device due to authentication failures. */
+"SCREEN_LOCK_ERROR_LOCAL_AUTHENTICATION_LOCKOUT" = "认证失败次数太多，请稍后再试。";
+
+/* Indicates that Touch ID/Face ID/Phone Passcode are not available on this device. */
+"SCREEN_LOCK_ERROR_LOCAL_AUTHENTICATION_NOT_AVAILABLE" = "您需要先设置您的密码来开启屏幕锁功能。";
+
+/* Indicates that Touch ID/Face ID/Phone Passcode is not configured on this device. */
+"SCREEN_LOCK_ERROR_LOCAL_AUTHENTICATION_NOT_ENROLLED" = "您需要先设置您的密码来开启屏幕锁功能。";
+
+/* Indicates that Touch ID/Face ID/Phone Passcode passcode is not set. */
+"SCREEN_LOCK_ERROR_LOCAL_AUTHENTICATION_PASSCODE_NOT_SET" = "您需要先设置您的密码来开启屏幕锁功能。";
+
+/* Description of how and why Chative iOS uses Touch ID/Face ID/Phone Passcode to unlock 'screen lock'. */
+"SCREEN_LOCK_REASON_UNLOCK_SCREEN_LOCK" = "认证来打开 Chative。";
+
+/* Title for alert indicating that screen lock could not be unlocked. */
+"SCREEN_LOCK_UNLOCK_FAILED" = "认证失败";
+
+/* Label for button on lock screen that lets users unlock Chative. */
+"SCREEN_LOCK_UNLOCK_SIGNAL" = "解锁 Chative";
+
+/* No comment provided by engineer. */
+"SEARCH_BYNAMEORNUMBER_PLACEHOLDER_TEXT" = "搜索姓名或号码";
+
+"SEARCH_SECTION_CONVERSATIONS_RECENT" = "最近";
+"SEARCH_SOMETHING_CONTAIN" = "包含: ";
+/* section header for search results that match a contact who doesn't have an existing conversation */
+"SEARCH_SECTION_CONTACTS" = "联系人";
+
+/* section header for search results that match existing conversations (either group or contact conversations) */
+"SEARCH_SECTION_CONVERSATIONS" = "群组";
+
+/* section header for search results that match a message in a conversation */
+"SEARCH_SECTION_MESSAGES" = "聊天记录";
+
+"SEARCH_SECTION_TRELATED_MESSAGE" = "相关聊天记录";
+
+"ENTER_KEYWORDS_TO_SEARCH" = "输入关键词搜索";
+
+"SEARCH_SECTION_VIEW_MORE" = "查看更多";
+
+"SEARCH_RESULT_LIST_TITLE_CONTACTS" = "更多联系人";
+
+"SEARCH_RESULT_LIST_TITLE_GROUP" = "更多群组";
+
+"SEARCH_RESULT_LIST_TITLE_MESSAGES" = "更多消息";
+
+/* No comment provided by engineer. */
+"SECURE_SESSION_RESET" = "安全会话被重置。";
+
+/* Label for 'select GIF to attach' action sheet button */
+"SELECT_GIF_BUTTON" = "GIF";
+
+/* Table section header for conversations you haven't recently used. */
+"SELECT_THREAD_TABLE_OTHER_CHATS_TITLE" = "联系人";
+
+/* Table section header for recently active conversations */
+"SELECT_THREAD_TABLE_RECENT_CHATS_TITLE" = "最近聊天";
+
+/* No comment provided by engineer. */
+"SEND_AGAIN_BUTTON" = "重新发送";
+
+/* Label for the send button in the conversation view. */
+"SEND_BUTTON_TITLE" = "发送";
+
+/* Alert body after invite failed */
+"SEND_INVITE_FAILURE" = "发送邀请失败, 请稍候再试.";
+
+/* Alert body after invite succeeded */
+"SEND_INVITE_SUCCESS" = "你已经邀请了你的朋友使用 Chative ！";
+
+/* Text for button to send a Chative invite via SMS. %@ is placeholder for the recipient's phone number. */
+"SEND_INVITE_VIA_SMS_BUTTON_FORMAT" = "通过短信邀请：%@";
+
+/* No comment provided by engineer. */
+"SEND_SMS_CONFIRM_TITLE" = "通过非加密的短信邀请好友？";
+
+/* No comment provided by engineer. */
+"SEND_SMS_INVITE_TITLE" = "您是否希望邀请以下号码加入Chative：";
+
+
+/* Title for the 'block contact' section of the 'add to block list' view. */
+"SETTINGS_ADD_TO_BLOCK_LIST_BLOCK_CONTACT_TITLE" = "将用户加入黑名单";
+
+/* Title for the 'block phone number' section of the 'add to block list' view. */
+"SETTINGS_ADD_TO_BLOCK_LIST_BLOCK_PHONE_NUMBER_TITLE" = "将号码加入黑名单";
+
+/* Title for the 'add to block list' view. */
+"SETTINGS_ADD_TO_BLOCK_LIST_TITLE" = "加入黑名单";
+
+/* Label for the  'manual censorship circumvention' switch. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION" = "审查规避";
+
+/* Label for the 'manual censorship circumvention' country. Embeds {{the manual censorship circumvention country}}. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_COUNTRY_FORMAT" = "位置：%@";
+
+/* Table footer for the 'censorship circumvention' section when censorship circumvention can be manually enabled. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_FOOTER" = "若启用，Chative 会尝试规避审查。除非 Chative 在您所在地受到审查，否则不要打开该功能。";
+
+/* Table footer for the 'censorship circumvention' section shown when censorship circumvention has been auto-enabled based on local phone number. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_FOOTER_AUTO_ENABLED" = "已根据您的电话号码启动审查规避。";
+
+/* Table footer for the 'censorship circumvention' section shown when the app is not connected to the internet. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_FOOTER_NO_CONNECTION" = "审查规避只能在联网时启动。";
+
+/* Table footer for the 'censorship circumvention' section shown when the app is connected to the Chative service. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_FOOTER_WEBSOCKET_CONNECTED" = "不需要规避审查；您已连接上了 Chative 服务。";
+
+/* Table header for the 'censorship circumvention' section. */
+"SETTINGS_ADVANCED_CENSORSHIP_CIRCUMVENTION_HEADER" = "审查规避";
+
+/* No comment provided by engineer. */
+"SETTINGS_ADVANCED_DEBUGLOG" = "启用调试日志";
+
+/* No comment provided by engineer. */
+"SETTINGS_ADVANCED_SUBMIT_DEBUGLOG" = "提交调试日志";
+
+"SETTINGS_ADVANCED_FIX_CONVERSATION_ANOMALY" = "修复会话异常";
+
+"SETTINGS_ADVANCED_FIX_COMPLETED" = "修复完成";
+
+/* No comment provided by engineer. */
+"SETTINGS_ADVANCED_THEME" = "主题";
+
+/* No comment provided by engineer. */
+"SETTINGS_ADVANCED_TITLE" = "高级";
+
+/* Format string for the default 'Note' sound. Embeds the system {{sound name}}. */
+"SETTINGS_AUDIO_DEFAULT_TONE_LABEL_FORMAT" = "%@（默认）";
+
+/* Label for the backup view in app settings. */
+"SETTINGS_BACKUP" = "备份";
+
+/* Label for 'backup now' button in the backup settings view. */
+"SETTINGS_BACKUP_BACKUP_NOW" = "现在备份";
+
+/* Label for 'cancel backup' button in the backup settings view. */
+"SETTINGS_BACKUP_CANCEL_BACKUP" = "取消备份";
+
+/* Label for switch in settings that controls whether or not backup is enabled. */
+"SETTINGS_BACKUP_ENABLING_SWITCH" = "备份已启用";
+
+/* Label for phase row in the in the backup settings view. */
+"SETTINGS_BACKUP_PHASE" = "阶段";
+
+/* Label for phase row in the in the backup settings view. */
+"SETTINGS_BACKUP_PROGRESS" = "进度";
+
+/* Label for status row in the in the backup settings view. */
+"SETTINGS_BACKUP_STATUS" = "状态";
+
+/* Indicates that the last backup failed. */
+"SETTINGS_BACKUP_STATUS_FAILED" = "备份失败";
+
+/* Indicates that app is not backing up. */
+"SETTINGS_BACKUP_STATUS_IDLE" = "等待中";
+
+/* Indicates that app is backing up. */
+"SETTINGS_BACKUP_STATUS_IN_PROGRESS" = "正在备份";
+
+/* Indicates that the last backup succeeded. */
+"SETTINGS_BACKUP_STATUS_SUCCEEDED" = "备份成功";
+
+/* A label for the 'add phone number' button in the block list table. */
+"SETTINGS_BLOCK_LIST_ADD_BUTTON" = "添加...";
+
+/* A label that indicates the user has no Chative contacts. */
+"SETTINGS_BLOCK_LIST_NO_CONTACTS" = "您没有任何 Chative 联系人。";
+
+/* A label that indicates the user's search has no matching results. */
+"SETTINGS_BLOCK_LIST_NO_SEARCH_RESULTS" = "无搜索结果";
+
+/* Label for the block list section of the settings view */
+"SETTINGS_BLOCK_LIST_TITLE" = "已加入黑名单";
+
+/* Table cell label */
+"SETTINGS_CALLING_HIDES_IP_ADDRESS_PREFERENCE_TITLE" = "始终使用中继进行通话";
+
+/* User settings section footer, a detailed explanation */
+"SETTINGS_CALLING_HIDES_IP_ADDRESS_PREFERENCE_TITLE_DETAIL" = "使用 Chative 服务器对所有通话进行中继，以防止联系人获取您的IP地址。开启后会降低通话质量。";
+
+/* No comment provided by engineer. */
+"SETTINGS_CLEAR_HISTORY" = "清除聊天记录";
+
+/* No comment provided by engineer. */
+"SETTINGS_COPYRIGHT" = "版权所有 Open Whisper Systems\n根据 GPLv3 授权";
+
+/* No comment provided by engineer. */
+"SETTINGS_DELETE_ACCOUNT_BUTTON" = "删除账号";
+
+/* Label for 'delete data' button. */
+"SETTINGS_DELETE_DATA_BUTTON" = "删除所有数据";
+
+/* Alert message before user confirms clearing history */
+"SETTINGS_DELETE_HISTORYLOG_CONFIRMATION" = "您是否确定要删除您所有的历史记录(消息，附件，通话记录)？这个操作将无法撤销。";
+
+/* Confirmation text for button which deletes all message, calling, attachments, etc. */
+"SETTINGS_DELETE_HISTORYLOG_CONFIRMATION_BUTTON" = "全部删除";
+
+/* No comment provided by engineer. */
+"SETTINGS_HELP_HEADER" = "帮助";
+
+/* Section header */
+"SETTINGS_HISTORYLOG_TITLE" = "清除聊天记录";
+
+/* No comment provided by engineer. */
+"SETTINGS_INFORMATION_HEADER" = "信息";
+
+/* Settings table view cell label */
+"SETTINGS_INVITE_TITLE" = "邀请朋友";
+
+/* content of tweet when inviting via twitter */
+"SETTINGS_INVITE_TWITTER_TEXT" = "你可以通过 @signalapp 来联系我。现在可以在 https://signal.org/download/ 下载。";
+
+/* Label for settings view that allows user to change the notification sound. */
+"SETTINGS_ITEM_NOTIFICATION_SOUND" = "消息提示音";
+"SETTINGS_ITEM_NOTIFICATION_SOUND_NM" = "消息提示音";
+"SETTINGS_ITEM_GROUP_REMINDER" = "周期性提醒";
+
+"SETTINGS_ITEM_ACCOUNT" = "账户";
+"SETTINGS_ITEM_ACCOUNT_ID" = "ID";
+"SETTINGS_ITEM_ACCOUNT_EMAIL" = "邮箱";
+"SETTINGS_ITEM_ACCOUNT_PHONE" = "手机号";
+"SETTINGS_ITEM_LOGOUT" = "退出登录";
+"SETTINGS_ITEM_DELETE" = "删除账号";
+
+/* app setting */
+"SETTINGS_ITEM_FEEDBACK" = "帮助与反馈";
+"SETTINGS_ITEM_ABOUT" = "关于";
+"SETTINGS_ITEM_UNLINK_TIP" = "未绑定";
+
+"SETTINGS_VC_TITLE_CHANGE_EMAIL" = "修改邮箱";
+"SETTINGS_VC_TITLE_CHANGE_EMAIL_PLACE_HOLDER" = "新邮箱地址";
+
+"SETTINGS_VC_TITLE_CHANGE_PHONE_NUMBER" = "修改手机号";
+"SETTINGS_VC_TITLE_CHANGE_PHONE_NUMBER_PLACE_HOLDER" = "新手机号";
+
+"Save" = "保存";
+
+"SETTINGS_ITEM_NOTIFICATION_APNS" = "通知";
+"SETTINGS_ITEM_NOTIFICATION_APNS_HEADER" = "群默认设置";
+"SETTINGS_ITEM_NOTIFICATION_APNS_NM" = "消息通知";
+"SETTINGS_COMMON_GLOBAL" = "默认";
+"SETTINGS_COMMON_GLOBAL_NOTIFICSTION" = "默认通知";
+"SETTINGS_COMMON_GLOBAL_NOTIFICSTION_TIP" = "在\"我-通知-群默认设置\"中更改所有群组的默认通知设置。\n更改群默认设置";
+"SETTINGS_COMMON_GLOBAL_NOTIFICSTION_BOTTOM_TIP" = "请此处为所有群组设置通知首选项。缺省情况下，单聊和呼叫通知处于开启状态。";
+"SETTINGS_COMMON_ONLY_@MENSION_BOTTOM_TIP" = "只有被@时才会收到推送通知";
+"TRANSLATE_SETTINGS_SELECTED_ENGLISH_LANGUAGE" = "English translations will be added to the new messages you receive";
+"TRANSLATE_SETTINGS_SELECTED_ORIGINAL" = "翻译已关闭";
+"TRANSLATE_SETTINGS_SELECTED_CHINISE_LANGUAGE" = "你收到的新消息将增加中文翻译";
+
+"SETTINGS_ITEM_NOTIFICATION_APNS_ALL_MESSAGE" = "所有";
+"SETTINGS_ITEM_NOTIFICATION_APNS_AT" = "仅@";
+"SETTINGS_ITEM_NOTIFICATION_APNS_OFF" = "关";
+
+"SETTINGS_COMMON_TIP_MESSAGE_SUCESS" = "设置成功";
+
+"SETTINGS_COMMON_TIP_MESSAGE_FAILE" = "设置失败，请重试";
+
+"SETTINGS_NOTITY_CUSTOM" = "自定义设置";
+
+/* table cell label */
+"SETTINGS_LEGAL_TERMS_CELL" = "条款和隐私政策";
+
+/* Title for settings activity */
+"SETTINGS_NAV_BAR_TITLE" = "我的";
+
+/* table section footer */
+"SETTINGS_NOTIFICATION_CONTENT_DESCRIPTION" = "电话和消息的提示将能够在锁屏状态下显示。您可以选择是否显示这些通知内容。";
+
+/* table section header */
+"SETTINGS_NOTIFICATION_CONTENT_TITLE" = "通知内容";
+
+/* No comment provided by engineer. */
+"SETTINGS_NOTIFICATIONS" = "通知";
+
+/* Label for 'CallKit privacy' preference */
+"SETTINGS_PRIVACY_CALLKIT_PRIVACY_TITLE" = "显示呼叫者的名称与号码";
+
+/* Settings table section footer. */
+"SETTINGS_PRIVACY_CALLKIT_SYSTEM_CALL_LOG_PREFERENCE_DESCRIPTION" = "将Chative通话记录整合在iOS通话记录中。";
+
+/* Short table cell label */
+"SETTINGS_PRIVACY_CALLKIT_SYSTEM_CALL_LOG_PREFERENCE_TITLE" = "显示最近通话";
+
+/* Short table cell label */
+"SETTINGS_PRIVACY_CALLKIT_TITLE" = "与iOS 通话记录整合";
+
+/* Settings table view cell label */
+"SETTINGS_PRIVACY_TITLE" = "安全和隐私";
+
+/* Label for the 'read receipts' setting. */
+"SETTINGS_READ_RECEIPT" = "已读回执";
+
+/* An explanation of the 'read receipts' setting. */
+"SETTINGS_READ_RECEIPTS_SECTION_FOOTER" = "消息已读时，查看和分享已读状态。该设置为可选设置，且对所有对话生效。";
+
+/* Label for re-registration button. */
+"SETTINGS_REREGISTER_BUTTON" = "重新注册";
+
+/* Label for the 'screen lock activity timeout' setting of the privacy settings. */
+"SETTINGS_SCREEN_LOCK_ACTIVITY_TIMEOUT" = "屏幕锁超时";
+
+/* Footer for the 'screen lock' section of the privacy settings. */
+"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "使用密码解锁屏幕。密码可以不同于系统密码，因此如果有人设法得到了系统密码，但他仍然无法访问TempTalk。此外，内容预览也会在app切换时被遮盖。";
+
+"UNLOCKSCREEN_TITLE" = "请输入屏幕锁密码";
+"UNLOCKSCREEN_DONE" = "确认";
+"SCREENLOCK_SETPASSCODE_TIPS" = "请设置解锁码（4-10位数字）。下一次解锁TempTalk时需输入此解锁码。";
+"SCREENLOCK_SETPASSCODE_EXCLAMATION" = "若遗失解锁码，必须退出账户或重新安装应用。";
+"SCREENLOCK_SETPASSCODE_FORGOT_TIPS" = "忘记解锁码？";
+"SCREENLOCK_SETPASSCODE_FORGOT_Alert_CONTENT" = "请删除并重装应用。";
+"SCREENLOCK_SETPASSCODE_FORGOT_Alert_OK" = "好的";
+"SCREENLOCK_SETPASSCODE_NEXT" = "下一步";
+"SCREENLOCK_CONFIRMPASSCODE_TIPS" = "请再次输入以确认。";
+"SCREENLOCK_CONFIRMPASSCODE_CONFIRM" = "确认";
+"SCREENLOCK_CONFIRMPASSCODE_ERROR_TITLE" = "错误";
+"SCREENLOCK_CONFIRMPASSCODE_ERROR_TIPS" = "密码不匹配。";
+"SCREENLOCK_CONFIRMPASSCODE_ERROR_OKBTN" = "确定";
+"SCREENLOCK_PASSCODESUCCESS_TITLE" = "成功！";
+"SCREENLOCK_PASSCODESUCCESS_TIPS" = "请妥善保存此代码。若遗失解锁码，必须退出账户或重新安装应用。";
+"SCREENLOCK_PASSCODESUCCESS_CONFIRM" = "我明白了";
+"SCREENLOCK_PASSCODESUCCESS_ATTEMPTS" = "下一次尝试需要等待%d秒。";
+"LOGIN_SUBIT_TOO_MANY_ATTEMPTS" = "尝试次数过多，请稍后再试。";
+
+"SCREENLOCK_UPGRADE_TITLE" = "功能更新";
+"SCREENLOCK_UPGRADE_TIPS" = "隐私设置中的 屏幕锁 功能有重要更新，您以前的设置可能已经失效，您可以前往查看确保安全。";
+"SCREENLOCK_UPGRADE_IGNORE" = "忽略";
+"SCREENLOCK_UPGRADE_CHECK" = "看看";
+
+/* Title for the 'screen lock' section of the privacy settings. */
+"SETTINGS_SCREEN_LOCK_SECTION_TITLE" = "安全";
+
+/* Label for the 'enable screen lock' switch of the privacy settings. */
+"SETTINGS_SCREEN_LOCK_SWITCH_LABEL" = "屏幕锁";
+
+/* No comment provided by engineer. */
+"SETTINGS_SCREEN_SECURITY" = "开启屏幕锁定功能";
+
+"SETTINGS_RENEW_KEY_LABEL" = "生成新密钥";
+
+"SETTINGS_RENEW_KEY_DES" = "您所有的数据包括消息都是使用此密钥加密的。";
+
+"ALERT_RENEW_KEY_TITLE" = "生成新密钥";
+
+"ALERT_RENEW_KEY_TIPS" = "您的设备上及好友的设备上历史消息将被清除，如果您有其他设备，他们将会登出，您需要重新链接。";
+
+"ALERT_RENEW_KEY_GENERATE" = "生成";
+
+/* No comment provided by engineer. */
+"SETTINGS_SCREEN_SECURITY_DETAIL" = "阻止 Chative 预览页面显示在应用切换窗口。";
+
+/* Settings table section footer. */
+"SETTINGS_SECTION_CALL_KIT_DESCRIPTION" = "iOS 通话整合会在您的锁屏界面和系统通话记录中显示您的Chative通话记录。您可以选择显示您的联系人的名称与号码。如果您已开启iCloud，系统会与苹果公司共享通话记录。";
+
+/* Label for the notifications section of conversation settings view. */
+"SETTINGS_SECTION_NOTIFICATIONS" = "通知";
+
+/* Header Label for the sounds section of settings views. */
+"SETTINGS_SECTION_SOUNDS" = "声音通知";
+"SETTINGS_SECTION_SOUNDS_SCOPES" = "通知范围";
+"SETTINGS_SECTION_MESSAGE_NOTIFYCATION" = "通知";
+"SETTINGS_GROUP_MESSAGE_NOTIFYCATION" = "消息通知";
+"SETTINGS_SECTION_TIPMESSAGE" = "只有@你时才会推送通知";
+"SETTINGS_SECTION_TRANSLATE" = "翻译";
+"SETTINGS_SECTION_GROUP_LINK" = "邀请链接";
+"SETTINGS_SECTION_TRANSLATE_LANGUAGE_CHINESE" = "中文";
+"SETTINGS_SECTION_TRANSLATE_LANGUAGE_ENGLISH" = "English";
+"SETTINGS_SECTION_TRANSLATE_LANGUAGE_OFF" = "关闭";
+"TRANSLATE_TIP_MESSAGE" = "翻译中...";
+"TRANSLATE_TIP_MESSAGE_FAILED" = "翻译失败，请重试";
+"TRANSLATE_TIP_MESSAGE_LONG_TEXT" = "消息超过2000字符，不支持翻译";
+"TRANSLATE_SOURCE_TEXT" = "翻译自Google";
+
+"SHARE_GROUP_LINK" = "分享群链接";
+"SHARE_GROUP_LINK_INVITE_TEXT" = "I invite you to join the %@ group \"%@\",  ";
+"SHARE_GROUP_LINK_CLICK_TO_JOIN" = "click to join the group";
+
+/* settings topic header for table section */
+"SETTINGS_SECTION_TITLE_CALLING" = "拨号中";
+
+/* Section header */
+"SETTINGS_SECURITY_TITLE" = "屏幕安全";
+
+"SETTINGS_SECURITY_METHODS_FOR_FINDING_ME_TITLE" = "找到我的方式";
+"SETTINGS_SECURITY_SEARCH_ME_FROM_PHONE_NUMBER" = "手机号";
+"SETTINGS_SECURITY_SEARCH_ME_FROM_EMAIL" = "邮箱";
+
+/* No comment provided by engineer. */
+"SETTINGS_SUPPORT" = "支持";
+
+
+/* Invitation */
+"SETTINGS_INVITATION" = "邀请";
+/* Invite code list header */
+"SETTINGS_INVITE_CODE_LIST_HEADER" = "邀请码列表";
+/* Get invite code item title */
+"SETTINGS_GET_INVITE_CODE_TITLE" = "获取邀请码...";
+"SETTINGS_NO_MORE_INVITE_CODE" = "您的邀请码已经用完！";
+
+"SETTINGS_SHARE_YOUR_CONTACT_CARD_TITLE" = "分享名片";
+"SETTINGS_NO_PROFILE_NAME" = "您的名字不能空！立即去设置？";
+"CONTACT_SHARE_MYSELF_DESCRIPTION_HEADER" = "这是我的名片";
+
+/* Indicates that 'two factor auth' is disabled in the privacy settings. */
+"SETTINGS_TWO_FACTOR_AUTH_DISABLED" = "关闭";
+
+/* Indicates that 'two factor auth' is enabled in the privacy settings. */
+"SETTINGS_TWO_FACTOR_AUTH_ENABLED" = "开启";
+
+/* Label for the 'two factor auth' item of the privacy settings. */
+"SETTINGS_TWO_FACTOR_AUTH_ITEM" = "注册锁";
+
+/* Title for the 'two factor auth' section of the privacy settings. */
+"SETTINGS_TWO_FACTOR_AUTH_TITLE" = "注册锁";
+
+/* No comment provided by engineer. */
+"SETTINGS_PLATFORM" = "平台";
+"SETTINGS_WEBSITE" = "网站";
+
+"SETTINGS_VERSION" = "版本";
+
+"BUILD_SETTINGS_VERSION" = "构建版本";
+
+/* Check is there a new version on server. */
+"CHECK_NEW_VERSION" = "检查新版本";
+
+/* action sheet item to open native mail app */
+"SHARE_ACTION_MAIL" = "Email";
+
+/* action sheet item to open native messages app */
+"SHARE_ACTION_MESSAGE" = "短信";
+
+/* action sheet item */
+"SHARE_ACTION_TWEET" = "推特";
+
+/* alert body when sharing file failed because of untrusted/changed identity keys */
+"SHARE_EXTENSION_FAILED_SENDING_BECAUSE_UNTRUSTED_IDENTITY_FORMAT" = "近期您与%@的安全码已改变。在您重新发送前，建议您在主应用中验证新的安全码。";
+
+/* Indicates that the share extension is still loading. */
+"SHARE_EXTENSION_LOADING" = "读取中";
+
+/* Message indicating that the share extension cannot be used until the user has registered in the main app. */
+"SHARE_EXTENSION_NOT_REGISTERED_MESSAGE" = "启动 Chative 来注册。";
+
+/* Title indicating that the share extension cannot be used until the user has registered in the main app. */
+"SHARE_EXTENSION_NOT_REGISTERED_TITLE" = "未注册";
+
+/* Message indicating that the share extension cannot be used until the main app has been launched at least once. */
+"SHARE_EXTENSION_NOT_YET_MIGRATED_MESSAGE" = "启动 Chative 来更新或注册。";
+
+/* Title indicating that the share extension cannot be used until the main app has been launched at least once. */
+"SHARE_EXTENSION_NOT_YET_MIGRATED_TITLE" = "还未准备好";
+
+/* Alert title */
+"SHARE_EXTENSION_SENDING_FAILURE_TITLE" = "无法发送附件";
+
+/* Alert title */
+"SHARE_EXTENSION_SENDING_IN_PROGRESS_TITLE" = "上传中...";
+
+/* Shown when trying to share content to a Chative user for the share extension. Followed by failure details. */
+"SHARE_EXTENSION_UNABLE_TO_BUILD_ATTACHMENT_ALERT_TITLE" = "无法准备附件";
+
+/* Title for the 'share extension' view. */
+"SHARE_EXTENSION_VIEW_TITLE" = "分享到 ";
+
+/* Action sheet item */
+"SHOW_SAFETY_NUMBER_ACTION" = "显示安全码";
+
+/* notification action */
+"SHOW_THREAD_BUTTON_TITLE" = "显示对话";
+
+/* body sent to contacts when inviting to Install Chative */
+"SMS_INVITE_BODY" = "请你下载Chative加密通讯软件！链接：";
+
+/* Label for the 'no sound' option that allows users to disable sounds for notifications, etc. */
+"SOUNDS_NONE" = "无";
+
+/* Alert body after verifying privacy with {{other user's name}} */
+"SUCCESSFUL_VERIFICATION_DESCRIPTION" = "您的安全码与%@一致。您可以将此联系人标记为已验证。";
+
+/* No comment provided by engineer. */
+"SUCCESSFUL_VERIFICATION_TITLE" = "安全码一致！";
+
+/* Label for button to verify a user's safety number. */
+"SYSTEM_MESSAGE_ACTION_VERIFY_SAFETY_NUMBER" = "验证安全码";
+
+/* No comment provided by engineer. */
+"THEME_SECTION" = "主题";
+
+/* {{number of days}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 days}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_DAYS" = "%@天";
+
+/* Label text below navbar button, embeds {{number of days}}. Must be very short, like 1 or 2 characters, The space is intentionally omitted between the text and the embedded duration so that we get, e.g. '5d' not '5 d'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_DAYS_SHORT_FORMAT" = "%@天";
+
+/* {{number of hours}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 hours}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_HOURS" = "%@小时";
+
+/* Label text below navbar button, embeds {{number of hours}}. Must be very short, like 1 or 2 characters, The space is intentionally omitted between the text and the embedded duration so that we get, e.g. '5h' not '5 h'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_HOURS_SHORT_FORMAT" = "%@时";
+
+/* {{number of minutes}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 minutes}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_MINUTES" = "%@分钟";
+
+/* Label text below navbar button, embeds {{number of minutes}}. Must be very short, like 1 or 2 characters, The space is intentionally omitted between the text and the embedded duration so that we get, e.g. '5m' not '5 m'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_MINUTES_SHORT_FORMAT" = "%@分";
+
+/* {{number of seconds}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 seconds}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SECONDS" = "%@秒";
+
+/* Label text below navbar button, embeds {{number of seconds}}. Must be very short, like 1 or 2 characters, The space is intentionally omitted between the text and the embedded duration so that we get, e.g. '5s' not '5 s'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SECONDS_SHORT_FORMAT" = "%@秒";
+
+/* {{1 day}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{1 day}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SINGLE_DAY" = "%@天";
+
+/* {{1 hour}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{1 hour}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SINGLE_HOUR" = "%@小时";
+
+/* {{1 minute}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{1 minute}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SINGLE_MINUTE" = "%@分钟";
+
+/* {{1 week}} embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{1 week}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_SINGLE_WEEK" = "%@个星期";
+
+/* {{number of weeks}}, embedded in strings, e.g. 'Alice updated disappearing messages expiration to {{5 weeks}}'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_WEEKS" = "%@个星期";
+
+/* Label text below navbar button, embeds {{number of weeks}}. Must be very short, like 1 or 2 characters, The space is intentionally omitted between the text and the embedded duration so that we get, e.g. '5w' not '5 w'. See other *_TIME_AMOUNT strings */
+"TIME_AMOUNT_WEEKS_SHORT_FORMAT" = "%@周";
+
+/* Label for the cancel button in an alert or action sheet. */
+"TXT_CANCEL_TITLE" = "取消";
+
+"TXT_CONFIRM_TITLE" = "确定";
+
+"TXT_OK_TITLE" = "确定";
+
+"TXT_CONFIRM_TITLE_Invite" = "邀请";
+
+/* No comment provided by engineer. */
+"TXT_DELETE_TITLE" = "删除";
+
+/* Pressing this button moves an archived thread from the archive back to the inbox */
+"UNARCHIVE_ACTION" = "未存档";
+
+/* In Inbox view, last message label for thread with corrupted attachment. */
+"UNKNOWN_ATTACHMENT_LABEL" = "[未知附件]";
+
+/* Message shown in conversation view that offers to block an unknown user. */
+"UNKNOWN_CONTACT_BLOCK_OFFER" = "该用户不在你的联系人里，是否将其加入黑名单？";
+
+/* Displayed if for some reason we can't determine a contacts phone number *or* name */
+"UNKNOWN_CONTACT_NAME" = "未知的联系人";
+
+/* Indicates an unknown or unrecognizable value. */
+"UNKNOWN_VALUE" = "无法识别";
+
+/* button title for unlinking a device */
+"UNLINK_ACTION" = "解绑";
+
+/* Alert message to confirm unlinking a device */
+"UNLINK_CONFIRMATION_ALERT_BODY" = "被解绑的设备将无法接收和发送消息。";
+
+/* Alert title for confirming device deletion */
+"UNLINK_CONFIRMATION_ALERT_TITLE" = "确定解绑 \"%@\"?";
+
+/* Alert title when unlinking device fails */
+"UNLINKING_FAILED_ALERT_TITLE" = "解绑设备失败。";
+
+/* Label text in device manager for a device with no name */
+"UNNAMED_DEVICE" = "未命名设备";
+
+/* No comment provided by engineer. */
+"UNREGISTER_SIGNAL_FAIL" = "从 Chative 退出登录失败。";
+
+"SEND_MESSAGE_FAILED_REASON" = "操作被拒绝，此账号已被注销。";
+
+/* No comment provided by engineer. */
+"UNSUPPORTED_ATTACHMENT" = "收到了不支持的附件类型。";
+
+/* No comment provided by engineer. */
+"UNSUPPORTED_FEATURE_ERROR" = "您的设备不支持此功能。";
+
+/* Title for alert indicating that group members can't be removed. */
+"UPDATE_GROUP_CANT_REMOVE_MEMBERS_ALERT_MESSAGE" = "您无法删除群组成员。只能其自行退出，或者您可以新建一个不包含该成员的群组。";
+
+/* Title for alert indicating that group members can't be removed. */
+"UPDATE_GROUP_CANT_REMOVE_MEMBERS_ALERT_TITLE" = "不允许";
+
+"YOU" = "您";
+"UPDATE_GROUP_MESSAGE_BODY_REMOVE_MEMBER" = "%@被移出了群组";
+"UPDATE_GROUP_MESSAGE_BODY_REMOVE_MEMBERS" = "%@被移出了群组";
+"GROUP_REMOVE_MEMBER_REJOIN" = "重新加入";
+"GROUP_REMOVE_MEMBER_REJOIN_TIPS" = "确认重新加入群组吗?";
+
+"UPDATE_GROUP_CONFIRM_REMOVE_MEMBERS_ALERT_TITLE" = "移出";
+"UPDATE_GROUP_CONFIRM_REMOVE_MEMBERS_ALERT_MESSAGE" = "确实要将他移出群聊吗？";
+
+/* Description of CallKit to upgrading (existing) users */
+"UPGRADE_EXPERIENCE_CALLKIT_DESCRIPTION" = "iOS 通话整合可以帮您简单地从锁定屏幕来接听电话。默认设置显示匿名呼叫人，所以您不必担心隐私泄露。";
+
+/* button label shown once when when user upgrades app, in context of call kit */
+"UPGRADE_EXPERIENCE_CALLKIT_PRIVACY_SETTINGS_BUTTON" = "更多信息请见您的隐私设置。";
+
+/* Header for upgrade experience */
+"UPGRADE_EXPERIENCE_CALLKIT_TITLE" = "滑动即可应答";
+
+/* Description for notification audio customization */
+"UPGRADE_EXPERIENCE_INTRODUCING_NOTIFICATION_AUDIO_DESCRIPTION" = "现在，您既可以为所有对话设置一个默认提示音，也可以为每一个对话选择单独的提示音。您的来电铃声将与 iOS 联系人中所设置的铃声一致。";
+
+/* button label shown one time, after upgrade */
+"UPGRADE_EXPERIENCE_INTRODUCING_NOTIFICATION_AUDIO_SETTINGS_BUTTON" = "检查通知设置";
+
+/* Header for upgrade experience */
+"UPGRADE_EXPERIENCE_INTRODUCING_NOTIFICATION_AUDIO_TITLE" = "新的通话和消息提示音";
+
+/* button label shown one time, after user upgrades app */
+"UPGRADE_EXPERIENCE_INTRODUCING_PROFILES_BUTTON" = "设置您的资料";
+
+/* Description of new profile feature for upgrading (existing) users */
+"UPGRADE_EXPERIENCE_INTRODUCING_PROFILES_DESCRIPTION" = "您现在可以与您的 Chative 好友分享分享资料照片和名称。";
+
+/* Header for upgrade experience */
+"UPGRADE_EXPERIENCE_INTRODUCING_PROFILES_TITLE" = "准备好来张特写了吗？";
+
+/* Description of new profile feature for upgrading (existing) users */
+"UPGRADE_EXPERIENCE_INTRODUCING_READ_RECEIPTS_DESCRIPTION" = "您现在可以选择查看和分享消息的已读状态。";
+
+/* button label shown one time, after upgrade */
+"UPGRADE_EXPERIENCE_INTRODUCING_READ_RECEIPTS_PRIVACY_SETTINGS" = "在隐私设置中启用已读回执。";
+
+/* Header for upgrade experience */
+"UPGRADE_EXPERIENCE_INTRODUCING_READ_RECEIPTS_TITLE" = "加入已读回执功能";
+
+/* Description of video calling to upgrading (existing) users */
+"UPGRADE_EXPERIENCE_VIDEO_DESCRIPTION" = "Chative 已开始支持安全的视频通话。正常的开始Chative通话，点击相机按钮，对方即可看到您。";
+
+/* Header for upgrade experience */
+"UPGRADE_EXPERIENCE_VIDEO_TITLE" = "现推出安全的视频通话！";
+
+/* Message for the alert indicating that user should upgrade iOS. */
+"UPGRADE_IOS_ALERT_MESSAGE" = "Chative 仅支持 iOS 9 或更新的系统版本。请到 设置 >> 通用 >> 软件更新 升级 iOS。";
+
+/* Title for the alert indicating that user should upgrade iOS. */
+"UPGRADE_IOS_ALERT_TITLE" = "升级 iOS";
+
+/* No comment provided by engineer. */
+"Upgrading Chative ..." = "正在升级 Chative…";
+
+/* button text for back button on verification view */
+"VERIFICATION_BACK_BUTTON" = "退后";
+
+/* Text field placeholder for SMS verification code during registration */
+"VERIFICATION_CHALLENGE_DEFAULT_TEXT" = "验证码";
+
+/* button text during registration to request phone number verification be done via phone call */
+"VERIFICATION_CHALLENGE_SEND_VIA_VOICE" = "通过电话呼叫我以获取验证码";
+
+/* button text during registration to request another SMS code be sent */
+"VERIFICATION_CHALLENGE_SUBMIT_AGAIN" = "重新通过SMS短信发送验证码";
+
+/* button text during registration to submit your SMS verification code. */
+"VERIFICATION_CHALLENGE_SUBMIT_CODE" = "提交";
+
+/* Label indicating the phone number currently being verified. */
+"VERIFICATION_PHONE_NUMBER_FORMAT" = "输入我们发送到 %@ 的验证码";
+
+/* Format for info message indicating that the verification state was unverified on this device. Embeds {{user's name or phone number}}. */
+"VERIFICATION_STATE_CHANGE_FORMAT_NOT_VERIFIED_LOCAL" = "您已将%@标记为未验证。";
+
+/* Format for info message indicating that the verification state was unverified on another device. Embeds {{user's name or phone number}}. */
+"VERIFICATION_STATE_CHANGE_FORMAT_NOT_VERIFIED_OTHER_DEVICE" = "您已在其它设备将%@标记为未验证。";
+
+/* Format for info message indicating that the verification state was verified on this device. Embeds {{user's name or phone number}}. */
+"VERIFICATION_STATE_CHANGE_FORMAT_VERIFIED_LOCAL" = "您已将%@标记为已验证。";
+
+/* Format for info message indicating that the verification state was verified on another device. Embeds {{user's name or phone number}}. */
+"VERIFICATION_STATE_CHANGE_FORMAT_VERIFIED_OTHER_DEVICE" = "您已在其它设备将%@标记为已验证。";
+
+/* Generic message indicating that verification state changed for a given user. */
+"VERIFICATION_STATE_CHANGE_GENERIC" = "验证状态改变。";
+
+/* Label for button or row which allows users to verify the safety number of another user. */
+"VERIFY_PRIVACY" = "查看安全码";
+
+/* Label for button or row which allows users to verify the safety numbers of multiple users. */
+"VERIFY_PRIVACY_MULTIPLE" = "检查安全码";
+
+/* Indicates how to cancel a voice message. */
+"VOICE_MESSAGE_CANCEL_INSTRUCTIONS" = " 滑动以取消";
+
+/* Filename for voice messages. */
+"VOICE_MESSAGE_FILE_NAME" = "[语音消息]";
+
+/* Message for the alert indicating the 'voice message' needs to be held to be held down to record. */
+"VOICE_MESSAGE_TOO_SHORT_ALERT_MESSAGE" = "按住不放来录取语音消息。";
+
+/* Title for the alert indicating the 'voice message' needs to be held to be held down to record. */
+"VOICE_MESSAGE_TOO_SHORT_ALERT_TITLE" = "语音消息";
+
+/* Activity indicator title, shown upon returning to the device manager, until you complete the provisioning process on desktop */
+"WAITING_TO_COMPLETE_DEVICE_LINK_TEXT" = "请完成 Chative 桌面版设置。";
+
+/* Info Message when you disable disappearing messages */
+"YOU_DISABLED_DISAPPEARING_MESSAGES_CONFIGURATION" = "您取消了阅后即焚。";
+
+"YOU_UPDATED_DISAPPEARING_MESSAGES_TIP_MESSAGE" = "消息在被阅读后会过期，并无法再通过任何方式查看和找回";
+
+/* Info message embedding a {{time amount}}, see the *_TIME_AMOUNT strings for context. */
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION" = "以下消息将在被阅读%d天后过期";
+
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION_DAYS" = "以下消息将在被阅读%d天后过期";
+
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION_HOUR" = "以下消息将在被阅读%d小时后过期";
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION_HOURS" = "以下消息将在被阅读%d小时后过期";
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION_MINUTE" = "以下消息将在被阅读%d分钟后过期";
+"YOU_UPDATED_DISAPPEARING_MESSAGES_CONFIGURATION_MINUTES" = "以下消息将在被阅读%d分钟后过期";
+
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_DAYS" = "%@ 将消息过期时间改为：%d 天。";
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_DAY" = "%@ 将消息过期时间改为：%d 天。";
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_HOURS" = "%@ 将消息过期时间改为：%d 小时。";
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_HOUR" = "%@ 将消息过期时间改为：%d 小时。";
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_MINUTES" = "%@ 将消息过期时间改为：%d 分钟。";
+"DISAPPEARING_MESSAGES_CONFIGURATION_UPDATED_MINUTE" = "%@ 将消息过期时间改为：%d 分钟。";
+
+"ARCHIVE_NOTICE_DISAPPEARING_MESSAGES_CONFIGURATION" = "%@天前的消息将被归档。";
+
+// Strings Copied in from JSQMessagesViewController
+
+
+"load_earlier_messages" = "加载早前的消息";
+
+"send" = "发送";
+
+"text_message_accessibility_label" = "%@：%@";
+
+"media_message_accessibility_label" = "%@：媒体消息";
+
+"accessory_button_accessibility_label" = "分享媒体";
+
+"new_message_received_accessibility_announcement" = "收到新消息";
+
+/* Action sheet that will add an unknown user to contact list. */
+"ADD_OFFER_ACTIONSHEET_ADD_ACTION" = "添加联系人";
+
+"ADD_OFFER_ACTIONSHEET_ADD_ACTION_LOWER" = "添加联系人";
+"ADD_OFFER_ACTIONSHEET_BLOCK_USER" = "拉黑";
+
+/* Title format for action sheet that offers to add an unknown user.Embeds {{the unknown user's name or phone number}}. */
+"ADD_OFFER_ACTIONSHEET_TITLE_FORMAT" = "将 %@ 添加为联系人";
+
+"ADD_CONTACT_ADD_SUCCESS" = "成功添加联系人.";
+"ADD_CONTACT_ADD_FAILED"  = "添加联系人失败.";
+"NEW_CONTACT_ADDED" = "已添加为新的联系人.";
+
+/* Invite friends to join */
+"INVITE_FRIENDS_LINK" = "I invite you to %@, a \"secure, private & no storage\" chat app, featuring E2E encryption, no metadata, and open source. Please use this link to download the app, and use it AGAIN to add me: ";
+"CONTACT_REQUEST" = "发送申请";
+"CONTACT_ACCEPT_REQUEST_FAILE_REASON_EXPIRED" = "好友添加请求已经过期, ";
+"CONTACT_NEW_REQUEST" = "发送新申请";
+"CONTACT_REQUEST_SENTED" = "好友请求已发送";
+"CONTACT_REQUEST" = "好友请求";
+"CONTACT_ACCEPT" = "同意";
+"CONTACT_ADD_BY_REQUEST" = "你们还不是好友, ";
+"CONTACT_ACCEPT_ADD_FRIENDS_BY_REQUEST" = "%@ 请求添加你为好友. ";
+"CONTACT_SEND_MESSAGE_FAILED_REASON_NOT_FRIENDS" = "操作被拒绝，你们还不是好友。 ";
+"CONTACT_Call_FAILED_REASON_BLOCK_UESR" = "操作被拒绝. 您需要取消拉黑联系人！";
+"CONTACT_ADD_CONTACT_SUCESS_TIP" = "%@ 接受了你的好友请求. 试试发送一条消息吧.";
+"CONTACT_REMOVE_ALERT_REASON" = "所有的消息也将会永久地在你和对方的设备上删除。";
+"CONTACT_REMOVEED" = "已删除";
+"CONTACT_DELETE" = "删除";
+"CONTACT_DELETE_TITLE" = "删除联系人";
+"CONTACT_NOTFRIEND_INFO_MSG" = "非好友每天最多发3条消息，请等待对方接受请求。";
+
+"CONTACT_BLOCK_ALERT_REASON" = "您确定要这么做吗?";
+"CONTACT_BLOCK_AND_DELETE_THIS_CHAT" = "拉黑并删除会话";
+"CONTACT_BLOCK_ACTION" = "仅拉黑";
+"OPREATION_SUCCESS" = "操作成功";
+"OPREATION_FAILED" = "操作失败";
+
+
+"CONTACT_EDITING_VIEW_TITLE" = "编辑";
+"CONTACT_REMARK_NAME_FIELD" = "备注名";
+"CONTACT_REMARK_NAME_DEFAULT_TEXT" = "请输入备注名";
+
+"CONTACT_SHARE_DESCRIPTION_HEADER" = "向您推荐TA";
+
+"CONTACT_EDIT_NAME" = "更改名字";
+"Save failed" = "保存失败";
+"UPDATENAME_OPREATION_FAILED" = "操作被禁止，请联系 ITBot / ChativeBot。";
+
+"CONTACT_EDIT_REMARK" = "设置备注";
+"CONTACT_REMARK" = "备注";
+
+"CONTACT_PROFILENAME_DESCRIPTION_HEADER" = "昵称： ";
+"CONTACT_NUMBER_DESCRIPTION_HEADER" = "号码： ";
+"CONTACT_EMAIL_DESCRIPTION_HEADER" = "邮箱： ";
+"CONTACT_NAME_DESCRIPTION_HEADER" = "名字";
+
+"CONTACT_PROFILE_LEADER" = "上级:";
+"CONTACT_PROFILE_Dot_Line_LEADER" = "虚线上级:";
+
+"CONTACT_SHARE_CONTACT_TO_FRIENTS" = "分享名片";
+
+"CONTACT_DETAILS_VIEW_TITLE" = "详情";
+
+"TABBAR_HOME" = "消息";
+"TABBAR_CONTACT" = "通讯录";
+"TABBAR_TASK" = "任务";
+"TABBAR_ME" = "我的";
+
+"SOMEONE_MENTION_YOU_TEXT" = "[@您] ";
+"SOMEONE_MENTION_ALL_TEXT" = "[@所有人] ";
+
+"SPECIAL_ACCOUNT_NAME_ALL" = "所有人";
+
+"LOCAL_ACCOUNT_DISPLAYNAME" = "收藏";
+
+"RECALL_INFO_MESSAGE" = "%@撤回了一条消息";
+"RECALL_INFO_MESSAGE_WITH_EDIT" = "%@撤回了一条消息 ";
+"RECALL_MESSAGE_PREVIEW" = "撤回了一条消息";
+"RE-EDIT_MESSAGE" = "重新编辑";
+"RECALL_CONFIRM_TITLE" = "是否撤回该条消息？";
+"RECALL_PASSED_TIME" = "该消息超过%@，不能被撤回。";
+"RECALL_CONTAINS_BOT" = "会话中包含Bot，暂不支持撤回";
+
+"CONFIDENTIAL_MESSAGE_MODE_ON" = "机密模式开启：消息将在被阅读后过期";
+"CONFIDENTIAL_MESSAGE_MODE_OFF" = "机密模式关闭";
+
+"TASK_MESSAGE_TITLE" = "任务";
+"TASK_MESSAGE_STATUS_Ongoing" = "处理中";
+"TASK_MESSAGE_STATUS_ing" = "处理中";
+"TASK_MESSAGE_STATUS_Received" = "被指派的";
+"TASK_MESSAGE_STATUS_CREATED" = "我创建的";
+"TASK_MESSAGE_STATUS_Completed" = "已完成";
+"TASK_MESSAGE_STATUS_Rejected" = "已拒绝";
+"TASK_MESSAGE_STATUS_Canceled" = "已取消";
+"TASK_MESSAGE_STATUS_FinalState" = "已结束";
+"TASK_MESSAGE_DISMISS_Deleted" = "该任务已被删除";
+"TASK_MESSAGE_DISMISS_Archived" = "该任务已被归档";
+"TASK_MESSAGE_View_details" = "查看详情";
+"TASK_MESSAGE_View_more" = "去任务中心查看更多";
+
+"TASK_LIST_SORT_BY_CREATED_TIME" = "按照创建时间排序";
+"TASK_LIST_SORT_BY_DUE_TIME" = "按照截止时间排序";
+"TASK_LIST_SORT_BY_PRIORITY_TIME" = "按照优先级排序";
+
+/* 通话 */
+"MEDIA_CALL_BUTTON" = "通话";
+"SINGLE_CALL_UNACCEPTED_TIMEOUT" = "超时未接听";
+"SINGLE_CALL_CALLER_CANCELED" = "对方已取消";
+"SINGLE_CALL_CALLEE_DECLINED" = "对方已拒绝";
+"SINGLE_CALL_BUSY" = "忙线中";
+"SINGLE_CALL_TIMEOUT" = "已超时";
+"SINGLE_CALL_CALLER_NETWORK_POOR" = "对方网络不佳";
+"SINGLE_CALL_CALLER_NETWORK_ABNORMAL" = "当前网络异常，建议稍后再试";
+"SINGLE_CALL_APPLY_MEETING_FAIL" = "申请会议失败";
+"SINGLE_CALL_MAY_NOT_ONLINE" = "对方暂时无法接听，请稍后尝试";
+"SINGLE_CALL_CALLING" = "通话中...";
+"SINGLE_CALL_WAITING_CALEE_ANSWER" = "等待对方接听中";
+"SINGLE_CALL_WAITING_ANSWER" = "邀请您进行语音通话";
+"GROUP_CALL_WAITING_ANSWER" = "邀请您加入会议: ";
+"CALL_REPEATING_CALL_IN_CALLING" = "通话中无法使用该服务";
+"CALL_CALLER_FAIL_ABNORMAL" = "呼叫异常";
+"GROUP_CALL_APPLY_MEETING_FAIL" = "准备会议失败";
+"MEETING_SERVICE_NOT_READY_NOTICE" = "会议服务准备中，请稍后再试";
+"MEETING_NOTICE_FAILED_TO_SWITCH_CAMERA" = "切换摄像头失败，请重试";
+"MEETING_WATCH_SCREEN_SHARE" = "观看屏幕分享";
+"MEETING_SCREEN_SHARE_LIST_TITLE" = "参会者";
+"GROUP_MEETING_DETAILS_TITLE" = "会议详情";
+
+"SINGLE_CALL_REREFUSED" = "Call refused";
+"SINGLE_CALL_CALL_CANCELED" = "Call cancelled";
+"SINGLE_CALL_ENDED" = "Call ended";
+"SINGLE_CALL_MISSED" = "Call missed";
+"SINGLE_CALL" = "Calling ...";
+"GROUP_CALL" = "Start a meeting...";
+"GROUP_CALL_WITH_LINK" = "%@ has started a meeting.";
+"GROUP_CALL_WITH_LINK_JOIN" = "Join";
+"GROUP_CALL_VIEW_DETAILS" = "View details";
+"GROUP_CALL_NOT_ORIGION_GROUP" = "详情仅支持在原群内打开";
+"GROUP_CALL_CONNECTING" = "连接中...";
+"GROUP_CALL_MAXPUSH_AUDIOSTREAM_TIP" = "最多支持%ld人同时开启麦";
+"GROUP_CALL_MAXPUSH_VIDEOSTREAM_TIP" = "最多支持%ld人同时开启视频";
+
+"GROUP_CALL_JOIN_MEETING_TIPS_TITLE" = "加入会议";
+"GROUP_CALL_JOIN_MEETING_TIPS_MSG" = "您确认要加入会议吗？";
+
+"CALL_INCOMING_ALERT_IGNORE" = "忽略";
+"CALL_INCOMING_ALERT_ACCEPT" = "接受";
+"CALL_INCOMING_ALERT_REFUSE" = "拒绝";
+"CALL_INCOMING_ALERT_INVITE_CALL" = "邀请你进行语音通话";
+"CALL_INCOMING_ALERT_ONGOING_TIP" = "当前已有通话进行中，断开当前通话才可以接听";
+
+"CALL_INVITE_MEMBERS_TITLE" = "邀请成员";
+"CALL_INVITE_MEMBERS" = "邀请";
+"CALL_INVITE_MESSAGE" = "Invite meeting";
+"CALL_INVITE_INSTANT_MEETING_DEFAULT_NAME" = "Instant meeting";
+"CALL_INVITE_INSTANT_MEETING_TITLE" = "即时会议";
+"CALL_INVITE_INSTANT_MEETING_NAME_PLACEHOLDER" = "为此即时会议命名";
+"CALL_INVITE_INSTANT_MEETING_START" = "发起";
+
+/* meeting  */
+"MEETING_MEMBER_JOIN_INFO_MESSAGE" = "加入了会议";
+"MEETING_MEMBER_LEFT_INFO_MESSAGE" = "离开了会议";
+"MEETING_AUTO_LEAVE_TITLE" = " 秒后结束会议";
+"MEETING_AUTO_LEAVE_TIP" = "您还在吗？倒计时结束将关闭会议";
+"MEETING_REMINDER_DEFAULT_PREVIEW" = "会议提醒";
+
+"ERROR_DESCRIPTION_MEETING_DOES_NOT_EXIT" = "会议不存在";
+"ERROR_DESCRIPTION_MEETING_ENDED" = "会议已结束";
+"ERROR_DESCRIPTION_MEETING_AUTHORIZATION_FAILED" = "校验失败";
+"ERROR_DESCRIPTION_MEETING_SYSTEM_ERROR" = "系统异常，请联系会议邀请人";
+
+"FLOATVIEW_ACTION_CREATE_GROUP" = "创建群组";
+"FLOATVIEW_ACTION_CHAT_FOLDER" = "会话分组";
+"FLOATVIEW_ACTION_INSTANT_MEETING" = "即时会议";
+"FLOATVIEW_ACTION_SCAN" = "扫一扫";
+"FLOATVIEW_ACTION_ADD_CONTACTS" = "邀请好友";
+
+"SCREENPROTECTION_TITLE" = "截屏警告";
+"SCREENPROTECTION_DESC" = "为了用户的安全和隐私，Chative禁止截屏。";
+"SCREENPROTECTION_UNDERSTAND" = "明白";
+
+// decrypted fail
+"CALL_ERROR_ALERT_DECRYPTIONFAILED" = "对方正在使用旧版本可能无法正常播放音频/视频。";
+
+/** app update */
+"APP_UPDATE_NO_NEW_VERSION" = "当前已是最新版本";
+"USER_STATE_ACTIVE" = "活动";
+"USER_STATE_UNACTIVE_CONDITION_MINUTES" = "%d分钟前活跃";
+"USER_STATE_UNACTIVE_CONDITION_HOUR" = "%d小时前活跃";
+"USER_STATE_UNACTIVE_CONDITION_YESTERDAY" = "昨天活跃";
+"USER_STATE_UNACTIVE_CONDITION_BEFORE_YESTERDAY" = "前天活跃";
+"USER_STATE_UNACTIVE_CONDITION_DAY" = "%d天前活跃";
+"USER_STATE_UNACTIVE_CONDITION_WEEK" = "%d周前活跃";
+"USER_STATE_UNACTIVE_CONDITION_MONTH" = "%d个月前活跃";
+
+"USER_STATE_CALLING" = "通话中";
+"USER_STATE_SHAREING" = "演示中";
+"USER_STATE_UNDISTURB" = "勿扰";//待补充
+"USER_STATE_IN_THE_MEETING" = "会议中";//待补充
+
+/** copy to pastboard */
+"COPY_TO_PASTBOARD" = "复制成功";
+"COPYID" = "已复制";
+
+"FORWARD_MESSAGE_CONVERSATION_MULTI_TITLE" = "选择多个聊天";
+"FORWARD_MESSAGE_CONVERSATION_SINGLE_TITLE" = "选择单个聊天";
+"FORWARD_MESSAGE_SELECT_CONVERSATION_MAX_COUNT" = "最多选择%lu个会话";
+"FORWARD_MESSAGE_SELECT_MULTI" = "多选";
+"FORWARD_MESSAGE_SELECT_CLOSE" = "关闭";
+"FORWARD_MESSAGE_SEND_TO_SINGLE" = "发送给：";
+"FORWARD_MESSAGE_SEND_TO_MULTI" = "分别发送给：";
+"FORWARD_MESSAGE_LEAVE_MESSAGE" = "给朋友留言";
+"FORWARD_MESSAGE_ONE_BY_ONE_TYPE" = "逐条转发";
+"FORWARD_MESSAGE_COMBINE_TYPE" = "合并转发";
+"FORWARD_MESSAGE_CONTACT_TYPE" = "个人名片";
+"FORWARD_MESSAGE_ONE_BY_ONE_OVERVIEW" = "共%ld条消息";
+"FORWARD_MESSAGE_COMBINE_GROUP_OVERVIEW" = "群聊的聊天记录";
+"FORWARD_MESSAGE_COMBINE_CONTACT_OVERVIEW" = "%@的聊天记录";
+"FORWARD_MESSAGE_OVERVIEW_AND" = "和";
+"FORWARD_MESSAGE_FORBIDDEN_REMINDER" = "此项不支持转发";
+"FORWARD_MESSAGE_ATTACHMENT_NOT_DOWNLOADED" = "附件未下载";
+"FORWARD_MESSAGE_CHAT_HISTORY" = "聊天记录";
+"FORWARD_MESSAGE_SELECT_MESSAGE_MAX_COUNT" = "最多选择%lu条消息";
+"FORWARD_MESSAGE_SINGLE_TITLE" = "转发消息 %@\n来自: ";
+"FORWARD_MESSAGE_CONFIDENTIAL" = "机密消息不能被选中";
+
+/* The title for the theme section in the appearance settings. */
+"SETTINGS_APPEARANCE_THEME_TITLE" = "主题";
+
+/* Name indicating that the dark theme is enabled. */
+"APPEARANCE_SETTINGS_DARK_THEME_NAME" = "深色";
+
+/* Name indicating that the light theme is enabled. */
+"APPEARANCE_SETTINGS_LIGHT_THEME_NAME" = "浅色";
+
+/* Name indicating that the system theme is enabled. */
+"APPEARANCE_SETTINGS_SYSTEM_THEME_NAME" = "系统";
+
+"APPEARANCE_SETTINGS_LANGUAGE" = "语言";
+"APPEARANCE_SETTINGS_LANGUAGE_EN" = "English";
+"APPEARANCE_SETTINGS_LANGUAGE_ZH" = "中文";
+
+"TIME_AM" = "上午";
+"TIME_PM" = "下午";
+"GROUP_OWER" = "群主";
+"PERSON_CARD_ICON" = "头像";
+"PERSON_CARD_NAME" = "名字";
+"PERSON_CARD_GENDER" = "性别";
+"PERSON_CARD_NONE" = "无";
+"PERSON_CARD_GENDER_MALE" = "男性";
+"PERSON_CARD_GENDER_FEMALE" = "女性";
+"PERSON_CARD_GENDER_OTHER" = "其他";
+"PERSON_CARD_STATE" = "状态";
+"PERSON_CARD_ID" = "ID:";
+"PERSON_CARD_EMAIL" = "邮箱:";
+"PERSON_CARD_PHONE_NUMBER" = "手机号:";
+"PERSON_CARD_TIMEZONE" = "本地时间:";
+"PERSON_CARD_STATE_SETTING_TITLE" = "设置勿扰状态";
+"PERSON_CARD_STATE_SETTING_TIME" = "设置勿扰时间";
+"PERSON_CARD_STATE_CLEAR" = "清除";
+"PERSON_CARD_STATE_UNTIL" = "直到";
+
+//复数
+"PERSON_CARD_STATE_MINUTES" = "分钟";
+"PERSON_CARD_STATE_HOURS" = "小时";
+"PERSON_CARD_STATE_DAYS" = "天";
+
+//单数
+"PERSON_CARD_STATE_MINUTE" = "分钟";
+"PERSON_CARD_STATE_HOUR" = "小时";
+"PERSON_CARD_STATE_DAY" = "天";
+
+"CONTACT_PROFILE_SIGNATURE" = "签名";
+"CONTACT_PROFILE_NAME" = "名字";
+"CONTACT_PROFILE_ROLES" = "角色";
+"CONTACT_PROFILE_BUSINESS_UNIT" = "事业部";
+"CONTACT_PROFILE_BUSINESS_DEPARTMENT" = "部门";
+"CONTACT_PROFILE_BUSINESS_ROLE" = "角色:";
+"CONTACT_PROFILE_BUSINESS_BU" = "业务部门:";
+"CONTACT_PROFILE_BUSINESS_DEPT" = "部门:";
+"CONTACT_PROFILE_BUSINESS_LEADER" = "领导:";
+"CONTACT_PROFILE_Dot_Line_LEADER" = "虚线领导:";
+"CONTACT_PROFILE_BUSINESS_NAME" = "名字";
+"CONTACT_PROFILE_BUSINESS_TITLE_LEADER" = "领导";
+"CONTACT_PROFILE_BUSINESS_TITLE_DOT_LINE_LEADER" = "虚线领导";
+"CONTACT_PROFILE_BUSINESS_CONTACT_INFO" = "联系信息";
+"CONTACT_PROFILE_BUSINESS_ORGANIZATION_INFO" = "组织信息";
+
+
+"APP_TEXT_CLOSE" = "关闭";
+"APP_ADD_SIGNATURE" = "设置签名";
+"APP_WORK_SIGNATURE" = "签名";
+
+"PERSON_CARD_SIGNATURE" = "签名";
+
+"PERSON_CARD_REMOVE" = "-删除";
+"PERSON_CARD_REMOVE_TIP" = "%@删除了%@，所有消息已被删除。";
+"PERSON_CARD_ADD" = "+好友";
+"PERSON_CARD_LIKES" = "点赞";
+"PERSON_CARD_LIKES_MORE" = "以及%d人...";
+"PERSON_CARD_LIKE_SUCESS" = "点赞成功!";
+"PERSON_CARD_LIKE_FAILED" = "点赞失败!";
+"PERSON_CARD_SEND_MESSAGE" = "发消息";
+"PERSON_CARD_VOICE_CALL" = "语音通话";
+"PERSON_CARD_SHARE_CARD" = "分享名片";
+
+"LOGIN_ERROR" = "邮箱/邀请码/手机号 错误";
+"LOGIN_EMAIL_PLACEHOLDER" = "输入邮箱或Code码";
+"LOGIN_EMAIL_PLACEHOLDER_CHATIVE" = "邮箱/手机号/邀请码";
+"LOGIN_EMAIL_PLACEHOLDER_CHATIVE_SIGNIN" = "输入邮箱/手机号";
+"LOGIN_EMAIL_PLACEHOLDER_CHATIVE_SIGNIN_EMAIL" = "输入邮箱";
+"Line_NewLine" = "换行";
+"TOAST_CAN_NOT_TO_PERSONCARD" = "你们属于不同组，无法查看对方名片";
+"VERIFICATION_CODE_EMPTY" = "验证码为空";
+"LOGIN_EMAIL_EMPTY" = "请输入邮箱/电话号码";
+"MODIFY_EMAIL_EMPTY" = "请输入邮箱";
+"MODIFY_PHONE_NUMBER_EMPTY" = "请输入电话号码";
+"LOGIN_SKIP_ALERT_MESSAGE" = "如果不链接到eamil帐户，您可能会丢失您的帐户。您确定跳过这一步吗?";
+"LOGIN_SKIP_ALERT_CANCEL" = "取消";
+"LOGIN_SKIP_ALERT_CONTINUE" = "继续";
+"ADVANCED_BINDEMAIL" = "绑定邮箱";
+
+"ACCOUNT_FORCEBIND_EMAIL_TITLE" = "邮箱已绑定其他账号";
+"ACCOUNT_FORCEBIND_EMAIL_MESSAGE" = "该邮箱已绑定其他账号，是否确认替换为当前账号的邮箱？";
+"ACCOUNT_FORCEBIND_PHONE_TITLE" = "手机号已绑定其他账号";
+"ACCOUNT_FORCEBIND_PHONE_MESSAGE" = "该手机号已绑定其他账号，是否确认替换为当前账号的手机号？";
+
+/* Light Task */
+"LIGHT_TASK_CREATE_BUTTON_TITLE" = "创建";
+"LIGHT_TASK_ADD_TASK" = "添加任务";
+"LIGHT_TASK_ADD_NOTES" = "添加备注";
+"LIGHT_TASK_TITLE_OVERRUN_ALERT" = "最多2000字符";
+"LIGHT_TASK_ADD_ASSIGNEE" = "添加执行者";
+"LIGHT_TASK_ADD_DUE_TIME" = "添加截止时间";
+"LIGHT_TASK_ADD_PRIORITY" = "添加优先级";
+"LIGHT_TASK_ASSIGNEE_TITLE" = "执行者";
+"LIGHT_TASK_ASSIGNEE_COUNT" = "%ld名执行者";
+"LIGHT_TASK_ADD_ASSIGNEE_COUNT" = "%ld个人";
+"LIGHT_TASK_NO_EDITING_PERMISSION" = "只允许查看";
+"LIGHT_TASK_PRESENT_CONVERSATION_PREFIX" = "在会话中查看：";
+"LIGHT_TASK_DUE_TIME" = "截止时间";
+"LIGHT_TASK_DUE_TIME_SELECT" = "截止:";
+"LIGHT_TASK_DUE_TIME_TODAY" = "(今天)";
+"LIGHT_TASK_DUE_TIME_TOMORROW" = "(明天)";
+"LIGHT_TASK_DUE_TIME_YESTERDAY" = "(昨天)";
+"LIGHT_TASK_DUE_TIME_INVALID_MSG" = "截止时间需大于当前时间，\n请重新设置";
+"LIGHT_TASK_DUE_TIME_INVALID_ALERT_MSG" = "所设提醒时间小于当前时间，\n任务将不再被提醒";
+"LIGHT_TASK_USER_HANDLE_TO_JIRA" = "去 Jira";
+"LIGHT_TASK_USER_HANDLE_REJECT" = "拒绝任务";
+"LIGHT_TASK_USER_HANDLE_CANCEL" = "取消任务";
+"LIGHT_TASK_USER_HANDLE_COMPLETE" = "完成";
+"LIGHT_TASK_USER_HANDLE_RESTART" = "恢复任务";
+"LIGHT_TASK_USER_REMOVE_ASSIGNEE_TITLE" = "移除执行者";
+"LIGHT_TASK_USER_REMOVE_SELF_MSG" = "移除自己后你将无法操作此任务";
+"LIGHT_TASK_LOG_COMPLETE" = "该任务已完成";
+"LIGHT_TASK_LOG_REJECT" = "该任务被拒绝";
+"LIGHT_TASK_LOG_NOT_EXIST" = "该任务不存在";
+"LIGHT_TASK_LOG_CANCEL" = "该任务已取消";
+"LIGHT_TASK_ENSURE_COMPLETE_MSG" = "确认任务已完成?";
+"LIGHT_TASK_ENSURE_REJECT_MSG" = "确认拒绝该任务?";
+"LIGHT_TASK_ENSURE_DELETE_MSG" = "确认删除该任务?";
+"LIGHT_TASK_ENSURE_CANCEL_MSG" = "确认取消该任务?";
+"LIGHT_TASK_ENSURE_REMOVE_MSG" = "确认移除该任务?";
+"LIGHT_TASK_ENSURE_TO_JIRA_MSG" = "确认完成该任务，并跳转到Jira吗?";
+"LIGHT_TASK_ALERT_BEFORE_DUE_MSG" = "你有任务预计%@分钟后到期";
+
+"LIGHT_TASK_LOG_TABLE_CREATE" = "%@  %@创建了该任务";
+"LIGHT_TASK_LOG_TABLE_COMPLETE" = "%@  %@完成了该任务";
+"LIGHT_TASK_LOG_TABLE_REJECT" = "%@  %@拒绝了该任务";
+"LIGHT_TASK_LOG_TABLE_CANCEL" = "%@  %@取消了该任务";
+"LIGHT_TASK_LOG_TABLE_ASSIGNEE" = "%@  %@变更执行者";
+"LIGHT_TASK_LOG_TABLE_PRIORITY" = "%@  %@变更优先级为%@";
+"LIGHT_TASK_LOG_TABLE_DUE" = "%@  %@变更截止时间为%@";
+"LIGHT_TASK_LOG_TABLE_NAME" = "%@  %@变更了任务名称";
+"LIGHT_TASK_LOG_RECORD_TITLE" = "变更记录";
+"LIGHT_TASK_DUE_TIME_PREFIX" = "截止于";
+"LIGHT_TASK_DONE_TIME_PREFIX" = "完成于";
+"LIGHT_TASK_REJECT_TIME_PREFIX" = "拒绝于";
+"LIGHT_TASK_CANCEL_TIME_PREFIX" = "取消于";
+"LIGHT_TASK_MAX_ASSIGNEE_COUNT" = "最多添加%ld个执行人";
+
+"VOTE_CREAT_TITLE"= "发起投票";
+"VOTE_LIST_TITLE"= "投票详情";
+"VOTE_CREAT_THTEM_TITLE"= "输入投票主题，最多30个字";
+"VOTE_CREAT_ENTER_OPTION"= "请输入选项内容";
+"VOTE_CREAT_ADD_OPTION"= "添加选项";
+"VOTE_CREAT_ALLOW_MULTIPLE"= "是否多选";
+"VOTE_CREAT_ALLOW_ANONYMOUS"= "匿名";
+"VOTE_CREAT_CREATE_Poll"= "发布";
+"VOTE_CREAT_ALLOW_MAX_OPTION"= "最多6个选项";
+"VOTE_CREAT_OPTION_CANNOT_SAME"= "选项内容不能相同";
+"VOTE_CREAT_DEADLINE"= "截止时间";
+"VOTE_CREAT_DEADLINE_DATE"= "截止日期";
+"VOTE_CREAT_FAILED"= "创建失败,请重试";
+"VOTE_CREAT_OPTION_CANNOT_EMPTY"= "投票选项不能为空";
+"VOTE_CREAT_VOTE_NOW"= "立即投票";
+"VOTE_CREAT_VOTING" = "投票中...";
+"VOTE_CREAT_SIGNAL"= "[单选]";
+"VOTE_CREAT_MULTIPLE"= "[多选]";
+"VOTE_CREAT_NAMED"= "[实名]";
+"VOTE_CREAT_PARTICIPANT" = "参与人数";
+"VOTE_CREAT_TOTALIVOTES" = "总票数";
+"VOTE_CREAT_VOTE" = "票";
+"VOTE_CREAT_VOTE_ENDED" = "投票已结束";
+"VOTE_CREAT_View_RESULTS" = "查看结果";
+"VOTE_CREAT_POLL_RESULTS" = "投票结果";
+"VOTE_CREAT_VOTING_THEME_NOEMPTY" = "投票主题不能为空";
+"VOTING_HAS_ENDED" = "投票已结束";
+"VOTING_HAS_VOTED" = "你已投票，无法重复投票";
+"REQUEST_FAILED_TRY_AGAIN" = "请求失败，请重试";
+"REQUEST_JUMP_FAILED" = "跳转失败";
+
+
+//　复数
+"VOTE_CREAT_VOTE_DURATION_MINUTES" = "分钟";
+"VOTE_CREAT_VOTE_DURATION_HOURS" = "小时";
+"VOTE_CREAT_VOTE_DURATION_DAYS" = "天";
+"VOTE_CREAT_VOTE_DURATION_WEEKS" = "周";
+
+//单数
+"VOTE_CREAT_VOTE_DURATION_MINUTE" = "分钟";
+"VOTE_CREAT_VOTE_DURATION_HOUR" = "小时";
+"VOTE_CREAT_VOTE_DURATION_DAY" = "天";
+"VOTE_CREAT_VOTE_DURATION_WEEK" = "周";
+
+"PINNED_MESSAGES_VC_TITLE" = "已Pin的消息";
+"UNPIN_ONE_MESSAGE_NOTICE" = "你要取消Pin这条消息吗?";
+"UNPIN_MESSAGES_NOTICE" = "你要取消Pin这%ld条消息吗";
+"PIN_MESSAGE_FAILED" = "固定消息失败";
+"UNPIN_MESSAGE_FAILED" = "取消固定失败";
+"PIN_MESSAGE_FAILED_LENGTH_LIMIT" = "长度超出限制，操作失败";
+"PIN_MESSAGE_ORIGION_NOT_EXIST" = "原消息不存在";
+"PINNED_SYSTEM_INFO_MESSAGE" = " pin了";
+"PINNED_INFO_MESSAGE_DEFAULT_PREVIEW" = "您有新的pin消息";
+
+"HOMEVIEWCELL_DRAFT" = "[草稿]";
+
+/* Chat Folder */
+"CHAT_FOLDER_VC_TITLE" = "会话分组";
+"CHAT_FOLDER_VC_SELECT_TITLE" = "选择分组";
+"CHAT_FOLDER_ADD_FOLDER" = "添加分组";
+"CHAT_FOLDER_CREATE_FOLDER" = "创建分组";
+"CHAT_FOLDER_EDIT_FOLDER" = "编辑分组";
+"CHAT_FOLDER_FOLDER_NAME" = "分组名称";
+"CHAT_FOLDER_ADD_CHATS" = "添加会话";
+"CHAT_FOLDER_MINE_TITLE" = "我的分组";
+"CHAT_FOLDER_RECOMMEND_TITLE" = "推荐";
+"CHAT_FOLDER_INCLUDED_CHATS" = "包含会话";
+"CHAT_FOLDER_INCLUDED_CONDITIONS" = "包含条件";
+"CHAT_FOLDER_ADD_CONDITIONS" = "添加条件";
+"CHAT_FOLDER_KEYWORDS" = "关键词";
+"CHAT_FOLDER_ADD_CHATS_TIPS" = "选择将会出现在这个分组的会话";
+"CHAT_FOLDER_EMPTY_FOLDER_TIPS" = "请添加会话到当前分组";
+"CHAT_FOLDER_ADD_FOLDER_TIPS" = "为不同的会话创建文件夹，并在它们之间快速切换";
+"CHAT_FOLDER_CHANGER_ORDER_TIPS" = "拖拽分组调整展示顺序";
+"CHAT_FOLDER_CREATE_SUCCESS_TIP" = "创建成功";
+"CHAT_FOLDER_CREATE_FAILED_TIP" = "创建失败，请重试";
+"CHAT_FOLDER_SAVE_SUCCESS_TIP" = "保存成功";
+"CHAT_FOLDER_SAVE_FAILED_TIP" = "保存失败，请重试";
+"CHAT_FOLDER_UPDATE_SUCCESS_TIP" = "更新成功";
+"CHAT_FOLDER_UPDATE_FAILED_TIP" = "更新失败，请重试";
+"CHAT_FOLDER_DELETE_TIP" = "您确认删除这个分组吗？里面的对话不会被删除。";
+"CHAT_FOLDER_ADD_TO_FOLDER_TIP" = "确认添加到此分组吗?";
+"CHAT_FOLDER_REMOVE_FROM_FOLDER_TIP" = "确认将对话移出分组吗?";
+"CHAT_FOLDER_REMOVE_LAST_TIP" = "至少需要添加一个对话或条件";
+"CHAT_FOLDER_FOLDER_NAME_EXIST_TIP" = "分组名称已存在";
+"CHAT_FOLDER_EMPTY_MESSAGE_TIP" = "此分组暂无新消息";
+"CHAT_FOLDER_CONVERSATION_EXIST_TIP" = "此分组已包含当前会话";
+"CHAT_FOLDER_NAME_ALL" = "全部";
+"CHAT_FOLDER_DISCARD_UPDATE_TIP" = "确认放弃该操作吗？";
+"CHAT_FOLDER_DISCARD_CONFIRM" = "确认";
+"CHAT_FOLDER_DISCARD_CANCEL" = "不";
+"CHAT_FOLDER_ITEM_REMOVE" = "移除";
+"CHAT_FOLDER_NOT_ALLOW_EDIT" = "推荐分组不允许编辑";
+"CHAT_FOLDER_RECOMMEDN_PRIVATE" = "私聊";
+"CHAT_FOLDER_RECOMMEDN_UNREAD" = "未读";
+"CHAT_FOLDER_RECOMMEDN_ATME" = "@我";
+"CHAT_FOLDER_NAME_CONFLICT" = "与推荐分组名字冲突";
+"CHAT_FOLDER_REMOVE_TIP" = "您确认移除这个分组吗？您稍后可以重新把它添加到展示。";
+"CHAT_FOLDER_ADD_RECOMMEND_EXIST_NAME_TIPS" = "已有同名分组，添加失败";
+"CHAT_FOLDER_ALL_DELETE_THREAD_TIPS" = "确认删除会话和聊天记录？它们不会被从其它设备删除。";
+"CHAT_FOLDER_ADD_CONDITIONS_VC_TITLE" = "条件";
+"CHAT_FOLDER_ADD_CONDITIONS_PLACEHOLDER" = "请输入%ld到%ld个字符";
+"CHAT_FOLDER_REMOVE_CONDITIONS_THREAD_TIPS" = "该会话是通过条件筛选自动加入分组的，您想要去更改筛选条件吗?";
+"CHAT_FOLDER_GROUP_OWNER_MAX_COUNT_TIPS" = "最多选择%lu个联系人";
+
+"SENSITIVE_WORDS_WARNING_TEXT" = "内容中包含\"%@\"，确定要发送吗";
+
+"WEBVIEW_LOAD_FAILED" = "页面加载失败，请重试";
+"WEBVIEW_LOAD_TRY_AGAIN" = "重试";
+"WEBVIEW_LOAD_URL_ILLEGAL" = "URL不合法";
+"WEBVIEW_LOAD_NETWORK_ERROR" = "网络连接异常，请重试";
+
+/* markdown card */
+
+"FETCH_APP_INFO_ERROR" = "获取应用信息失败";
+"CARD_SUBMIT_SUCCESS" = "操作成功";
+"CARD_SUBMIT_FAILURE" = "操作失败";
+"URL_NOT_ALLOWED" = "不允许的URL";
+"CONVERSATION_DOES_NOT_EXIST" = "对话不存在";
+"USER_DOES_NOT_EXIST" = "用户不存在";
+"MARKDOWN_CODE" = "代码块";
+
+/* call end feedback */
+"CALL_END_INFO_MESSAGE_DEFAULT_PREVIEW" = "会议已结束";
+"CALL_END_TEXTVIEW_PLACEHOLDER" = "发送您的反馈";
+
+/* RAPID system message */
+"RAPID_SET_SYSTEM_MESSAGE" = "%@将%@标记为%@";
+"RAPID_REMOVE_SYSTEM_MESSAGE" = "%@移除了%@的群角色";
+
+"SEARCH_PEOPLE_TITLE" = "不存在";
+
+/* group reminder */
+"MONDAY" = "周一";
+"TUESDAY" = "周二";
+"WEDNESDAY" = "周三";
+"THURSDAY" = "周四";
+"FRIDAY" = "周五";
+"SATURDAY" = "周六";
+"SUNDAY" = "周日";
+"LAST_DAY_OF_MONTH" = "最后一";
+"GROUP_REMINDER_MONTHLY" = "每月%@天";
+"GROUP_REMINDER_FIRST_DAY" = "第1";
+"GROUP_REMINDER_SECOND_DAY" = "第2";
+"GROUP_REMINDER_THIRD_DAY" = "第3";
+"GROUP_REMINDER_SUFFIX_TH" = "第%ld";
+"GROUP_REMINDER_EVERY" = "每%@";
+"GROUP_REMINDER_OFF" = "关闭";
+"GROUP_REMINDER_TIME_AM" = "上午";
+"GROUP_REMINDER_TIME_PM" = "下午";
+"GROUP_REMINDER_OFF_TIPS" = "关闭了群周期性提醒";
+"GROUP_REMINDER_DAILY" = "每日";
+"GROUP_REMINDER_CYCLE_WEEKLY" = "每周群提醒: ";
+"GROUP_REMINDER_CYCLE_MONTHLY" = "每月群提醒: ";
+"GROUP_REMINDER_CYCLE_DAILY" = "每日群提醒: ";
+"GROUP_REMINDER_CYCLE_DEFAULT" = "群周期性提醒: ";
+"GROUP_REMINDER_TIME_FORMAT_WEEKLY" = "每%1$@%2$@%3$ld:00(UTC+8)";
+"GROUP_REMINDER_TIME_FORMAT_MONTHLY" = "每月%1$@天%2$@%3$ld:00(UTC+8)";
+"GROUP_REMINDER_TIME_FORMAT_DAILY" = "每日%1$@%2$ld:00(UTC+8)";
+"GROUP_REMINDER_SET_SUCCEED_WEEKLY_TIPS" = "%@设置了每周群提醒: %@\n将会在%@进行提醒";
+"GROUP_REMINDER_SET_SUCCEED_MONTHLY_TIPS" = "%@设置了每月群提醒: %@\n将会在%@进行提醒";
+"GROUP_REMINDER_SET_SUCCEED_DAILY_TIPS" = "%@设置了每日群提醒: %@\n将会在%@进行提醒";
+"GROUP_REMINDER_DEFAULT_PREVIEW" = "您有新的群提醒通知";
+"GROUP_REMINDER_MODIFY_DEFAULT_TIPS" = "更改了群周期性提醒设置";
+
+"SHOW_PERSONAL_CARD_FAILED" = "Failed to view profile";
+
+/* group commnon */
+"GROUP_COMMEN_ERROR_INVALID_ARGUMENT" = "参数无效";
+"GROUP_COMMEN_ERROR_INVITER_EXCEPTION" = "邀请人权限异常";
+"GROUP_COMMEN_ERROR_GROUP_EXCEPTION" = "群组不存在或状态异常";
+"GROUP_COMMEN_ERROR_INVITATION_EXCEPTION" = "邀请已失效";
+"GROUP_COMMEN_ERROR_GROUP_FULL" = "群组已满员";
+"GROUP_COMMEN_ERROR_INVITER_NOT_EXIST" = "邀请人不存在";
+"GROUP_COMMEN_ERROR_ALREADY_IN_GROUP" = "您已经在群组中";
+"GROUP_COMMEN_REJOIN_CONFLICT_TIPS" = "- 被移除的成员可以在48小时内自行重新加入\n- 只有被有邀请权限的用户移除的成员可以选择自行重新加入";
+
+"GROUP_COMMEN_ERROR_INVITER_INVALID_INVITE_CODE" = "无效的群链接邀请码";
+"GROUP_COMMEN_ERROR_INVITER_LINK_INVITATION_DISABLED" = "入群失败，此群已关闭群邀请链接功能。";
+"GROUP_COMMEN_ERROR_INVITER_ONLY_MODERATORS_CAN_ADD_MEMBERS" = "入群失败，此群只允许管理员邀请入群";
+"GROUP_COMMEN_ERROR_INVITER_FAILED_TO_JOIN_GROUP_GROUP_DISBANDED" = "入群失败，此群已经被解散。";
+"GROUP_COMMEN_ERROR_INVITER_FAILED_TO_JOIN_GROUP_GROUP_INVALID" = "入群失败，此群无效。";
+
+
+"GROUP_INVITE_TO_GROUP_VIA_LINK" = "分享链接邀请入群";
+
+"MENTIONS_GROUP_MEMBERS_LIST_TITLE" = "群成员";
+"MENTIONS_GROUP_MEMBERS_LIST_SUBTITLE" = " - 用户会收到提醒";
+"MENTIONS_OTHER_CONTACTS_LIST_TITLE" = "其他联系人";
+"MENTIONS_OTHER_CONTACTS_LIST_SUBTITLE" = " - 用户不会收到提醒";
+
+"UNSUPPORTED_SCHEME_LINK" = "不支持的链接，请升级客户端后再试。";
+"SCHEME_LINK_ARG_ERROR" = "无效的链接";
+
+"OPEN_EMAIL_REMINDER" = "打开\n%@?";
+
+"PROFILE_STATUS_EDIT_ONFO" = "个人信息";
+
+"PROFILE_STATUS_DELETE_ACCOUNT" = "删除账号";
+
+"PROFILE_STATUS_DELETE_ACCOUNT_TOP_TIP" = "您的所有存储在客户端及服务端的数据都将被删除，包括个人资料、通讯录、消息等，并且将永久无法恢复。";
+
+"PROFILE_STATUS_DELETE_ACCOUNT_CONFIRM_TIP" = "请在下面的输入框输入 “%@” 以确认。";
+
+"Add Contact" = "添加好友";
+
+"Remove Contact" = "删除";
+
+"Request sent" = "请求已发送";
+
+"CONTACT_SET_NAME" = "设置名字";
+
+"INPUT_TEXT_VIEW_TOASTER_LIMIT_LENGTH" = "超出4096字节限制";
+
+
+"NAME" = "名字";
+
+"Transfer Data" = "迁移数据";
+
+"Do you want to clear old data" = "您是否想要清除旧数据？";
+
+"Exit and re-enter" = "退出重进？";
+
+"Please restart Chative" = "请重启Chative";
+
+"For security reasons, your data is only stored on your devices. If you have your old device, you can securely transfer it to this device." = "因为安全考虑，您的数据只保存在您的设备上。如果您有旧设备，可以安全地迁移数据到这个设备上。";
+
+"Continue" = "继续";
+
+"Transfer" = "转移";
+
+"Login without Transferring" = "不迁移数据";
+
+"Delete And Login failed, please try again" = "删除并登录失败，请重试";
+
+"Continuing will disable your account on other devices." = "继续会在另一个设备上禁用您的账号。";
+
+"All the messages on your old device will be deleted permanently. Are you sure to continue?" = "旧设备上所有的消息将被永久删除，您确定继续吗？";
+
+"Delete and Login" = "删除并登录";
+
+"Cancel" = "取消";
+
+"Waiting for the Old Device…" = "正在等待旧设备...";
+
+"Open Chative on your old device, bring it nearby, and make sure Wi-Fi and Bluetooth are enabled on both devices. Then, Scan the following QR code with the old device." = "在旧设备上打开Chative拿到旁边，确定两个设备都开启了Wi-Fi和蓝牙，然后用旧设备扫描下面的二维码。";
+
+"Receiving Data" = "接收数据中";
+
+"Keep both devices on and near each other." = "请保持两个设备都处于打开状态。";
+
+"About %1$@ second remaining" = "预计还需要%1$@秒";
+
+"Transfer Success" = "迁移成功";
+
+"Successfully Transferred All Your Data" = "成功迁移了您的所有数据";
+
+"OK" = "OK";
+
+"Transfer Failed" = "迁移失败";
+
+"The transfer failed. %1$@.Please try again." = "迁移失败。%1$@。Please try again。";
+
+"Are you sure to transfer all your data to this device: %1$@'s iPhone?" = "你确定要迁移所有数据到这个设备吗： %1$@ 的iPhone?";
+
+"Yes" = "确定";
+
+"Transferring Data" = "传输数据中";
+
+"DEVICE_TRANSFER_ERROR_GENERIC" = "迁移失败，请确保你的设备足够靠近并重试";
+
+"DEVICE_TRANSFER_ERROR_CERTIFICATE_MISMATCH" = "无法验证你的新设备，请重试";
+
+"DEVICE_TRANSFER_ERROR_UNSUPPORTED_VERSION" = "请更新到最新版本并重试";
+
+"DEVICE_TRANSFER_ERROR_MODE_MISMATCH_LINKED" = "要设置此 iPad 为关联设备，你必须用原来的设备扫描二维码";
+
+"DEVICE_TRANSFER_ERROR_MODE_MISMATCH_PRIMARY" = "要迁移你的账户，你必须用你的 iPhone 扫描二维码";
+
+"Leave" = "退群";
+
+"Disband" = "解散";
+
+"Link this device?" = "链接这个设备？";
+
+"This device will be able to see your groups and contacts, read all your messages, and send messages in your name." = "这个设备将可以查看你的群和通讯录、阅读你的消息、和用你的名字发送消息。";
+
+"Link New Device" = "链接新设备";
+
+"%@ took a screenshot!" = "%@拍摄了一张屏幕截图！";
+
+"took a screenshot!" = "拍摄了一张屏幕截图！";
+
+"Translation Leaks Your Message" = "翻译会泄漏您的消息";
+
+"Your messages will be sent to Google in plaintext for the translation. Are you sure to continue?" = "您的消息将被明文发送给Google用于翻译，您确定继续吗？";
+
+"STATUS_PLEASE_LOGIN" = "请登录";
+
+"PASSKEYS_SET_UP_TITLE" = "绑定Passkey";
+
+"PASSKEYS_SAFE_TITLE" = "让您的账号更安全";
+"PASSKEYS_SAFE_DESC" = "Passkeys拥有最前沿的安全能力可以防止钓鱼攻击。";
+
+"PASSKEYS_PASSWORDLESS_TITLE" = "无密码";
+"PASSKEYS_PASSWORDLESS_DESC" = "你将能够使用人脸识别、指纹识别或硬件安全钥匙登录账号，无需再使用密码。";
+
+"PASSKEYS_SET_UP" = "绑定";
+"NAV_SKIP" = "跳过";
+
+"PASSKEYS_VERIFY_TITLE" = "Passkey认证";
+"PASSKEYS_VERIFY_DESC" = "您的设备会请求认证人脸，\n指纹或安全Key。";
+"PASSKEYS_VERIFY_TEXT" = "验证";
+"PASSKEYS_OTHER_WAY" = "尝试其他方式";
+"PASSKEYS_ENABLE" = "开启 Passkey";
+"PASSKEYS_ENABLE_TIP" = "开启Passkey，您将能够更加安全方便使用指纹、人脸或硬件安全钥匙登录您的账号。如果您需要更换Passkey，请先关闭再重新开启。";
+"DELETE_ACCOUNT_TIP" = "如果您的账号90天没有活跃，我们将自动删除账号及所有数据，包括通讯录、群、消息等。您也可以按需重新注册。";
+
+"CHECK_USER_IS_NOT_EXITS" = "账号不存在,请注册";
+"CHECK_USER_IS_AREADY_EXITS" = "账号已存在,请登录";
+
+"BLOCK" = "屏蔽";
+"BLOCKED" = "已屏蔽";
+"UNBLOCK" = "解除屏蔽";
+"IGNORE" = "忽略";
+"ACCEPT" = "接受";
+"BLOCK&REPORT" = "屏蔽 & 上报";
+"BLOCK_REPORT_TITLE" = "你确定你要这么做吗?";
+
+"JOINED" = "注册时间:";
+"MET_METHOD" = "如何相遇:";
+"GROUPS" = "共同群:";
+"NOT_RECODED" = "未记录";
+"UNABLE_TO_CALL" = "无法通话";
+"UNABLE_TO_CALL_DESC" = "由于对方的隐私设置，发起通话失败。";
+
+"REMOVE_CONTACT" = "删除好友";
+"SELECTED_ERROR_PASSKEY" = "你使用了错误的passkey，请重试并选择正确的passkey。";
+
+/* notification title indicating the user generically has a new message */
+"GENERIC_INCOMING_MESSAGE_NOTIFICATION" = "新消息！";
+
+"CONTACT_ALL" = "全部";
+"CONTACT_GROUPS" = "群组";
+"CONTACT_MOBILE_CONTACTS" = "手机联系人";
+
+"GROUPM_MEETING_UNMATCH_VERSION" = "对方的设备不支持此会议的安全特性，请邀请对方入群并在群中重开会议，以便兼容。此问题近期将被解决。";
+
+"GROUP_IN_COMMON_TITLE_GROUPS" = "群组";
+"GROUP_IN_COMMON_TITLE_GROUP" = "群组";
+
+"ALLOWN_ACCESS_YOUR_PHONE_BOOK" = "允许聊天访问您的电话簿以查找您的朋友。";
+"ALLOWN" = "允许";
+
+"CALL_ALERT_ERROR_106" = "您没有会议密钥，请联系会议中的伙伴邀请您入会。";
+
+"Create" = "创建";
+
+"Never Repeat" = "永不重复";
+"Daily" = "每日";
+"Weekly" = "每周";
+"Biweekly" = "每两周";
+"Monthly" = "每月";
+"Weekdays" = "工作日";
+"Choose a weekday time first." = "请先选择一个工作日时间.";
+
+"created a reminder" = "%@ 创建了一个";
+"changed a reminder" = "%@ 修改了一个";
+"deleted a reminder" = "%@ 删除了一个";
+
+"reminder" = "提醒";
+"Reminder:" = "提醒来自@%@:";
+
+"Write some message" = "添加描述";
+"Please fill in the Desc." = "请填写描述。";
+"up to max characters" = "最大%ld字符";
+
+"Description" = "描述";
+"Repeat" = "周期";
+"Time" = "时间";
+"Desc" = "描述";
+"Close" = "关闭";
+"Delete Reminder" = "删除提醒？";
+"Delete failed" = "删除失败！";
+"Maximum 200 characters" = "最多200字符";
+"REMOVE_CONTACT_TIP" = "%@ 还不是你的好友，你无法邀请他们加入群组。请先请求他们添加你。";
+
+/* input bar action button title when choosing Photos */
+"INPUTTOOL_ATTACHMENT_PHOTO_BUTTON" = "相册";
+
+/* input bar action button title when open Camera */
+"INPUTTOOL_ATTACHMENT_CAMERA_BUTTON" = "相机";
+
+/* input bar action button title when start Voice Call */
+"INPUTTOOL_ATTACHMENT_VOICE_CALL_BUTTON" = "语音通话";
+
+/* input bar action button title when start Video Call */
+"INPUTTOOL_ATTACHMENT_VIDEO_CALL_BUTTON" = "视频通话";
+
+/* input bar action button title when send Contact */
+"INPUTTOOL_ATTACHMENT_CONTACT_BUTTON" = "联系人";
+
+/* input bar action button title when send File */
+"INPUTTOOL_ATTACHMENT_FILE_BUTTON" = "文档";
+
+/* input bar action button title when open Confidential Mode */
+"INPUTTOOL_ATTACHMENT_CONFIDENTIAL_BUTTON" = "机密模式";
+
+/* input bar action button title when open Mention */
+"INPUTTOOL_ATTACHMENT_MENTION" = "@";
+
+"INPUTTOOL_VOICE_HOLD_TO_TALK" = "按住 说话";
+
+"INPUTTOOL_VOICE_RELEASE_TO_SEND" = "松开 发送";
+
+"INPUTTOOL_VOICE_RELEASE_TO_CANCEL" = "松开 取消";
+
+"MENU_ACTION_MORE_ACTION" = "更多";
+
+"WORKSPACE_WARNING_TITLE" = "安全提示";
+"WORKSPACE_WARNING_DESC" = "不确定此链接是否安全，确认要打开吗?\n%@";
+"OPEN" = "打开";
+"CANCEL" = "取消";
+
+/* accessibility label for the button which open confidential mode */
+"INPUT_TOOLBAR_CONFIDE_BUTTON_ACCESSIBILITY_LABEL" = "机密消息";
+
+/* accessibility label for the button which open confidential mode */
+"INPUT_TOOLBAR_CONFIDE_BUTTON_ACCESSIBILITY_LABEL" = "机密消息";
+
+
+
+"IMAGE_PREVIEW_ADD_MESSAGE" = "添加消息";
+"CONFIRM_DISBAND_GROUP_DESCRIPTION" = "此群组的数据将被删除，群组中的所有成员也将同时被移除。";
+"MESSAGE_ACTION_COMBINE_FORWARD" = "合并转发";
+"MESSAGE_ACTION_SAVE" = "保存";
+
+"DEVICE_INACTIVE_POPVIEW_TITLE" = "激活设备";
+"DEVICE_INACTIVE_POPVIEW_CONTENT" = "由于您的设备长时间未使用，为确保账户安全，已暂时禁用并清除未接收的消息。请激活设备恢复使用。";
+"DEVICE_INACTIVE_POPVIEW_BUTTON" = "立即激活";
+"DEVICE_INACTIVE_POPVIEW_SUCCESS_TOAST" = "设备已激活";
+
+"APN_SOMEONE_MENTION_YOU_TEXT" = "@您 ";
+"APN_SOMEONE_MENTION_ALL_TEXT" = "@所有人 ";
+
+"INVITE_FRIEND_FULL_TIPS" = "当前邀请人数已满，请稍后再试！";
+
+"TTCALL_STREAM_LIMIT" = "当前服务器已达到推流上限，请稍候再试。";
+
+"MEETING_GROUP_AUTO_LEAVE_DESC" = "会议已长时间无人开麦，是否退出会议？";
+"MEETING_CONTACT_AUTO_LEAVE_DESC" = "当前会议无其他参与者，是否退出会议？";
+
+
+"GROUP_NAME_CHANGED_SYSTEM_MSG" = "%@已经将群名字修改为%@";
+
+"CONFIRM_NEW_ACCOUNT_LOGIN_TITLE" = "异常提示";
+"CONFIRM_NEW_ACCOUNT_LOGIN_TIP_MESSAGE" = "不同账号登录，原数据将被删除。";
+"CONFIRM_NEW_ACCOUNT_LOGIN_CONFIRM" = "删除并重新登录";
+
+"IMAGE_RECOGNIZATION_ACTION_OPEN_URL" = "打开链接";
+"IMAGE_RECOGNIZATION_ACTION_COPY_URL" = "复制链接";
+"GROUP_COMMEN_ERROR_SCHEME_ERROR" = "不支持的链接";
+
+"HANGUP_END_MEETING" = "结束";
+"HANGUP_LEAVE_MEETING" = "离开";
+"HANGUP_CANCEL_MEETING" = "取消";
+
+"GROUP_MEETING_EXIT" = "退出会议";
+"GROUP_MEETING_END_CALL" = "结束通话";
+"GROUP_MEETING_OTHER_END_CALL" = "通话已结束";
+
+"MESSAGE_ACTION_SPEECHTOTEXT" = "转文字";
+"MESSAGE_ACTION_SPEECHTOTEXT_ORIGIN" = "取消转文字";
+
+"SPEECHTOTEXT_CONVERT_TIP_MESSAGE" = "转换中...";
+"SPEECHTOTEXT_CONVERT_TIP_MESSAGE_FAILED" = "转文字失败";
+
+"CONVERT_SOURCE_TEXT" = "语音转文字由 TempTalk 服务器提供";
+
+"SPEECHTOTEXT_NO_TEXT_RECOGNIZE" = "未识别到文字";
+
+"SETTINGS_CHAT" = "聊天";
+
+"SETTINGS_CHAT_SAVE_PHOTOS" = "保存到相册";
+"SETTINGS_CHAT_SAVE_PHOTOS_DESCRIPTION" = "自动将收到的照片和视频保存到照片中；在机密模式下不会保存项目。";
+
+"MEETING_NAVAGATION_RECONNECTING_FAILURE" = "重连失败";
+"MEETING_NAVAGATION_CONNECTING" = "连接中...";
+
+"MEETING_SEND_ALL" = "发送所有人";
+"METTING_CONNECT_EXCEPTION_TIPS" = "会议连接异常，请重试";
+"MEETING_DOING_FREQUENTLY_TIPS" = "操作频繁，请稍后再试";
+"MEETING_JOINED_FAILURE_TIPS" = "申请会议失败";
+
+"PERSONAL_CARD_ADD_FRIEND_ERROR_TOAST" = "此帐号已登出，消息无法送达。";
+
+"LOGIN_BOTTOM_TIPS_FRONT" = "注册即表示您同意我们的";
+"LOGIN_BOTTOM_TIPS_BACKEND" = "服务条款与隐私政策。";
+"REPORT_CONTACT_TITLE" = "举报垃圾消息";
+"REPORT_CONTACT_TIPS_DESCRIPTION" = "TT会收到该用户可能发送垃圾消息的提醒，但无法查看任何聊天内容。";
+"REPORT_CONTACT_TIPS_CONFIRM" = "举报";
+"REPORT_CONTACT_TIPS_CANCEL" = "取消";
+"REPORT_INFO_TIPS_TITLE" = "已举报垃圾消息";
+"REPORT_INFO_TIPS_DESCRIPTION" = "更多操作，请前往「我的」页面，点击「帮助与反馈」联系客服。";
+"REPORT_INFO_TIPS_OK" = "好";
+"REPORT_INFO_REPORTED_SUCCESS" = "举报成功";
+
+"RAISE_HANDS_TITLE" = "举手";
+
+"CALLING_NOISE_TITLE" = "麦克风噪声抑制";
+
+"BLOCK_USER_TITLE" = "屏蔽用户";
+"BLOCK_USER_DESCRIPTION" = "是否屏蔽该用户，禁止其在 Temptalk 上向你发送消息或发起通话？";
+"BLOCK_USER_CONFIRM" = "屏蔽";
+"BLOCK_USER_CANCEL" = "取消";
+"BLOCK_USER_UNBLOCK" = "取消屏蔽";
+"BLOCK_USER_BLOCK_SUCCESS_TIPS" = "屏蔽成功";
+"BLOCK_USER_BLOCK_FAILURE_TIPS" = "屏蔽失败";
+"UNBLOCK_USER_BLOCK_FAILURE_TIPS" = "取消屏蔽失败";
+
+"RESET_IDENTITY_KEY_TIPS" = "重置了密钥，历史消息被清除。";
+
+"CALL_MORE_SWITCH_CAMERA" = "翻转";
+
+"EXPIRE_EXTEND_TITLE" = "延长销毁时间设置？";
+"EXPIRE_EXTEND_DESCRIPTION" = "你正在延长会话的消息销毁时长。请注意：此前已被销毁的消息无法恢复";
+"EXPIRE_EXTEND_CONFIRM" = "确认";
+"EXPIRE_EXTEND_CANCEL" = "取消";
+"EXPIRE_SHORTEN_TITLE" = "缩短销毁时间设置？";
+"EXPIRE_SHORTEN_DESCRIPTION" = "你正在缩短会话的消息销毁时长。可能更多历史消息被销毁且无法恢复，该操作将同步至你所有设备。";
+"EXPIRE_SHORTEN_CONFIRM" = "确认";
+"EXPIRE_SHORTEN_CANCEL" = "取消";
+"EXPIRE_SYSTEM_MESSAGE" = "上方消息已过期";
+
+"MESSAGE_ACTION_SELECT_ALL" = "全选";
+
+"CONVERSATION_JOIN_BAR_PRIVATE_CALLING" = "呼叫中";
+"CONVERSATION_JOIN_BAR_PRIVATE_ANOTHER_DEVICE" = "使用其他设备通话中";
+
+"CALL_LIVEKIT_ERROR_TOAST" = "通话连接异常";

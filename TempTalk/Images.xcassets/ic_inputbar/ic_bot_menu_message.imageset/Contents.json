@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "ic_bot_menu_message.pdf",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

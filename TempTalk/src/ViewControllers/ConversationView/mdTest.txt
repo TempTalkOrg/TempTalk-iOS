@@ -1,0 +1,28 @@
+# Hi Kris!You have 2 approval requests:
+
+**1.Clancey initiated an Expese**
+
+审批人：![Image](icon_male)Kyle ![Image](icon_female)Miana
+
+Deadline：2022/5/10 18:00
+
+3333
+
+4444
+
+* abc
+* def
+* ghi
+
+[Approve](wea://request?params=)        [Reject](wea://request?params=)
+
+[ViewMore](wea://openUrl?params=)
+
+[打开个人名片](wea://openapi/profile?uid=77771701147)
+
+[打开会话](wea://openapi/thread?tid=267dcee626dc497187b938f85b1cd944)
+
+[打开h5](wea://openapi/webview?layout=1&url=https://approval.com&appid=123)
+
+[提交数据](wea://openapi/submit?url=https://approval.com?id=123)
+

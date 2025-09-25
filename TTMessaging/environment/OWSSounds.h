@@ -1,0 +1,90 @@
+//
+//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//
+
+#import <AudioToolbox/AudioServices.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+typedef NS_ENUM(NSUInteger, OWSSound) {
+    OWSSound_Default = 0,
+
+    // Notification Sounds
+    OWSSound_Aurora,
+    OWSSound_Bamboo,
+    OWSSound_Chord,
+    OWSSound_Circles,
+    OWSSound_Complete,
+    OWSSound_Hello,
+    OWSSound_Input,
+    OWSSound_Keys,
+    OWSSound_Note,
+    OWSSound_Popcorn,
+    OWSSound_Pulse,
+    OWSSound_Synth,
+    OWSSound_SignalClassic,
+
+    // Ringtone Sounds
+    OWSSound_Opening,
+
+    // Calls
+    OWSSound_CallConnecting,
+    OWSSound_CallOutboundRinging,
+    OWSSound_CallBusy,
+    OWSSound_CallFailure,
+    
+    OWSSound_CallJoinMeetingNotice,
+    OWSSound_CallOutgoing1v1,
+    OWSSound_CallIncomming1v1,
+    OWSSound_CallIncommingGroup,
+    OWSSound_CallOff,
+
+    // Other
+    OWSSound_MessageSent,
+    OWSSound_CriticalAlert,
+    OWSSound_None,
+    OWSSound_DefaultiOSIncomingRingtone = OWSSound_Opening,
+};
+
+@class OWSAudioPlayer;
+@class TSThread;
+@class SDSAnyWriteTransaction;
+@class SDSKeyValueStore;
+
+@interface OWSSounds : NSObject
+
++ (SDSKeyValueStore *)keyValueStore;
+
+- (instancetype)init NS_UNAVAILABLE;
+
++ (NSString *)displayNameForSound:(OWSSound)sound;
+
++ (nullable NSString *)filenameForSound:(OWSSound)sound;
+
++ (nullable NSString *)filenameForSound:(OWSSound)sound quiet:(BOOL)isQuiet;
+
++ (NSString *)soundsDirectory;
+
++ (OWSSound)soundForFilename:(NSString *)filename;
+
+
+#pragma mark - Notifications
+
++ (NSArray<NSNumber *> *)allNotificationSounds;
+
++ (OWSSound)globalNotificationSound;
++ (OWSSound)globalNotificationSoundWithTransaction:(SDSAnyWriteTransaction *)transaction;
++ (void)setGlobalNotificationSound:(OWSSound)sound;
++ (void)setGlobalNotificationSound:(OWSSound)sound transaction:(SDSAnyWriteTransaction *)transaction;
+
++ (OWSSound)notificationSoundForThread:(TSThread *)thread;
++ (SystemSoundID)systemSoundIDForSound:(OWSSound)sound quiet:(BOOL)quiet;
++ (void)setNotificationSound:(OWSSound)sound forThread:(TSThread *)thread;
+
+#pragma mark - AudioPlayer
+
++ (nullable OWSAudioPlayer *)audioPlayerForSound:(OWSSound)sound;
+
+@end
+
+NS_ASSUME_NONNULL_END

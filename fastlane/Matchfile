@@ -1,0 +1,38 @@
+# Fastlane Match Configuration Template
+# 
+# This is a template file for fastlane match configuration.
+# Replace the placeholder values with your actual settings.
+# 
+# DO NOT commit real certificates repository URLs or credentials!
+
+# Git repository URL for storing certificates and provisioning profiles
+# Replace with your certificates repository URL
+git_url("https://github.com/YOUR_ORG/iOS-certificates.git")
+
+storage_mode("git")
+# git_branch('main') # Optional: specify git branch
+
+# Certificate types: appstore, adhoc, enterprise, development
+# type(ENV["MATCH_TYPE"]) # Use environment variable
+# type("development") # Or specify directly
+
+# App bundle identifiers - replace with your app identifiers
+# app_identifier(["com.yourcompany.yourapp", "com.yourcompany.yourapp.share", "com.yourcompany.yourapp.NSE"])
+
+# Example configurations for different environments:
+# Development
+# app_identifier(["com.yourcompany.yourapp.dev", "com.yourcompany.yourapp.dev.share", "com.yourcompany.yourapp.dev.NSE"])
+
+# Staging  
+# app_identifier(["com.yourcompany.yourapp.staging", "com.yourcompany.yourapp.staging.share", "com.yourcompany.yourapp.staging.NSE"])
+
+# Production
+# app_identifier(["com.yourcompany.yourapp", "com.yourcompany.yourapp.share", "com.yourcompany.yourapp.NSE"])
+
+# Apple Developer Portal credentials
+username(ENV["APPLE_USERNAME"]) # Use environment variable for security
+team_id(ENV["TEAM_ID"]) # Use environment variable for security
+# For all available options run `fastlane match --help`
+# Remove the # in the beginning of the line to enable the other options
+
+# The docs are available on https://docs.fastlane.tools/actions/match

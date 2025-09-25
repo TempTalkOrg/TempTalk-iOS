@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>aps-environment</key>
+	<string>development</string>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:chative.difft.org</string>
+		<string>applinks:chative.com</string>
+		<string>webcredentials:webauthn.test.chative.im</string>
+		<string>applinks:temptalk.app</string>
+	</array>
+	<key>com.apple.developer.default-data-protection</key>
+	<string>NSFileProtectionComplete</string>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.org.difft.chativetest</string>
+	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)org.difft.chativetest</string>
+	</array>
+</dict>
+</plist>

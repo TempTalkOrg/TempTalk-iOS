@@ -1,0 +1,111 @@
+//
+//  DTStepTextFiled.h
+//  Signal
+//
+//  Created by hornet on 2022/10/4.
+//  Copyright © 2022 Difft. All rights reserved.
+//
+
+#import <UIKit/UIKit.h>
+
+
+typedef NS_ENUM(NSUInteger, DTStepTextFieldConfigInputType) {
+    DTStepTextFieldConfigInputType_Number_Alphabet,
+    DTStepTextFieldConfigInputType_Number,
+    DTStepTextFieldConfigInputType_Alphabet,
+};
+
+NS_ASSUME_NONNULL_BEGIN
+@interface DTStepTextFieldConfig : NSObject
+
+//============================ Initialization ============================
+
+///输入框个数
+@property (assign,  nonatomic) NSUInteger        inputBoxNumber;
+///单个输入框的宽度
+@property (assign,  nonatomic) CGFloat          inputBoxWidth;
+///单个输入框的高度
+@property (assign,  nonatomic) CGFloat          inputBoxHeight;
+///单个输入框的边框宽度, Default is 1 pixel
+@property (assign,  nonatomic) CGFloat          inputBoxBorderWidth;
+///单个输入框的边框圆角
+@property (assign,  nonatomic) CGFloat          inputBoxCornerRadius;
+///输入框间距, Default is 5
+@property (assign,  nonatomic) CGFloat          inputBoxSpacing;
+///左边距
+@property (assign,  nonatomic) CGFloat          leftMargin;
+///单个输入框的颜色, Default is lightGrayColor
+@property (strong,  nonatomic) UIColor          *inputBoxColor;
+///光标颜色, Default is blueColor
+@property (strong,  nonatomic) UIColor          *tintColor;
+///显示 或 隐藏
+@property (assign,  nonatomic) BOOL             secureTextEntry;
+///字体, Default is [UIFont boldSystemFontOfSize:16]
+@property (strong,  nonatomic) UIFont           *font;
+///颜色, Default is [UIColor blackColor]
+@property (strong,  nonatomic) UIColor          *textColor;
+///输入类型：数字+字母，数字，字母. Default is 'DTStepTextFieldConfigInputType_Number_Alphabet'
+@property (nonatomic,  assign) DTStepTextFieldConfigInputType  inputType;
+///自动弹出键盘
+@property (nonatomic,  assign) BOOL             autoShowKeyboard;
+///默认0.5
+@property (nonatomic,  assign) CGFloat          autoShowKeyboardDelay;
+///光标闪烁动画, Default is YES
+@property (nonatomic,  assign) BOOL             showFlickerAnimation;
+///显示下划线
+@property (nonatomic,  assign) BOOL             showUnderLine;
+///下划线尺寸
+@property (nonatomic,  assign) CGSize           underLineSize;
+///下划线颜色, Default is lightGrayColor
+@property (nonatomic,  strong) UIColor          *underLineColor;
+///自定义的输入占位字符，secureTextEntry = NO，有效
+@property (nonatomic,    copy) NSString         *customInputHolder;
+///设置键盘类型
+@property (nonatomic,  assign) UIKeyboardType   keyboardType;
+///使用系统的密码键盘
+@property (nonatomic,  assign) BOOL             useSystemPasswordKeyboard;
+
+//============================ Input ============================
+
+///单个输入框输入时的颜色
+@property (strong,  nonatomic) UIColor          *inputBoxHighlightedColor;
+///下划线高亮颜色
+@property (nonatomic,  strong) UIColor          *underLineHighlightedColor;
+
+//============================ Finish ============================
+/* 输入完成后，可能根据不同的状态，显示不同的颜色。  */
+
+///单个输入框输入时的颜色
+@property (strong,  nonatomic) NSArray<UIColor*>    *inputBoxFinishColors;
+///下划线高亮颜色
+@property (nonatomic,  strong) NSArray<UIColor*>    *underLineFinishColors;
+///输入完成时字体
+@property (strong,  nonatomic) NSArray<UIFont*>     *finishFonts;
+///输入完成时颜色
+@property (strong,  nonatomic) NSArray<UIColor*>    *finishTextColors;
+
+@end
+
+@interface DTStepTextFiled : UIView
+
+@property (copy,    nonatomic) void (^inputBlock)(NSString *code);
+@property (copy,    nonatomic) void (^finishBlock)(DTStepTextFiled *codeView, NSString *code);
+
+- (instancetype)initWithFrame:(CGRect)frame config:(DTStepTextFieldConfig *)config;
+
+- (void)setContentTextValue:(NSString *)text;
+/**
+ 清空所有输入
+ */
+- (void)clear;
+
+/**
+ 输入完成后，调用此方法，根据 index 从 `Finish` 下的4个属性获取对应的值来设置颜色。
+ 
+ @param index 用于从 `inputBoxFinishColors`、`underLineFinishColors`、`finishFonts`、`finishTextColors`中获取对应的值
+ */
+- (void)showInputFinishColorWithIndex:(NSUInteger)index;
+
+@end
+
+NS_ASSUME_NONNULL_END
