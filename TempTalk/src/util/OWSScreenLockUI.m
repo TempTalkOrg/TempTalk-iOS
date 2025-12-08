@@ -116,6 +116,10 @@ NS_ASSUME_NONNULL_BEGIN
                                                  name:ScreenLock.ScreenLockDidChange
                                                object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(screenLockPatternDidChange:)
+                                                 name:ScreenLock.ScreenLockPatternDidChange
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(clockDidChange:)
                                                  name:NSSystemClockDidChangeNotification
                                                object:nil];
@@ -151,7 +155,7 @@ NS_ASSUME_NONNULL_BEGIN
     // It's not safe to access ScreenLock.isScreenLockEnabled
     // until the app is ready.
     AppReadinessRunNowOrWhenAppDidBecomeReadySync(^{
-        self.isScreenLockLocked = ScreenLock.sharedManager.isScreenLockEnabled;
+        self.isScreenLockLocked = ScreenLock.sharedManager.isScreenLockOpened;
         
         [self ensureUI];
     });
@@ -173,7 +177,7 @@ NS_ASSUME_NONNULL_BEGIN
         DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive NO 0", self.logTag);
         return;
     }
-    if (!ScreenLock.sharedManager.isScreenLockEnabled) {
+    if (!ScreenLock.sharedManager.isScreenLockOpened) {
         // Screen lock is not enabled.
         DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive NO 1", self.logTag);
         return;
@@ -310,7 +314,7 @@ bool bScreenLockDone = false;
         return;
     }
 
-    OWSLogInfo(@"%@, try to unlock screen lock", self.logTag);
+    OWSLogInfo(@"%@, ows try to unlock screen lock", self.logTag);
 
     self.isShowingScreenLockUI = YES;
     
@@ -457,6 +461,11 @@ bool bScreenLockDone = false;
     [self ensureUI];
 }
 
+- (void)screenLockPatternDidChange:(NSNotification *)notification
+{
+    [self ensureUI];
+}
+
 - (void)clearAuthUIWhenActive
 {
     // For continuity, continue to present blocking screen in "screen lock" mode while
@@ -509,7 +518,7 @@ bool bScreenLockDone = false;
         DDLogVerbose(@"%@ clockDidChange 0", self.logTag);
         return;
     }
-    self.isScreenLockLocked = ScreenLock.sharedManager.isScreenLockEnabled;
+    self.isScreenLockLocked = ScreenLock.sharedManager.isScreenLockOpened;
 
     // NOTE: this notifications fires _before_ applicationDidBecomeActive,
     // which is desirable.  Don't assume that though; call ensureUI

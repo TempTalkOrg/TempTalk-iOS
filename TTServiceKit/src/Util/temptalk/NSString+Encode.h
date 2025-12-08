@@ -26,7 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 ///解密challengeCode
 + (NSString *)decryptChallengeCode:(NSString *)encryptedChallengeCode withKey:(NSData *) publicKey;
 
-+ (NSString *)base58EncodedString:(NSString *)encodedString;
+//+ (NSString *)base58EncodedString:(NSString *)encodedString;
 
 + (NSString *)base58EncodedNumber:(NSString *)encodedString;
 

@@ -496,6 +496,10 @@ extension HomeViewController: UITableViewDelegate {
     }
     
     public func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard self.isViewLoaded && self.view.window != nil else {
+            return nil
+        }
+        
         guard let section = HomeViewControllerSection(rawValue: indexPath.section) else {
             return nil
         }
@@ -568,6 +572,10 @@ extension HomeViewController: UITableViewDelegate {
     }
     
     public func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard self.isViewLoaded && self.view.window != nil else {
+            return nil
+        }
+        
         guard let section = HomeViewControllerSection(rawValue: indexPath.section) else {
             return nil
         }

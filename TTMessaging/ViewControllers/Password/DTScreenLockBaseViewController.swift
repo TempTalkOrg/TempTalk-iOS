@@ -16,6 +16,7 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
         case confirmPasscode = 1
         case passcodeSuccess = 2
         case unlockScreen = 3
+        case patternSet = 4
     }
     
     let logoIconImageView = UIImageView()
@@ -38,6 +39,8 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
             return DTPasscodeSuccessViewController(doneCallback: doneCallback)
         case .unlockScreen:
             return DTUnlockScreenViewController(doneCallback: doneCallback)
+        case .patternSet:
+            return DTGestureLockViewController(doneCallback: doneCallback)
         }
     }
     
@@ -54,7 +57,9 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
         super.viewWillAppear(animated)
         self.navigationController?.setNavigationBarHidden(true, animated: false)
         
-        passcodeField.becomeFirstResponder()
+        if !shouldShowPatternView() {
+            passcodeField.becomeFirstResponder()
+        }
     }
     
     public override func viewWillDisappear(_ animated: Bool) {
@@ -73,7 +78,7 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
     
     private func setupUIPropety() {
         
-        titleLabel.text = Localized("UNLOCKSCREEN_TITLE", comment: "")
+        titleLabel.text = shouldShowPatternView() ? Localized("SETTINGS_DRAW_START_PATTERN", comment: "") : Localized("UNLOCKSCREEN_TITLE", comment: "")
         titleLabel.font = UIFont.boldSystemFont(ofSize: 20.0)
         titleLabel.textAlignment = .center
         
@@ -82,7 +87,7 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
         tipsLabel.textAlignment = .center
         tipsLabel.numberOfLines = 0;
         
-        logoIconImageView.image =  UIImage(named: "logo_chative")
+        logoIconImageView.image = UIImage(named: "logo_chative_light")
         
         passcodeField.delegate = self;
         passcodeField.keyboardAppearance = Theme.keyboardAppearance;
@@ -96,7 +101,7 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
         errorTipsLabel.font = UIFont.systemFont(ofSize: 12)
         errorTipsLabel.textAlignment = .center
         errorTipsLabel.textColor = UIColor.color(rgbHex: 0xF84135)
-        errorTipsLabel.numberOfLines = 1;
+        errorTipsLabel.numberOfLines = 0;
         
         doneButton = OWSFlatButton.button(title: Localized("UNLOCKSCREEN_DONE", comment: ""),
                                           font: OWSFlatButton.orignalFontForHeight(16),
@@ -132,6 +137,7 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
         passcodeField.textColor = Theme.secondaryTextAndIconColor
         tipsLabel.textColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0xB7BDC6) : UIColor.color(rgbHex: 0x474D57);
         lineView.backgroundColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x474D57) : UIColor.color(rgbHex: 0xEAECEF);
+        logoIconImageView.image = Theme.isDarkThemeEnabled ? UIImage(named: "logo_chative_dark") :  UIImage(named: "logo_chative_light")
     }
     
     
@@ -156,4 +162,22 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
         
     }
     
+    func shouldShowPatternView() -> Bool {
+        let patternEnabled = ScreenLock.shared.isScreenLockPatternEnabled()
+        let passwordEnabled = ScreenLock.shared.isScreenLockPasscodeEnabled()
+        if passwordEnabled && !patternEnabled {
+            return false
+        }
+        return true
+    }
+    
+    func shouldShowSwitchBtn() -> Bool {
+        let patternEnabled = ScreenLock.shared.isScreenLockPatternEnabled()
+        let passwordEnabled = ScreenLock.shared.isScreenLockPasscodeEnabled()
+        return patternEnabled && passwordEnabled
+    }
+    
+    func statusBarHeight() -> CGFloat {
+        return view.safeAreaInsets.top
+    }
 }

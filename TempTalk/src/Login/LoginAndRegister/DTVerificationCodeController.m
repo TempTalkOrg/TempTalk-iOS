@@ -276,15 +276,23 @@ static dispatch_source_t _timer;
         if(state == DTLoginStateTypeLoginFailed){
             self.errorTipLabel.hidden = false;
             self.errorTipLabel.text = message;
-            [self.errorTipLabelTopConstraint autoRemove];
-            [self.nextButtonTopConstraint autoRemove];
+            // 安全地移除约束，添加类型检查防止崩溃
+            if (self.errorTipLabelTopConstraint && [self.errorTipLabelTopConstraint isKindOfClass:[NSLayoutConstraint class]]) {
+                [self.errorTipLabelTopConstraint autoRemove];
+            }
+            if (self.nextButtonTopConstraint && [self.nextButtonTopConstraint isKindOfClass:[NSLayoutConstraint class]]) {
+                [self.nextButtonTopConstraint autoRemove];
+            }
             self.errorTipLabelTopConstraint = [self.errorTipLabel autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.stepTextFiled withOffset:16];
             self.nextButtonTopConstraint = [self.nextButton autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.errorTipLabel withOffset:32];
             [self.view layoutIfNeeded];
         } else {
             self.errorTipLabel.hidden = true;
             self.errorTipLabel.text = @"";
-            [self.nextButtonTopConstraint autoRemove];
+            // 安全地移除约束，添加类型检查防止崩溃
+            if (self.nextButtonTopConstraint && [self.nextButtonTopConstraint isKindOfClass:[NSLayoutConstraint class]]) {
+                [self.nextButtonTopConstraint autoRemove];
+            }
             self.nextButtonTopConstraint = [self.nextButton autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.stepTextFiled withOffset:32];
             [self.errorTipLabel autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.stepTextFiled withOffset:8];
             [self.view layoutIfNeeded];
@@ -488,6 +496,12 @@ static dispatch_source_t _timer;
             [DTToastHelper hide];
             [DTToastHelper _showSuccess:Localized(@"OPREATION_SUCCESS", @"")];
             [self verificationWasCompleted];
+            
+            // 成功绑定
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[NSNotificationCenter defaultCenter] postNotificationName:ScreenLock.ScreenLockBindEmail object:nil];
+            });
+            
         } failure:^(NSError * _Nonnull error, DTAPIMetaEntity * _Nonnull errResponse) {
             @strongify(self);
             [DTToastHelper hide];
@@ -521,6 +535,11 @@ static dispatch_source_t _timer;
             } else {
                 [DTToastHelper _showSuccess:Localized(@"OPREATION_SUCCESS", @"")];
                 [self verificationWasCompleted];
+                
+                // 成功绑定
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[NSNotificationCenter defaultCenter] postNotificationName:ScreenLock.ScreenLockBindPhone object:nil];
+                });
             }
         } failure:^(NSError * _Nonnull error, DTAPIMetaEntity * _Nonnull errResponse) {
             @strongify(self);

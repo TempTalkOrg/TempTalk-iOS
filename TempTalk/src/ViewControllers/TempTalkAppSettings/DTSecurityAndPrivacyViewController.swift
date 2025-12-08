@@ -195,6 +195,9 @@ extension DTSecurityAndPrivacyViewController : UITableViewDelegate, UITableViewD
         } else if settingItem.tag == SecurityAndPrivacyItemType.deleteAccount.rawValue {
             let deleteAccountVC =  DTDeleteAccountController()
             self.navigationController?.pushViewController(deleteAccountVC, animated: true)
+        } else if settingItem.tag == SecurityAndPrivacyItemType.screenLockEnable.rawValue {
+            let screenLockSelectedVC = ScreenLockSelectedViewController()
+            self.navigationController?.pushViewController(screenLockSelectedVC, animated: true)
         }
     }
     
@@ -256,10 +259,7 @@ extension DTSecurityAndPrivacyViewController {
         passkeyItem.tag = SecurityAndPrivacyItemType.passkeys.rawValue
         let passkeyTipsItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.plainTextType.rawValue, plainText:  Localized("PASSKEYS_ENABLE_TIP"))
         
-        
-        let screenlockEnable = ScreenLock.shared.isScreenLockEnabled()
-        
-        let screenLockEnableItem = DTSettingItem(icon: "", title: Localized("SETTINGS_SCREEN_LOCK_SWITCH_LABEL"), description: "", cellStyle: SettingCellStyle.onlySwitch.rawValue, openSwitch: screenlockEnable)
+        let screenLockEnableItem = DTSettingItem(icon: "", title: Localized("SETTINGS_SCREEN_LOCK_SWITCH_LABEL"), description: "", cellStyle: SettingCellStyle.accessoryAndDescription.rawValue, openSwitch: false)
         screenLockEnableItem.tag = SecurityAndPrivacyItemType.screenLockEnable.rawValue
         let screenLockTipsItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.plainTextType.rawValue, plainText: Localized("SETTINGS_SCREEN_LOCK_SECTION_FOOTER"))
         
@@ -288,54 +288,26 @@ extension DTSecurityAndPrivacyViewController {
         let deleteAccountItem = DTSettingItem(icon: "", title: Localized("SETTINGS_ITEM_DELETE"), description:"" , cellStyle: SettingCellStyle.accessoryAndDescription.rawValue)
         deleteAccountItem.tag = SecurityAndPrivacyItemType.deleteAccount.rawValue
         
-        if screenlockEnable {
-            
-            if TSAccountManager.sharedInstance().passKeyManager.isPasskeySupported() {
-                return [[blanckItem],
-                        [passkeyItem, passkeyTipsItem],
-                        [blanckItem],
-                        [screenLockEnableItem, timeoutItem],
-                        [screenLockTipsItem],
-                        [blanckItem],
-                        [renewKeyItem],
-                        [renewKeyTipsItem],
-                        [blanckItem],
-                        [deleteAccountItem]]
-            } else {
-                return [[blanckItem],
-                        [screenLockEnableItem, timeoutItem],
-                        [screenLockTipsItem],
-                        [blanckItem],
-                        [renewKeyItem],
-                        [renewKeyTipsItem],
-                        [blanckItem],
-                        [deleteAccountItem]]
-            }
-            
-            
+        if TSAccountManager.sharedInstance().passKeyManager.isPasskeySupported() {
+            return [[blanckItem],
+                    [passkeyItem, passkeyTipsItem],
+                    [blanckItem],
+                    [screenLockEnableItem],
+                    [screenLockTipsItem],
+                    [blanckItem],
+                    [renewKeyItem],
+                    [renewKeyTipsItem],
+                    [blanckItem],
+                    [deleteAccountItem]]
         } else {
-            
-            if TSAccountManager.sharedInstance().passKeyManager.isPasskeySupported() {
-                return [[blanckItem],
-                        [passkeyItem, passkeyTipsItem],
-                        [blanckItem],
-                        [screenLockEnableItem],
-                        [screenLockTipsItem],
-                        [blanckItem],
-                        [renewKeyItem],
-                        [renewKeyTipsItem],
-                        [blanckItem],
-                        [deleteAccountItem]]
-            } else {
-                return [[blanckItem],
-                        [screenLockEnableItem],
-                        [screenLockTipsItem],
-                        [blanckItem],
-                        [renewKeyItem],
-                        [renewKeyTipsItem],
-                        [blanckItem],
-                        [deleteAccountItem]]
-            }
+            return [[blanckItem],
+                    [screenLockEnableItem],
+                    [screenLockTipsItem],
+                    [blanckItem],
+                    [renewKeyItem],
+                    [renewKeyTipsItem],
+                    [blanckItem],
+                    [deleteAccountItem]]
         }
     }
     
@@ -355,9 +327,7 @@ extension DTSecurityAndPrivacyViewController : DTSettingSwitchCellDelegate  {
     func switchValueChanged(isOn: Bool, cell: DTDefaultBaseStyleCell) {
         
         if let settingItem = cell.model {
-            if settingItem.tag == SecurityAndPrivacyItemType.screenLockEnable.rawValue {
-                screenLockEnabledChangeAction(isOn: isOn, cell: cell)
-            } else if settingItem.tag == SecurityAndPrivacyItemType.passkeys.rawValue {
+            if settingItem.tag == SecurityAndPrivacyItemType.passkeys.rawValue {
                 if(isOn){
                     let setUpPasskeysVC = DTSetUpPasskeysController()
                     setUpPasskeysVC.loginType = DTLoginModeTypeViaRegisterPasskeyAuthFromMe
@@ -366,54 +336,6 @@ extension DTSecurityAndPrivacyViewController : DTSettingSwitchCellDelegate  {
                     self.setEnablePasskeysForProfileInfo(passkeysSwitch: 0)
                 }
             }
-        }
-        
-    }
-    
-    func screenLockEnabledChangeAction(isOn: Bool, cell: DTDefaultBaseStyleCell) {
-        let shouldBeEnabled = isOn;
-        if shouldBeEnabled == ScreenLock.shared.isScreenLockEnabled() {
-            Logger.error("\(self.logTag) ignoring redundant screen lock.")
-            return;
-        }
-        
-        Logger.info("\(self.logTag) trying to set is screen lock enabled: \(shouldBeEnabled)")
-        
-        if shouldBeEnabled {
-            let setPasscodeVc = DTScreenLockBaseViewController.buildScreenLockView(viewType: .setPasscode) { passcode in
-                let confirmPasscodeVc = DTScreenLockBaseViewController.buildScreenLockView(viewType: .confirmPasscode) { verifiedPasscode in
-                    //上报passcode
-                    let screenLockTimeout = round(ScreenLock.shared.screenLockTimeout())
-                    let screenlockCrypto = DTScreenLockCrypto()
-                    
-                    guard let verifiedPasscode = verifiedPasscode else{
-                        Logger.error("verifiedPasscode is empty!")
-                        return
-                    }
-                    
-                    guard let passcodeHash = screenlockCrypto.hashPasscode(passcode: verifiedPasscode) else{
-                        DTToastHelper.toast(withText: "Sorry,encountered some problems!", in: self.view, durationTime: 3.0, afterDelay: 0.2)
-                        Logger.error("passcodeHash is empty!")
-                        return
-                    }
-                    
-                    ScreenLock.shared.setPasscode(passcodeHash)
-                    self.navigationController?.popToViewController(self, animated: false)
-                    let passcodeSuccessVc = DTScreenLockBaseViewController.buildScreenLockView(viewType: .passcodeSuccess) { _ in
-                        self.navigationController?.popToViewController(self, animated: false)
-                    }
-                    self.navigationController?.pushViewController(passcodeSuccessVc, animated: true)
-                    
-                }
-                let confirmPasscode = confirmPasscodeVc as! DTConfirmPasscodeViewController
-                confirmPasscode.verifiedPasscode = passcode ?? ""
-                self.navigationController?.pushViewController(confirmPasscodeVc, animated: false)
-            }
-            
-            self.navigationController?.pushViewController(setPasscodeVc, animated: false)
-            
-        } else {
-            ScreenLock.shared.removePasscode()
         }
     }
     

@@ -147,7 +147,7 @@ class DTDeleteAccountController: OWSViewController {
             localNumber = self.tsAccountManager.localNumber(with: transaction)
         } completion: {
             if let localNumber = localNumber {
-                let base58LocalNumber = NSString.base58EncodedString(localNumber)
+                let base58LocalNumber = NSString.base58EncodedNumber(localNumber)
                 
                 var ensureString = base58LocalNumber
                 if base58LocalNumber.count > 6 {

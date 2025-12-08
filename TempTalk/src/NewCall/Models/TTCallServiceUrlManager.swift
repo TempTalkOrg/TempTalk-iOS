@@ -9,43 +9,57 @@
 import Foundation
 
 public class TTCallServiceUrlManager {
-
-    private var allUrls: [String] = []
-    private var currentIndex: Int = 0
+    private let queue = DispatchQueue(label: "TTCallServiceUrlManager.queue")
+    private var _currentIndex: Int = 0
+    private var currentIndex: Int {
+        get { queue.sync { _currentIndex } }
+        set { queue.sync { _currentIndex = newValue } }
+    }
+    
+    private var allUrls: [String] {
+        return DTMeetingManager.shared.clusterSpeedTester.sortedUrls
+    }
 
     /// 当前正在使用的 URL
-    var currentUrl: String? {
-        guard allUrls.indices.contains(currentIndex) else { return nil }
-        Logger.info("\(DTMeetingManager.shared.logTag) room connect currentUrl \(allUrls[currentIndex])")
-        let clusters: [ClusterMetric] = DTMeetingManager.shared.clusterSpeedTester.sortedAvailableClusters()
-        let sortedUrl: [String] = clusters.map { $0.url.absoluteString }
-        let intersectionUrls = sortedUrl.filter { allUrls.contains($0) }
-        if !intersectionUrls.isEmpty {
-            return intersectionUrls.first
+    func getCurrentUrl() async -> String? {
+        if DTParamsUtils.validateArray(allUrls).boolValue, currentIndex < allUrls.count {
+            Logger.info("[new call] currentUrl from allUrls = \(allUrls[currentIndex])")
+            return allUrls[currentIndex]
         }
-        return allUrls[currentIndex]
+
+        // fallback：调用接口
+        do {
+            let servers = try await fetchLiveKitServers()
+            if DTParamsUtils.validateArray(servers).boolValue {
+                Logger.info("[new call] currentUrl from servers = \(servers.first ?? "nil")")
+                return servers.first
+            } else {
+                Logger.error("[new call] livekit servcers nil")
+            }
+        } catch {
+            Logger.error("[new call] livekit servcers exception")
+        }
+        return nil
+    }
+
+    /// 把回调封装成 async
+    private func fetchLiveKitServers() async throws -> [String] {
+        try await withCheckedThrowingContinuation { continuation in
+            LiveKitServersApi().liveKitServers { entity in
+                if let servers = entity?.data["serviceUrls"] as? [String] {
+                    continuation.resume(returning: servers)
+                } else {
+                    continuation.resume(returning: [])
+                }
+            } failure: { error, _ in
+                continuation.resume(throwing: error)
+            }
+        }
     }
 
     /// 是否还有下一地址可尝试
     var hasNext: Bool {
         return currentIndex < allUrls.count - 1
-    }
-
-    /// 更新 URL 列表（在接口成功后调用）
-    func update(with json: [String: AnyCodable]?) {
-        var urls: [String] = []
-        
-        if let anyValue = json?["serviceUrls"], let serviceUrls = anyValue.value as? [String] {
-            urls.append(contentsOf: serviceUrls)
-        }
-
-//        if let fallback = json["serviceUrl"] as? String {
-//            urls.append(fallback) // fallback 放最后
-//        }
-
-        Logger.info("\(DTMeetingManager.shared.logTag) room urls \(urls)")
-        self.allUrls = urls
-        self.currentIndex = 0
     }
 
     /// 切换到下一个地址（失败时调用）

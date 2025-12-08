@@ -23,6 +23,8 @@ public class NotificationActionHandler: Dependencies {
     private class func handleNotificationResponse( _ response: UNNotificationResponse) throws -> Promise<Void> {
         AssertIsOnMainThread()
         owsAssertDebug(AppReadiness.isAppReady)
+        
+        Logger.info("[metris] handle notification response start")
 
         let userInfo = response.notification.request.content.userInfo
         
@@ -65,11 +67,13 @@ public class NotificationActionHandler: Dependencies {
             guard let textInputResponse = response as? UNTextInputNotificationResponse else {
                 throw OWSAssertionError("response had unexpected type: \(response)")
             }
-
+            Logger.info("[metris] handle notification response reply")
             return try reply(userInfo: userInfo, replyText: textInputResponse.userText)
         case .showThread:
+            Logger.info("[metris] handle notification response showThread")
             return try showThread(userInfo: userInfo)
         case .showScheduledMeetingInfo:
+            Logger.info("[metris] handle notification response showScheduledMeetingInfo")
             return try showScheduledMeetingInfo(userInfo: userInfo)
         }
     }

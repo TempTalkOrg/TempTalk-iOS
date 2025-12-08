@@ -44,6 +44,14 @@ import Logging
     let timerLock = NSLock()
     // livesdk的错误状态
     var showErrorTost: Bool = false
+    // answer的视图
+    var answerVC: DTHostingController<CallAnswerView>?
+    // startcall 优化
+    var startCallThread: TSThread?
+    // startcall 优化
+    var startCallRecipientIds: [String]? = nil
+    // 区分start还是accept
+    var fromSource: String?
     
     var allParticipantIds: [String] {
         guard let roomContext else {
@@ -140,12 +148,15 @@ import Logging
         
         Logger.info("\(self.logTag) clear current call room data nil")
         currentCall.isPresentedShare = false
-        currentCall.isConnecting = false
         currentCall = DTLiveKitCallModel()
         inMeeting = false
         hasMeeting = false
         
         visibleParticipants.removeAll()
+        startCallThread = nil
+        startCallRecipientIds = nil
+        fromSource = nil
+        answerVC = nil
         releaseAllTimer()
         TimerDataManager.shared.clearTimerDataSource()
         RoomDataManager.shared.clearRoomDataSource()
@@ -173,7 +184,7 @@ import Logging
     
     private var _appContext: LiveKitContext?
     
-    /// 发起call
+    /// 发起call - 重构版本，直接使用 LiveKit SDK 连接
     /// - Parameters:
     ///   - thread: 发起1on1/group时传入
     ///   - recipientIds: 发起instant会议时需要
@@ -182,12 +193,27 @@ import Logging
                    recipientIds: [String]? = nil,
                    displayLoading: Bool = false) {
         
+        // 防抖：已有会议或正在连接中直接返回
+        guard !hasMeeting else {
+            Logger.info("\(logTag) already in meeting or connecting, ignore duplicate startCall")
+            return
+        }
+        hasMeeting = true
+
+        if let thread = thread {
+            startCallThread = thread
+        }
+        
+        if let recipientIds = recipientIds {
+            startCallRecipientIds = recipientIds
+        }
+        
         guard let localNumber = TSAccountManager.localNumber() else {
             Logger.error("\(logTag) No local number.")
             return
         }
         
-        if let roomId = currentCall.roomId {
+        if let body = currentCall.ttcalResponseBody {
             Logger.info("\(logTag) the call has exist")
             DispatchMainThreadSafe {
                 DTToastHelper.show(withInfo: Localized("MEETING_DOING_FREQUENTLY_TIPS"))
@@ -195,7 +221,7 @@ import Logging
             return
         }
         
-        Logger.info("\(logTag) start call")
+        Logger.info("\(logTag) start call with direct LiveKit connection")
                  
         var callType: CallType = .instant
         var conversationId: String?
@@ -249,7 +275,6 @@ import Logging
             }
         }
         
-        hasMeeting = true
         let newCall = DTLiveKitCallModel()
         newCall.caller = localNumber
         newCall.roomName = roomName
@@ -265,19 +290,15 @@ import Logging
         }
         
         let timestamp = Date.ows_millisecondTimestamp()
-        let collapseId = collapseId(timestamp: timestamp)
-        let notification: [String: Any] = [
-            "type": DTApnsMessageType.ENC_CALL.rawValue,
-            "args": ["collapseId": collapseId]
-        ]
-        
+        newCall.timestamp = timestamp
         newCall.createCallMsg = createCallMsgEnabled()
         newCall.controlType = DTMeetingManager.sourceControlStart
         newCall.inviteCallees = recipientIdentifiers
-        newCall.timestamp = timestamp
         
+        currentCall = newCall
+        
+        // 直接使用 LiveKit SDK 连接，不再依赖 v1/call/start 接口
         Task {
-            
             let mKey = DTProtoAdapter().generateKey(version: Self.meetingVersion)
             
             guard let callMessage = await createCallMessage(
@@ -295,38 +316,215 @@ import Logging
                 timestamp: timestamp) else {
                 return
             }
+            let stringPublicKey = callMessage.keyResult.eKey.base64EncodedString()
             
-            let encryptedKeyResult = callMessage.keyResult
-            let publicKey = encryptedKeyResult.eKey
-            let stringPublicKey = publicKey.base64EncodedString()
-            currentCall = newCall
+            let protoMessages: [Livekit_TTCipherMessages] = parseCipherMessages(callMessage.cipherMessages)
+            let protoEncInfos: [Livekit_TTEncInfo] = parseEncInfoArray(callMessage.encInfos)
             
-            let endpoint = .startMeeting(type: newCall.callType,
-                                         version: Self.meetingVersion,
-                                         roomId: nil,
-                                         conversation: conversationId,
-                                         publicKey: stringPublicKey,
-                                         encInfos: callMessage.encInfos,
-                                         encMeta: nil,
-                                         timestamp: timestamp,
-                                         notification: notification,
-                                         cipherMessages: callMessage.cipherMessages) as DTCallEndpoint
+            fromSource = "startCall"
             
-            Logger.info("[Time-consuming] start call begin date \(Date.ows_millisecondTimestamp())")
-            
-            await processingMeeting(
-                endpoint: endpoint,
-                e2eeKey: nil,
-                thread: thread,
-                recipientIds: recipientIds,
+            await connectDirectlyToLiveKit(
+                callType: callType,
+                conversationId: conversationId,
                 timestamp: timestamp,
-                source: "startCall"
+                cipherMessages: protoMessages,
+                encInfos: protoEncInfos,
+                publicKey: stringPublicKey
+            )
+        }
+    }
+    
+    private func connectDirectlyToLiveKit(
+        callType: CallType,
+        roomId: String? = nil,
+        conversationId: String?,
+        timestamp: UInt64,
+        isCaller: Bool = true,
+        fromCallKit: Bool = false,
+        cipherMessages: [Livekit_TTCipherMessages]?,
+        encInfos: [Livekit_TTEncInfo]?,
+        publicKey: String?
+    ) async {
+        Logger.info("\(logTag) connecting directly to LiveKit with ttCallRequest")
+        
+        do {
+            currentCall.timestamp = timestamp
+            // 1. 获取 token
+            let token = try await requestAuthToken()
+            let collapseId = collapseId(timestamp: timestamp)
+
+            
+            // 2. 构建请求
+            let connectOptions = buildConnectOptions(
+                callType: callType,
+                roomId: roomId,
+                conversationId: conversationId,
+                timestamp: timestamp,
+                publicKey: publicKey,
+                cipherMessages: cipherMessages,
+                encInfos: encInfos,
+                collapseId: collapseId,
+                token: token
+            )
+            
+            // 3. 初始化房间
+            guard await setupRoomContextIfNeeded(token: token, publicKey: publicKey ?? "") else {
+                await MainActor.run {
+                    DTToastHelper.hide()
+                    DTToastHelper.dismiss(withInfo: "roomContext connect room failed")
+                }
+                return
+            }
+            await MainActor.run {
+                DTToastHelper.hide()
+                presentCallUI(callType: callType, isCaller: isCaller, fromCallKit: fromCallKit)
+            }
+            
+            // 4. 连接
+            await connectRoomSafely(fromCallKit: fromCallKit, connectOptions: connectOptions)
+        } catch {
+            Logger.error("\(logTag) request token error: \(error)")
+            // 失败时回滚状态，避免卡住
+            await hangupCall(needSyncCallKit: false,
+                             isByLocal: true,
+                             forceEndGroupMeeting: false,
+                             roomId: currentCall.roomId,
+                             removeMeetingBar: false,
+                             showErrorToast: true)
+        }
+    }
+    
+    /// 构建 Protobuf 请求
+    private func buildConnectOptions(
+        callType: CallType,
+        roomId: String?,
+        conversationId: String?,
+        timestamp: UInt64,
+        publicKey: String? = nil,
+        cipherMessages: [Livekit_TTCipherMessages]? = nil,
+        encInfos: [Livekit_TTEncInfo]? = nil,
+        collapseId: String,
+        token: String
+    ) -> ConnectOptions {
+        var connectOptions = ConnectOptions()
+        if let cipherMessages = cipherMessages,
+            let encInfos = encInfos,
+            let publicKey = publicKey {
+            connectOptions = ConnectOptions(
+                reconnectAttempts: 20,
+                reconnectAttemptDelay: 2,
+                ttCallRequest: Livekit_TTCallRequest.with {
+                    $0.token = token
+                    $0.startCall = Livekit_TTStartCall.with {
+                        $0.type = callType.rawValue
+                        $0.version = Self.meetingVersion
+                        $0.timestamp = Int64(timestamp)
+                        $0.conversationID = conversationId ?? ""
+                        $0.publicKey = publicKey
+                        $0.cipherMessages = cipherMessages
+                        $0.encInfos = encInfos
+                        $0.notification = Livekit_TTNotification.with {
+                            $0.type = Int32(DTApnsMessageType.ENC_CALL.rawValue)
+                            $0.args = .with { $0.collapseID = collapseId }
+                        }
+                    }
+                    $0.userAgent = TSConstants.appUserAgent
+                },
+                userAgent: TSConstants.appUserAgent
+            )
+        } else if let roomId = roomId {
+            connectOptions = ConnectOptions(
+                reconnectAttempts: 20,
+                reconnectAttemptDelay: 2,
+                ttCallRequest: Livekit_TTCallRequest.with {
+                    $0.token = token
+                    $0.startCall = Livekit_TTStartCall.with {
+                        $0.type = callType.rawValue
+                        $0.roomID = roomId
+                        $0.version = Self.meetingVersion
+                        $0.timestamp = Int64(timestamp)
+                    }
+                    $0.userAgent = TSConstants.appUserAgent
+                },
+                userAgent: TSConstants.appUserAgent
             )
         }
         
+        return connectOptions
     }
     
-    var answerVC: DTHostingController<CallAnswerView>?
+    /// 初始化房间上下文
+    @MainActor
+    private func setupRoomContextIfNeeded(token: String, publicKey: String) async -> Bool {
+        if roomContext != nil {
+            Logger.info("\(logTag) roomContext not nil")
+            DTToastHelper.hide()
+            return false
+        }
+        let serviceUrlManager = TTCallServiceUrlManager()
+        guard let url = await serviceUrlManager.getCurrentUrl() else { return false }
+        
+        roomContext = RoomContext(url: url, token: token, lkContext: appContext)
+        roomContext?.serviceUrlManager = serviceUrlManager
+        return true
+    }
+    
+    /// 展示通话 UI
+    @MainActor
+    private func presentCallUI(callType: CallType, isCaller: Bool, fromCallKit: Bool) {
+        let contextView = RoomContextView()
+            .environmentObject(appContext!)
+            .environmentObject(roomContext!)
+        
+        let callVC = DTHostingController(rootView: AnyView(contextView))
+        self.hostRoomContentVC = callVC
+        hasMeeting = true
+        
+        if isCaller {
+            OWSWindowManager.shared().startCall(callVC, animated: true)
+            if case .private = callType {
+                // 仅 1v1 主叫启动超时计时器
+                startCallTimeoutTimer()
+                if !fromCallKit {
+                    playSound(.callOutgoing1v1, playMode: .playback)
+                }
+            }
+        } else {
+            OWSWindowManager.shared().startCall(callVC, animated: false)
+            dismissAnswerVCIfNeeded()
+        }
+    }
+    
+    /// 处理被叫时的 answerVC
+    @MainActor
+    private func dismissAnswerVCIfNeeded() {
+        guard let answerVC else { return }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            guard let self else { return }
+            if answerVC.presentingViewController != nil {
+                answerVC.dismiss(animated: false) { self.answerVC = nil }
+            } else if let nav = answerVC.navigationController {
+                nav.popViewController(animated: false)
+                self.answerVC = nil
+            } else {
+                self.answerVC = nil
+            }
+        }
+    }
+    
+    /// 安全发起连接
+    private func connectRoomSafely(fromCallKit: Bool, connectOptions: ConnectOptions) async {
+        Logger.info("\(logTag) starting direct LiveKit connection with ttCallRequest")
+        do {
+            let _ = try await roomContext?.connect(connectOptions: connectOptions)
+        } catch {
+            Logger.info("\(self.logTag) hangup callkit room connect failed")
+            await hangupCall(needSyncCallKit: fromCallKit)
+            await DTToastHelper.dismiss(withInfo: "connect room failed")
+        }
+    }
+    
     func showAnswer(call: DTLiveKitCallModel, fromCallKit: Bool = false, onPlaySound: (() -> Void)? = nil) {
 
         hasMeeting = true
@@ -450,229 +648,23 @@ import Logging
                     emk: Data?,
                     fromCallKit: Bool) {
         
-        func acceptCallRequest(type: CallType,
-                               version: Int32,
-                               roomId: String,
-                               e2eeKey: Data?) async {
-            
-            let timestamp = Date.ows_millisecondTimestamp()
-            let endpoint = .startMeeting(type: type,
-                                         version: version,
-                                         roomId: roomId,
-                                         conversation: nil,
-                                         publicKey: nil,
-                                         encInfos: nil,
-                                         encMeta: nil,
-                                         timestamp: timestamp,
-                                         notification: nil,
-                                         cipherMessages: nil) as DTCallEndpoint
-            
-            await processingMeeting(endpoint: endpoint,
-                                    e2eeKey: e2eeKey,
-                                    isCaller: false,
-                                    fromCallKit: fromCallKit,
-                                    timestamp: timestamp,
-                                    source: "acceptCall")
-        }
+        Logger.info("\(logTag) accept call with direct LiveKit connection")
         
-        if let localPriKey = OWSIdentityManager.shared().identityKeyPair()?.privateKey as? Data, let publicKey, let emk {
+        // 直接使用 LiveKit SDK 连接，不再依赖 v1/call/start 接口
+        Task {
+            fromSource = "acceptCall"
             
-            do {
-                let result = try DTProtoAdapter().decryptKey(version: 2,
-                                                             eKey: publicKey,
-                                                             localPriKey: localPriKey,
-                                                             eMKey: emk)
-                let e2eeKey = result.mKey
-                
-                Task {
-                    await acceptCallRequest(
-                        type: type,
-                        version: version,
-                        roomId: roomId,
-                        e2eeKey: e2eeKey
-                    )
-                }
-            } catch {
-                clearCurrentCall()
-                DTToastHelper.showCallToast(Localized("MEETING_JOINED_FAILURE_TIPS"))
-                Logger.error("\(logTag) decrypt error: \(error.localizedDescription)")
-            }
-        } else {
-            Task {
-                DispatchMainThreadSafe {
-                    DTToastHelper.show01LoadingHudIsDark(Theme.isDarkThemeEnabled, in: nil)
-                }
-                
-                await acceptCallRequest(
-                    type: type,
-                    version: version,
-                    roomId: roomId,
-                    e2eeKey: nil
-                )
-            }
-        }
-    }
-    
-    func processingMeeting(endpoint: DTCallEndpoint,
-                           e2eeKey: Data?,
-                           isCaller: Bool = true,
-                           thread: TSThread? = nil,
-                           recipientIds: [String]? = nil,
-                           fromCallKit: Bool = false,
-                           timestamp: UInt64? = nil,
-                           source: String? = nil) async {
-        Logger.info("[Time-consuming] processing request time begin \(Date.ows_millisecondTimestamp())")
-        let result = await DTCallAPIManager().sendRequest(endpoint: endpoint)
-        Logger.info("[Time-consuming] processing request time end \(Date.ows_millisecondTimestamp())")
-        
-        await MainActor.run {
-            if roomContext != nil {
-                Logger.info("\(logTag) roomContext not nil")
-                DTToastHelper.hide()
-                return
-            }
-            switch result {
-            case .success(let data):
-                guard let data else { return }
-                
-                if let tmpStale = data["stale"],
-                   let stale = tmpStale.value as? [[String: Any]],
-                   !stale.isEmpty {
-                    // callees identityKeys失效处理
-                    Logger.warn("\(logTag) ⚠️ calling stale, need to resend message!!! ")
-                                       
-                    storeFreshPrekeys(stale) { [weak self] in
-                        guard let self else { return }
-                        startCall(thread: thread, recipientIds: recipientIds)
-                    }
-                    
-                    DTToastHelper.hide()
-                    return
-                }
-                
-                if let serverShowTimestamp = data["systemShowTimestamp"] {
-                    currentCall.serverTimestamp = anyCodableToUInt64(serverShowTimestamp)
-                }
-                
-                // 开始会议前的前置处理
-                prepareForMeetingStart(endpoint: endpoint,
-                                       isCaller: isCaller,
-                                         thread: thread,
-                                      timestamp: timestamp,
-                                         source: source)
-                
-                DTToastHelper.hide()
-                
-                let serviceUrlManager = TTCallServiceUrlManager()
-                serviceUrlManager.update(with: data)
-                 
-                guard let url = serviceUrlManager.currentUrl,
-                      let tmpToken = data["token"],
-                      let token = tmpToken.value as? String,
-                      let tmpRoomId = data["roomId"],
-                      let roomId = tmpRoomId.value as? String
-                else { return }
-                
-                currentCall.roomId = roomId
-
-                var k_e2eeKey: Data!
-                if let e2eeKey {
-                    k_e2eeKey = e2eeKey
-                } else {
-                    if let localPriKey = OWSIdentityManager.shared().identityKeyPair()?.privateKey as? Data,
-                       let tmpPublicKey = data["publicKey"],
-                       let stringPublicKey = tmpPublicKey.value as? String,
-                       let tmpEmk = data["emk"],
-                       let stringEmk = tmpEmk.value as? String,
-                       let publicKey = Data(base64Encoded: stringPublicKey),
-                       let emk = Data(base64Encoded: stringEmk) {
-                        
-                        do {
-                            let result = try DTProtoAdapter().decryptKey(version: 2,
-                                                        eKey: publicKey,
-                                                        localPriKey: localPriKey,
-                                                        eMKey: emk)
-                            k_e2eeKey = result.mKey
-                        } catch {
-                            clearCurrentCall()
-                            DTToastHelper.showCallToast(Localized("MEETING_JOINED_FAILURE_TIPS"))
-                            Logger.error("\(logTag) decrypt error: \(error.localizedDescription)")
-                        }
-                    }
-                }
-                currentCall.mKey = k_e2eeKey
-                
-                roomContext = RoomContext(url: url,
-                                          token: token,
-                                          e2eeKey: k_e2eeKey,
-                                          lkContext: appContext)
-                roomContext?.serviceUrlManager = serviceUrlManager
-                
-                Task {
-                    if fromCallKit, !currentCall.isConnecting { // 锁屏状态下 callkit 接听后, 不会触发 view 的 onAppear, 需要手动 connect
-                        do {
-                            Logger.info("\(logTag) 1 start connect")
-                            currentCall.isConnecting = true
-                            let _ = try await roomContext?.connect()
-                        } catch {
-                            await MainActor.run {
-                                Logger.error("\(logTag): \(error)")
-                                Task {
-                                    currentCall.isConnecting = false
-                                    Logger.info("\(self.logTag) hangup callkit room connect failed")
-                                    await hangupCall(needSyncCallKit: fromCallKit)
-                                }
-                                DTToastHelper.dismiss(withInfo: "connect room failed")
-                            }
-                        }
-                    }
-                }
-                
-                let contextView = RoomContextView()
-                    .environmentObject(appContext!)
-                    .environmentObject(roomContext!)
-                
-                let callVC = DTHostingController(rootView: AnyView(contextView))
-                self.hostRoomContentVC = callVC
-                hasMeeting = true
-                
-                if isCaller {
-                    OWSWindowManager.shared().startCall(callVC, animated: true)
-                    if case .private = currentCall.callType {
-                        startCallTimeoutTimer()
-
-                        // no need to play
-                        if !fromCallKit {
-                            playSound(.callOutgoing1v1, playMode: .playback)
-                        }
-                    }
-                } else {
-                    OWSWindowManager.shared().startCall(callVC, animated: false)
-                    
-                    if let answerVC {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                            guard let self = self else { return }
-                            if answerVC.presentingViewController != nil {
-                                answerVC.dismiss(animated: false) { [weak self] in
-                                    self?.answerVC = nil
-                                }
-                            } else if let nav = answerVC.navigationController {
-                                nav.popViewController(animated: false)
-                                self.answerVC = nil
-                            } else {
-                                self.answerVC = nil
-                            }
-                         }
-                    }
-                }
-            case .failure(let error):
-                Logger.error("processingMeetingError: \(error.localizedDescription)")
-                clearCurrentCall()
-                DispatchMainThreadSafe {
-                    DTToastHelper.hide()
-                    DTToastHelper.dismiss(withInfo: Localized("SINGLE_CALL_APPLY_MEETING_FAIL"))
-                }
-            }
+            await connectDirectlyToLiveKit(
+                callType: type,
+                roomId: roomId,
+                conversationId: currentCall.conversationId,
+                timestamp: Date.ows_millisecondTimestamp(),
+                isCaller: false,
+                fromCallKit: fromCallKit,
+                cipherMessages: nil,
+                encInfos: nil,
+                publicKey: nil
+            )
         }
     }
     
@@ -703,10 +695,6 @@ import Logging
                 self.audioPlayer = nil
             }
         }
-    }
-    
-    func isPresentedShare() -> Bool {
-        return currentCall.isPresentedShare
     }
     
     public func startLiveKitCall(thread: TSThread,
@@ -742,6 +730,110 @@ import Logging
         }
         
         rootNav.present(inviteNav, animated: true)
+    }
+    
+    func dealConnetedSuccess(with body: Livekit_TTCallResponseBody) {
+        
+        if DTParamsUtils.validateString(body.roomID).boolValue {
+            currentCall.roomId = body.roomID
+        }
+        
+        if DTParamsUtils.validateArray(body.stale).boolValue {
+            var tempStales: [[String: Any]] = []
+            let stales: [Livekit_TTExceptionRecipient] = body.stale
+        
+            for stale in stales {
+                var dict: [String: Any] = [:]
+                dict["uid"] = stale.uid
+                dict["identityKey"] = stale.identityKey
+                dict["registrationId"] = stale.registrationID
+                
+                tempStales.append(dict)
+            }
+            
+            storeFreshPrekeys(tempStales) { [weak self] in
+                guard let self else { return }
+                startCall(thread: startCallThread, recipientIds: startCallRecipientIds)
+            }
+            
+            DTToastHelper.hide()
+            return
+        }
+        
+        if DTParamsUtils.validateNumber(body.systemShowTimestamp as NSNumber).boolValue {
+            currentCall.serverTimestamp = UInt64(body.systemShowTimestamp)
+        }
+        
+        let isCaller = fromSource == "startCall"
+        // 开始会议前的前置处理
+        prepareForMeetingStart(isCaller: isCaller,
+                                 thread: startCallThread,
+                               timestamp: currentCall.timestamp,
+                                 source: fromSource)
+        
+        DispatchMainThreadSafe {
+            DTToastHelper.hide()
+        }
+    }
+}
+
+extension DTMeetingManager {
+    func parseCipherMessages(_ dictArray: [[String: Any]]) -> [Livekit_TTCipherMessages] {
+        return dictArray.compactMap { dict in
+            var msg = Livekit_TTCipherMessages()
+            
+            if let content = dict["content"] as? String {
+                msg.content = content
+            }
+            if let uid = dict["uid"] as? String {
+                msg.uid = uid
+            }
+            if let regID = dict["registrationId"] as? Int {
+                msg.registrationID = Int32(regID)
+            } else if let regID = dict["registrationId"] as? Int32 {
+                msg.registrationID = regID
+            } else if let regID = dict["registrationId"] as? String, let intVal = Int32(regID) {
+                msg.registrationID = intVal
+            }
+            
+            return msg
+        }
+    }
+    
+    func parseEncInfoArray(_ dictArray: [[String: Any]]) -> [Livekit_TTEncInfo] {
+        return dictArray.compactMap { dict in
+            var info = Livekit_TTEncInfo()
+            
+            if let uid = dict["uid"] as? String {
+                info.uid = uid
+            }
+            if let emk = dict["emk"] as? String {
+                info.emk = emk
+            }
+            
+            return info
+        }
+    }
+    
+    func requestAuthToken() async throws -> String {
+        return try await withCheckedThrowingContinuation { continuation in
+            DTTokenHelper.sharedInstance.asyncFetchGlobalAuthToken { token, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let token {
+                    continuation.resume(returning: token)
+                } else {
+                    let invalidError = NSError(domain: "com.temptalk.call.token",
+                                      code: -10000,
+                                      userInfo: [NSLocalizedDescriptionKey: "token invalid"])
+                    continuation.resume(throwing: invalidError)
+                }
+            }
+        }
+    }
+    
+    func isPresentedShare() -> Bool {
+        return currentCall.isPresentedShare
     }
     
 }

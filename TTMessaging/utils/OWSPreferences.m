@@ -116,7 +116,7 @@ NSString *const OWSPreferencesKeySystemEndCallKey = @"kNotificationEndCall";
 
 - (BOOL)screenSecurityIsEnabled
 {
-    return [ScreenLock sharedManager].isScreenLockEnabled;
+    return [ScreenLock sharedManager].isScreenLockOpened;
 }
 
 - (BOOL)old_screenSecurityIsEnabled

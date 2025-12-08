@@ -142,9 +142,8 @@ struct ParticipantLayout<Data: RandomAccessCollection, Content: View>: View {
     private let items: [(id: String, view: AnyView)]
     let spacing: CGFloat
     
-    let edgeSpacing: CGFloat = 12.0
+    let edgeSpacing: CGFloat = 16.0
     let bottomPadding: CGFloat = 64.0
-    let itemSize: CGFloat = (min(screenWidth, screenHeight) - 8 * 2) * 0.5 // 固定大小
     
     init(
         _ data: Data,
@@ -159,21 +158,30 @@ struct ParticipantLayout<Data: RandomAccessCollection, Content: View>: View {
     }
     
     func grid(axis: Axis) -> some View {
-        ScrollView([axis == .vertical ? .vertical : .horizontal]) {
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(itemSize), spacing: spacing), count: 2),
-                alignment: .center,
-                spacing: spacing
-            ) {
-                ForEach(items, id: \.id) { item in
-                    item.view
-                        .frame(width: itemSize, height: itemSize)
-                        .cornerRadius(8)
+        GeometryReader { proxy in
+            let availableWidth = max(0, proxy.size.width - edgeSpacing * 2)
+            let extraMargin: CGFloat = 12
+            let itemSize = floor((availableWidth - spacing - extraMargin) / 2)
+            ScrollView([axis == .vertical ? .vertical : .horizontal]) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.fixed(itemSize), spacing: spacing, alignment: .center),
+                        GridItem(.fixed(itemSize), spacing: spacing, alignment: .center)
+                    ],
+                    alignment: .center,
+                    spacing: spacing
+                ) {
+                    ForEach(items, id: \.id) { item in
+                        item.view
+                            .frame(width: itemSize, height: itemSize)
+                            .clipped()
+                            .cornerRadius(8)
+                    }
                 }
+                .padding(.horizontal, edgeSpacing)
+                .padding(.top, spacing)
+                .padding(.bottom, bottomPadding)
             }
-            .padding(.leading, edgeSpacing)
-            .padding(.top, spacing)
-            .padding(.bottom, bottomPadding)
         }
     }
     

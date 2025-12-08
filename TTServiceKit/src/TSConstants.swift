@@ -199,8 +199,11 @@ extension TSConstants {
     @objc public static func refreshDomainSpeeds() {
         let allDomains = defaultServerConfig.domains.map { $0.domain }
         Task {
-            let results = await testDomains(allDomains)
-            let domainSpeeds = Dictionary(uniqueKeysWithValues: results)
+            let results = await testDomains(allDomains)  // [(domain, speed)]
+            
+            // 如果 key 重复，取最小的速度
+            let domainSpeeds = Dictionary(results, uniquingKeysWith: { min($0, $1) })
+            
             sortedDomainSpeeds = domainSpeeds
                 .sorted { $0.value < $1.value }
                 .map { $0.key }

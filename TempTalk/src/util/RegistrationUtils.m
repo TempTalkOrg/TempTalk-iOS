@@ -73,6 +73,7 @@ NS_ASSUME_NONNULL_BEGIN
     
     //screen lock
     [[ScreenLock sharedManager] removePasscode];
+    [[ScreenLock sharedManager] removePattern];
     
     [self showNewLoginView:fromViewController];
 }

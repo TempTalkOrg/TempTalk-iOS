@@ -19,10 +19,11 @@ import SwiftUI
 import TTMessaging
 import AVFAudio
 import DenoisePluginFilter
+import DTProto
 
 // This class contains the logic to control behavior of the whole app.
 public
-final class RoomContext: ObservableObject, DTRTCAudioSessionObserver {
+final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncryptor {
     
     let logTag: String = "[newcall]"
     
@@ -86,8 +87,10 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver {
     var resetToDefaultWorkItem: DispatchWorkItem?
     let activeSpeakerDelay: TimeInterval = 0.4
     let resetDelay: TimeInterval = 2.5
+    // 连接
+    var connectTimeoutTask: Task<Void, Never>?
 
-    public init(url: String, token: String, e2eeKey: Data, lkContext: LiveKitContext?) {
+    public init(url: String, token: String, lkContext: LiveKitContext?) {
         AudioManager.shared.capturePostProcessingDelegate = denoiseFilter
         
         room.add(delegate: self)
@@ -126,30 +129,22 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver {
     }
 
     @MainActor
-    func connect() async throws -> Room {
+    func connect(connectOptions: ConnectOptions) async throws -> Room {
         DTRTCAudioSession.shared.addObserver(self)
         DTRTCAudioSession.shared.connectRoomConfig(self)
         DTRTCAudioSession.shared.startObserving(self)
-        
-        let connectOptions = ConnectOptions(
-            autoSubscribe: autoSubscribe,
-            reconnectAttempts: 20,
-            reconnectAttemptDelay: 2
-        )
 
-        let keyProvider = BaseKeyProvider(isSharedKey: true, sharedKey: e2eeKey)
-        let e2eeOptions = E2EEOptions(keyProvider: keyProvider)
+        let keyProvider = BaseKeyProvider(isSharedKey: true, sharedKey: nil as Data?)
+        let e2eeOptions = E2EEOptions(keyProvider: keyProvider, ttEncryptor: self)
 
         let roomOptions = RoomOptions(
-            defaultCameraCaptureOptions: CameraCaptureOptions(
-                dimensions: .h1080_169
-            ),
-            defaultScreenShareCaptureOptions: ScreenShareCaptureOptions(
-                dimensions: .h1080_169,
-                useBroadcastExtension: true
-            ),
-            defaultVideoPublishOptions: VideoPublishOptions(
-                encoding: VideoEncoding(maxBitrate: VideoParameters.presetH1080_169.encoding.maxBitrate, maxFps: 30),
+            defaultCameraCaptureOptions: .init(dimensions: .h1080_169),
+            defaultScreenShareCaptureOptions: .init(dimensions: .h1080_169, useBroadcastExtension: true),
+            defaultVideoPublishOptions: .init(
+                encoding: VideoEncoding(
+                    maxBitrate: VideoParameters.presetH1080_169.encoding.maxBitrate,
+                    maxFps: 30
+                ),
                 simulcast: simulcast
             ),
             adaptiveStream: true,
@@ -160,55 +155,65 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver {
         let connectTask = Task.detached { [weak self] in
             guard let self else { return }
             do {
+                // token 校验
                 let currentTime = Int(Date().timeIntervalSince1970)
-                if currentTime - self.genrateTokenTimeDuration > 30 {
-                    Logger.info("\(logTag) token timeout")
+                guard currentTime - self.genrateTokenTimeDuration <= 30 else {
+                    Logger.info("\(self.logTag) token timeout")
                     return
                 }
-                try await self.room.connect(url: self.url,
-                                            token: self.token,
-                                            connectOptions: connectOptions,
-                                            roomOptions: roomOptions)
+
+                try await self.room.connect(
+                    url: self.url,
+                    token: "",
+                    connectOptions: connectOptions,
+                    roomOptions: roomOptions
+                )
             } catch {
-                Logger.error("\(logTag): connect error \(error)")
-                if let httpError = error as? LiveKitError {
-                    if httpError.type == .timedOut {
-                        // TODO：超时时候会去做重连的操作
-                        if let serviceUrlManager,
-                           serviceUrlManager.switchToNextUrl(),
-                           let currentUrl = serviceUrlManager.currentUrl {
-                            await MainActor.run {
-                                self.url = currentUrl
-                                Task {
-                                    _ = try await self.connect()
-                                }
-                            }
-                        } else {
-                            // 到这属于还是异常并且也不会再重试了
-                            Task {
-                                await DTMeetingManager.shared.clearDisconnectErrorData()
-                            }
-                            DispatchMainThreadSafe {
-                                DTToastHelper.toast(withText: Localized("METTING_CONNECT_EXCEPTION_TIPS"))
-                            }
-                            
-                            throw error
-                        }
-                    } else {
-                        // 其他的错误类型，直接删除
-                        Logger.error("\(logTag): connect other error dismissView \(error)")
-                        Task {
-                            await DTMeetingManager.shared.clearDisconnectErrorData()
-                        }
-                    }
-                }
+                try await self.handleConnectError(
+                    error,
+                    connectOptions: connectOptions
+                )
+                throw error
             }
         }
 
         _connectTask = connectTask
         try await connectTask.value
-
         return room
+    }
+
+    @MainActor
+    private func handleConnectError(
+        _ error: Error,
+        connectOptions: ConnectOptions
+    ) async throws {
+        guard let httpError = error as? LiveKitError else {
+            Logger.error("\(logTag): unexpected connect error \(error)")
+            await DTMeetingManager.shared.clearDisconnectErrorData()
+            return
+        }
+
+        switch httpError.type {
+        case .timedOut:
+            Logger.error("\(logTag): connect timed out")
+            // 尝试切换到下一个 URL
+            if let serviceUrlManager,
+               serviceUrlManager.switchToNextUrl(),
+               let nextUrl = await serviceUrlManager.getCurrentUrl() {
+                self.url = nextUrl
+                Logger.info("\(logTag): switched to next URL=\(nextUrl)")
+                _ = try await connect(connectOptions: connectOptions) 
+            } else {
+                Logger.error("\(logTag): no more URLs to try")
+                await DTMeetingManager.shared.clearDisconnectErrorData()
+                DTToastHelper.toast(withText: Localized("METTING_CONNECT_EXCEPTION_TIPS"))
+            }
+
+        default:
+            Logger.error("\(logTag): connect failed with \(httpError)")
+            DTMeetingManager.shared.showErrorTost = true
+            await DTMeetingManager.shared.clearDisconnectErrorData()
+        }
     }
 
     func disconnect() async {
@@ -456,5 +461,31 @@ extension RoomContext {
         Logger.info("\(logTag) audiosession change portName: \(portName)")
         lastPortName = portName
         self.setDenoiseFilter(enabled: !DTMeetingManager.shared.isInputAirPods(portName: portName))
+    }
+}
+
+extension RoomContext {
+    nonisolated public func decryptCallKey(eKey: String, eMKey: String) -> Data? {
+        var k_e2eeKey: Data?
+        if let localPriKey = OWSIdentityManager.shared().identityKeyPair()?.privateKey as? Data,
+           let publicKey = Data(base64Encoded: eKey),
+            let emk = Data(base64Encoded: eMKey) {
+            do {
+                let result = try DTProtoAdapter().decryptKey(version: 2,
+                                            eKey: publicKey,
+                                            localPriKey: localPriKey,
+                                            eMKey: emk)
+                k_e2eeKey = result.mKey
+                currentCall.mKey = k_e2eeKey
+            } catch {
+                DispatchMainThreadSafe {
+                    self.callManager.clearCurrentCall()
+                    DTToastHelper.showCallToast(Localized("MEETING_JOINED_FAILURE_TIPS"))
+                    Logger.error("\(self.logTag) decrypt error: \(error.localizedDescription)")
+                }
+            }
+        }
+        
+        return k_e2eeKey
     }
 }

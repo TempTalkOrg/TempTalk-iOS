@@ -147,7 +147,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
 
         Logger.info("\(self.logTag) \(#function)")
 
-        if ScreenLock.shared.isScreenLockEnabled() {
+        if ScreenLock.shared.isScreenLockOpened() {
 
             Logger.info("\(self.logTag) \(#function) dismissing.")
 
@@ -297,7 +297,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
 
         Logger.info("\(logTag) Presenting initial root view controller")
 
-        if ScreenLock.shared.isScreenLockEnabled() {
+        if ScreenLock.shared.isScreenLockOpened() {
             presentScreenLock()
         } else {
             presentContentView()

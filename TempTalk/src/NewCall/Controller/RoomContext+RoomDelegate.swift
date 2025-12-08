@@ -51,11 +51,6 @@ extension RoomContext: RoomDelegate {
     public func roomDidConnect(_ room: Room) {
         Logger.info("\(logTag) roomDidConnect")
         
-        guard let roomId = currentCall.roomId, !roomId.isEmpty else {
-            Logger.info("\(logTag) roomDidConnect:roomId is empty")
-            return
-        }
-        
         // 默认开启 mic, 不推流
         Task {
             do {
@@ -71,7 +66,6 @@ extension RoomContext: RoomDelegate {
         
         // 连接成功之后给sid赋值
         currentCall.roomSid = room.sid?.stringValue
-        currentCall.isConnecting = false
         
         // 多人会议自己进入后展示meeting bar
         if currentCall.callType != .private {
@@ -121,9 +115,59 @@ extension RoomContext: RoomDelegate {
         }
     }
     
+    public func roomDidSignalConnect(_ room: Room) {
+        Logger.info("\(logTag) roomDidSignalConnect")
+        
+        guard !callManager.inMeeting else {
+            Logger.info("\(logTag) same call has Multiple SignalConnect")
+            return
+        }
+
+        /// 连接成功
+        func handleSuccess(with response: Livekit_TTCallResponse) {
+            guard response.hasBody else {
+                Logger.warn("\(logTag) response.body is empty, waiting for timeout")
+                return
+            }
+            connectTimeoutTask?.cancel()
+            connectTimeoutTask = nil
+            currentCall.ttcalResponseBody = response.body
+            callManager.dealConnetedSuccess(with: response.body)
+        }
+
+        /// 超时处理
+        func handleTimeout() {
+            Logger.error("\(logTag) ttCallResp is nil or body empty after 15s")
+            Task {
+                await callManager.hangupCall(
+                    needSyncCallKit: true,
+                    isByLocal: true,
+                    roomId: currentCall.roomId,
+                    removeMeetingBar: false,
+                    showErrorToast: true
+                )
+            }
+        }
+
+        if let response = room.ttCallResp, response.hasBody {
+            handleSuccess(with: response)
+        } else {
+            connectTimeoutTask = Task {
+                try? await Task.sleep(nanoseconds: 15 * 1_000_000_000)
+                guard !Task.isCancelled else { return }
+                if let response = room.ttCallResp, response.hasBody {
+                    handleSuccess(with: response)
+                } else {
+                    handleTimeout()
+                }
+            }
+        }
+    }
+    
     ///连接异常的时候
     public func room(_ room: Room, didFailToConnectWithError error: LiveKitError?) {
         if let error {
+            updateStale(with: error)
             Logger.error("\(logTag) didFailToConnectWithError error: \(error)")
             if callManager.inMeeting {
                 // 会议中，不降级就会走这个错误
@@ -144,6 +188,7 @@ extension RoomContext: RoomDelegate {
     public func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
         Task {
             if let error {
+                updateStale(with: error)
                 Logger.info("\(logTag) didDisconnect error: \(error) errortype:\(error.type)")
                 await callManager.hangupCall(needSyncCallKit: true,
                                              isByLocal: true,
@@ -506,5 +551,26 @@ extension RoomContext {
     func cleanup() {
         activeSpeakerWorkItem?.cancel()
         resetToDefaultWorkItem?.cancel()
+    }
+    
+    func updateStale(with error: LiveKitError) {
+        if let body = error.response?.body {
+            if DTParamsUtils.validateArray(body.stale).boolValue {
+                Logger.info("\(logTag) error update stal data")
+                var tempStales: [[String: Any]] = []
+                let stales: [Livekit_TTExceptionRecipient] = body.stale
+                
+                for stale in stales {
+                    var dict: [String: Any] = [:]
+                    dict["uid"] = stale.uid
+                    dict["identityKey"] = stale.identityKey
+                    dict["registrationId"] = stale.registrationID
+                    
+                    tempStales.append(dict)
+                }
+                
+                callManager.storeFreshPrekeys(tempStales) {}
+            }
+        }
     }
 }

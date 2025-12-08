@@ -21,7 +21,7 @@ extension DTAccountSettingController {
     func getDataSource() -> [[DTAccountSettingItem]] {
         var idString: String?
         if let userid = self.signalAccount?.recipientId {
-            idString = NSString.base58EncodedString(userid)
+            idString = NSString.base58EncodedNumber(userid)
         }
         var email = TSAccountManager.shared.loadStoredUserEmail()
         if(!DTParamsUtils.validateString(email).boolValue){

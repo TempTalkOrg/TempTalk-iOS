@@ -174,9 +174,29 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        Logger.info("")
+        Logger.info("[metris] did become appReadiness sync notification start")
+        let startTime = MonotonicDate()
+        
+        var didCallCompletion = false
+        let safeCompletion: () -> Void = {
+            guard !didCallCompletion else { return }
+            didCallCompletion = true
+            completionHandler()
+        }
+  
         AppReadiness.runNowOrWhenAppDidBecomeReadySync {
-            NotificationActionHandler.handleNotificationResponse(response, completionHandler: completionHandler)
+            Task {
+                let elapsed = (MonotonicDate() - startTime).seconds
+                do {
+                    try await withCooperativeTimeout(seconds: 27 - elapsed) {
+                        Logger.info("[metris] did become appReadiness sync notification end")
+                        NotificationActionHandler.handleNotificationResponse(response, completionHandler: safeCompletion)
+                    }
+                } catch {
+                    safeCompletion()
+                    Logger.error("[metris] notification handling timeout or failed: \(error)")
+                }
+            }
         }
     }
 }

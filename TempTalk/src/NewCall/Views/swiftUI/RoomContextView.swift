@@ -97,20 +97,17 @@ struct CallContentView: View {
             if currentCall.callType == .private {
                 if currentCall.isCaller && currentCall.callState != .answering {
                     CallerWaitingView()
-                        .modifier(AppearConnectModifier())
                 } else {
                     Room1on1ContentView()
                         .environmentObject(appCtx)
                         .environmentObject(roomCtx)
                         .environmentObject(roomCtx.room)
-                        .modifier(AppearConnectModifier())
                 }
             } else {
                 RoomView()
                     .environmentObject(appCtx)
                     .environmentObject(roomCtx)
                     .environmentObject(roomCtx.room)
-                    .modifier(AppearConnectModifier())
             }
         }
     }
@@ -172,6 +169,12 @@ struct BulletOverlayView: View {
                 .padding(.bottom, paddingBottom + paddingMargin * 0.5 + controlViewHeight)
             
             if showQuickPanel {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showQuickPanel = false
+                    }
+                
                 QuickMessagePanelUIKitWrapper(
                     messages: DTMeetingManager.shared.sampleBulletRtmCalls()
                 ) { message in
@@ -201,32 +204,6 @@ struct BulletOverlayView: View {
                 .padding(.bottom, 90)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
-    }
-}
-
-struct AppearConnectModifier: ViewModifier {
-    @EnvironmentObject var roomCtx: RoomContext
-    @State private var hasAppeared = false
-
-    func body(content: Content) -> some View {
-        content
-            .onAppear {
-                if !hasAppeared {
-                    hasAppeared = true
-                    Task { @MainActor in
-                        if !roomCtx.token.isEmpty && roomCtx.room.connectionState == .disconnected && !DTMeetingManager.shared.currentCall.isConnecting {
-                            do {
-                                Logger.info("\(DTMeetingManager.shared.logTag) call view appear connect room")
-                                DTMeetingManager.shared.currentCall.isConnecting = true
-                                _ = try await roomCtx.connect()
-                            } catch {
-                                Logger.error("\(DTMeetingManager.shared.logTag) view appear failed to connect: \(error)")
-                                DTMeetingManager.shared.currentCall.isConnecting = false
-                            }
-                        }
-                    }
-                }
-            }
     }
 }
 

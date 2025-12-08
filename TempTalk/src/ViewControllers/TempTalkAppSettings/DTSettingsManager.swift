@@ -10,7 +10,7 @@ import Foundation
 import GRDB
 
 @objcMembers
-open class DTSettingsManager: NSObject, ObservableObject, DTSettingsManagerProtocol {
+open class DTSettingsManager: NSObject, ObservableObject {
     static let shared = DTSettingsManager()
     
     private let serialQueue = DispatchQueue(label: "com.temptalk.resetKeyConsumer")
@@ -22,7 +22,15 @@ open class DTSettingsManager: NSObject, ObservableObject, DTSettingsManagerProto
     deinit {
         isCheckingResetKeyMap = false
     }
-    
+}
+
+extension DTSettingsManager: LogoutDelegate {
+    public func didRequestLogout() {
+        RegistrationUtils.kickedOffToRegistration()
+    }
+}
+
+extension DTSettingsManager: DTSettingsManagerProtocol {
     public func syncRemoteProfileInfo() {
         DTChatProfileInfoApi().profileInfo(sucess: { entity in
             if entity?.status == 0,

@@ -23,34 +23,6 @@ public class DTLoginNeedUnlockScreen: NSObject {
                                             processedVc: UIViewController,
                                             completionCallback:  @escaping () -> Void,
                                             errorBlock:  @escaping (String) -> Void) {
-        /*
-        if let screenlock = screenlock,
-            screenlock.requirePasscode {
-            guard let passcodeSalt = screenlock.passcodeSalt else {
-                showErrorToast(processedVc: processedVc)
-                return
-            }
-            if passcodeSalt.isEmpty {
-                showErrorToast(processedVc: processedVc)
-                return
-            }
-            if screenlock.screenLockTimeout == nil {
-                Logger.error("transfer screenLockTimeout is empty!");
-            }
-            
-            
-            let unlockScreenVc = DTScreenLockBaseViewController.buildScreenLockView(viewType: .unlockScreen) { passcode in
-                register(vcode: vcode, pin:nil, passcode:passcode, screenlock: screenlock, processedVc: processedVc, completionCallback: completionCallback, errorBlock: errorBlock)
-            }
-            let unlockScreen = unlockScreenVc as! DTUnlockScreenViewController
-            unlockScreen.salt = passcodeSalt
-            unlockScreen.verifyToServer = true
-            processedVc.navigationController?.pushViewController(unlockScreen, animated: true)
-            DTToastHelper.hide()
-        } else {
-            register(vcode: vcode, pin:nil, passcode:nil, screenlock: nil, processedVc: processedVc, completionCallback: completionCallback, errorBlock: errorBlock)
-        }
-        */
         register(vcode: vcode, pin:nil, passcode:nil, screenlock: nil, processedVc: processedVc, completionCallback: completionCallback, errorBlock: errorBlock)
     }
     

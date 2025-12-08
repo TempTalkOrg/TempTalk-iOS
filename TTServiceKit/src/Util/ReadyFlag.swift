@@ -179,6 +179,7 @@ public class ReadyFlag: NSObject {
         }()
 
         if !didEnqueue {
+            Logger.info("[metris] runNowOrWhenDidBecomeReadySync bench queue \(self.name + ".didBecomeReady " + task.displayLabel)")
             // We perform the block outside unfairLock to avoid deadlock.
             BenchManager.bench(title: self.name + ".didBecomeReady " + task.displayLabel,
                                logIfLongerThan: Self.blockLogDuration,

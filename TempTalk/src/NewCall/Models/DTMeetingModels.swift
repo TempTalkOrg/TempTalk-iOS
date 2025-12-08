@@ -75,8 +75,8 @@ let defaultRoomName = "TempTalk Call"
     var envelopeSourceDevice: UInt32? = OWSDevice.currentDeviceId()
     /// sdk的sid，用于rtm清除信息使用
     var roomSid: String?
-    /// 是否当前会议已经正在连接中
-    var isConnecting: Bool = false
+    /// startCall优化之后会返回响应body
+    var ttcalResponseBody: Livekit_TTCallResponseBody?
     
     private var _roomName: String = ""
     var roomName: String {

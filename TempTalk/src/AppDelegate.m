@@ -149,6 +149,7 @@ static NSTimeInterval launchStartedAt;
         [TextSecureKitEnv sharedEnv].meetingManager = [DTMeetingManager shared];
         [TextSecureKitEnv sharedEnv].settingsManager = [DTSettingsManager shared];
         [SignalApp sharedApp];
+        [LogoutManager shared].logoutDelegate = [DTSettingsManager shared];
     } migrationCompletion:^{
         OWSAssertIsOnMainThread();
 
@@ -534,7 +535,7 @@ extern bool bScreenLockDone;
     
     // added: call the update checking after successing to call screenlock
     // otherwise, do it before main window showing
-    if ( !ScreenLock.sharedManager.isScreenLockEnabled || (bScreenLockDone&&ScreenLock.sharedManager.isScreenLockEnabled)) {
+    if ( !ScreenLock.sharedManager.isScreenLockOpened || (bScreenLockDone&&ScreenLock.sharedManager.isScreenLockOpened)) {
         [AppUpdateNag.sharedInstance showAppUpgradeNagIfNecessary];
         // reset the flag
         bScreenLockDone = false;

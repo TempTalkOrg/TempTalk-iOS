@@ -210,6 +210,13 @@ struct CallScreenShareView: View {
             }.frame(maxWidth: .infinity, alignment: .leading)
 
             if showQuickPanel, viewModel.showControls {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showQuickPanel = false
+                    }
+                    .allowsHitTesting(viewModel.showControls)
+                
                 let messages = DTMeetingManager.shared.sampleBulletRtmCalls()
                 QuickMessagePanelUIKitWrapper(messages: messages) { message in
                     Task {

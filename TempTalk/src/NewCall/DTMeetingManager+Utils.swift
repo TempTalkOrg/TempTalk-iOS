@@ -35,7 +35,7 @@ extension DTMeetingManager {
         DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "call") { config, _ in
             guard let raw = config as? [String: Any],
                   let callConfig = CallConfig(from: raw) else {
-                return 
+                return
             }
             timeoutResult = callConfig.autoHideTimeoutResult ?? 9000
         }
@@ -393,21 +393,18 @@ extension DTMeetingManager {
     }
     
     // MARK: - 本地消息合并
-    func prepareForMeetingStart(endpoint: DTCallEndpoint,
-                                isCaller: Bool = true,
+    func prepareForMeetingStart(isCaller: Bool = true,
                                 thread: TSThread? = nil,
                                 timestamp: UInt64? = nil,
                                 source: String? = nil) {
-        if case .startMeeting = endpoint {
-            // 处理开始会议的主叫和非主叫的逻辑
-            prepareForMeetingCaller(isCaller: isCaller,
-                                    thread: thread)
-            // 处理开始和邀请的本地消息
-            guard currentCall.createCallMsg else { return }
-            prepareForMeetingStartOrInvite(thread: thread,
-                                           timestamp: timestamp,
-                                           isOutgoing: source == "startCall")
-        }
+        // 处理开始会议的主叫和非主叫的逻辑
+        prepareForMeetingCaller(isCaller: isCaller,
+                                thread: thread)
+        // 处理开始和邀请的本地消息
+        guard currentCall.createCallMsg else { return }
+        prepareForMeetingStartOrInvite(thread: thread,
+                                       timestamp: timestamp,
+                                       isOutgoing: source == "startCall")
     }
     
     private func prepareForMeetingCaller(isCaller: Bool = true,

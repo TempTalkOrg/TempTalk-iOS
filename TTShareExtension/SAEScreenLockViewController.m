@@ -90,7 +90,7 @@ NS_ASSUME_NONNULL_BEGIN
         // We're already showing the auth UI; abort.
         return;
     }
-    OWSLogInfo(@"%@, try to unlock screen lock", self.logTag);
+    OWSLogInfo(@"%@, sae try to unlock screen lock", self.logTag);
 
     self.isShowingAuthUI = YES;
 

@@ -21,14 +21,14 @@ public class DTSetPasscodeViewController: DTScreenLockBaseViewController {
     }
     
     public override func setupUI() {
-        
+        titleLabel.text = Localized("UNLOCKSCREEN_TITLE", comment: "")
         titleLabel.font = .boldSystemFont(ofSize: 24.0)
         tipsLabel.text = String(format: Localized("SCREENLOCK_SETPASSCODE_TIPS"), TSConstants.appDisplayName)
         doneButton.setTitle(title: Localized("SCREENLOCK_SETPASSCODE_NEXT", comment: ""), font: OWSFlatButton.orignalFontForHeight(16), titleColor: UIColor.white)
         exclamationIcon.image = UIImage(named: "passcode_exclamation-circle")
         exclamationLabel.font = UIFont.systemFont(ofSize: 14)
         exclamationLabel.numberOfLines = 0;
-        exclamationLabel.text = Localized("SCREENLOCK_SETPASSCODE_EXCLAMATION")
+        exclamationLabel.text = Localized("SETTINGS_PATTERN_TIPS")
         
         view.addSubview(titleLabel)
         view.addSubview(tipsLabel)

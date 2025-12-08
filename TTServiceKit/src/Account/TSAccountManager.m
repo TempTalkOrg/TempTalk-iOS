@@ -1082,7 +1082,14 @@ NSString *NSStringForOWSRegistrationState(OWSRegistrationState value)
                      failure:(void (^)(NSError *error))failureHandler
 {
     OWSLogInfo(@"[DTChatFolderManager] sync with server");
-    TSRequest *request = [OWSRequestFactory getV1ContactMessage:@[[TSAccountManager localNumber]]];
+    NSString *localNumber = [TSAccountManager localNumber];
+    if (!localNumber) {
+        OWSLogError(@"%@ Error: localNumber is nil, cannot create request", self.logTag);
+        NSError *error = [NSError errorWithDomain:@"DTChatFolderManager" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"Local number is nil"}];
+        failureHandler(error);
+        return;
+    }
+    TSRequest *request = [OWSRequestFactory getV1ContactMessage:@[localNumber]];
     
     [self.networkManager makeRequest:request success:^(id<HTTPResponse>  _Nonnull response) {
         NSDictionary *responseObject = response.responseBodyJson;

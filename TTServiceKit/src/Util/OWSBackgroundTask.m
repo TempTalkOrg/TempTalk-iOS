@@ -6,6 +6,7 @@
 #import "AppContext.h"
 #import "NSTimer+OWS.h"
 #import <SignalCoreKit/Threading.h>
+#import <stdatomic.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -202,8 +203,8 @@ typedef NSNumber *OWSTaskId;
             // Need to end background task.
             OWSLogInfo(@"Ending background task.");
             UIBackgroundTaskIdentifier backgroundTaskId = self.backgroundTaskId;
-            self.backgroundTaskId = UIBackgroundTaskInvalid;
             [CurrentAppContext() endBackgroundTask:backgroundTaskId];
+            self.backgroundTaskId = UIBackgroundTaskInvalid;
             return YES;
         }
     }

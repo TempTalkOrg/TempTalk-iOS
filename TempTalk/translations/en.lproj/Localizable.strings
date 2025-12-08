@@ -2427,9 +2427,9 @@
 "SETTINGS_SCREEN_LOCK_ACTIVITY_TIMEOUT" = "Screen Lock Timeout";
 
 /* Footer for the 'screen lock' section of the privacy settings. */
-"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "Unlock TempTalk’s screen using a passcode. The passcode can be different from system’s passcode. So if somebody manage to get access to your system, he still has no access to TempTalk. It also prevents content previews from appearing in the app switcher.";
+"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "Unlock TempTalk’s screen using a passcode or pattern. The passcode can be different from system’s passcode. So if somebody manage to get access to your system, he still has no access to TempTalk. It also prevents content previews from appearing in the app switcher.";
 
-"UNLOCKSCREEN_TITLE" = "Enter Screen Lock passcode";
+"UNLOCKSCREEN_TITLE" = "Passcode";
 "UNLOCKSCREEN_DONE" = "Done";
 "SCREENLOCK_SETPASSCODE_TIPS" = "Enter a passcode (4-10 digits). You will be asked to enter this passcode the next time you unlock TempTalk.";
 "SCREENLOCK_SETPASSCODE_EXCLAMATION" = "If you forget your passcode, you’ll need to log out or reinstall the app.";
@@ -2437,7 +2437,7 @@
 "SCREENLOCK_SETPASSCODE_FORGOT_Alert_CONTENT" = "Please delete and reinstall the app.";
 "SCREENLOCK_SETPASSCODE_FORGOT_Alert_OK" = "OK";
 "SCREENLOCK_SETPASSCODE_NEXT" = "Next";
-"SCREENLOCK_CONFIRMPASSCODE_TIPS" = "Please enter again to confirm your passcode.";
+"SCREENLOCK_CONFIRMPASSCODE_TIPS" = "Please enter again to confirm.";
 "SCREENLOCK_CONFIRMPASSCODE_CONFIRM" = "Confirm";
 "SCREENLOCK_CONFIRMPASSCODE_ERROR_TITLE" = "Error!";
 "SCREENLOCK_CONFIRMPASSCODE_ERROR_TIPS" = "Passcode does not match.";
@@ -3798,3 +3798,36 @@
 "CONVERSATION_JOIN_BAR_PRIVATE_ANOTHER_DEVICE" = "In call on another device.";
 
 "CALL_LIVEKIT_ERROR_TOAST" = "Call Connection Issue";
+
+"SETTINGS_SCREEN_LOCK_TITLE" = "Screen Lock";
+"SETTINGS_GESTURE_UNLOCK" = "Pattern";
+"SETTINGS_PASSWORD_UNLOCK" = "Passcode";
+"SETTINGS_GESTURE_PATH_UNLOCK" = "Pattern path";
+"SETTINGS_TIMEOUT_UNLOCK" = "Timeout";
+"SETTINGS_CREATE_PATTERN" = "Create your pattern";
+"SETTINGS_CONFIRM_PATTERN" = "Confirm your pattern";
+"SETTINGS_DRAW_START_PATTERN" = "Draw pattern";
+"SETTINGS_DRAW_PATTERN" = "Draw an unlock pattern";
+"SETTINGS_DRAW_AGAIN_PATTERN" = "Draw the pattern again";
+"SETTINGS_LEAST_DOTS_PATTERN" = "Too short. Connect at least 4 dots";
+"SETTINGS_DRAW_CONTINUE_PATTERN" = "Please draw a pattern to continue";
+"SETTINGS_DRAW_ERROR_PATTERN" = "Patterns don’t match. Please try again.";
+"SETTINGS_DRAW_SUCCESS_TOAST" = "Pattern lock enabled";
+"SETTINGS_PATTERN_TIPS" = "If you forget your passcode or pattern, try the other one. If you forget both, you’ll need to log in again.";
+"SETTINGS_VERIFY_EMAIL_NUMBER_TITLE" = "Bind Email or Phone";
+"SETTINGS_VERIFY_EMAIL_NUMBER_DESCRIPTION" = "To avoid being locked out if you forget your passcode, please link your email or phone before enabling screen lock.";
+"SETTINGS_VERIFY_EMAIL_ACTION" = "Bind Email";
+"SETTINGS_VERIFY_NUMBER_ACTION" = "Bind Phone";
+"SETTINGS_VERIFY_EMAIL_NUMBER_CANCEL" = "Cancel";
+"SCREENLOCK_SETPATTERN_SWITCH_TIPS" = "Switch to pattern";
+"SCREENLOCK_SETPASSCODE_SWITCH_TIPS" = "Switch to passcode";
+"SCREENLOCK_ERROR_MORE_TIPS" = "Too many failed attempts. The next incorrect attempt will force a logout.";
+"SCREENLOCK_LOGOUT_TITLE_ALERT" = "Forgot passcode or pattern?";
+"SCREENLOCK_LOGOUT_DESCRIPTION_ALERT" = "You can try the other one if available. If both are forgotten, you’ll need to log in again.";
+"SCREENLOCK_LOGOUT_ACTION" = "Logout";
+"SCREENLOCK_SETPATTERN_FORGOT_TIPS" = "Forgot pattern?";
+"SCREENLOCK_BINDING_ACCOUNT_TITLE" = "Bind Email and Phone";
+"SCREENLOCK_BINDING_ACCOUNT_TIPS" = "Regain access via phone or email if you forget your passcode and pattern.";
+"SCREENLOCK_BINDING_CONFIRM_ACTION" = "Bind";
+"SCREENLOCK_BINDING_CANCEL_ACTION" = "Not now";
+"SCREENLOCK_CONFIRMPATTERN_ERROR_TIPS" = "Pattern does not match.";
