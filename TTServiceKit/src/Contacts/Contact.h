@@ -28,6 +28,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ContactPublicConfigs : MTLModel<MTLJSONSerializing>
 @property (nonatomic, copy) NSString *publicName; //裁剪版本的名字
 @property (nonatomic, assign) int meetingVersion; //会议的版本号
+/// 是否启用紧急警报
+@property (nonatomic, assign) BOOL criticalAlert;
 
 - (BOOL)isEqualToPublicConfigs:(ContactPublicConfigs *)publicConfigs;
 
@@ -40,6 +42,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong, nullable) NSNumber *calendarNotification;
 @property (nonatomic, copy) NSString *notificationSound;
 @property (nonatomic, strong) NSDictionary *chatFolder;
+/// 是否保存到相册
+@property (nonatomic, assign) BOOL saveToPhotos;
 
 @end
 
@@ -73,9 +77,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nullable, strong, nonatomic) NSNumber* gender;
 @property (nullable, copy, nonatomic) NSString *address;
 @property (nullable, strong, nonatomic) NSNumber *flag;
-@property (nullable,nonatomic, strong) ContactPrivateConfig *privateConfigs;
+@property (nullable, nonatomic, strong) ContactPrivateConfig *privateConfigs;
 @property (nonatomic, strong) DTThumbsUpEntity *thumbsUp;
-@property (nonatomic, strong) ContactPublicConfigs *publicConfigs;
+@property (nullable, nonatomic, strong) ContactPublicConfigs *publicConfigs;
 @property (nullable, nonatomic, strong) NSString *sourceDescribe;
 
 //MARK: vip客户专用

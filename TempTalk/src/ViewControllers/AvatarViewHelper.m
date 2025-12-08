@@ -3,7 +3,7 @@
 //
 
 #import "AvatarViewHelper.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <MobileCoreServices/UTCoreTypes.h>
 #import <TTMessaging/OWSContactsManager.h>
 #import <TTMessaging/UIUtil.h>

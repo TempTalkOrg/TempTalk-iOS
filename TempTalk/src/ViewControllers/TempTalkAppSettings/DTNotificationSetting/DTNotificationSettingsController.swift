@@ -58,7 +58,7 @@ class DTNotificationSettingsController : SettingBaseViewController {
         }
         
         // 默认critical alert描述，会在异步更新后刷新
-        var criticalAlertDescription = Localized("NOTIFICATIONS_CRITICAL_SWITCH_OFF")
+        let criticalAlertDescription = Localized("NOTIFICATIONS_CRITICAL_SWITCH_OFF")
         /// cellStyle 不同的值对应不同的cell类型
         ///blank = 0
         ///onlyAccessory = 1
@@ -163,6 +163,7 @@ class DTNotificationSettingsController : SettingBaseViewController {
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.criticalEnabed = isEnabled
+                
                 for sectionIndex in 0..<self.dataSource.count {
                     for rowIndex in 0..<self.dataSource[sectionIndex].count {
                         let item = self.dataSource[sectionIndex][rowIndex]
@@ -212,11 +213,6 @@ class DTNotificationSettingsController : SettingBaseViewController {
         prepareUIData()
         updateCriticalAlertStatus()
         self.mainTableView.reloadData()
-        
-    }
-    
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
     }
     
     override func applyTheme() {
@@ -412,5 +408,4 @@ extension DTNotificationSettingsController : DTSettingSwitchCellDelegate  {
         
         present(alertController, animated: true)
     }
-    
 }

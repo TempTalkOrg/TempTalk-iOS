@@ -30,8 +30,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D221A088169C9E5E00537ABF"
-               BuildableName = "TempTalk.app"
-               BlueprintName = "TempTalk"
+               BuildableName = "Yelling.app"
+               BlueprintName = "Yelling"
                ReferencedContainer = "container:Difft.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -61,8 +61,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D221A088169C9E5E00537ABF"
-            BuildableName = "TempTalk.app"
-            BlueprintName = "TempTalk"
+            BuildableName = "Yelling.app"
+            BlueprintName = "Yelling"
             ReferencedContainer = "container:Difft.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -80,8 +80,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D221A088169C9E5E00537ABF"
-            BuildableName = "TempTalk.app"
-            BlueprintName = "TempTalk"
+            BuildableName = "Yelling.app"
+            BlueprintName = "Yelling"
             ReferencedContainer = "container:Difft.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

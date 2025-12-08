@@ -6,7 +6,7 @@
 #import "AttachmentSharing.h"
 #import "ConversationItemMacro.h"
 #import "ConversationViewItem.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "TSAttachmentStream.h"
 #import "TSInteraction.h"
 #import "UIColor+OWS.h"

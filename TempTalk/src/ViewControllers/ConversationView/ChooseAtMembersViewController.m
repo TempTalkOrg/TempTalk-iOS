@@ -6,7 +6,7 @@
 //
 
 #import "ChooseAtMembersViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "SignalApp.h"
 #import "ViewControllerUtils.h"
 #import <TTMessaging/TTMessaging-Swift.h>

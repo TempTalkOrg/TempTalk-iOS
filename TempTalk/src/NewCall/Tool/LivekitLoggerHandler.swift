@@ -17,7 +17,7 @@ extension LivekitLogLevel {
     @inlinable
     var ddLogFlag: DDLogFlag {
         switch self {
-        case .debug: .debug
+        case .debug: .info
         case .info: .info
         case .warning: .warning
         case .error: .error
@@ -37,7 +37,7 @@ extension LivekitLogLevel {
 extension LKRTCLoggingSeverity {
     var ddLogFlag: DDLogFlag {
         switch self {
-        case .verbose: .debug
+        case .verbose: .info
         case .info: .info
         case .warning: .warning
         case .error: .error

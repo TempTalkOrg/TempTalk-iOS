@@ -1910,7 +1910,7 @@
 		D028D1E0A7B94BB08F3A6998 /* Pods_ShareExtension.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ShareExtension.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2179CFB16BB0B3A0006F3AB /* CoreTelephony.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreTelephony.framework; path = System/Library/Frameworks/CoreTelephony.framework; sourceTree = SDKROOT; };
 		D2179CFD16BB0B480006F3AB /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
-		D221A089169C9E5E00537ABF /* TempTalk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TempTalk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D221A089169C9E5E00537ABF /* Yelling.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Yelling.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D221A08D169C9E5E00537ABF /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		D221A08F169C9E5E00537ABF /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		D221A091169C9E5E00537ABF /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
@@ -3843,7 +3843,7 @@
 		D221A08A169C9E5E00537ABF /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D221A089169C9E5E00537ABF /* TempTalk.app */,
+				D221A089169C9E5E00537ABF /* Yelling.app */,
 				D221A0AA169C9E5F00537ABF /* TempTalkTests.xctest */,
 				453518681FC635DD00210559 /* ShareExtension.appex */,
 				453518921FC63DBF00210559 /* TTMessaging.framework */,
@@ -4204,9 +4204,9 @@
 			productReference = 453518921FC63DBF00210559 /* TTMessaging.framework */;
 			productType = "com.apple.product-type.framework";
 		};
-		D221A088169C9E5E00537ABF /* TempTalk */ = {
+		D221A088169C9E5E00537ABF /* Yelling */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = D221A0BC169C9E5F00537ABF /* Build configuration list for PBXNativeTarget "TempTalk" */;
+			buildConfigurationList = D221A0BC169C9E5F00537ABF /* Build configuration list for PBXNativeTarget "Yelling" */;
 			buildPhases = (
 				5E80D3D8CD5FCE32718AADC7 /* [CP] Check Pods Manifest.lock */,
 				D221A085169C9E5E00537ABF /* Sources */,
@@ -4225,9 +4225,9 @@
 				453518981FC63DBF00210559 /* PBXTargetDependency */,
 				DCCEF9E72790570700E6523F /* PBXTargetDependency */,
 			);
-			name = TempTalk;
+			name = Yelling;
 			productName = RedPhone;
-			productReference = D221A089169C9E5E00537ABF /* TempTalk.app */;
+			productReference = D221A089169C9E5E00537ABF /* Yelling.app */;
 			productType = "com.apple.product-type.application";
 		};
 		D221A0A9169C9E5F00537ABF /* TempTalkTests */ = {
@@ -4364,7 +4364,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				D221A088169C9E5E00537ABF /* TempTalk */,
+				D221A088169C9E5E00537ABF /* Yelling */,
 				453518671FC635DD00210559 /* ShareExtension */,
 				DCCEF9E02790570700E6523F /* NSE */,
 				D221A0A9169C9E5F00537ABF /* TempTalkTests */,
@@ -5584,7 +5584,7 @@
 		};
 		B6AFCEBB19A93DA60098CFCB /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = D221A088169C9E5E00537ABF /* TempTalk */;
+			target = D221A088169C9E5E00537ABF /* Yelling */;
 			targetProxy = B6AFCEBA19A93DA60098CFCB /* PBXContainerItemProxy */;
 		};
 		DCCEF9E72790570700E6523F /* PBXTargetDependency */ = {
@@ -5664,7 +5664,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
@@ -5743,7 +5743,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -6089,7 +6089,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -6247,7 +6247,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
@@ -6548,7 +6548,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6622,7 +6622,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6908,7 +6908,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -7064,7 +7064,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -7208,7 +7208,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7264,7 +7264,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7321,7 +7321,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7379,7 +7379,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.5;
+				MARKETING_VERSION = 3.5.6;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7431,7 +7431,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D221A0BC169C9E5F00537ABF /* Build configuration list for PBXNativeTarget "TempTalk" */ = {
+		D221A0BC169C9E5F00537ABF /* Build configuration list for PBXNativeTarget "Yelling" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D221A0BD169C9E5F00537ABF /* Debug */,
@@ -7480,7 +7480,7 @@
 			repositoryURL = "https://github.com/difftim/client-sdk-swift";
 			requirement = {
 				kind = exactVersion;
-				version = 2.9.0;
+				version = "2.9.0-a2";
 			};
 		};
 		CE45C7A82D71CD36008B8452 /* XCRemoteSwiftPackageReference "SFSafeSymbols" */ = {

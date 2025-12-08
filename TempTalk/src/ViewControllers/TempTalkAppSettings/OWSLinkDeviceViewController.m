@@ -6,7 +6,7 @@
 #import "Cryptography.h"
 #import "OWSDeviceProvisioningURLParser.h"
 #import "OWSLinkedDevicesTableViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <TTMessaging/OWSProfileManager.h>
 #import <TTServiceKit/ECKeyPair+OWSPrivateKey.h>
 #import <TTServiceKit/OWSDevice.h>

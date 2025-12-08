@@ -11,7 +11,7 @@
 #import "DebugUISessionState.h"
 #import "DebugUIStress.h"
 #import "DebugUISyncMessages.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <TTServiceKit/TSContactThread.h>
 #import <TTServiceKit/TSThread.h>
 

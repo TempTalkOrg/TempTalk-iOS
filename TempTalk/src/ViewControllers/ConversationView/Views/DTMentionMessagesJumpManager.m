@@ -12,7 +12,7 @@
 #import "AppContext.h"
 #import "DTMentionMsgsIndicatorView.h"
 #import "TSMessage.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "TSIncomingMessage.h"
 
 @interface DTMentionMessagesJumpManager ()<DatabaseChangeDelegate>

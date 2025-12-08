@@ -3,7 +3,7 @@
 //
 
 #import "MainAppContext.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #include <sys/utsname.h>
 #import <TTMessaging/Environment.h>
 #import <TTMessaging/OWSProfileManager.h>

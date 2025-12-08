@@ -11,7 +11,7 @@
 #import <JXCategoryView/JXCategoryView.h>
 #import "NewContactThreadViewController.h"
 #import "DTGroupsViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @interface DTContactsViewController ()<JXCategoryTitleViewDataSource, JXPagerViewDelegate, JXCategoryViewDelegate>
 

@@ -7,7 +7,7 @@
 #import "DebugUIMessagesAction.h"
 #import "DebugUIMessagesAssetLoader.h"
 #import "OWSTableViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <SignalCoreKit/Randomness.h>
 #import <TTMessaging/Environment.h>
 #import <TTServiceKit/MIMETypeUtil.h>

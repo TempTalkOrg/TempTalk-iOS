@@ -39,6 +39,11 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
     let patternConfig: PatternLockViewConfig = PatternLockConfig()
     
     let attemptsThreshold = 5
+    
+    // 倒计时相关属性
+    private var countdownTimer: Timer?
+    private var remainingSeconds: Int = 0
+    private var isCountdownActive: Bool = false
 
     public override func setupUI() {
         patternView = PatternLockView(config: patternConfig)
@@ -99,16 +104,28 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
         switchPasswordBtn.isHidden = !showSwitchButtons || !shouldShowPattern
         seperatorView.isHidden = !shouldShowSwitchBtn()
         
-        
-        if attempts >= attemptsThreshold {
+        if isCountdownActive && remainingSeconds > 0 {
+            updateCountdownText(seconds: remainingSeconds)
+            if shouldShowPattern {
+                closePatternUserInteractionEnabled()
+            } else {
+                closePasswordUserInteractionEnabled()
+            }
+        } else if attempts >= attemptsThreshold {
             if attempts >= self.maxRetryCount - 1 {
                 self.errorTipsLabel.text = Localized("SCREENLOCK_ERROR_MORE_TIPS")
                 self.errorTipsLabel.isHidden = false
             } else {
-                self.showNextTime(nextAttempts: attempts)
+//                self.showNextTime(nextAttempts: attempts)
             }
         } else {
             self.errorTipsLabel.isHidden = true
+            // 确保交互已恢复
+            if shouldShowPattern {
+                openPatternUserInteractionEnabled()
+            } else {
+                openPasswordUserInteractionEnabled()
+            }
         }
     }
     
@@ -275,11 +292,23 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
     }
     
     @objc private func switchPasscodeAction() {
+        // 停止倒计时
+        stopCountdown()
+        // 恢复交互状态
+        openPatternUserInteractionEnabled()
+        openPasswordUserInteractionEnabled()
+        
         updateUILayout(with: false)
         titleLabel.text = Localized("UNLOCKSCREEN_TITLE", comment: "")
     }
     
     @objc private func switchPatternAction() {
+        // 停止倒计时
+        stopCountdown()
+        // 恢复交互状态
+        openPatternUserInteractionEnabled()
+        openPasswordUserInteractionEnabled()
+        
         updateUILayout(with: true)
         titleLabel.text = Localized("SETTINGS_DRAW_START_PATTERN", comment: "")
     }
@@ -291,53 +320,103 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
         errorTipsLabel.isHidden = false
     }
     
+    private func updateCountdownText(seconds: Int) {
+        errorTipsLabel.text = String(format: Localized("SCREENLOCK_PASSCODESUCCESS_ATTEMPTS"), seconds)
+        errorTipsLabel.isHidden = false
+    }
+    
+    private func startCountdown(delay: Int, isShowPattern: Bool, attempts: Int) {
+        stopCountdown()
+        remainingSeconds = delay
+        isCountdownActive = true
+        
+        if isShowPattern {
+            closePatternUserInteractionEnabled()
+        } else {
+            closePasswordUserInteractionEnabled()
+        }
+        
+        // 更新初始倒计时文本
+        updateCountdownText(seconds: remainingSeconds)
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+            self.remainingSeconds -= 1
+            if self.remainingSeconds > 0 {
+                self.updateCountdownText(seconds: self.remainingSeconds)
+            } else {
+                self.stopCountdown()
+                self.errorTipsLabel.isHidden = true
+                
+                // 恢复交互
+                if isShowPattern {
+                    openPatternUserInteractionEnabled()
+                } else {
+                    openPasswordUserInteractionEnabled()
+                    
+                }
+                if attempts + 1 >= self.maxRetryCount {
+                    self.errorTipsLabel.text = Localized("SCREENLOCK_ERROR_MORE_TIPS")
+                    self.errorTipsLabel.isHidden = false
+                } else {
+//                    self.showNextTime(nextAttempts: attempts + 1)
+                }
+            }
+        }
+    }
+    
+    private func stopCountdown() {
+        countdownTimer?.invalidate()
+        countdownTimer = nil
+        isCountdownActive = false
+        remainingSeconds = 0
+    }
+    
     private func checkShowLoadingView(with isShowPattern: Bool, completion: @escaping () -> Bool) {
         let attempts = isShowPattern ? ScreenLock.shared.patternAttempts() :  ScreenLock.shared.passcodeAttempts()
-        let nextAttempts = attempts + 1
-        
-        if attempts >= self.maxRetryCount {
-            if !completion() {
+        let verifyResult = completion()
+        if verifyResult {
+            self.errorTipsLabel.isHidden = true
+            self.stopCountdown()
+            if isShowPattern {
+                openPatternUserInteractionEnabled()
+            } else {
+                openPasswordUserInteractionEnabled()
+            }
+        } else {
+            if attempts >= self.maxRetryCount {
                 self.errorTipsLabel.text = Localized("SCREENLOCK_ERROR_MORE_TIPS")
                 self.errorTipsLabel.isHidden = false
+            } else if attempts >= attemptsThreshold {
+                let delay = (attempts - 4) * (attempts - 4)
+                self.startCountdown(delay: delay, isShowPattern: isShowPattern, attempts: attempts)
             } else {
                 self.errorTipsLabel.isHidden = true
             }
-        } else if attempts >= attemptsThreshold - 1 {
-            //本次等待时间
-            let delay = (attempts - 4) * (attempts - 4)
-            if attempts >= attemptsThreshold {
-                DTToastHelper.showHud(in: self.view)
-                DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + Double(delay)){
-                    DTToastHelper.hide()
-                    if !completion() {
-                        if nextAttempts >= self.maxRetryCount {
-                            self.errorTipsLabel.text = Localized("SCREENLOCK_ERROR_MORE_TIPS")
-                            self.errorTipsLabel.isHidden = false
-                        } else {
-                            self.showNextTime(nextAttempts: nextAttempts)
-                        }
-                    } else {
-                        self.errorTipsLabel.isHidden = true
-                    }
-                }
-            } else {
-                if !completion() {
-                    if nextAttempts >= self.maxRetryCount {
-                        self.errorTipsLabel.text = Localized("SCREENLOCK_ERROR_MORE_TIPS")
-                        self.errorTipsLabel.isHidden = false
-                    } else {
-                        self.showNextTime(nextAttempts: nextAttempts)
-                    }
-                } else {
-                    self.errorTipsLabel.isHidden = true
-                }
-            }
-        } else {
-            self.errorTipsLabel.isHidden = true
-            if !completion() {
-                //do nothing!
-            }
         }
+    }
+    
+    private func openPatternUserInteractionEnabled() {
+        self.patternView.isUserInteractionEnabled = true
+        self.patternView.shouldPatternEnable = false
+        self.patternView.reset()
+    }
+    
+    private func closePatternUserInteractionEnabled() {
+        self.patternView.shouldPatternEnable = true
+        self.patternView.isUserInteractionEnabled = false
+    }
+    
+    private func openPasswordUserInteractionEnabled() {
+        self.passcodeField.isEnabled = true
+        self.doneButton.setBackgroundColors(upColor: UIColor.ows_signalBrandBlue)
+    }
+    
+    private func closePasswordUserInteractionEnabled() {
+        self.passcodeField.isEnabled = false
+        self.doneButton.setBackgroundColors(upColor: UIColor.color(rgbHex: 0xEAECEF))
     }
     
     @objc public override func doneButtonClick() {
@@ -453,6 +532,15 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
 
     public override var shouldAutorotate: Bool {
         return false
+    }
+    
+    public override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopCountdown()
+    }
+    
+    deinit {
+        stopCountdown()
     }
     
 }

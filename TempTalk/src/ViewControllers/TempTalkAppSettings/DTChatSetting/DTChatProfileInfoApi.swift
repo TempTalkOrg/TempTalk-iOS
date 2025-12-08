@@ -69,5 +69,43 @@ import Foundation
             failure(error);
         });
     }
+    
+    @objc
+    public func profileInfo(uid: String, success:((DTAPIMetaEntity?) -> Void)? = nil , failure:((Error) -> Void)? = nil)  {
+        guard let url = URL(string: self.requestUrl) else {
+            return
+        }
+        var uids: [String] = []
+        uids.append(uid)
+        let params: [String: Any] = ["uids": uids]
+        let request : TSRequest = TSRequest.init(url: url, method: self.requestMethod, parameters: params)
+        request.shouldHaveAuthorizationHeaders = true;
+        self.networkManager.makeRequest(request, success: { response in
+            do {
+                let entity :DTAPIMetaEntity = try MTLJSONAdapter.model(of: DTAPIMetaEntity.self, fromJSONDictionary: response.responseBodyJson as? [AnyHashable : Any]) as! DTAPIMetaEntity
+                if(entity.status != 0 ){
+                    guard let failure = failure else { return }
+                    
+                    let error = NSError(domain: "profileInfo", code: entity.status ,userInfo: [NSLocalizedDescriptionKey:entity.reason])
+                    failure(error)
+                } else {
+                    
+                    guard let responseData = entity.data as? [String : Any] else {
+                        success?(entity)
+                        return
+                    }
+                    success?(entity)
+                }
+            } catch _ {
+                guard let failure = failure else { return }
+                failure(DTErrorWithCodeDescription(DTAPIRequestResponseStatus.dataError, kDTAPIDataErrorDescription))
+            }
+            
+        }, failure: { errorWrapper in
+            guard let failure = failure else { return }
+            let error = errorWrapper.asNSError
+            failure(error);
+        });
+    }
 }
 

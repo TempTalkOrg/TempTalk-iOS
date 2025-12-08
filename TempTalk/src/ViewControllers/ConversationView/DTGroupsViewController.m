@@ -16,7 +16,7 @@
 #import <TTServiceKit/TSConstants.h>
 #import <TTServiceKit/DTGroupBaseInfoEntity.h>
 #import <TTServiceKit/DTToastHelper.h>
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @interface DTGroupsViewController ()<UITableViewDelegate, UITableViewDataSource>
 

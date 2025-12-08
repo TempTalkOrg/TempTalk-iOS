@@ -28,7 +28,9 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 - (BOOL)isEqualToPublicConfigs:(ContactPublicConfigs *)publicConfigs {
-    return ([self.publicName isEqualToString:publicConfigs.publicName] && (self.meetingVersion == publicConfigs.meetingVersion));
+    return ([self.publicName isEqualToString:publicConfigs.publicName] 
+            && (self.meetingVersion == publicConfigs.meetingVersion)
+            && (self.criticalAlert == publicConfigs.criticalAlert));
 }
 @end
 
@@ -43,6 +45,10 @@ NS_ASSUME_NONNULL_BEGIN
     if (self == nil) return nil;
     if (![dictionaryValue.allKeys containsObject:voipKey]) {
         self.voipNotification = YES;
+    }
+    // saveToPhotos 默认为 NO，如果接口返回 true 则设置为 YES
+    if (![dictionaryValue.allKeys containsObject:@"saveToPhotos"]) {
+        self.saveToPhotos = NO;
     }
     
     return self;
@@ -86,6 +92,48 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (NSValueTransformer *)privateConfigsJSONTransformer {
     return [MTLJSONAdapter dictionaryTransformerWithModelClass:ContactPrivateConfig.class];
+}
+
++ (NSValueTransformer *)publicConfigsJSONTransformer {
+    return [MTLJSONAdapter dictionaryTransformerWithModelClass:ContactPublicConfigs.class];
+}
+
++ (NSValueTransformer *)avatarJSONTransformer {
+    return [MTLValueTransformer transformerUsingForwardBlock:^id(id avatarValue, BOOL *success, NSError *__autoreleasing *error) {
+        // 如果已经是字典，直接返回
+        if ([avatarValue isKindOfClass:[NSDictionary class]]) {
+            return avatarValue;
+        }
+        // 如果是字符串，解析为字典
+        if ([avatarValue isKindOfClass:[NSString class]]) {
+            NSString *avatarString = (NSString *)avatarValue;
+            NSData *jsonData = [avatarString dataUsingEncoding:NSUTF8StringEncoding];
+            if (jsonData) {
+                NSError *jsonError;
+                NSDictionary *avatarDict = [NSJSONSerialization JSONObjectWithData:jsonData
+                                                                           options:NSJSONReadingMutableContainers
+                                                                             error:&jsonError];
+                if (!jsonError && [avatarDict isKindOfClass:[NSDictionary class]]) {
+                    return avatarDict;
+                } else {
+                    OWSLogWarn(@"avatar JSONSerialization error: %@", jsonError);
+                }
+            }
+        }
+        return nil;
+    } reverseBlock:^id(NSDictionary *avatarInfo, BOOL *success, NSError *__autoreleasing *error) {
+        // 反向转换：将字典转换为 JSON 字符串
+        if ([avatarInfo isKindOfClass:[NSDictionary class]] && avatarInfo.count > 0) {
+            NSError *jsonError;
+            NSData *jsonData = [NSJSONSerialization dataWithJSONObject:avatarInfo.copy
+                                                               options:0
+                                                                 error:&jsonError];
+            if (jsonData.length && !jsonError) {
+                return [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+            }
+        }
+        return nil;
+    }];
 }
 
 // adapt previous versions privateConfigs are dictionary in database

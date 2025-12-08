@@ -14,7 +14,7 @@
 #import <TTMessaging/UIImageView+ContactAvatar.h>
 #import <TTMessaging/TTMessaging-Swift.h>
 #import <TTServiceKit/DTVirtualThread.h>
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @interface DTHomeVirtualCell()
 

@@ -90,10 +90,17 @@ class DTChatSettingsController : SettingBaseViewController {
             if entity?.status == 0,
                let data = entity?.data,
                let contacts = data["contacts"] as? [[String: Any]],
-               let contact = contacts.first,
-               let privateConfigs = contact["privateConfigs"] as? [String: Any] {
-                self.isSavePhotos = privateConfigs["saveToPhotos"] as? Bool ?? false
-                MediaSavePolicyManager.shared.updateSaveToPhoto(needSave: self.isSavePhotos)
+               let contactDict = contacts.first {
+                do {
+                    let contact = try MTLJSONAdapter.model(of: Contact.self, fromJSONDictionary: contactDict) as? Contact
+                    if let contact = contact,
+                       let privateConfigs = contact.privateConfigs {
+                        self.isSavePhotos = privateConfigs.saveToPhotos
+                        MediaSavePolicyManager.shared.updateSaveToPhoto(needSave: self.isSavePhotos)
+                    }
+                } catch {
+                    Logger.error("getProfileInfo: Failed to parse Contact model: \(error)")
+                }
             }
             self.reloadPage()
         }) { _ in

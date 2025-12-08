@@ -41,7 +41,6 @@ struct ParticipantView: View {
             Logger.info("[swiftUI] participent identity")
             return stringIdentity
         }
-        Logger.info("[swiftUI] participent identity component")
         return recipientId
     }
     

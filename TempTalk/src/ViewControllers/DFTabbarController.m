@@ -14,7 +14,7 @@
 #import <TTServiceKit/TTServiceKit-swift.h>
 #import <TTServiceKit/TSThread.h>
 #import <TTServiceKit/DTThreadHelper.h>
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "UITabBar+BadgeCount.h"
 
 NSString *const kTabBarItemDoubleClickNotification = @"kTabBarItemDoubleClickNotification";

@@ -54,6 +54,8 @@ import DTProto
     var startCallRecipientIds: [String]? = nil
     // 区分start还是accept
     var fromSource: String?
+    // 1v1的另一端是否开启CriticalAlert
+    var otherCriticalAlert: Bool = false
     
     var allParticipantIds: [String] {
         guard let roomContext else {

@@ -5,7 +5,7 @@
 #import "UpdateGroupViewController.h"
 #import "AddToGroupViewController.h"
 #import "AvatarViewHelper.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "ViewControllerUtils.h"
 #import <TTMessaging/BlockListUIUtils.h>
 #import <TTMessaging/ContactTableViewCell.h>

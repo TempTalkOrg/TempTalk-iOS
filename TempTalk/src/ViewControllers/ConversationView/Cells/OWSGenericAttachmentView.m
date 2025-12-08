@@ -4,7 +4,7 @@
 
 #import "OWSGenericAttachmentView.h"
 #import "OWSBezierPathView.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "UIFont+OWS.h"
 #import "UIView+SignalUI.h"
 #import "ViewControllerUtils.h"

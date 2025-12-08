@@ -7,7 +7,7 @@
 
 #import "DTPinPageControl.h"
 #import "DTPinPageDot.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <TTMessaging/Theme.h>
 
 #define DTPinPageControlHeight 50.0

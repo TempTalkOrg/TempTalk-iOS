@@ -3,7 +3,7 @@
 //
 
 #import "AppUpdateNag.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <TTServiceKit/ATAppUpdater.h>
 #import <SignalCoreKit/NSDate+OWS.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>

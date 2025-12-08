@@ -3,7 +3,7 @@
 //
 
 #import "PinEntryView.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <TTMessaging/UIColor+OWS.h>
 #import <TTMessaging/UIFont+OWS.h>
 #import <TTMessaging/UIView+SignalUI.h>

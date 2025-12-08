@@ -729,6 +729,12 @@ extension DTMeetingManager {
         }
     }
     
+    func setCameraRotation(orientation newOrientation: UIInterfaceOrientation) {
+        if let participant = DTMeetingManager.shared.roomContext?.room.localParticipant {
+            participant.set(orientation: newOrientation)
+        }
+    }
+    
     func callShowToast(message: String) {
         let rootWindow = OWSWindowManager.shared().rootWindow
         let topVC = rootWindow.findTopViewController()
@@ -754,6 +760,75 @@ extension DTMeetingManager {
                 }
             }
         }
+    }
+    
+    func getProfileInfo(
+        uid: String,
+        completion: @escaping (Bool) -> Void
+    ) {
+        TSAccountManager.shared.getContactMessage(byReceptid: uid, success: { [weak self] contact in
+            guard let self = self else { return }
+            self.databaseStorage.asyncWrite { writeTransaction in
+                let contactsManager = Environment.shared.contactsManager
+                var signalAccount = contactsManager?.signalAccount(forRecipientId: uid, transaction: writeTransaction)
+                
+                if signalAccount == nil {
+                    signalAccount = SignalAccount(recipientId: uid)
+                }
+                
+                signalAccount?.contact = contact
+                
+                if let newAccount = signalAccount?.copy() as? SignalAccount {
+                    contactsManager?.updateSignalAccount(
+                        withRecipientId: uid,
+                        withNewSignalAccount: newAccount,
+                        with: writeTransaction
+                    )
+                }
+                
+                writeTransaction.addAsyncCompletionOnMain {
+                    if let publicConfigs = contact.publicConfigs {
+                        completion(publicConfigs.criticalAlert)
+                    }
+                }
+            }
+        }, failure: { error in
+            Logger.info("\(self.logTag) get profile critical error \(error.localizedDescription)")
+            completion(false)
+        })
+    }
+    
+    func syncCriticalAlertNotificationSettingsIfNeeded() {
+        guard let localNumber = TSAccountManager.localNumber() else {
+            return
+        }
+        // 获取系统CriticalAlert状态
+        let enabled = isCriticalAlertEnabled()
+        self.getProfileInfo(uid: localNumber) { value in
+            if value != enabled {
+                DTChatSetProfileApi().setProfileCriticalInfo(enabled) { entity in
+                    if entity?.status == 0 {
+                        Logger.info("\(self.logTag) set profile critical success enable\(enabled)")
+                    }
+                } failure: { error in
+                    Logger.info("\(self.logTag) set profile critical error \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func isCriticalAlertEnabled() -> Bool {
+        let center = UNUserNotificationCenter.current()
+        var enabled = false
+        let semaphore = DispatchSemaphore(value: 0)
+
+        center.getNotificationSettings { settings in
+            enabled = (settings.criticalAlertSetting == .enabled)
+            semaphore.signal()
+        }
+
+        semaphore.wait()
+        return enabled
     }
 }
 

@@ -5,7 +5,7 @@
 #import "OWSLinkedDevicesTableViewController.h"
 #import "OWSDeviceTableViewCell.h"
 #import "OWSLinkDeviceViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "UIViewController+Permissions.h"
 #import <TTServiceKit/NSTimer+OWS.h>
 #import <TTServiceKit/OWSDevice.h>

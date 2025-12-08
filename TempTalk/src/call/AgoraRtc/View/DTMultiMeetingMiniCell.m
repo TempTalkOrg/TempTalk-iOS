@@ -13,7 +13,7 @@
 #import <TTMessaging/UIView+SignalUI.h>
 #import <TTMessaging/UIColor+OWS.h>
 #import <Lottie/Lottie-Swift.h>
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @interface DTMultiMeetingMiniCell ()
 

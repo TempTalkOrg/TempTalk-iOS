@@ -39,7 +39,9 @@ enum AudioPlayMode {
     case playAndRecord
 }
 
-let defaultRoomName = "TempTalk Call"
+var defaultRoomName: String {
+    return "\(TSConstants.appDisplayName) Call"
+}
 
 @objcMembers public class DTLiveKitCallModel: NSObject, ObservableObject {
     

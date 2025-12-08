@@ -8,7 +8,7 @@
 #import "DTForwardMessageHelper.h"
 #import <CoreServices/CoreServices.h>
 #import "ConversationViewItem.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @implementation DTForwardMessageHelper
 

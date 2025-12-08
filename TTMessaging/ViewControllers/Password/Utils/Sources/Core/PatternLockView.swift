@@ -27,10 +27,11 @@ public struct Matrix: Equatable {
 /// Grid不同的状态显示不同的参数
 public struct GridPropertyStatus<T> {
     public private(set) var map: [GridStatus: T] = [GridStatus: T]()
-    public init(normal: T? = nil, connect: T? = nil, error: T? = nil) {
+    public init(normal: T? = nil, connect: T? = nil, error: T? = nil, enable: T? = nil) {
         map[.normal] = normal
         map[.connect] = connect
         map[.error] = error
+        map[.enable] = enable
     }
 }
 
@@ -47,6 +48,7 @@ public enum GridStatus {
     case normal
     case connect
     case error
+    case enable
 }
 
 public enum ConnectLineStatus {
@@ -91,10 +93,11 @@ public protocol PatternLockViewDelegate: AnyObject {
 
 open class PatternLockView: UIView {
     public weak var delegate: PatternLockViewDelegate?
-    internal let config: PatternLockViewConfig
+    internal var config: PatternLockViewConfig
     internal lazy var grids: [PatternLockGrid] = { [PatternLockGrid]() }()
     internal lazy var connectedGrids: [PatternLockGrid] = { [PatternLockGrid]() }()
-    private var isTaskDelaying = false
+    var isTaskDelaying = false
+    var shouldPatternEnable = false
 
     public init(config: PatternLockViewConfig) {
         self.config = config
@@ -147,7 +150,8 @@ open class PatternLockView: UIView {
     //MARK: - Event
     @objc public func reset() {
         isTaskDelaying = false
-        connectedGrids.forEach { $0.setStatus(.normal) }
+        connectedGrids.forEach { $0.setStatus(!shouldPatternEnable ? .normal : .enable) }
+        grids.forEach { $0.setStatus(!shouldPatternEnable ? .normal : .enable) }
         connectedGrids.removeAll()
         config.connectLine?.reset()
     }

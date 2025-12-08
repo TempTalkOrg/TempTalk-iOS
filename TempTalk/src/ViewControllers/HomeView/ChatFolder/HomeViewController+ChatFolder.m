@@ -17,7 +17,7 @@
 #import "UIColor+OWS.h"
 #import "UIFont+OWS.h"
 #import "DTChatFolderManager.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 static NSString *DTChatFolderBarKey = @"kChatFolderBarKey";
 

@@ -17,7 +17,7 @@
 #import <TTServiceKit/DTGroupConfig.h>
 #import <TTServiceKit/DTFetchThreadConfigAPI.h>
 #import "OWSConversationSettingsViewDelegate.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 extern NSString *const DTGroupMessageExpiryConfigChangedNotification;
 extern NSString *const DTConversationSharingConfigurationChangeNotification;

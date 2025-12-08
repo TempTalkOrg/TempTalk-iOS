@@ -20,6 +20,7 @@ struct CallScreenShareView: View {
     @State private var isGroupMembers: Bool = false
     // 展示快速点击的弹幕
     @State private var showQuickPanel = false
+    @State private var showPlaceholder = true
     
     @StateObject private var timerManager = TimerDataManager.shared
     @StateObject private var roomDataManager = RoomDataManager.shared
@@ -73,38 +74,45 @@ struct CallScreenShareView: View {
             }
             .ignoresSafeArea()
             .onAppear {
+                DTMeetingManager.shared.setCameraRotation(orientation: .landscapeRight)
                 viewModel.hiddenTopBottomBar()
             }
             .onDisappear {
+                DTMeetingManager.shared.setCameraRotation(orientation: .portrait)
                 Task { await cleanUpResources() }
             }
         }
     }
     
     private func screenShareContentView(geometry: GeometryProxy) -> some View {
-        Group {
+        ZStack {
             if let publication = roomCtx.screenSharePublication,
                !publication.isMuted,
                let track = publication.track as? VideoTrack
             {
                 ZoomableScrollView {
                     let notchOffset = geometry.safeAreaInsets.leading
-                    
-                    SwiftUIVideoView(
-                        track,
-                        layoutMode: .fit,
-                        pinchToZoomOptions: .resetOnRelease,
-                        isRendering: $isRendering
-                    )
-                    .frame(
-                        maxWidth: max(screenWidth, screenHeight) - 200,
-                        maxHeight: min(screenWidth, screenHeight),
-                        alignment: .center
-                    )
-                    .offset(x: notchOffset > 0 ? -notchOffset : 0)
+
+                    ZStack {
+                        SwiftUIVideoView(
+                            track,
+                            layoutMode: .fit,
+                            pinchToZoomOptions: .resetOnRelease,
+                            isRendering: $isRendering
+                        )
+                        .id(track.sid)
+                        .frame(
+                            maxWidth: max(screenWidth, screenHeight) - 200,
+                            maxHeight: min(screenWidth, screenHeight),
+                            alignment: .center
+                        )
+                        .offset(x: notchOffset > 0 ? -notchOffset : 0)
+                    }
+                }
+                .onChange(of: isRendering) { rendering in
+                    showPlaceholder = !rendering
                 }
                 .ignoresSafeArea()
-                .background(Color.dtBackground)
                 .onTapGesture {
                     withAnimation {
                         viewModel.showControls.toggle()
@@ -113,10 +121,28 @@ struct CallScreenShareView: View {
                         }
                     }
                 }
-
-                if !isRendering {
-                    ProgressView().progressViewStyle(CircularProgressViewStyle())
-                }
+            }
+            
+            if showPlaceholder {
+                waitingForScreenPlaceholder
+                        .transition(.opacity)
+            }
+        }
+    }
+    
+    // 占位图视图
+    private var waitingForScreenPlaceholder: some View {
+        ZStack {
+            Color.dtBackground.ignoresSafeArea()
+            
+            VStack(spacing: 8) {
+                Image("call_screen_share")
+                    .font(.system(size: 20))
+                    .foregroundColor(.gray.opacity(0.6))
+                
+                Text("Waiting for screen…")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.gray.opacity(0.8))
             }
         }
     }

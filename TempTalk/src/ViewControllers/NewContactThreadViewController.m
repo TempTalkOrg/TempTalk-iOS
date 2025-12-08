@@ -8,7 +8,7 @@
 #import "NewGroupViewController.h"
 #import "NewNonContactConversationViewController.h"
 #import "OWSTableViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "SignalApp.h"
 #import "UIColor+OWS.h"
 #import "UIView+SignalUI.h"

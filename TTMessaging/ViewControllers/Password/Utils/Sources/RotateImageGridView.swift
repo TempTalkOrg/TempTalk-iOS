@@ -26,6 +26,9 @@ open class RotateImageGridView: ImageGridView {
             imageView.layer.add(anim, forKey: "rotate")
         case .error:
             break
+        case .enable:
+            imageView.layer.removeAllAnimations()
+            break
         }
     }
 

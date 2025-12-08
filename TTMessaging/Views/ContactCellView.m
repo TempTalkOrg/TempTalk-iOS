@@ -294,14 +294,24 @@ const CGFloat kContactCellAvatarTextMargin = 12;
     OWSAssertDebug(thread);
     self.thread = thread;
     
+    BOOL isContactThread = NO;
+    if ([thread isKindOfClass:[TSContactThread class]]) {
+        isContactThread = YES;
+        self.recipientId = thread.contactIdentifier;
+    }
+    
     // Update fonts to reflect changes to dynamic type.
     [self configureFonts];
 
     self.contactsManager = contactsManager;
     
-    __block NSString * threadName = nil;
+    __block NSString *threadName = nil;
+    __block SignalAccount *account = nil;
     [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
         threadName = [thread nameWithTransaction:readTransaction];
+        if (isContactThread) {
+            account = [self.contactsManager signalAccountForRecipientId:self.recipientId transaction:readTransaction];
+        }
     }];
 
     threadName = threadName ?: @"Unknown";
@@ -319,7 +329,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
                                         }];
     self.nameView.attributeName = attributedText;
 
-    if ([thread isKindOfClass:[TSContactThread class]]) {
+    if (isContactThread) {
         self.recipientId = thread.contactIdentifier;
 
         [[NSNotificationCenter defaultCenter] addObserver:self
@@ -330,7 +340,6 @@ const CGFloat kContactCellAvatarTextMargin = 12;
         if (thread.isNoteToSelf) {
             [self.avatarView dt_setImageWith:nil placeholderImage:[UIImage imageNamed:@"icon_note_to_self"] recipientId:[TSAccountManager sharedInstance].localNumber];
         } else {
-            SignalAccount *account = [self.contactsManager signalAccountForRecipientId:self.recipientId];
             [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:self.recipientId displayName:account.contactFullName completion:nil];
         }
     } else {

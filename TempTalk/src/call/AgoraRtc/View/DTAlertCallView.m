@@ -17,7 +17,7 @@
 #import <TTServiceKit/TSIncomingMessage.h>
 #import <TTServiceKit/DTCardMessageEntity.h>
 #import <TTServiceKit/NSString+DTMarkdown.h>
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @interface DTAlertCallView ()
 

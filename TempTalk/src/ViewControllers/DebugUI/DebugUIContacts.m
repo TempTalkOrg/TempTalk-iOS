@@ -4,7 +4,7 @@
 
 #import "DebugUIContacts.h"
 #import "OWSTableViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <Contacts/Contacts.h>
 
 NS_ASSUME_NONNULL_BEGIN

@@ -3,7 +3,7 @@
 //
 
 #import "ConversationInputTextView.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <SignalCoreKit/NSString+OWS.h>
 
 NS_ASSUME_NONNULL_BEGIN

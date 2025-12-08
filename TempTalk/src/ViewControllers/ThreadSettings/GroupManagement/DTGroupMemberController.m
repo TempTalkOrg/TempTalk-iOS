@@ -6,7 +6,7 @@
 //
 
 #import "DTGroupMemberController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "SignalApp.h"
 #import "ViewControllerUtils.h"
 #import <TTMessaging/BlockListUIUtils.h>

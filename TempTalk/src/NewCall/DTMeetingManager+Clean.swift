@@ -30,6 +30,7 @@ extension DTMeetingManager {
 
         isMinimize = false
         showErrorTost = false
+        otherCriticalAlert = false
         hasTriggeredRating = false
 
         DispatchMainThreadSafe {

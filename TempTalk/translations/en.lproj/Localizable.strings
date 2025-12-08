@@ -2445,7 +2445,7 @@
 "SCREENLOCK_PASSCODESUCCESS_TITLE" = "Success!";
 "SCREENLOCK_PASSCODESUCCESS_TIPS" = "Safely save this code. If you forget your passcode, you’ll need to log out or reinstall the app.";
 "SCREENLOCK_PASSCODESUCCESS_CONFIRM" = "I understand";
-"SCREENLOCK_PASSCODESUCCESS_ATTEMPTS" = "Next attempt will be delayed by %ds.";
+"SCREENLOCK_PASSCODESUCCESS_ATTEMPTS" = "Yelling Unavailable. Try again in %ds.";
 "LOGIN_SUBIT_TOO_MANY_ATTEMPTS" = "Too many attempts. Please try again later.";
 
 "SCREENLOCK_UPGRADE_TITLE" = "Feature Update";

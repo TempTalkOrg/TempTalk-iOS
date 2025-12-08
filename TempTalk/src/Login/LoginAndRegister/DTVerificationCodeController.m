@@ -14,7 +14,7 @@
 #import <TTServiceKit/TSAccountManager.h>
 #import "AppDelegate.h"
 #import "SignalApp.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "DTChatLoginUtils.h"
 #import <TTServiceKit/Localize_Swift.h>
 #import <TTServiceKit/DTScreenLockEntity.h>
@@ -793,6 +793,7 @@ static dispatch_source_t _timer;
 
 - (void)verificationWasCompleted {
     [[DTCallManager sharedInstance] requestForConfigMeetingversion];
+    [[DTMeetingManager shared] syncCriticalAlertNotificationSettingsIfNeeded];
     OWSLogInfo(@"verificationWasCompleted ");
     /// 通过邮箱注册
     if(self.loginModeType == DTLoginModeTypeRegisterEmailFromLogin) {

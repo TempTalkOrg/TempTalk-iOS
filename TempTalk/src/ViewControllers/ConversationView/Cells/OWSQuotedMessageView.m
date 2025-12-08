@@ -6,7 +6,7 @@
 #import "ConversationViewItem.h"
 #import "Environment.h"
 #import "OWSBubbleView.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <TTMessaging/OWSContactsManager.h>
 #import <TTMessaging/TTMessaging-Swift.h>
 #import <TTMessaging/UIColor+OWS.h>

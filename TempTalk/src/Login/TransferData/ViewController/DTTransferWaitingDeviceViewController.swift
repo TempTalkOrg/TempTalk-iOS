@@ -152,7 +152,7 @@ import TTMessaging
         label.font = UIFont.systemFont(ofSize: 14)
         label.textAlignment = .center
         label.numberOfLines = .zero
-        label.text = Localized("Open TempTalk on your old device, bring it nearby, and make sure Wi-Fi and Bluetooth are enabled on both devices. Then, Scan the following QR code with the old device.")
+        label.text = String(format: Localized("Open %@ on your old device, bring it nearby, and make sure Wi-Fi and Bluetooth are enabled on both devices. Then, Scan the following QR code with the old device."), TSConstants.appDisplayName)
         return label
     }()
     

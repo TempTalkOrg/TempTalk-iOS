@@ -7,7 +7,7 @@
 //
 
 #import "DTInviteRequestHandler.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @implementation DTInviteRequestHandler
 

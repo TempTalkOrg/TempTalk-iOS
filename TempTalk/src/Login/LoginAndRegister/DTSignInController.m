@@ -10,7 +10,7 @@
 #import "DTTextField.h"
 #import <TTServiceKit/DTToastHelper.h>
 #import "DTVerificationCodeController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "AppDelegate.h"
 #import "DTChatLoginUtils.h"
 #import "DTChativeMacro.h"

@@ -6,7 +6,7 @@
 #import "ConversationViewItem.h"
 #import "DateUtil.h"
 #import "OWSQuotedReplyModel.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <SignalCoreKit/NSDate+OWS.h>
 #import <TTMessaging/OWSContactsManager.h>
 #import <TTMessaging/TTMessaging-Swift.h>
@@ -326,9 +326,9 @@ NS_ASSUME_NONNULL_BEGIN
                 OWSLogInfo(@"[CVM:configure] loadInitial message success");
             }
             OWSLogInfo(@"[CVM:configure] initial page loaded. canLoadOlder=%d canLoadNewer=%d", self.messageMapping.canLoadOlder, self.messageMapping.canLoadNewer);
-            if (![self reloadViewItemsWithTransaction:transaction]) {
-                OWSLogInfo(@"failed to reload view items in configureForThread.");
-            }
+//            if (![self reloadViewItemsWithTransaction:transaction]) {
+//                OWSLogInfo(@"failed to reload view items in configureForThread.");
+//            }
         }];
         OWSLogInfo(@"[CVM:configure] end");
     }];

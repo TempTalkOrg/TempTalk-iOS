@@ -15,7 +15,7 @@
 #import <TTServiceKit/DTVirtualThread.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import <TTServiceKit/Localize_Swift.h>
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @interface DTAlertCallViewManager () <DTAlertCallViewDelegate>
 

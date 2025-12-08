@@ -159,15 +159,6 @@ final class ConversationViewController: OWSViewController {
         if viewHasEverAppeared {
             updateInputAccessoryPlaceholderHeight()
         }
-        
-        let width = floor(view.width)
-        if conversationStyle.viewWidth != width {
-            Logger.info("[CVC:viewDidLayoutSubviews] updating conversationStyle.viewWidth from \(conversationStyle.viewWidth) -> \(width), bounds=\(view.bounds), collectionFrame=\(collectionView.frame)")
-            conversationStyle.viewWidth = width
-            layout.invalidateLayout()
-        } else {
-            Logger.info("[CVC:viewDidLayoutSubviews] width OK: \(width), contentSize=\(collectionView.contentSize)")
-        }
     }
     
     override func viewDidAppear(_ animated: Bool) {

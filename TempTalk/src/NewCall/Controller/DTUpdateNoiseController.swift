@@ -46,6 +46,7 @@ class DTUpdateNoiseController: OWSTableViewController {
         super.viewDidLoad()
         updateTableContents()
         setupKVOObservers()
+        requestCriticalAlertData()
     }
     
     deinit {
@@ -122,15 +123,15 @@ class DTUpdateNoiseController: OWSTableViewController {
     }
     
     func moreUpdateCell() -> UITableViewCell {
-        
         let cell = OWSTableItem.newCell()
         cell.preservesSuperviewLayoutMargins = true
         cell.contentView.preservesSuperviewLayoutMargins = true
-        cell.separatorInset = UIEdgeInsets(top: 0, left: UIScreen.main.bounds.size.width, bottom: 0, right: 0)
+        cell.separatorInset = UIEdgeInsets(top: 0, left: UIScreen.main.bounds.width, bottom: 0, right: 0)
         cell.selectionStyle = .none
         cell.backgroundColor = UIColor(rgbHex: 0x2B3139)
         cell.contentView.backgroundColor = UIColor(rgbHex: 0x2B3139)
-        
+
+        // --- UI Elements ---
         let inviteTextView = VerticalIconTextView(
             image: UIImage(named: "calling_invite"),
             title: Localized("CALL_INVITE_MEMBERS")
@@ -140,27 +141,26 @@ class DTUpdateNoiseController: OWSTableViewController {
             let inviteNav = OWSNavigationController(rootViewController: inviteVC)
             self.navigationController?.present(inviteNav, animated: true)
         }
-        
-        
+
         let switchCameraTextView = VerticalIconTextView(
             image: UIImage(named: "call_switch"),
             title: Localized("CALL_MORE_SWITCH_CAMERA")
         ) {
             DTMeetingManager.shared.switchCamera()
         }
-        
+
         let criticalTextView = VerticalIconTextView(
             image: UIImage(named: "call_critical"),
             title: Localized("CALL_MORE_CRITICAL_ALERT")
         ) {
-            self.dismiss(animated: true, completion: { [weak self] in
+            self.dismiss(animated: true) { [weak self] in
                 guard self != nil else { return }
                 Task {
                     await DTMeetingManager.shared.sendCriticalAlertWithBarrage(Localized("MEETING_CRITICAL_ALERT_DANMU"))
                 }
-            })
+            }
         }
-        
+
         let raiseHandTextView = VerticalIconTextView(
             image: UIImage(named: "calling_lowerHand"),
             selectedImage: UIImage(named: "calling_raiseHand"),
@@ -168,9 +168,11 @@ class DTUpdateNoiseController: OWSTableViewController {
         ) {
             if RoomDataManager.shared.localRaiseHand {
                 Task {
-                    await DTMeetingManager.shared.handCancelRemoteSyncStatus(participantId: DTMeetingManager.shared.roomContext?.room.localParticipant.identity?.stringValue.components(separatedBy: ".").first ?? "")
+                    await DTMeetingManager.shared.handCancelRemoteSyncStatus(
+                        participantId: DTMeetingManager.shared.roomContext?.room.localParticipant.identity?.stringValue.split(separator: ".").first.map(String.init) ?? ""
+                    )
                     RoomDataManager.shared.localRaiseHand = false
-               }
+                }
             } else {
                 Task {
                     await DTMeetingManager.shared.handRaiseRemoteSyncStatus()
@@ -178,43 +180,31 @@ class DTUpdateNoiseController: OWSTableViewController {
                 }
             }
         }
-            
-        if DTMeetingManager.shared.currentCall.callType == .private {
-            var arrangedSubviews: [UIView] = [inviteTextView, switchCameraTextView]
-            let isCalled = DTMeetingManager.shared.inMeeting ||
-            DTMeetingManager.shared.currentCall.callState != .outgoing
-            if isCalled {
-                arrangedSubviews = [inviteTextView, switchCameraTextView]
-            } else {
-                arrangedSubviews.append(criticalTextView)
-            }
-            
-            let contentRow = UIStackView(arrangedSubviews: arrangedSubviews)
-            contentRow.axis = .horizontal
-            contentRow.alignment = .center
-            contentRow.distribution = .equalSpacing
-            contentRow.spacing = 5
-            contentRow.isLayoutMarginsRelativeArrangement = true
-            
-            // 根据实际按钮数量计算 padding
-            let actualItemsCount = CGFloat(arrangedSubviews.count)
-            let padding = (screenWidth - 50 - 70 * actualItemsCount) / actualItemsCount
-            contentRow.layoutMargins = UIEdgeInsets(top: 0, left: padding , bottom: 0, right: padding)
-            cell.contentView.addSubview(contentRow)
-            contentRow.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12))
-        } else {
-            let contentRow = UIStackView(arrangedSubviews: [inviteTextView, raiseHandTextView, switchCameraTextView])
-            contentRow.axis = .horizontal
-            contentRow.alignment = .center
-            contentRow.distribution = .equalSpacing
-            contentRow.spacing = 5
-            contentRow.isLayoutMarginsRelativeArrangement = true
-            let padding = (screenWidth - 50 - 70 * itemsCount_group) / itemsCount_group
-            contentRow.layoutMargins = UIEdgeInsets(top: 0, left: padding , bottom: 0, right: padding)
-            cell.contentView.addSubview(contentRow)
-            contentRow.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12))
-        }
+
+        let contentRow = UIStackView()
+        contentRow.axis = .horizontal
+        contentRow.alignment = .center
+        contentRow.distribution = .equalSpacing
+        contentRow.spacing = 5
+        contentRow.isLayoutMarginsRelativeArrangement = true
+        cell.contentView.addSubview(contentRow)
+        contentRow.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12))
         
+        if DTMeetingManager.shared.currentCall.callType == .private,
+           !DTMeetingManager.shared.inMeeting,
+           DTMeetingManager.shared.currentCall.callState == .outgoing {
+            if DTMeetingManager.shared.otherCriticalAlert {
+                self.updateSubviews([inviteTextView, switchCameraTextView, criticalTextView], contentRow: contentRow)
+            } else {
+                self.updateSubviews([inviteTextView, switchCameraTextView], contentRow: contentRow)
+            }
+        } else if DTMeetingManager.shared.currentCall.callType != .private {
+            let items = [inviteTextView, raiseHandTextView, switchCameraTextView]
+            updateSubviews(items, contentRow: contentRow)
+        } else {
+            self.updateSubviews([inviteTextView, switchCameraTextView], contentRow: contentRow)
+        }
+
         return cell
     }
     
@@ -224,6 +214,38 @@ class DTUpdateNoiseController: OWSTableViewController {
             return
         }
         roomContext.setDenoiseFilter(enabled: noiseSwitch.isOn)
+    }
+    
+    func updateSubviews(_ subviews: [UIView], contentRow: UIStackView) {
+        contentRow.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for view in subviews {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            contentRow.addArrangedSubview(view)
+            let widthConstraint = view.widthAnchor.constraint(equalToConstant: 80) // 固定宽度
+            widthConstraint.priority = .required
+            widthConstraint.isActive = true
+        }
+        let count = CGFloat(subviews.count)
+        let padding = max(8, (screenWidth - 50 - 80 * count) / count) // 防止过小
+        contentRow.layoutMargins = UIEdgeInsets(top: 0, left: padding, bottom: 0, right: padding)
+        contentRow.isLayoutMarginsRelativeArrangement = true
+        contentRow.setNeedsLayout()
+        contentRow.layoutIfNeeded()
+    }
+    
+    func requestCriticalAlertData() {
+        if DTMeetingManager.shared.currentCall.callType == .private,
+           !DTMeetingManager.shared.inMeeting,
+           DTMeetingManager.shared.currentCall.callState == .outgoing,
+           let otherParticipantId = DTMeetingManager.shared.currentCall.conversationId {
+            DTMeetingManager.shared.getProfileInfo(uid: otherParticipantId) { enableCritical in
+                DispatchMainThreadSafe {
+                    if DTMeetingManager.shared.otherCriticalAlert != enableCritical {
+                        self.updateTableContents()
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -9,7 +9,7 @@
 #import "OWS2FASettingsViewController.h"
 #import "OWSScreenLockUI.h"
 #import "PushManager.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "SignalApp.h"
 #import "ViewControllerUtils.h"
 #import <TTMessaging/AppSetup.h>
@@ -416,6 +416,8 @@ static NSTimeInterval launchStartedAt;
     AppReadinessRunNowOrWhenAppDidBecomeReadyAsync(^{
         [self handleActivation];
         [DTMeetingManager.shared syncServerCalls];
+        // 同步服务端配置
+        [[DTMeetingManager shared] syncCriticalAlertNotificationSettingsIfNeeded];
     });
 
     // Clear all notifications whenever we become active.
@@ -1078,6 +1080,14 @@ extern bool bScreenLockDone;
             return UIInterfaceOrientationMaskPortrait | UIInterfaceOrientationMaskLandscape;
         }
     } else if (window.windowLevel == UIWindowLevel_ScreenBlocking() || window.windowLevel == UIWindowLevel_Background) {
+        UIViewController *topVC = [window findTopViewController];
+        if (topVC) {
+            NSString *className = NSStringFromClass([topVC class]);
+            if ([className containsString:@"DTUnlockScreenViewController"] ||
+                [className containsString:@"DTScreenLockBaseViewController"]) {
+                return UIInterfaceOrientationMaskPortrait;
+            }
+        }
         DTMeetingManager *meetingManager = [DTMeetingManager shared];
         if (!meetingManager.hasMeeting) {
             return UIInterfaceOrientationMaskPortrait;

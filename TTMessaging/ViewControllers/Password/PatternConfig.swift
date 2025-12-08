@@ -6,9 +6,10 @@
 //  Copyright © 2025 Difft. All rights reserved.
 //
 
-let normalColor: UIColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0xB7BDC6) : UIColor.color(rgbHex: 0x474D57)
-let selectedColor: UIColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0xEAECEF) : UIColor.color(rgbHex: 0x1E2329)
+let normalColor: UIColor = UIColor.color(rgbHex: 0x848E9C)
+let selectedColor: UIColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0xFFFFFF) : UIColor.color(rgbHex: 0x1E2329)
 let warnColor: UIColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0xD9271E) : UIColor.color(rgbHex: 0xF84135)
+let outerColor: UIColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x474D57) : UIColor.color(rgbHex: 0xEAECEF)
 let lineColor: UIColor = UIColor.color(rgbHex: 0x848E9C)
 let noLineColor: UIColor = UIColor.clear
 
@@ -24,9 +25,9 @@ struct PatternLockConfig: PatternLockViewConfig {
     init() {
         initGridClosure = {(matrix) -> PatternLockGrid in
             let gridView = GridView()
-            let outerFillColorStatus = GridPropertyStatus<UIColor>(connect: selectedColor, error: normalColor)
-            gridView.outerRoundConfig = RoundConfig(radius: 8, fillColorStatus: outerFillColorStatus)
-            let innerFillColorStatus = GridPropertyStatus<UIColor>(normal: normalColor)
+            let outerFillColorStatus = GridPropertyStatus<UIColor>(connect: outerColor)
+            gridView.outerRoundConfig = RoundConfig(radius: 16, fillColorStatus: outerFillColorStatus)
+            let innerFillColorStatus = GridPropertyStatus<UIColor>(normal: normalColor, connect: selectedColor, error: selectedColor, enable: outerColor)
             gridView.innerRoundConfig = RoundConfig(radius: 8, fillColorStatus: innerFillColorStatus)
             return gridView
         }
@@ -34,7 +35,7 @@ struct PatternLockConfig: PatternLockViewConfig {
         let pathEnable = ScreenLock.shared.isScreenLockPatternPathEnabled()
         let color = pathEnable ? lineColor : noLineColor
         lineView.lineColorStatus = .init(normal: color, error: color)
-        lineView.lineWidth = 4
+        lineView.lineWidth = 6
         connectLine = lineView
     }
 }

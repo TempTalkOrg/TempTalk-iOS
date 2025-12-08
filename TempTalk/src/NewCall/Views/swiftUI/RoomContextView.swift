@@ -201,11 +201,17 @@ struct CallerWaitingView: View {
         callingStartTime = Date()
         showTimeoutAlert = false
         
-        // 15秒后显示超时提示
-        callingTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
-            DispatchQueue.main.async {
-                if callingStartTime != nil {
-                    showTimeoutAlert = true
+        if let otherParticipantId = currentCall.conversationId {
+            DTMeetingManager.shared.getProfileInfo(uid: otherParticipantId) { value in
+                DTMeetingManager.shared.otherCriticalAlert = value
+            }
+            
+            // 15秒后显示超时提示
+            callingTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
+                DispatchQueue.main.async {
+                    if callingStartTime != nil {
+                        showTimeoutAlert = DTMeetingManager.shared.otherCriticalAlert
+                    }
                 }
             }
         }

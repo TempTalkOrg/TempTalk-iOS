@@ -13,7 +13,7 @@
 #import <TTMessaging/Environment.h>
 #import <TTMessaging/UIImageView+ContactAvatar.h>
 #import "OWSAvatarBuilder.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @interface DTAddToGroupItem()
 @property(nonatomic,strong) DTAvatarImageView *iconImage;

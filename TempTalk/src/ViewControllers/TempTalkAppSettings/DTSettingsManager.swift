@@ -36,11 +36,18 @@ extension DTSettingsManager: DTSettingsManagerProtocol {
             if entity?.status == 0,
                let data = entity?.data,
                let contacts = data["contacts"] as? [[String: Any]],
-               let contact = contacts.first,
-               let privateConfigs = contact["privateConfigs"] as? [String: Any] {
-                let saveToPhotos = privateConfigs["saveToPhotos"] as? Bool ?? false
-                MediaSavePolicyManager.shared.updateSaveToPhoto(needSave: saveToPhotos)
-                Logger.info("sync save to photos \(saveToPhotos)")
+               let contactDict = contacts.first {
+                do {
+                    let contact = try MTLJSONAdapter.model(of: Contact.self, fromJSONDictionary: contactDict) as? Contact
+                    if let contact = contact,
+                       let privateConfigs = contact.privateConfigs {
+                        let saveToPhotos = privateConfigs.saveToPhotos
+                        MediaSavePolicyManager.shared.updateSaveToPhoto(needSave: saveToPhotos)
+                        Logger.info("sync save to photos \(saveToPhotos)")
+                    }
+                } catch {
+                    Logger.error("syncRemoteProfileInfo: Failed to parse Contact model: \(error)")
+                }
             }
         }) { _ in
             Logger.info("sync save to photos failure")

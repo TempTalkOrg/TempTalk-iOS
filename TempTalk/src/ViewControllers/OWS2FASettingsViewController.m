@@ -4,7 +4,7 @@
 
 #import "OWS2FASettingsViewController.h"
 #import "OWSTableViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "TTMessaging.h"
 #import <SignalCoreKit/NSString+OWS.h>
 #import <TTMessaging/TTMessaging-Swift.h>

@@ -15,7 +15,7 @@
 #import <TTMessaging/UIImageView+ContactAvatar.h>
 #import "OWSAvatarBuilder.h"
 #import <TTServiceKit/TSAccountManager.h>
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @interface DTHandupTableContainerCell () <UITableViewDataSource, UITableViewDelegate>
 

@@ -107,7 +107,7 @@ import TTMessaging
     func showExitForReloadDatabaseAlert()  {
         let alertController = UIAlertController(
             title: nil,
-            message: Localized("Please restart TempTalk"),
+            message: String(format: Localized("Please restart %@"), TSConstants.appDisplayName),
             preferredStyle: .alert
         )
         

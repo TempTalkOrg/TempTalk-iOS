@@ -4,7 +4,7 @@
 
 #import "PushManager.h"
 #import "AppDelegate.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "SignalApp.h"
 #import "ThreadUtil.h"
 #import <TTMessaging/OWSContactsManager.h>

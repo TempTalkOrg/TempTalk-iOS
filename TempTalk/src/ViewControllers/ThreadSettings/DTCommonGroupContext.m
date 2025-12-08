@@ -7,7 +7,7 @@
 //
 
 #import "DTCommonGroupContext.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "TSContactThread.h"
 
 @interface DTCommonGroupContext ()

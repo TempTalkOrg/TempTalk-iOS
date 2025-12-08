@@ -40,7 +40,7 @@ def crashlytics_pods
   pod 'FirebasePerformance', '~> 10.24.0'
 end
 
-target 'TempTalk' do
+target 'Yelling' do
   shared_pods
   crashlytics_pods
   pod 'SSZipArchive', '2.4.2', :inhibit_warnings => true

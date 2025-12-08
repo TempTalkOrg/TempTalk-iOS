@@ -6,7 +6,7 @@
 //
 
 #import "DTConversationPinView.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <TTMessaging/Theme.h>
 #import "DTPinPageControl.h"
 #import <TTServiceKit/TTServiceKit-Swift.h>

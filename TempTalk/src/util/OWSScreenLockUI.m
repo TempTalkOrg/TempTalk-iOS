@@ -4,7 +4,7 @@
 
 #import "OWSScreenLockUI.h"
 #import "OWSWindowManager.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <TTMessaging/ScreenLockViewController.h>
 #import <TTMessaging/TTMessaging-Swift.h>
 #import <TTMessaging/UIView+SignalUI.h>
@@ -319,18 +319,36 @@ bool bScreenLockDone = false;
     self.isShowingScreenLockUI = YES;
     
     DTScreenLockBaseViewController *unlockScreenVc = [DTScreenLockBaseViewController buildScreenLockViewWithViewType:DTScreenLockViewTypeUnlockScreen doneCallback:^(NSString * _Nullable passcode) {
-            OWSLogInfo(@"%@ unlock screen lock succeeded.", self.logTag);
+        OWSLogInfo(@"%@ unlock screen lock succeeded.", self.logTag);
+    
+        self.isShowingScreenLockUI = NO;
+    
+        self.isScreenLockLocked = NO;
+
+        [self ensureUI];
+
+        // added: set screen lock flag to true.
+        bScreenLockDone = true;
+
+        self.screenBlockingWindow.rootViewController = self.screenBlockingViewController;
         
-            self.isShowingScreenLockUI = NO;
-        
-            self.isScreenLockLocked = NO;
-
-            [self ensureUI];
-
-            // added: set screen lock flag to true.
-            bScreenLockDone = true;
-
-            self.screenBlockingWindow.rootViewController = self.screenBlockingViewController;
+        // 使用dispatch_async确保在窗口状态更新后再恢复会议窗口
+        dispatch_async(dispatch_get_main_queue(), ^{
+            BOOL haveMeeting = [DTMeetingManager shared].inMeeting;
+            OWSWindowManager *windowManager = [OWSWindowManager sharedManager];
+            OWSLogInfo(@"%@ restore call view haveMeeting %@, has call %@", self.logTag, @(haveMeeting), @(windowManager.hasCall));
+            if (haveMeeting && windowManager.hasCall) {
+                OWSLogInfo(@"%@ restore call view after unlock.", self.logTag);
+                if (!windowManager.shouldShowCallView) {
+                    OWSLogInfo(@"%@ window show call", self.logTag);
+                    [windowManager showCallView];
+                } else {
+                    OWSLogInfo(@"%@ window setIsScreenBlockActive", self.logTag);
+                    [OWSWindowManager.sharedManager setIsScreenBlockActive:NO];
+                }
+            }
+        });
+                    
     }];
 
     self.screenBlockingWindow.rootViewController = unlockScreenVc;

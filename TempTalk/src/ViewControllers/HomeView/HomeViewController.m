@@ -34,7 +34,7 @@
 #import <JXCategoryView/JXCategoryView.h>
 #import "DTThreadHelper.h"
 #import "DTHomeVirtualCell.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "SVProgressHUD.h"
 #import <TTMessaging/TTMessaging-Swift.h>
 #import "DTInviteRequestHandler.h"
@@ -659,16 +659,16 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
 
     // Define a block to perform the second step.
     void (^dismissNavigationBlock)(void) = ^{
-        if (self.navigationController.viewControllers.lastObject != self) {
-            [CATransaction begin];
-            [CATransaction setCompletionBlock:^{
-                presentationBlock();
-            }];
+        if (![self.navigationController.viewControllers.lastObject isKindOfClass:NSClassFromString(@"DTHomeViewController")]) {
+              [CATransaction begin];
+              [CATransaction setCompletionBlock:^{
+                  presentationBlock();
+              }];
+  
+             [self.navigationController popToRootViewControllerAnimated:animateDismissal];
 
-            [self.navigationController popToViewController:self animated:animateDismissal];
-            
-            [CATransaction commit];
-        } else {
+              [CATransaction commit];
+          } else {
             presentationBlock();
         }
     };

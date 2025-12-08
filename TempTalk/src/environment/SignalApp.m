@@ -6,7 +6,7 @@
 #import "ConversationItemMacro.h"
 #import "NewContactThreadViewController.h"
 #import "HomeViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <TTMessaging/DebugLogger.h>
 #import <TTMessaging/Environment.h>
 #import <TTServiceKit/TSContactThread.h>

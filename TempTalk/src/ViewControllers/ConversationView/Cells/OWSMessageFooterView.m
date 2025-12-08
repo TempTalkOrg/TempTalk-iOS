@@ -4,7 +4,7 @@
 
 #import "OWSMessageFooterView.h"
 //#import "OWSMessageTimerView.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import <QuartzCore/QuartzCore.h>
 #import <TTMessaging/DateUtil.h>
 #import "DTImageView.h"

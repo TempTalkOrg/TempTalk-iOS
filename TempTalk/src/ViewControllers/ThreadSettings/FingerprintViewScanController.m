@@ -4,7 +4,7 @@
 
 #import "FingerprintViewScanController.h"
 #import "OWSQRCodeScanningViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "UIColor+OWS.h"
 #import "UIFont+OWS.h"
 #import "UIView+SignalUI.h"

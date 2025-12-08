@@ -3,7 +3,7 @@
 //
 
 #import "NotificationSettingsOptionsViewController.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 #import "SignalApp.h"
 #import <TTMessaging/Environment.h>
 #import <TTServiceKit/Localize_Swift.h>

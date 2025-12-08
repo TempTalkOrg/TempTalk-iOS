@@ -1,17 +1,16 @@
 {
   "images" : [
     {
-      "filename" : "callKit_icon@1x.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "callKit_icon@2x.png",
+      "filename" : "call_screen_share@2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "callKit_icon@3x.png",
+      "filename" : "call_screen_share@3x.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

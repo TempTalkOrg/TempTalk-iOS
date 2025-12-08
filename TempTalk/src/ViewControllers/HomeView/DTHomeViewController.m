@@ -19,7 +19,7 @@
 #import "OWSLinkDeviceViewController.h"
 #import "NewGroupViewController.h"
 #import "DTChatFolderManager.h"
-#import "TempTalk-Swift.h"
+#import "Yelling-Swift.h"
 
 @interface DTHomeViewController ()<JXCategoryTitleViewDataSource,
     JXPagerViewDelegate,

@@ -41,7 +41,7 @@ struct CallAnswerView: View {
     var body: some View {
         VStack {
             VStack(spacing: 15) {
-                AvatarImageViewRepresentable(recipientId: currentCall.caller ?? "TempTalk")
+                AvatarImageViewRepresentable(recipientId: currentCall.caller ?? "Yelling")
                     .frame(width: 120, height: 120)
                     .clipShape(Circle())
                 Text(displayName())
