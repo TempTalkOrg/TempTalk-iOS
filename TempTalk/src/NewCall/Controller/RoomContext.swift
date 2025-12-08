@@ -89,6 +89,8 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     let resetDelay: TimeInterval = 2.5
     // 连接
     var connectTimeoutTask: Task<Void, Never>?
+    // 展示screen share
+    var isPresentingShareView = false
 
     public init(url: String, token: String, lkContext: LiveKitContext?) {
         AudioManager.shared.capturePostProcessingDelegate = denoiseFilter
@@ -256,7 +258,21 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         }
     }
     
-    func presentShareView() {
+    func presentShareView(completion: (() -> Void)? = nil) {
+        // 确保在主线程执行
+        guard Thread.isMainThread else {
+            DispatchMainThreadSafe { [weak self] in
+                self?.presentShareView()
+            }
+            return
+        }
+        
+        // 检查应用状态，确保在前台
+        guard CurrentAppContext().isMainAppAndActive else {
+            Logger.info("[newcall] app is not active")
+            return
+        }
+        
         let shareView = CallScreenShareView(minimizeAction: { [weak self] in
             guard let self else { return }
             toolbarMinimizeTaped()
@@ -267,7 +283,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         shareVC.modalPresentationStyle = .fullScreen
         let callWindow = OWSWindowManager.shared().callViewWindow
         let callVC = callWindow.findTopViewController()
-        callVC.present(shareVC, animated: false)
+        callVC.present(shareVC, animated: false, completion: completion)
     }
     
     func presentInviteView() {

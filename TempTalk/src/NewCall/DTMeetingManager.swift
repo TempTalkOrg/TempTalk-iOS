@@ -126,6 +126,9 @@ import DTProto
     var hasTriggeredRating: Bool = false
     var feedbackIsNetworkPoor: Bool? = false
     
+    // 防止重复执行answerCall的标志
+    var isAnswering: Bool = false
+    
     override init() {
         super.init()
         
@@ -134,7 +137,7 @@ import DTProto
         registerNotifications()
         
         NotificationHandler.shared.registerDarwinNotification()
-        LiveKitSDK.setLogger(OSLogger())
+        LiveKitSDK.setLogger(OSLogger(minLevel: .debug))
     }
     
     func clearCurrentCall(roomId: String? = nil) {
@@ -157,6 +160,7 @@ import DTProto
         currentCall = DTLiveKitCallModel()
         inMeeting = false
         hasMeeting = false
+        isAnswering = false
         
         visibleParticipants.removeAll()
         startCallThread = nil
@@ -499,8 +503,11 @@ import DTProto
                 }
             }
         } else {
-            OWSWindowManager.shared().startCall(callVC, animated: false)
+            // 被叫时，先隐藏 AnswerVC，再展示通话界面
             dismissAnswerVCIfNeeded()
+            // AnswerVC 路径不需要动画，因为用户已经在界面上，直接切换到通话界面
+            // CallKit 路径也不需要动画，直接进入通话
+            OWSWindowManager.shared().startCall(callVC, animated: false)
         }
     }
     
@@ -509,16 +516,18 @@ import DTProto
     private func dismissAnswerVCIfNeeded() {
         guard let answerVC else { return }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            guard let self else { return }
-            if answerVC.presentingViewController != nil {
-                answerVC.dismiss(animated: false) { self.answerVC = nil }
-            } else if let nav = answerVC.navigationController {
-                nav.popViewController(animated: false)
-                self.answerVC = nil
-            } else {
-                self.answerVC = nil
+        // 立即隐藏 AnswerVC，避免界面闪烁
+        if answerVC.presentingViewController != nil {
+            answerVC.dismiss(animated: false) { [weak self] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self?.answerVC = nil
+                }
             }
+        } else if let nav = answerVC.navigationController {
+            nav.popViewController(animated: false)
+            self.answerVC = nil
+        } else {
+            self.answerVC = nil
         }
     }
     
@@ -574,52 +583,72 @@ import DTProto
                 if fromCallKit { // 点击 callkit answer, 应用内同步接听
                     Logger.info("\(logTag) answer from CallKit")
                     handleMeetingBar(call: call, action: .add)
+                    // 防止重复执行answerCall
+                    guard !isAnswering else {
+                        Logger.info("\(logTag) already answering, ignore duplicate answerCall from CallKit")
+                        return
+                    }
                     answerCall(caller: caller, roomId: roomId, publicKey: publicKey, emk: emk, fromCallKit: true)
                 } else {
                     DispatchMainThreadSafe {
                         self.startCallTimeoutTimer()
+                        self.presentAnswerVC(call: call, caller: caller, roomId: roomId, publicKey: publicKey, emk: emk)
                     }
-                }
-                
-                DispatchMainThreadSafe {
-                    let answerVC = DTHostingController(rootView:
-                                                        CallAnswerView(
-                                                            currentCall: call,
-                                                            autoAccept: fromCallKit,
-                                                            isConnecting: fromCallKit,
-                                                            onAnswer: { [weak self] in
-                        guard let self else { return }
-                        Logger.info("\(logTag) answer from alertView")
-                        self.answerVC = nil
-                        stopCallTimeoutTimer()
-                        answerCall(caller: caller, roomId: roomId, publicKey: publicKey, emk: emk, fromCallKit: false)
-                                                            },
-                                                            onDecline: { [weak self] in
-                        guard let self else { return }
-                        
-                        Logger.info("\(logTag) reject from alertView")
-                        self.answerVC = nil
-                        stopCallTimeoutTimer()
-                        if currentCall.callType != .private {
-                            // 多人会议拒接时需要展示bar
-                            handleMeetingBar(call: call, action: .add)
-                        }
-                        Task {
-                            // reject
-                            await self.rejectRemoteCall()
-                            Logger.info("\(self.logTag) reject remote call")
-                        }
-                    }))
-                            
-                    OWSWindowManager.shared().startCall(answerVC, animated: !fromCallKit)
-                    self.answerVC = answerVC
                 }
             }
         }
     }
     
+    /// 展示 AnswerVC
+    @MainActor
+    private func presentAnswerVC(call: DTLiveKitCallModel, caller: String, roomId: String, publicKey: Data, emk: Data) {
+        let answerVC = DTHostingController(rootView:
+                                            CallAnswerView(
+                                                currentCall: call,
+                                                autoAccept: false,
+                                                isConnecting: false,
+                                                onAnswer: { [weak self] in
+                    guard let self else { return }
+                    Logger.info("\(logTag) answer from alertView")
+                    // 防止重复执行answerCall
+                    guard !isAnswering else {
+                        Logger.info("\(logTag) already answering, ignore duplicate answerCall from alertView")
+                        return
+                    }
+                    self.answerVC = nil
+                    stopCallTimeoutTimer()
+                    answerCall(caller: caller, roomId: roomId, publicKey: publicKey, emk: emk, fromCallKit: false)
+                                                },
+                                                onDecline: { [weak self] in
+                    guard let self else { return }
+                    
+                    Logger.info("\(logTag) reject from alertView")
+                    self.answerVC = nil
+                    stopCallTimeoutTimer()
+                    if currentCall.callType != .private {
+                        // 多人会议拒接时需要展示bar
+                        handleMeetingBar(call: call, action: .add)
+                    }
+                    Task {
+                        // reject
+                        await self.rejectRemoteCall()
+                        Logger.info("\(self.logTag) reject remote call")
+                    }
+                }))
+        
+        OWSWindowManager.shared().startCall(answerVC, animated: true)
+        self.answerVC = answerVC
+    }
+    
     private func answerCall(caller: String, roomId: String, publicKey: Data, emk: Data, fromCallKit: Bool) {
         
+        // 防止重复执行answerCall
+        guard !isAnswering else {
+            Logger.info("\(logTag) already answering, ignore duplicate answerCall")
+            return
+        }
+        
+        isAnswering = true
         stopSound()
         
         Logger.info("\(logTag) answer meeting")

@@ -284,6 +284,7 @@
 		5BC2A7062D8D7B2F0063C4FA /* DTMeetingManager+AutoLeave.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC2A7052D8D7B2F0063C4FA /* DTMeetingManager+AutoLeave.swift */; };
 		5BC2A70E2D9034C10063C4FA /* NewCallGlobalConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC2A70D2D9034C10063C4FA /* NewCallGlobalConfig.swift */; };
 		5BC61DC22DA6D95E008F8769 /* QuickMessagePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC61DC12DA6D958008F8769 /* QuickMessagePanel.swift */; };
+		5BCB1E992EA8EDA2009A5AF6 /* CallCriticalAlertApi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BCB1E982EA8ED9F009A5AF6 /* CallCriticalAlertApi.swift */; };
 		5BD264E52DB110DA001706EA /* Meeting_Soundwave.json in Resources */ = {isa = PBXBuildFile; fileRef = 5BD264E42DB110DA001706EA /* Meeting_Soundwave.json */; };
 		5BD264E72DB24789001706EA /* RoomDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD264E62DB24788001706EA /* RoomDataManager.swift */; };
 		5BD9782A2D797AA8007DFB4C /* DTTransLateTool.m in Sources */ = {isa = PBXBuildFile; fileRef = 5BD978292D797AA8007DFB4C /* DTTransLateTool.m */; };
@@ -1284,6 +1285,7 @@
 		5BC2A7052D8D7B2F0063C4FA /* DTMeetingManager+AutoLeave.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DTMeetingManager+AutoLeave.swift"; sourceTree = "<group>"; };
 		5BC2A70D2D9034C10063C4FA /* NewCallGlobalConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewCallGlobalConfig.swift; sourceTree = "<group>"; };
 		5BC61DC12DA6D958008F8769 /* QuickMessagePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickMessagePanel.swift; sourceTree = "<group>"; };
+		5BCB1E982EA8ED9F009A5AF6 /* CallCriticalAlertApi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCriticalAlertApi.swift; sourceTree = "<group>"; };
 		5BD264E42DB110DA001706EA /* Meeting_Soundwave.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Meeting_Soundwave.json; sourceTree = "<group>"; };
 		5BD264E62DB24788001706EA /* RoomDataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomDataManager.swift; sourceTree = "<group>"; };
 		5BD978282D797AA8007DFB4C /* DTTransLateTool.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DTTransLateTool.h; sourceTree = "<group>"; };
@@ -2886,6 +2888,7 @@
 		5BC2A70C2D9034470063C4FA /* Tool */ = {
 			isa = PBXGroup;
 			children = (
+				5BCB1E982EA8ED9F009A5AF6 /* CallCriticalAlertApi.swift */,
 				5BA8497F2E9FE20D00577C87 /* CallRatingTrigger.swift */,
 				5BA8497D2E9FC47200577C87 /* FeedbackAPI.swift */,
 				5BE985822E7D4D6D00D78913 /* LiveKitServersApi.swift */,
@@ -5078,6 +5081,7 @@
 				CE3710E028BE4B070052137E /* DTInputMessagePreView.m in Sources */,
 				CE5A066F2C9ECD7100F5CE7E /* HomeViewController+TableView.swift in Sources */,
 				CE2A1EF52DBA55A400055979 /* DTInviteRequestHandler.m in Sources */,
+				5BCB1E992EA8EDA2009A5AF6 /* CallCriticalAlertApi.swift in Sources */,
 				34D8C02B1ED3685800188D7C /* DebugUIContacts.m in Sources */,
 				CE0D574427F1652C00AC3BB9 /* DTInputToolbarFlowLayout.m in Sources */,
 				CE2A1EEE2DBA350400055979 /* DeviceLinkHandler.swift in Sources */,
@@ -5648,7 +5652,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
@@ -5727,7 +5731,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -6073,7 +6077,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -6231,7 +6235,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
@@ -6532,7 +6536,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6606,7 +6610,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6892,7 +6896,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -7048,7 +7052,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -7192,7 +7196,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7248,7 +7252,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7305,7 +7309,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7363,7 +7367,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.3;
+				MARKETING_VERSION = 3.5.4;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;

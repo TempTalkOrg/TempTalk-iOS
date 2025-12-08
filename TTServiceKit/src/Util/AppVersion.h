@@ -55,6 +55,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL)isFirstLaunch;
 
+// App Name Management
+- (NSString *)getAppDisplayNameForNotification;
+
 + (NSComparisonResult)compareAppVersion:(NSString *)lhs with:(NSString *)rhs;
 
 @end

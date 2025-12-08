@@ -117,6 +117,11 @@ struct CallerWaitingView: View {
     @EnvironmentObject var roomCtx: RoomContext
     @StateObject var currentCall = DTMeetingManager.shared.currentCall
     
+    // 15秒超时逻辑
+    @State private var callingStartTime: Date?
+    @State private var callingTimer: Timer?
+    @State private var showTimeoutAlert: Bool = false
+    
     func otherRecipientId() -> String {
         var recipientId = currentCall.conversationId ?? ""
         if roomCtx.room.connectionState == .reconnecting {
@@ -136,15 +141,89 @@ struct CallerWaitingView: View {
         let name = DTLiveKitCallModel.getDisplayName(recipientId: recipientId)
 
         VStack {
-            AvatarImageViewRepresentable(recipientId: recipientId)
-                .frame(width: 120, height: 120)
-            Text(name)
-                .font(.system(size: 17))
-                .foregroundColor(.white)
-                .padding(.top, 10)
+            ZStack(alignment: .top) {
+                // 背景内容
+                VStack {
+                    Spacer() // 让内容整体居中偏下
+                    AvatarImageViewRepresentable(recipientId: recipientId)
+                        .frame(width: 120, height: 120)
+                        .offset(y: -40)
+                    Text(name)
+                        .font(.system(size: 17))
+                        .foregroundColor(.white)
+                        .padding(.top, 10)
+                        .offset(y: -40)
+                    Spacer()
+                }
+            
+                if showTimeoutAlert {
+                    Button(action: sendTimeoutMessage) {
+                        HStack(spacing: 8) {
+                            Image("call_calling_critical")
+                            Text(Localized("MEETING_CRITICAL_ALERT_TIPS"))
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color(rgbHex: 0x2B3139))
+                        .cornerRadius(8)
+                        .shadow(radius: 2)
+                    }
+                    .padding(.top, 45)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.easeInOut(duration: 0.3), value: showTimeoutAlert)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, 200) // 用 padding 来替代 .position
+        .onAppear {
+            startCallingTimerIfNeeded()
+        }
+        .onDisappear {
+            stopCallingTimer()
+        }
+        .onChange(of: currentCall.callState) { newState in
+            if newState != .outgoing {
+                stopCallingTimer()
+            }
+        }
+    }
+    
+    private func startCallingTimerIfNeeded() {
+        // 只在1v1通话outgoing状态时开始计时
+        guard currentCall.callType == .private && 
+              currentCall.callState == .outgoing && 
+              currentCall.isCaller else {
+            return
+        }
+        
+        callingStartTime = Date()
+        showTimeoutAlert = false
+        
+        // 15秒后显示超时提示
+        callingTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
+            DispatchQueue.main.async {
+                if callingStartTime != nil {
+                    showTimeoutAlert = true
+                }
+            }
+        }
+    }
+    
+    private func stopCallingTimer() {
+        callingTimer?.invalidate()
+        callingTimer = nil
+        callingStartTime = nil
+        showTimeoutAlert = false
+    }
+    
+    private func sendTimeoutMessage() {
+        Task {
+            await DTMeetingManager.shared.sendCriticalAlertWithBarrage(Localized("MEETING_CRITICAL_ALERT_DANMU"))
+        }
+        // 关闭提示
+        showTimeoutAlert = false
     }
 }
 
@@ -167,6 +246,7 @@ struct BulletOverlayView: View {
                 .frame(width: min(screenWidth, screenHeight))
                 .padding(.leading, paddingLeading)
                 .padding(.bottom, paddingBottom + paddingMargin * 0.5 + controlViewHeight)
+                .allowsHitTesting(false)
             
             if showQuickPanel {
                 Color.black.opacity(0.001)
@@ -174,7 +254,15 @@ struct BulletOverlayView: View {
                     .onTapGesture {
                         showQuickPanel = false
                     }
-                
+                    .allowsHitTesting(true)
+                    .simultaneousGesture(
+                        DragGesture()
+                            .onChanged { _ in
+                            }
+                    )
+            }
+            
+            if showQuickPanel {
                 QuickMessagePanelUIKitWrapper(
                     messages: DTMeetingManager.shared.sampleBulletRtmCalls()
                 ) { message in
@@ -187,6 +275,14 @@ struct BulletOverlayView: View {
                 .padding(.leading, paddingOverlayLeading)
                 .padding(.bottom, paddingBottom + paddingMargin + controlViewHeight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .allowsHitTesting(true)
+                .onTapGesture {
+                }
+                .simultaneousGesture(
+                    DragGesture()
+                        .onChanged { _ in
+                        }
+                )
             }
             
             if hasRaiseHand {
@@ -196,6 +292,7 @@ struct BulletOverlayView: View {
                     .padding(.leading, paddingOverlayLeading)
                     .padding(.bottom, paddingBottom)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .allowsHitTesting(hasRaiseHand)
             }
 
             DTBulletChatControlViewRepresentable(showQuickPanel: $showQuickPanel)
@@ -203,6 +300,7 @@ struct BulletOverlayView: View {
                 .padding(.leading, paddingOverlayLeading)
                 .padding(.bottom, 90)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .allowsHitTesting(true)
         }
     }
 }

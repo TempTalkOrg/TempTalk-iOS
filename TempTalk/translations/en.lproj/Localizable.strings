@@ -3866,3 +3866,22 @@
 "CALL_RATING_REASON_OTHER_2" = "I could not answer the call";
 
 "ATTACHMENT_DOWNLOADING_STATUS_EXPIRED" = "File has expired.";
+
+"CALL_MORE_CRITICAL_ALERT" = "Critical Alert";
+"MEETING_NAVAGATION_CALLING" = "Calling...";
+"MEETING_CRITICAL_ALERT_DANMU" = "sent a critical alert";
+"MEETING_CRITICAL_ALERT_TIPS" = "No answer? Send a critical alert.";
+"MEETING_CRITICAL_ALERT_ERROR_TIPS" = "failed to send a critical alert. Please try again.";
+
+"NOTIFICATIONS_CRITICAL_ALERT" = "Critical Alerts";
+"NOTIFICATIONS_CRITICAL_SWITCH_ON" = "On";
+"NOTIFICATIONS_CRITICAL_SWITCH_OFF" = "Off";
+"NOTIFICATIONS_CRITICAL_DESCRIPTION" = "Go to Settings - Notification - Yelling - Critical Alerts, and turn it on.";
+"NOTIFICATIONS_CRITICAL_ALERT_TITLE_ON" = "Turn on Critical Alerts";
+"NOTIFICATIONS_CRITICAL_ALERT_TITLE_OFF" = "Turn off Critical Alerts";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "Go to Settings - Notification - Yelling - Critical Alerts, and it on.";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "Go to Settings - Notification - Yelling - Critical Alerts, and turn it off.";
+"NOTIFICATIONS_CRITICAL_ALERT_CANCEL" = "Cancel";
+"NOTIFICATIONS_CRITICAL_ALERT_SETTING" = "Go to Setting";
+"NOTIFICATIONS_CRITICAL_EXTENSION_TITLE" = "Missed Call from %@";
+"NOTIFICATIONS_CRITICAL_EXTENSION_CONTENT" = "Urgent: Please answer the call now.";

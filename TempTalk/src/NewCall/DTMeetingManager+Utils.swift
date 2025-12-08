@@ -728,6 +728,12 @@ extension DTMeetingManager {
             try await cameraCapturer.switchCameraPosition()
         }
     }
+    
+    func callShowToast(message: String) {
+        let rootWindow = OWSWindowManager.shared().rootWindow
+        let topVC = rootWindow.findTopViewController()
+        DTToastHelper.toast(withText: message, in: topVC.view, durationTime: 3, afterDelay: 1)
+    }
 }
 
 // DTMeetingManagerProtocol

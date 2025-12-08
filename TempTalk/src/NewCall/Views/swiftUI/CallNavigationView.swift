@@ -89,6 +89,12 @@ struct CallNavigationView: View {
                     }
                 }
             }
+        } else {
+            VStack(spacing: 2) {
+                if isPrivateOutgoing, !DTMeetingManager.shared.inMeeting {
+                    statusText(Localized("MEETING_NAVAGATION_CALLING"))
+                }
+            }
         }
     }
 

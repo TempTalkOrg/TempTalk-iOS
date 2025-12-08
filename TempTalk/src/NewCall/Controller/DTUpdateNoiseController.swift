@@ -15,6 +15,10 @@ import PanModal
 class DTUpdateNoiseController: OWSTableViewController {
     
     private var noiseSwitch = UISwitch()
+    private var criticalTextView: VerticalIconTextView?
+    
+    let itemsCount_private: CGFloat = 3
+    let itemsCount_group: CGFloat = 3
     
     override func loadView() {
         super.loadView()
@@ -41,8 +45,30 @@ class DTUpdateNoiseController: OWSTableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         updateTableContents()
+        setupKVOObservers()
     }
     
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    private func setupKVOObservers() {
+        // 监听 callState 变化通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(callStateDidChange),
+            name: NSNotification.Name("CallStateDidChange"),
+            object: nil
+        )
+    }
+    
+    @objc private func callStateDidChange() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            // 重新加载表格内容以更新布局
+            self.updateTableContents()
+        }
+    }
     
     func updateTableContents() {
         let contents = OWSTableContents()
@@ -123,6 +149,18 @@ class DTUpdateNoiseController: OWSTableViewController {
             DTMeetingManager.shared.switchCamera()
         }
         
+        let criticalTextView = VerticalIconTextView(
+            image: UIImage(named: "call_critical"),
+            title: Localized("CALL_MORE_CRITICAL_ALERT")
+        ) {
+            self.dismiss(animated: true, completion: { [weak self] in
+                guard self != nil else { return }
+                Task {
+                    await DTMeetingManager.shared.sendCriticalAlertWithBarrage(Localized("MEETING_CRITICAL_ALERT_DANMU"))
+                }
+            })
+        }
+        
         let raiseHandTextView = VerticalIconTextView(
             image: UIImage(named: "calling_lowerHand"),
             selectedImage: UIImage(named: "calling_raiseHand"),
@@ -142,13 +180,25 @@ class DTUpdateNoiseController: OWSTableViewController {
         }
             
         if DTMeetingManager.shared.currentCall.callType == .private {
-            let contentRow = UIStackView(arrangedSubviews: [inviteTextView, switchCameraTextView])
+            var arrangedSubviews: [UIView] = [inviteTextView, switchCameraTextView]
+            let isCalled = DTMeetingManager.shared.inMeeting ||
+            DTMeetingManager.shared.currentCall.callState != .outgoing
+            if isCalled {
+                arrangedSubviews = [inviteTextView, switchCameraTextView]
+            } else {
+                arrangedSubviews.append(criticalTextView)
+            }
+            
+            let contentRow = UIStackView(arrangedSubviews: arrangedSubviews)
             contentRow.axis = .horizontal
             contentRow.alignment = .center
             contentRow.distribution = .equalSpacing
             contentRow.spacing = 5
             contentRow.isLayoutMarginsRelativeArrangement = true
-            let padding = (screenWidth - 50 - 70 * 2) / 2
+            
+            // 根据实际按钮数量计算 padding
+            let actualItemsCount = CGFloat(arrangedSubviews.count)
+            let padding = (screenWidth - 50 - 70 * actualItemsCount) / actualItemsCount
             contentRow.layoutMargins = UIEdgeInsets(top: 0, left: padding , bottom: 0, right: padding)
             cell.contentView.addSubview(contentRow)
             contentRow.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12))
@@ -159,7 +209,7 @@ class DTUpdateNoiseController: OWSTableViewController {
             contentRow.distribution = .equalSpacing
             contentRow.spacing = 5
             contentRow.isLayoutMarginsRelativeArrangement = true
-            let padding = (screenWidth - 50 - 70 * 3) / 3
+            let padding = (screenWidth - 50 - 70 * itemsCount_group) / itemsCount_group
             contentRow.layoutMargins = UIEdgeInsets(top: 0, left: padding , bottom: 0, right: padding)
             cell.contentView.addSubview(contentRow)
             contentRow.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12))

@@ -124,7 +124,11 @@ static NSTimeInterval launchStartedAt;
     }
 #endif
     [NSUserDefaults migrateToSharedUserDefaults];
+    // 初始化应用版本管理器（包含版本和名称管理）
     [AppVersion shared];
+    
+    // 检查版本更新并执行通知清理
+    [self checkVersionUpdateAndCleanupNotifications];
     
     [self setupNSEInteroperation];
     
@@ -231,6 +235,14 @@ static NSTimeInterval launchStartedAt;
     [self addLocalNotificationDelegate];
     
     return YES;
+}
+
+- (void)checkVersionUpdateAndCleanupNotifications {
+    // 使用共享的通知清理管理器
+    if ([NotificationCleanupManager.shared shouldPerformNotificationCleanup]) {
+        OWSLogInfo(@"Version changed, performing notification cleanup via shared manager");
+        [NotificationCleanupManager.shared performNotificationCleanup];
+    }
 }
 
 - (BOOL)setupCrashAndLogReport {

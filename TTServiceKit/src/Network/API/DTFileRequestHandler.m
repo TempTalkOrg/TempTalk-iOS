@@ -46,6 +46,22 @@
                           fileSize:(long long)fileSize
                             digest:(NSString *)digest
                         completion:(DTFileRequestCompletionBlock)completion{
+    [self reportToServerWithFileHash:fileHash
+                          recipients:recipients
+                        attachmentId:attachmentId
+                      attachmentType:0
+                            fileSize:fileSize
+                              digest:digest
+                          completion:completion];
+}
+
++ (void)reportToServerWithFileHash:(NSString *)fileHash
+                        recipients:(NSArray *)recipients
+                      attachmentId:(NSString *)attachmentId
+                    attachmentType:(NSInteger)attachmentType
+                          fileSize:(long long)fileSize
+                            digest:(NSString *)digest
+                        completion:(DTFileRequestCompletionBlock)completion{
     
     NSMutableArray *newNumbers = recipients.mutableCopy;
     if(!newNumbers){
@@ -73,7 +89,8 @@
                                  @"encAlg":@"AES-CBC-256",
                                  @"cipherHash":digest,
                                  @"cipherHashType":@"MD5",
-                                 @"numbers":newNumbers.copy}
+                                 @"numbers":newNumbers.copy,
+                                 @"attachmentType":@(attachmentType)}
                        success:^(DTFileDataEntity * _Nonnull entity) {
         completion(entity, nil);
     } failure:^(NSError * _Nonnull error) {

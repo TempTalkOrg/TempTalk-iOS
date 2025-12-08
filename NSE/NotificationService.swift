@@ -187,6 +187,11 @@ class NotificationService: UNNotificationServiceExtension {
         
         // This should be the first thing we do.
         environment.ensureAppContext()
+    
+        // 检查是否需要执行通知清理
+        if NotificationCleanupManager.shared.shouldPerformNotificationCleanup() {
+            NotificationCleanupManager.shared.requestNotificationCleanup()
+        }
         
         if NSEEnvironment.verifyDBKeysAvailable() != nil {
             if hasShownFirstUnlockError.tryToSetFlag() {
@@ -371,6 +376,58 @@ class NotificationService: UNNotificationServiceExtension {
         }
     }
     
+    // 是否 critical 相关
+    func isCriticalNotification(attemptContent :UNNotificationContent) -> Bool {
+        
+        let userInfo = attemptContent.userInfo
+        if let aps = userInfo["aps"] as? Dictionary<String, Any> {
+    
+            guard let level = aps["interruption-level"] as? String else {
+                return false
+            }
+            
+            switch level {
+            case "critical":
+                return true
+            default:
+                return false
+            }
+            
+        } else {
+            return false
+        }
+    }
+    
+    func conversationName(from attemptContent: UNNotificationContent, completion: @escaping (_ displayName: String?, _ locArg: String?) -> Void) {
+        let userInfo = attemptContent.userInfo
+        
+        guard
+            let aps = userInfo["aps"] as? [String: Any],
+            let passthroughString = aps["passthrough"] as? String,
+            let passthroughData = passthroughString.data(using: .utf8),
+            let passthroughDict = try? JSONSerialization.jsonObject(with: passthroughData) as? [String: Any],
+            let conversationId = passthroughDict["conversationId"] as? String
+        else {
+            completion(nil, nil)
+            return
+        }
+        
+        var locArg: String?
+        if let alert = aps["alert"] as? [String: Any],
+           let locArgs = alert["loc-args"] as? [String],
+           let firstArg = locArgs.first {
+            locArg = firstArg
+        }
+
+        databaseStorage.read { transaction in
+            let displayName = Environment.shared.contactsManager.displayName(forPhoneIdentifier: conversationId, transaction: transaction)
+            DispatchQueue.main.async {
+                let finalName = displayName.isEmpty ? conversationId : displayName
+                completion(finalName, locArg)
+            }
+        }
+    }
+    
     func scheduleUpdateNotification(attemptContent :UNNotificationContent) -> (Bool, Int?) {
         
         let userInfo = attemptContent.userInfo
@@ -470,15 +527,15 @@ class NotificationService: UNNotificationServiceExtension {
                 if let hangup = callMessage.hangup, let roomID = hangup.roomID { // 挂断 call
                     Logger.debug("\(logTag) NSE receive hangup")
                     Environment.preferences().endCallKitCall(withRoomId: roomID)
-                    configWithNameAndPreview(title: "TempTalk", body: "The call has ended")
+                    configWithNameAndPreview(title: "Yelling", body: "The call has ended")
                 } else if let reject = callMessage.reject, let roomID = reject.roomID {
                     Logger.debug("\(logTag) NSE receive reject")
                     Environment.preferences().endCallKitCall(withRoomId: roomID)
-                    configWithNameAndPreview(title: "TempTalk", body: "The call has been rejected")
+                    configWithNameAndPreview(title: "Yelling", body: "The call has been rejected")
                 } else if let cancel = callMessage.cancel, let roomID = cancel.roomID {
                     Logger.debug("\(logTag) NSE receive cancel")
                     Environment.preferences().endCallKitCall(withRoomId: roomID)
-                    configWithNameAndPreview(title: "TempTalk", body: "The call has been canceled")
+                    configWithNameAndPreview(title: "Yelling", body: "The call has been canceled")
                 }
             }
               
@@ -587,7 +644,7 @@ class NotificationService: UNNotificationServiceExtension {
             "TASK_ARCHIVED",
             "CALENDAR_FULL_UPDATE":
             if locargs.count == 1 {
-                let fromRecipient = locargs.first ?? "TempTalk"
+                let fromRecipient = locargs.first ?? "Yelling"
                 if displayName.isEmpty {
                     plainTitle = fromRecipient
                 } else {
@@ -595,7 +652,7 @@ class NotificationService: UNNotificationServiceExtension {
                 }
                 plainBody = defaultNewMessageBody
             } else if (locargs.count > 1) {
-                var plainTitle = locargs.first ?? "TempTalk"
+                var plainTitle = locargs.first ?? "Yelling"
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName
@@ -715,7 +772,7 @@ class NotificationService: UNNotificationServiceExtension {
                         body = dataMessage.body ?? ""
                     }
                     
-                    plainTitle = locargs.first ?? "TempTalk"
+                    plainTitle = locargs.first ?? "Yelling"
                     var fromRecipient = locargs[1]
                     if !displayName.isEmpty {
                         fromRecipient = displayName
@@ -733,7 +790,7 @@ class NotificationService: UNNotificationServiceExtension {
             
             if locargs.count >= 2 {
                 
-                plainTitle = locargs.first ?? "TempTalk"
+                plainTitle = locargs.first ?? "Yelling"
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName
@@ -776,7 +833,7 @@ class NotificationService: UNNotificationServiceExtension {
             // TODO: @ 不展示附带文本，因为 body 里有 @ 人信息，不能去重
             if locargs.count >= 2 {
                 
-                plainTitle = locargs.first ?? "TempTalk"
+                plainTitle = locargs.first ?? "Yelling"
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName
@@ -790,7 +847,7 @@ class NotificationService: UNNotificationServiceExtension {
             "GROUP_REPLY_OTHER":
             // TODO: @ 不展示附带文本，因为 body 里有 @ 人信息，不能去重
             if locargs.count >= 3 {
-                plainTitle = locargs.first ?? "TempTalk"
+                plainTitle = locargs.first ?? "Yelling"
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName
@@ -802,7 +859,7 @@ class NotificationService: UNNotificationServiceExtension {
         case "GROUP_MENTIONS_ALL":
             //            // TODO: @ 不展示附带文本，因为 body 里有 @ 人信息，不能去重
             if locargs.count >= 2 {
-                plainTitle = locargs.first ?? "TempTalk"
+                plainTitle = locargs.first ?? "Yelling"
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName

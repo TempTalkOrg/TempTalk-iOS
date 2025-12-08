@@ -499,6 +499,7 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
                                 success:^(NSData * digest){
                         [self reportToServerWithFileHash:[keyHash base64EncodedString]
                                             attachmentId:entity.attachmentId
+                                          attachmentType:attachmentStream.isVoiceMessage ? 1 : 0
                                                 fileSize:attachmentStream.encryptedDatalength
                                                   digest:digest completion:^(DTFileDataEntity *entity) {
                             reportToServerCompletion(entity);
@@ -519,6 +520,7 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
                 
                 [self reportToServerWithFileHash:[keyHash base64EncodedString]
                                     attachmentId:attachmentStream.serverAttachmentId
+                                  attachmentType:attachmentStream.isVoiceMessage ? 1 : 0
                                         fileSize:attachmentStream.encryptedDatalength
                                           digest:attachmentStream.digest
                                       completion:^(DTFileDataEntity *entity) {
@@ -530,7 +532,8 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
 }
 
 - (void)reportToServerWithFileHash:(NSString *)fileHash
-                      attachmentId:(NSString *)attachmentId 
+                      attachmentId:(NSString *)attachmentId
+                    attachmentType:(NSInteger)attachmentType
                           fileSize:(long long)fileSize
                             digest:(NSData *)digest
                         completion:(void(^)(DTFileDataEntity *entity))completion{
@@ -539,13 +542,19 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
     [DTFileRequestHandler reportToServerWithFileHash:fileHash
                                           recipients:self.recipientIds
                                         attachmentId:attachmentId
+                                      attachmentType:attachmentType
                                             fileSize:fileSize
                                               digest:[[digest hexadecimalString] uppercaseString]
                                           completion:^(DTFileDataEntity * _Nullable entity, NSError * _Nullable error) {
         if(error || entity.authorizeIdToInt <= 0){
             OWSLogError(@"%@ reportToServer error: %@,entity.authorizeId = %lld", self.logTag, error, entity.authorizeIdToInt);
             if(self.reportRetryCount > 0){
-                [self reportToServerWithFileHash:fileHash attachmentId:attachmentId fileSize:fileSize digest:digest completion:completion];
+                [self reportToServerWithFileHash:fileHash
+                                    attachmentId:attachmentId
+                                  attachmentType:attachmentType
+                                        fileSize:fileSize
+                                          digest:digest
+                                      completion:completion];
                 self.reportRetryCount --;
             }else{
                 OWSLogError(@"%@ reportToServer 4 times error: %@, entity.authorizeId = %lld", self.logTag, error, entity.authorizeIdToInt);

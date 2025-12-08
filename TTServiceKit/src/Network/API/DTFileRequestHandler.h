@@ -28,6 +28,14 @@ typedef void (^DTFileRequestCompletionBlock)(DTFileDataEntity *_Nullable entity,
                             digest:(NSString *)digest
                         completion:(DTFileRequestCompletionBlock)completion;
 
++ (void)reportToServerWithFileHash:(NSString *)fileHash
+                        recipients:(NSArray *)recipients
+                      attachmentId:(NSString *)attachmentId
+                    attachmentType:(NSInteger)attachmentType
+                          fileSize:(long long)fileSize
+                            digest:(NSString *)digest
+                        completion:(DTFileRequestCompletionBlock)completion;
+
 + (void)getFileInfoWithFileHash:(NSString *)fileHash
                     authorizeId:(UInt64)authorizeId
                             gid:(NSString *)gid

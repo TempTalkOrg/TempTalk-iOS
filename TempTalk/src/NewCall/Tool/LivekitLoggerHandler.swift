@@ -7,24 +7,81 @@
 //
 
 import LiveKit
+internal import LiveKitWebRTC
+import OSLog
 
-open class OSLogger: LiveKit.Logger, @unchecked Sendable {
-    private static let subsystem = "io.livekit.sdk"
+typealias LivekitLogger = LiveKit.Logger
+typealias LivekitLogLevel = LiveKit.LogLevel
 
-    private let queue = DispatchQueue(label: "io.livekit.oslogger", qos: .utility)
+extension LivekitLogLevel {
+    @inlinable
+    var ddLogFlag: DDLogFlag {
+        switch self {
+        case .debug: .debug
+        case .info: .info
+        case .warning: .warning
+        case .error: .error
+        }
+    }
+    
+    var rtcSeverity: LKRTCLoggingSeverity {
+        switch self {
+        case .debug: .verbose
+        case .info: .info
+        case .warning: .warning
+        case .error: .error
+        }
+    }
+}
 
+extension LKRTCLoggingSeverity {
+    var ddLogFlag: DDLogFlag {
+        switch self {
+        case .verbose: .debug
+        case .info: .info
+        case .warning: .warning
+        case .error: .error
+        case .none: .debug
+        @unknown default:
+                .debug
+        }
+    }
+}
+
+open class OSLogger: LivekitLogger, @unchecked Sendable {
+    private let minLevel: LogLevel
+    
+    private var rtcLogger: LKRTCCallbackLogger?
+    
+    public init(minLevel: LogLevel = .debug, webrtc: Bool = false) {
+        self.minLevel = minLevel
+        
+        guard webrtc else { return }
+
+        rtcLogger = LKRTCCallbackLogger()
+        rtcLogger?.severity = minLevel.rtcSeverity
+        rtcLogger?.start { message, severity in
+            let cleanMessage = message.trimmingCharacters(in: .newlines)
+            Logger.log("[LiveKit/WebRTC] \(cleanMessage)", flag: severity.ddLogFlag, file: "", function: "", line: 0)
+        }
+    }
+    
+    deinit {
+        rtcLogger?.stop()
+    }
+    
     public func log(
         _ message: @autoclosure () -> CustomStringConvertible,
         _ level: LogLevel,
         source _: @autoclosure () -> String?,
-        file _: StaticString,
+        file: StaticString,
         type: Any.Type,
         function: StaticString,
-        line _: UInt,
+        line: UInt,
         metaData: ScopedMetadataContainer,
         ptr: String? = nil
     ) {
-        guard level >= .debug else { return }
+        guard level >= minLevel else { return }
 
         let message = message().description
 
@@ -36,8 +93,6 @@ open class OSLogger: LiveKit.Logger, @unchecked Sendable {
         let metadata = buildScopedMetadataString()
         let ptr = ptr ?? String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
 
-        queue.async {
-            Logger.info("[livekit]: debug: \(type).\(function) [\(ptr)] \(message)\(metadata)")
-        }
+        Logger.log("[\(type).\(ptr)] \(message)\(metadata)", flag: level.ddLogFlag, file: String(describing: file), function: String(describing: function), line: Int(line))
     }
 }

@@ -763,6 +763,36 @@ extension DTMeetingManager: DTCallMessageDelegate {
         }
     }
     
+    func sendCriticalAlertWithBarrage(_ message: String) async {
+        if let otherParticipantId = currentCall.conversationId {
+            CallCriticalAlertApi().criticalAlertServers(["destination": otherParticipantId]) { [weak self] entity in
+                guard let self = self else { return }
+                if let result = entity?.data["result"] as? Bool, result {
+                    Logger.info("[newCall] CallCriticalAlert success")
+                    if let roomCtx = self.roomContext {
+                        let pid = roomCtx.room.localParticipant.identity?.stringValue
+                            .components(separatedBy: ".").first ?? ""
+                        RoomDataManager.shared.sendRTMBarrageMessage(pid: pid, message: message)
+                    }
+                } else {
+                    self.criticalAlertFailedBarrage()
+                    Logger.error("[newCall] CallCriticalAlert result is false or missing")
+                }
+            } failure: { error, _ in
+                self.criticalAlertFailedBarrage()
+                Logger.error("[newCall] CallCriticalAlert failure \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func criticalAlertFailedBarrage() {
+        if let roomCtx = self.roomContext {
+            let pid = roomCtx.room.localParticipant.identity?.stringValue
+                .components(separatedBy: ".").first ?? ""
+            RoomDataManager.shared.sendRTMBarrageMessage(pid: pid, message: Localized("MEETING_CRITICAL_ALERT_ERROR_TIPS"))
+        }
+    }
+    
     // MARK: 控制他人关麦
     func sendRemoteMicOffRoom(targetParticentId: String) async {
         var result: DTEncryptedRtmMsgResult

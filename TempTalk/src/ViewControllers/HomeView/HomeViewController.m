@@ -189,9 +189,6 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     
     [self checkIfNeedShowScreenLockAlert];
     
-    // 清理归档过的会话
-//    [self cleanupEmptyThreadsIfNeeded];
-    
     OWSLogInfo(@"viewDidAppear");
 }
 
@@ -400,13 +397,6 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     if ([TSAccountManager isRegistered]) {
         [[DTConversationsJob sharedJob] startIfNecessary];
     }
-}
-
-- (void)cleanupEmptyThreadsIfNeeded
-{
-    DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-        [TSThread cleanupEmptyVisibleThreadsWithTransaction:writeTransaction];
-    });
 }
 
 - (BOOL)hasAnyMessagesWithTransaction:(SDSAnyReadTransaction *)transaction

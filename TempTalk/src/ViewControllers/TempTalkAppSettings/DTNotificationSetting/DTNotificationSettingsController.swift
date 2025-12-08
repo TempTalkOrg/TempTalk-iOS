@@ -9,15 +9,18 @@
 import Foundation
 import TTServiceKit
 import TTMessaging
+import UserNotifications
 
 @objc
 class DTNotificationSettingsController : SettingBaseViewController {
     let reuse_identifier_style_blank = "DTDefaultStyleCell_NotificationSettings_style_blank"
     let reuse_identifier_style_description = "DTDefaultStyleCell_NotificationSettings_style_description"
     let reuse_identifier_style_switch = "DTDefaultStyleCell_NotificationSettings_style_switch"
+    let reuse_identifier_style_plainText = "DTDefaultStyleCell_NotificationSettings_style_plainText"
     
     var notificationTypeValue : NSNumber = NSNumber(value: -1000)
     var contact : Contact?
+    var criticalEnabed: Bool = false
     public lazy var mainTableView: UITableView = {
         let mainTableView = UITableView(frame: CGRect.zero, style: .plain)
         if #available(iOS 15.0, *) {
@@ -31,6 +34,7 @@ class DTNotificationSettingsController : SettingBaseViewController {
         mainTableView.register(DTBlankCell.self, forCellReuseIdentifier: reuse_identifier_style_blank)
         mainTableView.register(DTSettingDescriptionCell.self, forCellReuseIdentifier: reuse_identifier_style_description)
         mainTableView.register(DTSettingSwitchCell.self, forCellReuseIdentifier: reuse_identifier_style_switch)
+        mainTableView.register(DTSettingPlanTextCell.self, forCellReuseIdentifier: reuse_identifier_style_plainText)
         return mainTableView
     }()
     var signalAccount: SignalAccount?
@@ -52,6 +56,9 @@ class DTNotificationSettingsController : SettingBaseViewController {
         if let openSwitchValue = prefs?.soundInForeground() {
             openSwitch = openSwitchValue
         }
+        
+        // 默认critical alert描述，会在异步更新后刷新
+        var criticalAlertDescription = Localized("NOTIFICATIONS_CRITICAL_SWITCH_OFF")
         /// cellStyle 不同的值对应不同的cell类型
         ///blank = 0
         ///onlyAccessory = 1
@@ -109,9 +116,69 @@ class DTNotificationSettingsController : SettingBaseViewController {
                  "cellStyle": 4
                 ],
             ],
+            [
+                ["icon":"",
+                 "title":"",
+                 "description":"",
+                 "cellStyle": 0
+                ],
+            ],
+            [
+                ["icon":"",
+                 "title": Localized("NOTIFICATIONS_CRITICAL_ALERT",comment: "Critical Alert"),
+                 "description":criticalAlertDescription,
+                 "type":5,
+                 "cellStyle": 4,
+                ],
+                ["icon":"",
+                 "title":"",
+                 "description":"",
+                 "cellStyle": SettingCellStyle.plainTextType.rawValue,
+                 "plainText": Localized("NOTIFICATIONS_CRITICAL_DESCRIPTION", comment: "Critical Alert Tips")
+                ],
+            ],
         ]
         let dataSourceArr = DTJsonParsesUtil.convert(dataSource, to: DTNotificationItem.self)
         return dataSourceArr
+    }
+    
+    func checkCriticalAlertPermission(completion: @escaping (Bool) -> Void) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            switch settings.criticalAlertSetting {
+            case .enabled:
+                completion(true)
+            case .disabled:
+                completion(false)
+            case .notSupported:
+                completion(false)
+            @unknown default:
+                completion(false)
+            }
+        }
+    }
+    
+    func updateCriticalAlertStatus() {
+        checkCriticalAlertPermission { [weak self] isEnabled in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.criticalEnabed = isEnabled
+                for sectionIndex in 0..<self.dataSource.count {
+                    for rowIndex in 0..<self.dataSource[sectionIndex].count {
+                        let item = self.dataSource[sectionIndex][rowIndex]
+                        if item.type == .criticalAlert {
+                            let description = isEnabled ? Localized("NOTIFICATIONS_CRITICAL_SWITCH_ON") : Localized("NOTIFICATIONS_CRITICAL_SWITCH_OFF")
+                            self.dataSource[sectionIndex][rowIndex].description = description
+                            let indexPath = IndexPath(row: rowIndex, section: sectionIndex)
+                            if let cell = self.mainTableView.cellForRow(at: indexPath) as? DTSettingDescriptionCell {
+                                cell.reloadCell(model: self.dataSource[sectionIndex][rowIndex])
+                            }
+                            break
+                        }
+                    }
+                }
+            }
+        }
     }
     
     func notificationTypeString() -> String {
@@ -143,6 +210,7 @@ class DTNotificationSettingsController : SettingBaseViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         prepareUIData()
+        updateCriticalAlertStatus()
         self.mainTableView.reloadData()
         
     }
@@ -255,6 +323,14 @@ extension DTNotificationSettingsController : UITableViewDelegate,UITableViewData
             defaultStyleCell.selectionStyle = .none
             defaultStyleCell.reloadCell(model: settingMeItem)
             return defaultStyleCell
+        } else if(settingMeItem.cellStyle == .plainTextType){
+            
+            let cell = tableView.dequeueReusableCell(withIdentifier: reuse_identifier_style_plainText, for: indexPath) as? DTSettingPlanTextCell
+            guard let defaultStyleCell = cell else { return UITableViewCell.init()}
+            defaultStyleCell.selectionStyle = .none
+            defaultStyleCell.reloadCell(model: settingMeItem)
+            return defaultStyleCell
+            
         }
         else {
             return UITableViewCell.init()
@@ -278,17 +354,63 @@ extension DTNotificationSettingsController : UITableViewDelegate,UITableViewData
             let notificationsVC = NotificationSettingsOptionsViewController()
             self.navigationController?.pushViewController(notificationsVC, animated: true)
             return
+        case .some(.criticalAlert):
+            handleCriticalAlertTap()
+            return
         case .none:
             return
         }
     }
+    
+    private func handleCriticalAlertTap() {
+        let hasShownCriticalAlertPopup = Environment.preferences().hasShownCriticalAlertPopup()
+        if !hasShownCriticalAlertPopup, !self.criticalEnabed {
+            self.requestCriticalAlertPermission()
+            Environment.preferences().setHasShownCriticalAlertPopup(true)
+        } else {
+            showCriticalAlertSettingsRedirect()
+        }
+    }
 }
 
-//MARK:  用户自定义的按钮点击事件
 extension DTNotificationSettingsController : DTSettingSwitchCellDelegate  {
     
     func switchValueChanged(isOn: Bool, cell: DTDefaultBaseStyleCell) {
-        Environment.preferences().setSoundInForeground(isOn)
+        if let indexPath = mainTableView.indexPath(for: cell) {
+            let settingItem = dataSource[indexPath.section][indexPath.row]
+            if settingItem.type == .playWhileAppOpen {
+                Environment.preferences().setSoundInForeground(isOn)
+            }
+        }
+    }
+    
+    private func requestCriticalAlertPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.criticalAlert]) { granted, error in
+            DispatchQueue.main.async {
+                self.updateCriticalAlertStatus()
+            }
+        }
+    }
+    
+    private func showCriticalAlertSettingsRedirect() {
+        let title = self.criticalEnabed ? Localized("NOTIFICATIONS_CRITICAL_ALERT_TITLE_OFF") : Localized("NOTIFICATIONS_CRITICAL_ALERT_TITLE_ON")
+        let description = self.criticalEnabed ? Localized("NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF") : Localized("NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON")
+        let alertController = UIAlertController(
+            title: title,
+            message: description,
+            preferredStyle: .alert
+        )
+        
+        let settingsAction = UIAlertAction(title: Localized("NOTIFICATIONS_CRITICAL_ALERT_SETTING", comment: "Open Settings"), style: .default) { _ in
+            UIApplication.shared.openSystemSettings()
+        }
+        
+        let cancelAction = UIAlertAction(title: Localized("NOTIFICATIONS_CRITICAL_ALERT_CANCEL", comment: "Cancel"), style: .cancel)
+        
+        alertController.addAction(settingsAction)
+        alertController.addAction(cancelAction)
+        
+        present(alertController, animated: true)
     }
     
 }

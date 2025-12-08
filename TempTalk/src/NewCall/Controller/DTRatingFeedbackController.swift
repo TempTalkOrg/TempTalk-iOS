@@ -29,7 +29,7 @@ public class DTRatingFeedbackController: OWSViewController, PanModalPresentable 
     public static func present(from source: UIViewController, submit: ((FeedbackResult) -> Void)? = nil) {
         let vc = DTRatingFeedbackController()
         vc.submitHandler = submit
-        let nav = DTPanModalNavController(rootViewController: vc, defaultHeight: 300.0)
+        let nav = DTPanModalNavController(rootViewController: vc, defaultHeight: 270.0)
         source.presentPanModal(nav)
     }
 
@@ -377,7 +377,7 @@ public class DTRatingFeedbackController: OWSViewController, PanModalPresentable 
     public var panScrollable: UIScrollView? { nil }
     
     public var shortFormHeight: PanModalHeight {
-        .contentHeight(300)
+        .contentHeight(270)
     }
 
     public var longFormHeight: PanModalHeight {

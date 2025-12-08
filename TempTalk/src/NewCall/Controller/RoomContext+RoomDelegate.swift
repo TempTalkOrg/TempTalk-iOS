@@ -431,12 +431,12 @@ extension RoomContext: RoomDelegate {
         if participant.isScreenShareEnabled()
             && !callManager.currentCall.isPresentedShare
             && publication.source == .screenShareVideo {
-            Logger.info("开始了屏幕共享")
+            Logger.info("[Livekit] start screen share")
             DispatchMainThreadSafe { [self] in
                 screenSharePublication = publication
                 screenShareParticipant = participant
                 callManager.currentCall.isPresentedShare = true
-                presentShareView()
+                tryPresentShareView(maxRetryCount: 8)
             }
         }
     }
@@ -576,6 +576,32 @@ extension RoomContext {
                 
                 callManager.storeFreshPrekeys(tempStales) {}
             }
+        }
+    }
+    
+    private func tryPresentShareView(delay: TimeInterval = 0.5, maxRetryCount: Int = 1) {
+        guard !isPresentingShareView else {
+            Logger.info("[Livekit] Share view is already being presented, skipping duplicate call")
+            return
+        }
+
+        guard CurrentAppContext().isMainAppAndActive else {
+            if maxRetryCount > 0 {
+                Logger.info("[Livekit] App not active, delaying \(delay)s before retry (\(maxRetryCount) retries left)")
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.tryPresentShareView(delay: delay, maxRetryCount: maxRetryCount - 1)
+                }
+            } else {
+                Logger.info("[Livekit] App still not active after delay, cancel presenting share view")
+            }
+            return
+        }
+        isPresentingShareView = true
+        Logger.info("[Livekit] App active, presenting share view")
+
+        presentShareView { [weak self] in
+            self?.isPresentingShareView = false
+            Logger.info("[Livekit] Share view dismissed, reset presenting state")
         }
     }
 }

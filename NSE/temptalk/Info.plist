@@ -43,6 +43,8 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>CFBundleDisplayName</key>
+	<string>$(AppDisplayName)</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>

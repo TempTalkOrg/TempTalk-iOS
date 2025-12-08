@@ -23,7 +23,8 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
     
     let GWidth = UIScreen.main.bounds.width
     let GHeight = UIScreen.main.bounds.height
-    let patternWidth: CGFloat = UIScreen.main.bounds.width - 100
+    let minScreenDimension = min(UIScreen.main.bounds.width, UIScreen.main.bounds.height)
+    let patternWidth: CGFloat = min(UIScreen.main.bounds.width, UIScreen.main.bounds.height) - 100
     let patternHeight: CGFloat = 300
     let patternX: CGFloat = 50
     
@@ -49,7 +50,6 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
         view.addSubview(lineView)
         view.addSubview(errorTipsLabel)
         view.addSubview(doneButton)
-        view.addSubview(patternView)
         
         switchPasswordBtn.titleLabel?.font = UIFont.systemFont(ofSize: 14)
         switchPasswordBtn.titleLabel?.textAlignment = .right
@@ -94,8 +94,10 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
         lineView.isHidden = shouldShowPattern
         doneButton.isHidden = shouldShowPattern
         patternView.isHidden = !shouldShowPattern
-        switchPatternBtn.isHidden = shouldShowPattern
-        switchPasswordBtn.isHidden = !shouldShowPattern
+        let showSwitchButtons = shouldShowSwitchBtn()
+        switchPatternBtn.isHidden = !showSwitchButtons || shouldShowPattern
+        switchPasswordBtn.isHidden = !showSwitchButtons || !shouldShowPattern
+        seperatorView.isHidden = !shouldShowSwitchBtn()
         
         
         if attempts >= attemptsThreshold {
@@ -111,8 +113,32 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
     }
     
     func updateSubViewsLayout(with shouldShowPattern: Bool) {
-        // 先移除旧约束，避免重复
-        NSLayoutConstraint.deactivate(view.constraints)
+        // Deactivate existing constraints for specific views that need layout updates
+        let managedSubviews: [UIView] = [
+            logoIconImageView,
+            titleLabel,
+            passcodeField,
+            lineView,
+            errorTipsLabel,
+            doneButton,
+            patternView,
+            switchPasswordBtn,
+            switchPatternBtn,
+            forgotBtn,
+            seperatorView
+        ]
+
+        managedSubviews.forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+
+        let constraintsToDeactivate = view.constraints.filter { constraint in
+            guard
+                let first = constraint.firstItem as? UIView,
+                let second = constraint.secondItem as? UIView
+            else { return false }
+            return managedSubviews.contains(first) || managedSubviews.contains(second)
+        }
+
+        NSLayoutConstraint.deactivate(constraintsToDeactivate)
         
         logoIconImageView.autoPinEdge(toSuperviewEdge: .top, withInset: 108)
         logoIconImageView.autoSetDimensions(to: CGSize(width: 160, height: 160))
@@ -143,13 +169,13 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
                 // switchBtn 在左侧
                 switchPatternBtn.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -60)
                 switchPatternBtn.autoSetDimensions(to: CGSize(width: 130, height: 20))
-                switchPatternBtn.autoPinEdge(.right, to: .right, of: view, withOffset: -UIScreen.main.bounds.size.width * 0.5 - 10)
+                switchPatternBtn.autoPinEdge(.right, to: .right, of: view, withOffset: -minScreenDimension * 0.5 - 10)
                 
                 switchPasswordBtn.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -60)
                 switchPasswordBtn.autoSetDimensions(to: CGSize(width: 130, height: 20))
-                switchPasswordBtn.autoPinEdge(.right, to: .right, of: view, withOffset: -UIScreen.main.bounds.size.width * 0.5 - 10)
+                switchPasswordBtn.autoPinEdge(.right, to: .right, of: view, withOffset: -minScreenDimension * 0.5 - 10)
                 
-                seperatorView.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -60)
+                seperatorView.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -65)
                 seperatorView.autoPinEdge(.left, to: .right, of: switchPasswordBtn, withOffset: 10)
                 seperatorView.autoSetDimension(.height, toSize: 12)
                 seperatorView.autoSetDimension(.width, toSize: 2)
@@ -192,11 +218,11 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
                 // switchBtn 在左测
                 switchPatternBtn.autoPinEdge(.top, to: .bottom, of: doneButton, withOffset: 12)
                 switchPatternBtn.autoSetDimensions(to: CGSize(width: 130, height: 20))
-                switchPatternBtn.autoPinEdge(.right, to: .right, of: view, withOffset: -UIScreen.main.bounds.size.width * 0.5 - 10)
+                switchPatternBtn.autoPinEdge(.right, to: .right, of: view, withOffset: -minScreenDimension * 0.5 - 10)
                 
                 switchPasswordBtn.autoPinEdge(.top, to: .bottom, of: doneButton, withOffset: 12)
                 switchPasswordBtn.autoSetDimensions(to: CGSize(width: 130, height: 20))
-                switchPasswordBtn.autoPinEdge(.right, to: .right, of: view, withOffset: -UIScreen.main.bounds.size.width * 0.5 - 10)
+                switchPasswordBtn.autoPinEdge(.right, to: .right, of: view, withOffset: -minScreenDimension * 0.5 - 10)
                 
                 seperatorView.autoPinEdge(.top, to: .bottom, of: doneButton, withOffset: 16)
                 seperatorView.autoPinEdge(.left, to: .right, of: switchPatternBtn, withOffset: 10)

@@ -90,12 +90,7 @@ public class UserNotificationsAdaptee: NSObject, UNUserNotificationCenterDelegat
     public func requestAuthorization() {
 #warning ("--- cc us暂时不支持criticalAlert ---")
         var options: UNAuthorizationOptions!
-        let isWea = TSConstants.appDisplayName.lowercased().contains("cc us")
-        if isWea {
-            options = [.badge, .sound, .alert]
-        } else {
-            options = [.badge, .sound, .alert, .criticalAlert]
-        }
+        options = [.badge, .sound, .alert]
         center.requestAuthorization(options: options) { (granted, error) in
             if granted {
                 Logger.debug("\(self.TAG) \(#function) succeeded.")

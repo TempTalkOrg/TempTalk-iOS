@@ -26,6 +26,7 @@ class DTNotificationItem: DTSettingItem , DTSettingItemProtocol {
         case messageSound = 2
         case playWhileAppOpen = 3
         case displayContent = 4
+        case criticalAlert = 5
     }
 
     /// 关联协议中的 SettingType属性 并重写 type的 get 函数 为type赋值
@@ -42,7 +43,7 @@ class DTNotificationItem: DTSettingItem , DTSettingItemProtocol {
                   cellStyle : Int?,
                   openSwitch: Bool?,
                   plainText: String? = ""){
-        super.init(icon: icon, title: title, description: description, cellStyle: cellStyle, openSwitch: openSwitch)
+        super.init(icon: icon, title: title, description: description, cellStyle: cellStyle, openSwitch: openSwitch, plainText: plainText)
     }
 
     convenience init(icon: String,

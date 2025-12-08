@@ -34,6 +34,8 @@ NSString *const OWSPreferencesKeyIOSUpgradeNagDate = @"iOSUpgradeNagDate";
 NSString *const OWSPreferencesKey_IsReadyForAppExtensions = @"isReadyForAppExtensions_5";
 NSString *const OWSPreferencesKeySystemCallLogEnabled = @"OWSPreferencesKeySystemCallLogEnabled";
 NSString *const OWSPreferencesKeySystemEndCallKey = @"kNotificationEndCall";
+NSString *const OWSPreferencesKeyCriticalAlertEnabled = @"OWSPreferencesKeyCriticalAlertEnabled";
+NSString *const OWSPreferencesKeyHasShownCriticalAlertPopup = @"OWSPreferencesKeyHasShownCriticalAlertPopup";
 
 @implementation OWSPreferences
 
@@ -465,6 +467,38 @@ NSString *const OWSPreferencesKeySystemEndCallKey = @"kNotificationEndCall";
 - (NSString *)voipNotificationDescription {
     
     return [NSString stringWithFormat:Localized(@"MEETING_VOIP_NOTIFICATION_DESCRIPTION", @""), TSConstants.appDisplayName];
+}
+
+#pragma mark - Critical Alert Preferences
+
+- (BOOL)criticalAlertEnabled
+{
+    NSNumber *preference = [self tryGetValueForKey:OWSPreferencesKeyCriticalAlertEnabled];
+    if (preference) {
+        return [preference boolValue];
+    } else {
+        return NO;
+    }
+}
+
+- (void)setCriticalAlertEnabled:(BOOL)enabled
+{
+    [self setValueForKey:OWSPreferencesKeyCriticalAlertEnabled toValue:@(enabled)];
+}
+
+- (BOOL)hasShownCriticalAlertPopup
+{
+    NSNumber *preference = [self tryGetValueForKey:OWSPreferencesKeyHasShownCriticalAlertPopup];
+    if (preference) {
+        return [preference boolValue];
+    } else {
+        return NO;
+    }
+}
+
+- (void)setHasShownCriticalAlertPopup:(BOOL)shown
+{
+    [self setValueForKey:OWSPreferencesKeyHasShownCriticalAlertPopup toValue:@(shown)];
 }
 
 @end

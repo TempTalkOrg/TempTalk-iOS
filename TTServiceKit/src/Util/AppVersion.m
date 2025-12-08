@@ -18,6 +18,7 @@ NSString *const kNSUserDefaults_LastCompletedLaunchAppVersion_SAE
     = @"kNSUserDefaults_LastCompletedLaunchAppVersion_SAE";
 NSString *const kNSUserDefaults_LastCompletedLaunchAppVersion_NSE
     = @"kNSUserDefaults_LastCompletedLaunchAppVersion_NSE";
+NSString *const kNSUserDefaults_AppDisplayNameForNotification = @"kNSUserDefaults_AppDisplayNameForNotification";
 
 @interface AppVersion ()
 
@@ -200,6 +201,9 @@ NSString *const kNSUserDefaults_LastCompletedLaunchAppVersion_NSE
     [[NSUserDefaults appUserDefaults] setObject:self.currentAppReleaseVersion
                                          forKey:kNSUserDefaults_LastCompletedLaunchAppVersion_MainApp];
 
+    // 更新应用名称缓存
+    [self updateAppDisplayNameForNotification];
+
     [self appLaunchDidComplete];
 }
 
@@ -251,6 +255,58 @@ NSString *const kNSUserDefaults_LastCompletedLaunchAppVersion_NSE
 
     // If we get here, the versions are effectively equal
     return NSOrderedSame;
+}
+
+#pragma mark - App Name Management
+
+- (void)updateAppDisplayNameForNotification
+{
+    NSString *currentAppDisplayName = [self getCurrentAppDisplayName];
+    NSString *cachedAppDisplayName = [[NSUserDefaults appUserDefaults] 
+                                      objectForKey:kNSUserDefaults_AppDisplayNameForNotification];
+    
+    // 只有在名称为空或发生改变时才更新
+    if (cachedAppDisplayName.length == 0 || ![cachedAppDisplayName isEqualToString:currentAppDisplayName]) {
+        // 缓存到 UserDefaults
+        [[NSUserDefaults appUserDefaults] setObject:currentAppDisplayName
+                                             forKey:kNSUserDefaults_AppDisplayNameForNotification];
+        [[NSUserDefaults appUserDefaults] synchronize];
+        
+        OWSLogInfo(@"Updated app display name for notification: %@ (was: %@)", 
+                   currentAppDisplayName, cachedAppDisplayName);
+    } else {
+        OWSLogDebug(@"App display name unchanged, skipping update: %@", currentAppDisplayName);
+    }
+}
+
+- (NSString *)getCurrentAppDisplayName
+{
+    NSString *displayName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"];
+    if (displayName.length > 0) {
+        return displayName;
+    }
+    
+    NSString *bundleName = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleName"];
+    if (bundleName.length > 0) {
+        return bundleName;
+    }
+    
+    return @"Yelling";
+}
+
+- (NSString *)getAppDisplayNameForNotification
+{
+    NSString *cachedName = [[NSUserDefaults appUserDefaults] objectForKey:kNSUserDefaults_AppDisplayNameForNotification];
+    if (cachedName.length > 0) {
+        return cachedName;
+    }
+    
+    NSString *currentName = [self getCurrentAppDisplayName];
+    [[NSUserDefaults appUserDefaults] setObject:currentName
+                                         forKey:kNSUserDefaults_AppDisplayNameForNotification];
+    [[NSUserDefaults appUserDefaults] synchronize];
+    
+    return currentName;
 }
 
 @end

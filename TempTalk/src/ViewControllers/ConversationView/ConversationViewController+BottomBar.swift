@@ -329,9 +329,10 @@ extension ConversationViewController {
     }
     
     func dismissKeyBoard() {
-        if self.inputToolbar.isFirstResponder {
+        if self.inputToolbar.isInputViewFirstResponder {
             self.inputToolbar.endEditingMessage()
         }
+        self.view.endEditing(true)
         self.inputToolbar.clearDesiredKeyboard()
     }
 }

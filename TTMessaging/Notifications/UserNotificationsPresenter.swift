@@ -147,12 +147,7 @@ class UserNotificationPresenter: Dependencies {
     func registerNotificationSettings() -> Guarantee<Void> {
         
         var options: UNAuthorizationOptions!
-        let isWea = TSConstants.appDisplayName.lowercased().contains("cc us")
-        if isWea {
-            options = [.badge, .sound, .alert]
-        } else {
-            options = [.badge, .sound, .alert, .criticalAlert]
-        }
+        options = [.badge, .sound, .alert]
         
         return Guarantee { done in
             Self.notificationCenter.requestAuthorization(options: options) { (granted, error) in

@@ -127,14 +127,16 @@ open class PatternLockView: UIView {
 
     open override func layoutSubviews() {
         super.layoutSubviews()
-
+        // 使用宽高的最小值，确保竖屏布局稳定，避免横屏时布局错乱
+        let minDimension = min(bounds.size.width, bounds.size.height)
+        
         var horizantalSpacing: CGFloat = 0
         if config.matrix.column > 1 {
-            horizantalSpacing = (bounds.size.width - CGFloat(config.matrix.column) * config.gridSize.width)/CGFloat(config.matrix.column - 1)
+            horizantalSpacing = (minDimension - CGFloat(config.matrix.column) * config.gridSize.width)/CGFloat(config.matrix.column - 1)
         }
         var verticalSpacing: CGFloat = 0
         if config.matrix.row > 1 {
-            verticalSpacing = (bounds.size.width - CGFloat(config.matrix.row) * config.gridSize.height)/CGFloat(config.matrix.row - 1)
+            verticalSpacing = (minDimension - CGFloat(config.matrix.row) * config.gridSize.height)/CGFloat(config.matrix.row - 1)
         }
         grids.forEach { (grid) in
             grid.frame = CGRect(x: CGFloat(grid.matrix.column) * (horizantalSpacing + config.gridSize.width), y: CGFloat(grid.matrix.row) * (verticalSpacing + config.gridSize.height), width: config.gridSize.width, height: config.gridSize.height)

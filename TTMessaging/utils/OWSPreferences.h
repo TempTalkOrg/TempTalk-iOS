@@ -66,6 +66,13 @@ extern NSString *const OWSPreferencesKeySystemEndCallKey;
 - (BOOL)hasGeneratedThumbnails;
 - (void)setHasGeneratedThumbnails:(BOOL)value;
 
+#pragma mark Critical Alert
+
+- (BOOL)criticalAlertEnabled;
+- (void)setCriticalAlertEnabled:(BOOL)enabled;
+- (BOOL)hasShownCriticalAlertPopup;
+- (void)setHasShownCriticalAlertPopup:(BOOL)shown;
+
 #pragma mark Callkit
 
 - (BOOL)isSystemCallLogEnabled;

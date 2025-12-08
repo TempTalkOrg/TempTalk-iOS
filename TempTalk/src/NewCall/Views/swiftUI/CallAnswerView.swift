@@ -22,6 +22,7 @@ struct CallAnswerView: View {
     var onDecline: () -> Void
     
     @State private var rotation: Double = 0
+    @State private var hasAutoAccepted = false // 防止重复自动接听
     
     func displayName() -> String {
         return Environment.shared.contactsManager.displayName(forPhoneIdentifier: currentCall.caller)
@@ -65,10 +66,14 @@ struct CallAnswerView: View {
                 }
                 
                 Button(action: {
-                    if !isConnecting {
-                        isConnecting = true
-                        onAnswer()
+                    // 防止重复点击和自动接听冲突
+                    guard !isConnecting && !hasAutoAccepted else {
+                        Logger.info("\(logTag) button action ignored - isConnecting: \(isConnecting), hasAutoAccepted: \(hasAutoAccepted)")
+                        return
                     }
+                    isConnecting = true
+                    Logger.info("\(logTag) manual answer button tapped")
+                    onAnswer()
                 }) {
                     VStack {
                         if isConnecting {
@@ -90,10 +95,12 @@ struct CallAnswerView: View {
         .background(Color.dtBackground)
         .edgesIgnoringSafeArea(.all)
         .onAppear {
-            Logger.info("\(logTag) callAnswerView onAppear")
-            // callKit自动接听
-            if autoAccept && !isConnecting {
+            Logger.info("\(logTag) callAnswerView onAppear - autoAccept: \(autoAccept), isConnecting: \(isConnecting)")
+            // callKit自动接听 - 防止重复执行
+            if autoAccept && !isConnecting && !hasAutoAccepted {
+                hasAutoAccepted = true
                 isConnecting = true
+                Logger.info("\(logTag) auto accepting call from CallKit")
                 onAnswer()
             }
         }.onDisappear() {

@@ -43,7 +43,13 @@ let defaultRoomName = "TempTalk Call"
 
 @objcMembers public class DTLiveKitCallModel: NSObject, ObservableObject {
     
-    var callState: CallState = .idle
+    @Published var callState: CallState = .idle {
+        willSet {
+            if newValue != callState {
+                NotificationCenter.default.post(name: NSNotification.Name("CallStateDidChange"), object: nil)
+            }
+        }
+    }
     @Published var callType: CallType = .instant
     var roomId: String?
 //    var roomName: String = ""

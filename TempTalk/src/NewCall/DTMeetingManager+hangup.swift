@@ -184,7 +184,7 @@ extension DTMeetingManager {
         
         DispatchMainThreadSafe {
             // 播放停会的声音
-            DTToastHelper.show(withInfo: Localized("GROUP_MEETING_OTHER_END_CALL"))
+            DTToastHelper.toast(withText: Localized("GROUP_MEETING_OTHER_END_CALL"), durationTime: 3, afterDelay: 1)
             self.playSound(.callOff, isLoop: false, playMode: .playback)
         }
     }
@@ -310,6 +310,11 @@ extension DTMeetingManager {
         // 防止多次调用导致评分逻辑被重复消费
         guard !hasTriggeredRating else {
             Logger.info("\(logTag) Rating already triggered, skipping")
+            return
+        }
+        
+        guard feedbackUserSid != nil else {
+            Logger.info("\(logTag) Call never connected, skipping rating")
             return
         }
         
