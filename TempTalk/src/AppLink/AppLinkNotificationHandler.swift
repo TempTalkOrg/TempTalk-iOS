@@ -18,8 +18,8 @@ import Foundation
     
     @objc static let kURLHostTransfer = "transfer"
     @objc static let kURLHostInvite = "invite"
-    @objc static let kURLHostTempTalk = "temptalk.app"
-    @objc static let kURLHost3WTempTalk = "www.temptalk.app"
+    @objc static let kURLHostTempTalk = "yelling.pro"
+    @objc static let kURLHost3WTempTalk = "www.yelling.pro"
     
     @objc static let kULinkPathInvite = "/u"
     

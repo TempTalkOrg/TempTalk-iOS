@@ -211,8 +211,33 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
                                       authorizeId:attachment.serverId
                                               gid:gid
                                        completion:^(DTFileDataEntity * _Nullable entity, NSError * _Nullable error) {
-        if(error || !DTParamsUtils.validateString(entity.url)){
+        if(error){
             DDLogError(@"%@ getFileInfoWithFileHash Response had unexpected format. or error : %@", self.logTag, error);
+            // 根据状态码设置不同的错误状态
+            NSInteger statusCode = error.code;
+            if (statusCode == DTAPIRequestResponseStatusNoPermission) {
+                // 状态码2：文件已过期
+                NSError *expiredError = OWSErrorMakeUnableToProcessServerResponseError();
+                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                    [self setAttachment:attachment didExpireInMessage:message error:expiredError];
+                    failureHandler(expiredError);
+                    backgroundTask = nil;
+                });
+                return;
+            } else if (statusCode == DTAPIRequestResponseStatusInvalidParameter ||
+                       statusCode == DTAPIRequestResponseStatusNoSuchFile ||
+                       statusCode == DTAPIRequestResponseStatusOperateError ||
+                       statusCode == DTAPIRequestResponseStatusOtherError) {
+                // 状态码1,9,12,99：失败状态，可以重试
+                NSError *retryError = OWSErrorMakeUnableToProcessServerResponseError();
+                return markAndHandleFailure(retryError);
+            } else {
+                // 其他错误
+                NSError *generalError = OWSErrorMakeUnableToProcessServerResponseError();
+                return markAndHandleFailure(generalError);
+            }
+        } else if(!DTParamsUtils.validateString(entity.url)){
+            DDLogError(@"%@ getFileInfoWithFileHash Response had unexpected format. entity.url is nil", self.logTag);
             NSError *error = OWSErrorMakeUnableToProcessServerResponseError();
             return markAndHandleFailure(error);
         }else{
@@ -601,16 +626,34 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
             instance.state = TSAttachmentPointerStateFailed;
         }];
         
-        if (message.isPinnedMessage) {
-            [[NSNotificationCenter defaultCenter] postNotificationNameAsync:AnyPinnedMessageFinder.touchPinnedMessageNotification object:nil];
-        } else {
-            if(message.uniqueId &&
-               message.grdbId &&
-               [TSMessage anyFetchMessageWithUniqueId:message.uniqueId transaction:transaction]){
-                [self.databaseStorage touchInteraction:message
-                                         shouldReindex:NO
-                                           transaction:transaction];
-            }
+        if(message.uniqueId &&
+           message.grdbId &&
+           [TSMessage anyFetchMessageWithUniqueId:message.uniqueId transaction:transaction]){
+            [self.databaseStorage touchInteraction:message
+                                     shouldReindex:NO
+                                       transaction:transaction];
+        }
+        
+    });
+}
+
+- (void)setAttachment:(TSAttachmentPointer *)pointer
+   didExpireInMessage:(nullable TSMessage *)message
+                error:(NSError *)error
+{
+    DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+        [pointer anyUpdateAttachmentPointerWithTransaction:transaction
+                                                     block:^(TSAttachmentPointer * instance) {
+            instance.mostRecentFailureLocalizedText = error.localizedDescription;
+            instance.state = TSAttachmentPointerStateExpired;
+        }];
+        
+        if(message.uniqueId &&
+           message.grdbId &&
+           [TSMessage anyFetchMessageWithUniqueId:message.uniqueId transaction:transaction]){
+            [self.databaseStorage touchInteraction:message
+                                     shouldReindex:NO
+                                       transaction:transaction];
         }
         
     });

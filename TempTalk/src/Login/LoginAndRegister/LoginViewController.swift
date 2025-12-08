@@ -11,7 +11,7 @@ import Foundation
 @objc class LoginViewController: OWSViewController, UITextViewDelegate {
     
     private let window = UIApplication.shared.delegate?.window
-    private let legalPolicyURL = "https://temptalk.app/legal.html"
+    private let legalPolicyURL = "https://yelling.pro/legal.html"
     
     // MARK: lifecycle
     override func viewDidLoad() {

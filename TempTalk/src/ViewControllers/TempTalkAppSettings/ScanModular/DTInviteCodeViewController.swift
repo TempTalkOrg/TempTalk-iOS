@@ -163,7 +163,7 @@ final class DTInviteCodeViewController: SettingBaseViewController {
         }
         let action = MenuAction(image: iconImage, title: Localized("INVITE_SHARE"), subtitle: nil, block: {[weak self] _ in
             
-            let inviteDesc = Localized("INVITE_DESC") + " " + (self?.inviteCodeEntity?.inviteLink ?? "https://temptalk.app")
+            let inviteDesc = Localized("INVITE_DESC") + " " + (self?.inviteCodeEntity?.inviteLink ?? "https://yelling.pro")
             let activityController = UIActivityViewController.init(activityItems: [inviteDesc], applicationActivities: nil)
             activityController.completionWithItemsHandler =  { activity, success, items, error in
                 if(success == true){

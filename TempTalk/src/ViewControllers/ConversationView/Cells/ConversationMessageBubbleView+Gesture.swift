@@ -183,7 +183,7 @@ extension ConversationMessageBubbleView {
             )
         case .downloadingAttachment:
             guard let attachmentPointer = viewItem.attachmentPointer() else { return }
-            if attachmentPointer.state == .failed || attachmentPointer.state == .enqueued {
+            if attachmentPointer.state == .failed || attachmentPointer.state == .enqueued || attachmentPointer.state == .expired {
                 delegate?.messageBubbleView?(
                     self,
                     didTapDownloadFailedAttachmentWith: viewItem,

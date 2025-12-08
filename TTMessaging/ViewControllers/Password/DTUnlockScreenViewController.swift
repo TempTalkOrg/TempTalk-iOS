@@ -418,11 +418,15 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
     }
     
     public override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        return .all
+        return .portrait
     }
 
     public override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
         return .portrait
+    }
+
+    public override var shouldAutorotate: Bool {
+        return false
     }
     
 }

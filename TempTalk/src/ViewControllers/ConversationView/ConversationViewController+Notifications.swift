@@ -235,7 +235,7 @@ private extension ConversationViewController {
             self.thread.anyReload(transaction: transaction)
         } completion: {
             self.checkBotBlock()
-            self.checkContactBlock()
+            self.safeUpdateBlockStatus()
             if let conversationEntity = self.thread.conversationEntity, conversationEntity.confidentialMode == TSMessageModeType.confidential {
                 self.inputToolbar.inputToolbarState = .confidential
             } else {

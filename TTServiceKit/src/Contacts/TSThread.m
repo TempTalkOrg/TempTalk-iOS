@@ -215,6 +215,27 @@ BOOL IsNoteToSelfEnabled(void)
 //                             }];
 }
 
+// 清理空的会话
++ (void)cleanupEmptyVisibleThreadsWithTransaction:(SDSAnyWriteTransaction *)transaction
+{
+    OWSLogInfo(@"Starting cleanup of empty visible threads");
+    
+    NSArray<NSString *> *emptyThreadIds = [InteractionFinder findThreadsWithOnlyArchiveMessagesWithTransaction:transaction];
+
+    OWSLogInfo(@"Found %lu threads with only archived messages, which will be deleted", (unsigned long)emptyThreadIds.count);
+    
+    // 删除空的thread
+    for (NSString *threadId in emptyThreadIds) {
+        TSThread *thread = [TSThread anyFetchWithUniqueId:threadId transaction:transaction];
+        if (thread) {
+            OWSLogInfo(@"Deleting empty visible thread: %@", threadId);
+            [thread anyRemoveWithTransaction:transaction];
+        }
+    }
+    
+    OWSLogInfo(@"Cleanup completed, deleted %lu empty visible threads", (unsigned long)emptyThreadIds.count);
+}
+
 
 #pragma mark To be subclassed.
 
@@ -423,6 +444,13 @@ BOOL IsNoteToSelfEnabled(void)
     if(!interaction){
         interaction = [self lastInteractionForInboxWithTransaction:transaction];
         OWSLogInfo(@"get lastInteraction : %llu", interaction.timestampForSorting);
+    }
+    
+    if ([interaction isKindOfClass:[TSInfoMessage class]]) {
+        TSInfoMessage *info = (TSInfoMessage *)interaction;
+        if (info.messageType == TSInfoMessageArchiveMessage) {
+            return @"";
+        }
     }
     
     NSString *previewString = @"";

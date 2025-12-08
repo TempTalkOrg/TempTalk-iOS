@@ -226,6 +226,8 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
                 return Localized("ATTACHMENT_DOWNLOADING_STATUS_IN_PROGRESS", comment: "Status label when an attachment is currently downloading")
             case .failed:
                 return Localized("ATTACHMENT_DOWNLOADING_STATUS_FAILED", comment: "Status label when an attachment download has failed.")
+            case .expired:
+                return Localized("ATTACHMENT_DOWNLOADING_STATUS_EXPIRED", comment: "Status label when an attachment download has expired.")
             @unknown default:
                 return ""
             }

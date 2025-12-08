@@ -278,10 +278,10 @@ private class TSConstantsTempTalkProduction: TSConstantsProtocol {
     public var callServerPath = DTServerToCall
     public var fileShareServicePath = DTServerToFileSharing
 
-    public let appDisplayName = "TempTalk"
-    public let displayNameForUA = "TempTalk"
+    public let appDisplayName = "Yelling"
+    public let displayNameForUA = "Yelling"
     public let appLogoName: String = "logoTempTalk"
-    public let officialBotName: String = "TempTalkBot"
+    public let officialBotName: String = "TTSupport"
     public let officialBotId: String = "+10000"
 
     public let applicationGroup = "group.org.difft.chative"
@@ -296,10 +296,10 @@ private class TSConstantsTempTalkTest: TSConstantsProtocol {
     public var callServerPath = DTServerToCall
     public var fileShareServicePath = DTServerToFileSharing
 
-    public let appDisplayName = "TempTalkTest"
-    public let displayNameForUA = "TempTalkTest"
+    public let appDisplayName = "YellingTest"
+    public let displayNameForUA = "YellingTest"
     public let appLogoName: String = "logoTempTalk"
-    public let officialBotName: String = "TempTalkBot"
+    public let officialBotName: String = "TTSupport"
     public let officialBotId: String = "+10000"
 
     public let applicationGroup = "group.org.difft.chativetest"

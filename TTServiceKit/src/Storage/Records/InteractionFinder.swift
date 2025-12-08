@@ -69,6 +69,8 @@ protocol InteractionFinderAdapter {
     func unseenMentionedInteractions(transaction: ReadTransaction, block: @escaping (TSIncomingMessage) -> Void)
     
     static func enumerateCardRelatedInteractions(cardUniqueId: String, transaction: ReadTransaction, block: @escaping (TSInteraction, UnsafeMutablePointer<ObjCBool>) -> Void) throws
+    
+    static func findThreadsWithOnlyArchiveMessages(transaction: ReadTransaction) -> [String]
 
     #if DEBUG
     func enumerateUnstartedExpiringMessages(transaction: ReadTransaction, block: @escaping (TSMessage, UnsafeMutablePointer<ObjCBool>) -> Void)
@@ -496,6 +498,14 @@ public class InteractionFinder: NSObject, InteractionFinderAdapter {
         switch transaction.readTransaction {
         case .grdbRead(let grdbRead):
             try GRDBInteractionFinderAdapter.enumerateCardRelatedInteractions(cardUniqueId: cardUniqueId, transaction: grdbRead, block: block)
+        }
+    }
+    
+    @objc
+    public class func findThreadsWithOnlyArchiveMessages(transaction: SDSAnyReadTransaction) -> [String] {
+        switch transaction.readTransaction {
+        case .grdbRead(let grdbRead):
+            return GRDBInteractionFinderAdapter.findThreadsWithOnlyArchiveMessages(transaction: grdbRead)
         }
     }
 }
@@ -1384,6 +1394,45 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
         }
     }
 
+    static func findThreadsWithOnlyArchiveMessages(transaction: GRDBReadTransaction) -> [String] {
+        let sql = """
+        SELECT DISTINCT t.uniqueId
+        FROM \(ThreadRecord.databaseTableName) t
+        WHERE t.uniqueId != ?
+        AND \(threadColumn: .shouldBeVisible) = 1
+        AND EXISTS (
+            SELECT 1 
+            FROM \(InteractionRecord.databaseTableName) i 
+            WHERE i.\(interactionColumn: .threadUniqueId) = t.uniqueId 
+            AND i.\(interactionColumn: .recordType) = ? 
+            AND i.\(interactionColumn: .messageType) = ?
+        )
+        AND NOT EXISTS (
+            SELECT 1 
+            FROM \(InteractionRecord.databaseTableName) i2 
+            WHERE i2.\(interactionColumn: .threadUniqueId) = t.uniqueId 
+            AND (
+                i2.\(interactionColumn: .recordType) != ? 
+                OR i2.\(interactionColumn: .messageType) != ?
+            )
+        )
+        """
+        let threadUniqueId = TSContactThread.threadId(fromContactId: TSAccountManager.localNumber() ?? "")
+        let arguments: StatementArguments = [
+            threadUniqueId,
+            SDSRecordType.infoMessage.rawValue,
+            TSInfoMessageType.archiveMessage.rawValue,
+            SDSRecordType.infoMessage.rawValue,
+            TSInfoMessageType.archiveMessage.rawValue
+        ]
+        
+        do {
+            return try String.fetchAll(transaction.database, sql: sql, arguments: arguments)
+        } catch {
+            owsFailDebug("Failed to find threads with only archive messages: \(error)")
+            return []
+        }
+    }
 
     // MARK: - Unseen & Unread
     

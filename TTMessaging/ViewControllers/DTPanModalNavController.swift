@@ -80,6 +80,13 @@ public class DTPanModalNavController: OWSNavigationController, PanModalPresentab
         }
     }
     
+    public override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        
+        // 修复：在屏幕方向变化时，确保PanModal布局正确更新
+        panModalSetNeedsLayoutUpdate()
+    }
+    
     public override func popViewController(animated: Bool) -> UIViewController? {
         let vc = super.popViewController(animated: animated)
         panModalSetNeedsLayoutUpdate()
@@ -102,6 +109,9 @@ public class DTPanModalNavController: OWSNavigationController, PanModalPresentab
     }
     
     public var longFormHeight: PanModalHeight {
+        if let child = topViewController as? PanModalPresentable {
+            return child.longFormHeight
+        }
         return .contentHeight(UIScreen.main.bounds.height)
     }
     

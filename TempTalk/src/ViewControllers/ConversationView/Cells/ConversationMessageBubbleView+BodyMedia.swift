@@ -315,7 +315,7 @@ extension ConversationMessageBubbleView {
             guard MIMETypeUtil.isImage(contentType) || MIMETypeUtil.isAnimated(contentType) else {
                 return
             }
-            guard attachmentPointer.state == .failed || attachmentPointer.state == .enqueued else {
+            guard attachmentPointer.state == .failed || attachmentPointer.state == .enqueued || attachmentPointer.state == .expired else {
                 return
             }
             

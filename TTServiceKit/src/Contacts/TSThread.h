@@ -240,8 +240,8 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:archivalDate:conver
 - (void)unarchiveThread;
 
 - (void)removeAllThreadInteractionsWithTransaction:(SDSAnyWriteTransaction *)transaction;
-
-
+// 清理数据
++ (void)cleanupEmptyVisibleThreadsWithTransaction:(SDSAnyWriteTransaction *)transaction;
 
 #pragma mark Disappearing Messages
 

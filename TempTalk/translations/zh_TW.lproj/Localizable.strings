@@ -81,7 +81,7 @@
 "APP_UPDATE_NAG_ALERT_MESSAGE_FORMAT" = "%@ 版已在 App Store 上线。";
 
 /* Title for the 'new app version available' alert. */
-"APP_UPDATE_NAG_ALERT_TITLE" = "新版本TempTalk发布了";
+"APP_UPDATE_NAG_ALERT_TITLE" = "新版本Yelling发布了";
 
 /* Label for the 'update' button in the 'new app version available' alert. */
 "APP_UPDATE_NAG_ALERT_UPDATE_BUTTON" = "更新";
@@ -2102,7 +2102,7 @@
 "INVITE_SCAN" = "扫一扫";
 "INVITE_SHARE" = "分享";
 "INVITE_ENTER_CODE" = "输入邀请码";
-"INVITE_DESC" = "在 TempTalk 上跟我聊天";
+"INVITE_DESC" = "在 Yelling 上跟我聊天";
 "INVITE_CANCEL" = "取消";
 "INVITE_REGENERATE_ACTION" = "重新生成";
 "INVITE_LINK_TITLE" = "邀请链接";
@@ -2427,11 +2427,11 @@
 "SETTINGS_SCREEN_LOCK_ACTIVITY_TIMEOUT" = "屏幕锁超时";
 
 /* Footer for the 'screen lock' section of the privacy settings. */
-"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "使用密码或手势解锁屏幕。密码可以不同于系统密码，因此如果有人设法得到了系统密码，但他仍然无法访问TempTalk。此外，内容预览也会在app切换时被遮盖。";
+"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "使用密码或手势解锁屏幕。密码可以不同于系统密码，因此如果有人设法得到了系统密码，但他仍然无法访问Yelling。此外，内容预览也会在app切换时被遮盖。";
 
 "UNLOCKSCREEN_TITLE" = "数字密码";
 "UNLOCKSCREEN_DONE" = "确认";
-"SCREENLOCK_SETPASSCODE_TIPS" = "请输入 4–10 位数字的密码。下次解锁 TempTalk 时会要求您输入此密码。";
+"SCREENLOCK_SETPASSCODE_TIPS" = "请输入 4–10 位数字的密码。下次解锁 Yelling 时会要求您输入此密码。";
 "SCREENLOCK_SETPASSCODE_EXCLAMATION" = "若遗失解锁码，必须退出账户或重新安装应用。";
 "SCREENLOCK_SETPASSCODE_FORGOT_TIPS" = "忘记数字密码？";
 "SCREENLOCK_SETPASSCODE_FORGOT_Alert_CONTENT" = "请删除并重装应用。";
@@ -3764,7 +3764,7 @@
 "SPEECHTOTEXT_CONVERT_TIP_MESSAGE" = "转换中...";
 "SPEECHTOTEXT_CONVERT_TIP_MESSAGE_FAILED" = "转文字失败";
 
-"CONVERT_SOURCE_TEXT" = "语音转文字由 TempTalk 服务器提供";
+"CONVERT_SOURCE_TEXT" = "语音转文字由 Yelling 服务器提供";
 
 "SPEECHTOTEXT_NO_TEXT_RECOGNIZE" = "未识别到文字";
 
@@ -3799,7 +3799,7 @@
 "CALLING_NOISE_TITLE" = "麦克风噪声抑制";
 
 "BLOCK_USER_TITLE" = "屏蔽用户";
-"BLOCK_USER_DESCRIPTION" = "是否屏蔽该用户，禁止其在 Temptalk 上向你发送消息或发起通话？";
+"BLOCK_USER_DESCRIPTION" = "是否屏蔽该用户，禁止其在 Yelling 上向你发送消息或发起通话？";
 "BLOCK_USER_CONFIRM" = "屏蔽";
 "BLOCK_USER_CANCEL" = "取消";
 "BLOCK_USER_UNBLOCK" = "取消屏蔽";
@@ -3860,3 +3860,38 @@
 "SCREENLOCK_BINDING_CONFIRM_ACTION" = "立即绑定";
 "SCREENLOCK_BINDING_CANCEL_ACTION" = "現在不要";
 "SCREENLOCK_CONFIRMPATTERN_ERROR_TIPS" = "手势密码不匹配。";
+
+"CALL_RATING_TAB_AUDIO" = "音频";
+"CALL_RATING_TAB_VIDEO" = "视频";
+"CALL_RATING_TAB_OTHER" = "其他";
+"CALL_RATING_SUBMIT" = "提交";
+"CALL_RATING_STAR_TITLE" = "请评价您的通话质量";
+"CALL_RATING_STAR_DESCRIPTION" = "您的回答将保持匿名，我们会用它来帮助提升通话体验";
+"CALL_RATING_NOT_NOW" = "暂不";
+"CALL_RATING_DESC_1" = "非常差";
+"CALL_RATING_DESC_2" = "差";
+"CALL_RATING_DESC_3" = "一般";
+"CALL_RATING_DESC_4" = "好";
+"CALL_RATING_DESC_5" = "非常好";
+"CALL_RATING_REASON_TITLE" = "请描述一下情况";
+"CALL_RATING_REASON_TAB_AUDIO" = "音频";
+"CALL_RATING_REASON_TAB_VIDEO" = "视频";
+"CALL_RATING_REASON_TAB_OTHER" = "其他";
+"CALL_RATING_REASON_AUDIO_0" = "有回声";
+"CALL_RATING_REASON_AUDIO_1" = "其他人听不到我的声音";
+"CALL_RATING_REASON_AUDIO_2" = "机器人音或声音失真";
+"CALL_RATING_REASON_AUDIO_3" = "声音播放过慢";
+"CALL_RATING_REASON_AUDIO_4" = "声音断断续续、卡顿不清晰";
+"CALL_RATING_REASON_AUDIO_5" = "背景噪音";
+"CALL_RATING_REASON_AUDIO_6" = "我听不到别人说话";
+"CALL_RATING_REASON_VIDEO_0" = "视频画面失真、出现异常图像";
+"CALL_RATING_REASON_VIDEO_1" = "别人看不到我的视频画面";
+"CALL_RATING_REASON_VIDEO_2" = "画面模糊";
+"CALL_RATING_REASON_VIDEO_3" = "我看不到别人的视频画面";
+"CALL_RATING_REASON_VIDEO_4" = "视频与音频不同步";
+"CALL_RATING_REASON_VIDEO_5" = "视频画面卡住不动";
+"CALL_RATING_REASON_OTHER_0" = "通话频繁中断";
+"CALL_RATING_REASON_OTHER_1" = "通话突然结束";
+"CALL_RATING_REASON_OTHER_2" = "我无法接听来电";
+
+"ATTACHMENT_DOWNLOADING_STATUS_EXPIRED" = "文件已过期。";

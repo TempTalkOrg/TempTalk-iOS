@@ -67,6 +67,10 @@ extension RoomContext: RoomDelegate {
         // 连接成功之后给sid赋值
         currentCall.roomSid = room.sid?.stringValue
         
+        callManager.feedbackUserSid = room.localParticipant.sid?.stringValue
+        callManager.feedbackRoomSid = room.sid?.stringValue
+        callManager.feedbackRoomId = currentCall.roomId
+        
         // 多人会议自己进入后展示meeting bar
         if currentCall.callType != .private {
             // 展示meetingbar
@@ -220,6 +224,7 @@ extension RoomContext: RoomDelegate {
         
         let local = room.localParticipant
         let isLocalValid = local.sid?.stringValue.isEmpty == false
+        callManager.feedbackIsNetworkPoor = true
 
         // 过滤 remoteParticipants 中 sid 有效的
         let remoteParticipants = Array(room.remoteParticipants.values)
@@ -309,7 +314,7 @@ extension RoomContext: RoomDelegate {
         RoomDataManager.shared.disconnectParticipant(participant: participant)
     }
 
-    public func room(_ room: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String) {
+    public func room(_ room: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType: EncryptionType) {
         let participantId = participant?.identity?.stringValue.components(separatedBy: ".").first ?? ""
 
         // 统一解析 base64 结构数据

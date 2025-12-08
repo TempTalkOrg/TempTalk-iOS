@@ -1196,6 +1196,11 @@ extension ShareViewController: UIAdaptivePresentationControllerDelegate {
     public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
         shareViewWasCancelled()
     }
+    
+    public func adaptivePresentationStyle(for controller: UIPresentationController,
+                                   traitCollection: UITraitCollection) -> UIModalPresentationStyle {
+        return .fullScreen
+    }
 }
 
 // Exposes a Progress object, whose progress is updated by polling the return of a given block

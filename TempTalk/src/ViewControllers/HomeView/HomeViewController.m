@@ -189,6 +189,9 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     
     [self checkIfNeedShowScreenLockAlert];
     
+    // 清理归档过的会话
+//    [self cleanupEmptyThreadsIfNeeded];
+    
     OWSLogInfo(@"viewDidAppear");
 }
 
@@ -397,6 +400,13 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     if ([TSAccountManager isRegistered]) {
         [[DTConversationsJob sharedJob] startIfNecessary];
     }
+}
+
+- (void)cleanupEmptyThreadsIfNeeded
+{
+    DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
+        [TSThread cleanupEmptyVisibleThreadsWithTransaction:writeTransaction];
+    });
 }
 
 - (BOOL)hasAnyMessagesWithTransaction:(SDSAnyReadTransaction *)transaction
@@ -679,6 +689,19 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
         if (self.presentedViewController.isPanModalPresentable) {
             animated = YES;
         }
+        
+        // 修复：在横屏状态下dismiss PanModal弹窗时，确保视图布局正确
+        if (self.presentedViewController.isPanModalPresentable) {
+            CGSize screenSize = [UIScreen mainScreen].bounds.size;
+            BOOL isLandscape = screenSize.width > screenSize.height;
+            
+            if (isLandscape) {
+                // Force layout update before dismissal in landscape
+                [self.presentedViewController.view setNeedsLayout];
+                [self.presentedViewController.view layoutIfNeeded];
+            }
+        }
+        
         [self.presentedViewController dismissViewControllerAnimated:animated completion:dismissNavigationBlock];
     } else {
         dismissNavigationBlock();

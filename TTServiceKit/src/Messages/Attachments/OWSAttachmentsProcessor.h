@@ -58,6 +58,10 @@ extern NSString *const kAttachmentDownloadAttachmentIDKey;
 + (void)changeAutoDownloadImageValue:(BOOL)newValue;
 + (void)decryptVoiceAttachment:(TSAttachmentStream *)attachment;
 
+- (void)setAttachment:(TSAttachmentPointer *)pointer
+   didExpireInMessage:(nullable TSMessage *)message
+                error:(NSError * _Nonnull)error;
+
 @end
 
 NS_ASSUME_NONNULL_END

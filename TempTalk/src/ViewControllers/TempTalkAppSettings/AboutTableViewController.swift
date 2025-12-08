@@ -12,7 +12,7 @@ import TTServiceKit
 
 class AboutTableViewController : SettingBaseViewController {
     
-    fileprivate let websiteUrl = "https://TempTalk.app"
+    fileprivate let websiteUrl = "https://yelling.pro"
     
     fileprivate let reuse_identifier_style_blank = "DTDefaultStyleCell_SecurityAndPrivacy_style_blank"
     fileprivate let reuse_identifier_style_description = "DTDefaultStyleCell_SecurityAndPrivacy_style_description"
@@ -193,7 +193,7 @@ extension AboutTableViewController {
         let buildItem = DTSettingItem(icon: "", title: Localized("BUILD_SETTINGS_VERSION"), description: AppVersion.shared().currentAppBuildVersion, cellStyle: SettingCellStyle.onlyDescription.rawValue, plainText: "")
         let checkForUpdateItem = DTSettingItem(icon: "", title: Localized("CHECK_NEW_VERSION"), description: "", cellStyle: SettingCellStyle.accessoryAndDescription.rawValue, plainText: "")
         checkForUpdateItem.tag = AboutViewItemType.checkForUpdate.rawValue
-        let websiteItem = DTSettingItem(icon: "", title: Localized("SETTINGS_WEBSITE"), description: "TempTalk.app", cellStyle: SettingCellStyle.accessoryAndDescription.rawValue, plainText: "")
+        let websiteItem = DTSettingItem(icon: "", title: Localized("SETTINGS_WEBSITE"), description: "Yelling.pro", cellStyle: SettingCellStyle.accessoryAndDescription.rawValue, plainText: "")
         websiteItem.tag = AboutViewItemType.website.rawValue
         
         return [

@@ -228,6 +228,8 @@
 		5B0F3ACD2E891E6600E01BFD /* PatternLockPathView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0F3AC22E891E6600E01BFD /* PatternLockPathView.swift */; };
 		5B0F3ACE2E891E6600E01BFD /* PatternLockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0F3ABE2E891E6600E01BFD /* PatternLockView.swift */; };
 		5B0F3AD02E892BF600E01BFD /* PatternConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0F3ACF2E892BED00E01BFD /* PatternConfig.swift */; };
+		5B0F3ADE2E9CFA9300E01BFD /* DTRatingFeedbackController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0F3ADD2E9CFA9300E01BFD /* DTRatingFeedbackController.swift */; };
+		5B0F3AE02E9E897700E01BFD /* FeedbackReasonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0F3ADF2E9E896F00E01BFD /* FeedbackReasonsView.swift */; };
 		5B2039562E54B9D700C4460C /* ConversationJoinCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2039552E54B9C200C4460C /* ConversationJoinCallView.swift */; };
 		5B30999E2E3C70A700925AD5 /* tt_loading_dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 5B30999D2E3C70A700925AD5 /* tt_loading_dark.json */; };
 		5B3099A62E3C759900925AD5 /* tt_loading_light.json in Resources */ = {isa = PBXBuildFile; fileRef = 5B3099A52E3C759900925AD5 /* tt_loading_light.json */; };
@@ -257,6 +259,8 @@
 		5B9440A02E339EB200C59EBA /* SMCallLib.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B94409F2E339EB200C59EBA /* SMCallLib.m */; };
 		5B9440A32E33A1A400C59EBA /* fishhook.c in Sources */ = {isa = PBXBuildFile; fileRef = 5B9440A22E33A1A400C59EBA /* fishhook.c */; };
 		5BA6A0302E03019D007C2C48 /* DTCircleLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA6A02F2E030193007C2C48 /* DTCircleLoadingView.swift */; };
+		5BA8497E2E9FC47C00577C87 /* FeedbackAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA8497D2E9FC47200577C87 /* FeedbackAPI.swift */; };
+		5BA849802E9FE21000577C87 /* CallRatingTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA8497F2E9FE20D00577C87 /* CallRatingTrigger.swift */; };
 		5BA928F62E3B763100EAFC36 /* ClusterSpeedTester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA928F52E3B762200EAFC36 /* ClusterSpeedTester.swift */; };
 		5BAB7EF52DF87E3800A34FF5 /* DTMeetingManager+LocalMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BAB7EF42DF87E3700A34FF5 /* DTMeetingManager+LocalMessage.swift */; };
 		5BABD21F2DFBECCA002862ED /* DTChatSettingsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABD21E2DFBECC7002862ED /* DTChatSettingsController.swift */; };
@@ -1215,6 +1219,8 @@
 		5B0F3AC32E891E6600E01BFD /* RotateImageGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RotateImageGridView.swift; sourceTree = "<group>"; };
 		5B0F3AC42E891E6600E01BFD /* ShadowGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShadowGridView.swift; sourceTree = "<group>"; };
 		5B0F3ACF2E892BED00E01BFD /* PatternConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternConfig.swift; sourceTree = "<group>"; };
+		5B0F3ADD2E9CFA9300E01BFD /* DTRatingFeedbackController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTRatingFeedbackController.swift; sourceTree = "<group>"; };
+		5B0F3ADF2E9E896F00E01BFD /* FeedbackReasonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackReasonsView.swift; sourceTree = "<group>"; };
 		5B2039552E54B9C200C4460C /* ConversationJoinCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationJoinCallView.swift; sourceTree = "<group>"; };
 		5B30999D2E3C70A700925AD5 /* tt_loading_dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tt_loading_dark.json; sourceTree = "<group>"; };
 		5B3099A52E3C759900925AD5 /* tt_loading_light.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tt_loading_light.json; sourceTree = "<group>"; };
@@ -1253,6 +1259,8 @@
 		5B9440A12E33A1A400C59EBA /* fishhook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = fishhook.h; sourceTree = "<group>"; };
 		5B9440A22E33A1A400C59EBA /* fishhook.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fishhook.c; sourceTree = "<group>"; };
 		5BA6A02F2E030193007C2C48 /* DTCircleLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTCircleLoadingView.swift; sourceTree = "<group>"; };
+		5BA8497D2E9FC47200577C87 /* FeedbackAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackAPI.swift; sourceTree = "<group>"; };
+		5BA8497F2E9FE20D00577C87 /* CallRatingTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRatingTrigger.swift; sourceTree = "<group>"; };
 		5BA928F52E3B762200EAFC36 /* ClusterSpeedTester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClusterSpeedTester.swift; sourceTree = "<group>"; };
 		5BAB7EF42DF87E3700A34FF5 /* DTMeetingManager+LocalMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DTMeetingManager+LocalMessage.swift"; sourceTree = "<group>"; };
 		5BABD21E2DFBECC7002862ED /* DTChatSettingsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTChatSettingsController.swift; sourceTree = "<group>"; };
@@ -2835,6 +2843,7 @@
 		5B89547A2D8AF09400CCF66B /* swift */ = {
 			isa = PBXGroup;
 			children = (
+				5B0F3ADF2E9E896F00E01BFD /* FeedbackReasonsView.swift */,
 				5BB62E9C2E15829900B20DBD /* HandsControlView.swift */,
 				5B88FA0C2E0BBBE3006893AD /* SwingingAlarmView.swift */,
 				5BB4B0592DF9B33B0016A044 /* BubbleTipView.swift */,
@@ -2877,6 +2886,8 @@
 		5BC2A70C2D9034470063C4FA /* Tool */ = {
 			isa = PBXGroup;
 			children = (
+				5BA8497F2E9FE20D00577C87 /* CallRatingTrigger.swift */,
+				5BA8497D2E9FC47200577C87 /* FeedbackAPI.swift */,
 				5BE985822E7D4D6D00D78913 /* LiveKitServersApi.swift */,
 				5BA928F52E3B762200EAFC36 /* ClusterSpeedTester.swift */,
 				5BB0B7992E014D770035516C /* ParticipantSnapshot.swift */,
@@ -3205,6 +3216,7 @@
 		CE9ED5122D59D108009E1BAC /* Controller */ = {
 			isa = PBXGroup;
 			children = (
+				5B0F3ADD2E9CFA9300E01BFD /* DTRatingFeedbackController.swift */,
 				5B4615152E28ECCC00143F4A /* DTUpdateNoiseController.swift */,
 				5BBFEB812E1683B70019E4C2 /* DTRaiseHandController.swift */,
 				5B7F7E942DDC5F3500B2C3E9 /* LiveKitContext.swift */,
@@ -5097,8 +5109,10 @@
 				450DF2091E0DD2C6003D14BE /* UserNotificationsAdaptee.swift in Sources */,
 				5BFF65D72DA81E2D00D5A2F9 /* DTStickMeetingManager.swift in Sources */,
 				CE3BB4612BC37FBD003E5CB9 /* ConversationViewController+CollectionView.swift in Sources */,
+				5BA849802E9FE21000577C87 /* CallRatingTrigger.swift in Sources */,
 				DCDDAC6F2893ECAB009CFE4D /* DTArchiveMessageSettingController.m in Sources */,
 				343A65981FC4CFE7000477A1 /* ConversationScrollButton.m in Sources */,
+				5B0F3AE02E9E897700E01BFD /* FeedbackReasonsView.swift in Sources */,
 				34386A51207D0C01009F5D9C /* HomeViewController.m in Sources */,
 				CE10F0C928B86750000E80D4 /* DTGroupReminderController.swift in Sources */,
 				4505C2BF1E648EA300CEBF41 /* ExperienceUpgrade.swift in Sources */,
@@ -5380,6 +5394,7 @@
 				CEA87FA72CF9B712007480A1 /* DTDefaultBaseStyleCell.swift in Sources */,
 				CEA87FA92CF9B712007480A1 /* DomainFrontingCountryViewController.m in Sources */,
 				CEA87FAA2CF9B712007480A1 /* DTDeleteAccountApi.swift in Sources */,
+				5BA8497E2E9FC47C00577C87 /* FeedbackAPI.swift in Sources */,
 				CEA87FAB2CF9B712007480A1 /* DTSettingDescriptionCell.swift in Sources */,
 				CEA87FAC2CF9B712007480A1 /* AppSettingsViewController.swift in Sources */,
 				CEA87FAD2CF9B712007480A1 /* NotificationSettingsViewController.m in Sources */,
@@ -5482,6 +5497,7 @@
 				CE7C0A962B62C83B00EE8512 /* ConversationViewController+Audio.swift in Sources */,
 				CEDC58372A1FA1F0000F4F7C /* AppDelegate+ReportBackgroundStatus.m in Sources */,
 				CEF64A542D1E94A900BAB8AA /* DTEditRemarkController.m in Sources */,
+				5B0F3ADE2E9CFA9300E01BFD /* DTRatingFeedbackController.swift in Sources */,
 				CEB228CA2C5B28DE002408E1 /* CVBodyMediaRenderItem.swift in Sources */,
 				5B6067262E5EE40100C6D0ED /* ConversationViewController+joinBar.swift in Sources */,
 				CEE492F42BF1276B006FE189 /* ConversationMessageBubbleView+BodyText.swift in Sources */,
@@ -5632,7 +5648,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
@@ -5711,7 +5727,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -6009,7 +6025,7 @@
 			baseConfigurationReference = FAA3A7DE015482B692256A23 /* Pods-TempTalk.debug_test.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				AppDisplayName = TempTalkTest;
+				AppDisplayName = YellingTest;
 				AppLaunchScreenName = "Launch Screen";
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = TempTalk/entitlements/temptalk/temptalktest_debug.entitlements;
@@ -6057,7 +6073,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -6215,7 +6231,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
@@ -6472,7 +6488,7 @@
 			baseConfigurationReference = DDEE3466B59BC7596EC22B7A /* Pods-TempTalk.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				AppDisplayName = TempTalk;
+				AppDisplayName = Yelling;
 				AppLaunchScreenName = "Launch Screen";
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = TempTalk/entitlements/temptalk/temptalk_debug.entitlements;
@@ -6516,7 +6532,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6544,7 +6560,7 @@
 			baseConfigurationReference = 6C418898360BCFB6DD3B87A4 /* Pods-TempTalk.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				AppDisplayName = TempTalk;
+				AppDisplayName = Yelling;
 				AppLaunchScreenName = "Launch Screen";
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = TempTalk/entitlements/temptalk/tamptalk_release.entitlements;
@@ -6590,7 +6606,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6830,7 +6846,7 @@
 			baseConfigurationReference = B09AB7CD92581F424FEE918F /* Pods-TempTalk.release_test.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				AppDisplayName = TempTalkTest;
+				AppDisplayName = YellingTest;
 				AppLaunchScreenName = "Launch Screen";
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = TempTalk/entitlements/temptalk/temptalktest_release.entitlements;
@@ -6876,7 +6892,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -7032,7 +7048,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -7176,7 +7192,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7232,7 +7248,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7289,7 +7305,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7347,7 +7363,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.2;
+				MARKETING_VERSION = 3.5.3;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7448,7 +7464,7 @@
 			repositoryURL = "https://github.com/difftim/client-sdk-swift";
 			requirement = {
 				kind = exactVersion;
-				version = "2.7.2-a5";
+				version = 2.8.1;
 			};
 		};
 		CE45C7A82D71CD36008B8452 /* XCRemoteSwiftPackageReference "SFSafeSymbols" */ = {

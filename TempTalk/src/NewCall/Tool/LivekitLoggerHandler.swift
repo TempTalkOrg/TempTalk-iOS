@@ -6,31 +6,38 @@
 //  Copyright © 2025 Difft. All rights reserved.
 //
 
-import Logging
+import LiveKit
 
-// 自定义 LogHandler
-struct LivekitLoggerHandler: LogHandler {
-    // 元数据存储
-    var metadata: Logging.Logger.Metadata = [:]
-    // 日志级别
-    var logLevel: Logging.Logger.Level = .debug
+open class OSLogger: LiveKit.Logger, @unchecked Sendable {
+    private static let subsystem = "io.livekit.sdk"
 
-    // 拦截并处理日志
-    func log(
-        level: Logging.Logger.Level,
-        message: Logging.Logger.Message,
-        metadata: Logging.Logger.Metadata?,
-        source: String,
-        file: String,
-        function: String,
-        line: UInt
+    private let queue = DispatchQueue(label: "io.livekit.oslogger", qos: .utility)
+
+    public func log(
+        _ message: @autoclosure () -> CustomStringConvertible,
+        _ level: LogLevel,
+        source _: @autoclosure () -> String?,
+        file _: StaticString,
+        type: Any.Type,
+        function: StaticString,
+        line _: UInt,
+        metaData: ScopedMetadataContainer,
+        ptr: String? = nil
     ) {
-        Logger.info("[livekit] \(level): \(message.description)")
-    }
+        guard level >= .debug else { return }
 
-    // 处理元数据
-    subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
-        get { metadata[key] }
-        set { metadata[key] = newValue }
+        let message = message().description
+
+        func buildScopedMetadataString() -> String {
+            guard !metaData.isEmpty else { return "" }
+            return " [\(metaData.map { "\($0): \($1)" }.joined(separator: ", "))]"
+        }
+
+        let metadata = buildScopedMetadataString()
+        let ptr = ptr ?? String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
+
+        queue.async {
+            Logger.info("[livekit]: debug: \(type).\(function) [\(ptr)] \(message)\(metadata)")
+        }
     }
 }

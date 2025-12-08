@@ -79,7 +79,7 @@
 
         if ([attachment isKindOfClass:[TSAttachmentPointer class]]) {
             attachmentPointer = (TSAttachmentPointer *)attachment;
-            if (attachmentPointer.state == TSAttachmentPointerStateFailed) {
+            if (attachmentPointer.state == TSAttachmentPointerStateFailed || attachmentPointer.state == TSAttachmentPointerStateExpired) {
                 thumbnailDownloadFailed = YES;
             }
         }

@@ -53,7 +53,7 @@ public class FailedAttachmentDownloadsJob: NSObject, Dependencies {
             default:
                 break
             }
-        case .enqueued, .failed:
+        case .enqueued, .failed, .expired:
             // This should not have been returned from `unfailedAttachmentPointerIds`
             owsFailDebug("Attachment has unexpected state \(attachment.uniqueId).")
         @unknown default:

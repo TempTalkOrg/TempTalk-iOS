@@ -102,7 +102,7 @@ final class ConversationViewController: OWSViewController {
         super.viewIsAppearing(animated)
         
         checkBotBlock()
-        checkContactBlock()
+        safeUpdateBlockStatus()
         
         // We need to recheck on every appearance, since the user may have left the group in the settings VC,
         // or on another device.

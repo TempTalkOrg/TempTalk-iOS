@@ -81,7 +81,7 @@
 "APP_UPDATE_NAG_ALERT_MESSAGE_FORMAT" = "Version %@ is now available in the App Store.";
 
 /* Title for the 'new app version available' alert. */
-"APP_UPDATE_NAG_ALERT_TITLE" = "A new version of TempTalk is available now";
+"APP_UPDATE_NAG_ALERT_TITLE" = "A new version of Yelling is available now";
 
 /* Label for the 'update' button in the 'new app version available' alert. */
 "APP_UPDATE_NAG_ALERT_UPDATE_BUTTON" = "Update";
@@ -2104,7 +2104,7 @@
 "INVITE_SCAN" = "Scan";
 "INVITE_SHARE" = "Share";
 "INVITE_ENTER_CODE" = "Enter Code";
-"INVITE_DESC" = "Chat with me on TempTalk";
+"INVITE_DESC" = "Chat with me on Yelling";
 "INVITE_CANCEL" = "Cancel";
 "INVITE_REGENERATE_ACTION" = "Regenerate";
 "INVITE_LINK_TITLE" = "Invite Link";
@@ -2427,11 +2427,11 @@
 "SETTINGS_SCREEN_LOCK_ACTIVITY_TIMEOUT" = "Screen Lock Timeout";
 
 /* Footer for the 'screen lock' section of the privacy settings. */
-"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "Unlock TempTalk’s screen using a passcode or pattern. The passcode can be different from system’s passcode. So if somebody manage to get access to your system, he still has no access to TempTalk. It also prevents content previews from appearing in the app switcher.";
+"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "Unlock Yelling's screen using a passcode or pattern. The passcode can be different from system's passcode. So if somebody manage to get access to your system, he still has no access to Yelling. It also prevents content previews from appearing in the app switcher.";
 
 "UNLOCKSCREEN_TITLE" = "Passcode";
 "UNLOCKSCREEN_DONE" = "Done";
-"SCREENLOCK_SETPASSCODE_TIPS" = "Enter a passcode (4-10 digits). You will be asked to enter this passcode the next time you unlock TempTalk.";
+"SCREENLOCK_SETPASSCODE_TIPS" = "Enter a passcode (4-10 digits). You will be asked to enter this passcode the next time you unlock Yelling.";
 "SCREENLOCK_SETPASSCODE_EXCLAMATION" = "If you forget your passcode, you’ll need to log out or reinstall the app.";
 "SCREENLOCK_SETPASSCODE_FORGOT_TIPS" = "Forgot passcode?";
 "SCREENLOCK_SETPASSCODE_FORGOT_Alert_CONTENT" = "Please delete and reinstall the app.";
@@ -3735,7 +3735,7 @@
 "SPEECHTOTEXT_CONVERT_TIP_MESSAGE" = "Converting...";
 "SPEECHTOTEXT_CONVERT_TIP_MESSAGE_FAILED" = "Unable to convert to text";
 
-"CONVERT_SOURCE_TEXT" = "Voice-to-Text converted by TempTalk server";
+"CONVERT_SOURCE_TEXT" = "Voice-to-Text converted by Yelling server";
 
 "SPEECHTOTEXT_NO_TEXT_RECOGNIZE" = "No text recognized";
 
@@ -3770,7 +3770,7 @@
 "CALLING_NOISE_TITLE" = "Mic Noise Suppression";
 
 "BLOCK_USER_TITLE" = "Block user";
-"BLOCK_USER_DESCRIPTION" = "Block this user from messaging and calling you on Temptalk?";
+"BLOCK_USER_DESCRIPTION" = "Block this user from messaging and calling you on Yelling?";
 "BLOCK_USER_CONFIRM" = "Block";
 "BLOCK_USER_CANCEL" = "Cancel";
 "BLOCK_USER_UNBLOCK" = "Unblock";
@@ -3831,3 +3831,38 @@
 "SCREENLOCK_BINDING_CONFIRM_ACTION" = "Bind";
 "SCREENLOCK_BINDING_CANCEL_ACTION" = "Not now";
 "SCREENLOCK_CONFIRMPATTERN_ERROR_TIPS" = "Pattern does not match.";
+
+"CALL_RATING_TAB_AUDIO" = "Audio";
+"CALL_RATING_TAB_VIDEO" = "Video";
+"CALL_RATING_TAB_OTHER" = "Other";
+"CALL_RATING_SUBMIT" = "Submit";
+"CALL_RATING_STAR_TITLE" = "Rate the quality of your call";
+"CALL_RATING_STAR_DESCRIPTION" = "Your answer is anonymous. We use it to help improve your call experience. ";
+"CALL_RATING_NOT_NOW" = "Not now";
+"CALL_RATING_DESC_1" = "Very bad";
+"CALL_RATING_DESC_2" = "Bad";
+"CALL_RATING_DESC_3" = "Okay";
+"CALL_RATING_DESC_4" = "Good";
+"CALL_RATING_DESC_5" = "Excellent";
+"CALL_RATING_REASON_TITLE" = "Tell us what happened";
+"CALL_RATING_REASON_TAB_AUDIO" = "Audio";
+"CALL_RATING_REASON_TAB_VIDEO" = "Video";
+"CALL_RATING_REASON_TAB_OTHER" = "Other";
+"CALL_RATING_REASON_AUDIO_0" = "Echo";
+"CALL_RATING_REASON_AUDIO_1" = "Others could not hear me";
+"CALL_RATING_REASON_AUDIO_2" = "Robotic or distorted";
+"CALL_RATING_REASON_AUDIO_3" = "Audio too slow";
+"CALL_RATING_REASON_AUDIO_4" = "Audio broke up and got choppy";
+"CALL_RATING_REASON_AUDIO_5" = "Background or cracking noise";
+"CALL_RATING_REASON_AUDIO_6" = "I could not hear others";
+"CALL_RATING_REASON_VIDEO_0" = "Video distorted with strange images";
+"CALL_RATING_REASON_VIDEO_1" = "Other could not see me";
+"CALL_RATING_REASON_VIDEO_2" = "Blurry";
+"CALL_RATING_REASON_VIDEO_3" = "I cloud not see others";
+"CALL_RATING_REASON_VIDEO_4" = "Video did not match audio";
+"CALL_RATING_REASON_VIDEO_5" = "Video froze";
+"CALL_RATING_REASON_OTHER_0" = "Call kept disconnecting";
+"CALL_RATING_REASON_OTHER_1" = "Call suddenly ended";
+"CALL_RATING_REASON_OTHER_2" = "I could not answer the call";
+
+"ATTACHMENT_DOWNLOADING_STATUS_EXPIRED" = "File has expired.";

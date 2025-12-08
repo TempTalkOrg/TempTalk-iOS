@@ -12,7 +12,6 @@ import TTMessaging
 import SwiftUI
 import LiveKit
 import DTProto
-import Logging
 
 @objcMembers open class DTMeetingManager: NSObject, ObservableObject, DTMeetingManagerProtocol {
     
@@ -117,7 +116,16 @@ import Logging
     
     //测速文件
     let clusterSpeedTester = ClusterSpeedTester()
-        
+    
+    // 评价
+    var feedbackUserSid: String?
+    var feedbackRoomSid: String?
+    var feedbackRoomId: String?
+    
+    // 评分触发保护，防止多次消费评分逻辑
+    var hasTriggeredRating: Bool = false
+    var feedbackIsNetworkPoor: Bool? = false
+    
     override init() {
         super.init()
         
@@ -126,9 +134,7 @@ import Logging
         registerNotifications()
         
         NotificationHandler.shared.registerDarwinNotification()
-        LoggingSystem.bootstrap {_ in
-            return LivekitLoggerHandler()
-        }
+        LiveKitSDK.setLogger(OSLogger())
     }
     
     func clearCurrentCall(roomId: String? = nil) {
@@ -296,6 +302,9 @@ import Logging
         newCall.inviteCallees = recipientIdentifiers
         
         currentCall = newCall
+        
+        // 重置评分触发标志，为新通话做准备
+        hasTriggeredRating = false
         
         // 直接使用 LiveKit SDK 连接，不再依赖 v1/call/start 接口
         Task {
@@ -529,6 +538,9 @@ import Logging
 
         hasMeeting = true
         currentCall = call
+        
+        // 重置评分触发标志，为新通话做准备
+        hasTriggeredRating = false
         
         Logger.info("\(logTag) show answer controller: fromCallKit=\(fromCallKit)")
         

@@ -10,6 +10,7 @@ typedef NS_ENUM(NSUInteger, TSAttachmentPointerState) {
     TSAttachmentPointerStateEnqueued = 0,
     TSAttachmentPointerStateDownloading = 1,
     TSAttachmentPointerStateFailed = 2,
+    TSAttachmentPointerStateExpired = 3
 };
 
 @class TSMessage;

@@ -193,6 +193,7 @@ static const NSUInteger kArchivedMessageBatchSize = 30;
             thread = [TSThread anyFetchWithUniqueId:threadId transaction:readTransaction];
             if (!thread) return;
         } completion:^{
+            // 归档完成后，清理空的thread
             [self genrateSystemMessageWithThread:thread];
         }];
     }
@@ -216,6 +217,13 @@ static const NSUInteger kArchivedMessageBatchSize = 30;
                                                              customMessage:Localized(@"EXPIRE_SYSTEM_MESSAGE",
                                                                                                                                                                                        @"Message for the 'app launch failed' alert.")];
             [info anyUpsertWithTransaction:updateTransaction];
+            
+//            [updateTransaction addAsyncCompletionOnMain:^{
+//                // 插入系统消息之后过滤消息
+//                DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
+//                    [TSThread cleanupEmptyVisibleThreadsWithTransaction:writeTransaction];
+//                });
+//            }];
         }
     });
 }

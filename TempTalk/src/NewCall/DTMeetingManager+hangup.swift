@@ -300,6 +300,46 @@ extension DTMeetingManager {
                 self.showErrorTost = false
                 Logger.info("\(self.logTag) root window show error toast")
             }
+            
+            self.ensurePortraitOrientationBeforeShowingRating()
+        }
+    }
+    
+    /// 确保屏幕方向切换回竖屏后再展示评分弹窗，避免视图偏移问题
+    private func ensurePortraitOrientationBeforeShowingRating() {
+        // 防止多次调用导致评分逻辑被重复消费
+        guard !hasTriggeredRating else {
+            Logger.info("\(logTag) Rating already triggered, skipping")
+            return
+        }
+        
+        let shouldShowRating = CallRatingTrigger.shared.shouldTriggerRating(hasSevereQualityIssue: self.feedbackIsNetworkPoor ?? false)
+        
+        if shouldShowRating {
+            // 标记已经触发过评分，防止重复调用
+            hasTriggeredRating = true
+            
+            // 检查当前屏幕方向
+            let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+            let isLandscape = windowScene?.interfaceOrientation.isLandscape ?? false
+            if isLandscape {
+                Logger.info("\(logTag) Current orientation is landscape, switching to portrait before showing rating")
+                UIDevice.current.ows_setOrientation(.portrait)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.showRatingController()
+                }
+            } else {
+                self.showRatingController()
+            }
+        }
+    }
+    
+    /// 展示评分控制器
+    private func showRatingController() {
+        let rootWindow = OWSWindowManager.shared().rootWindow
+        let topVC = rootWindow.findTopViewController()
+        DTRatingFeedbackController.present(from: topVC) { result in
+            Logger.info("\(self.logTag) ratingFeedbackController present success")
         }
     }
     

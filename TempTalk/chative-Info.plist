@@ -86,23 +86,23 @@
 		</dict>
 	</dict>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>TempTalk needs to use Apple Music to play media attachments.</string>
+	<string>Yelling needs to use Apple Music to play media attachments.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_cht-new-device._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>TempTalk uses your camera to take photos to change your profile picture and send images during chats, and for video calls.</string>
+	<string>Yelling uses your camera to take photos to change your profile picture and send images during chats, and for video calls.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>TempTalk's Screen Lock uses Face ID.</string>
+	<string>Yelling&apos;s Screen Lock uses Face ID.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>TempTalk uses the local network to allow you to directly transfer your account to a new phone. It will not be used unless you explicitly choose to initiate a transfer to a new device.</string>
+	<string>Yelling uses the local network to allow you to directly transfer your account to a new phone. It will not be used unless you explicitly choose to initiate a transfer to a new device.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>TempTalk needs access to your microphone to make and receive phone calls and record voice messages.</string>
+	<string>Yelling needs access to your microphone to make and receive phone calls and record voice messages.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>TempTalk will save photos to your library.</string>
+	<string>Yelling will save photos to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>TempTalk requires access to your Photo Library to allow you to change your profile picture and send images during chats.</string>
+	<string>Yelling requires access to your Photo Library to allow you to change your profile picture and send images during chats.</string>
 	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
 	<true/>
 	<key>UIAppFonts</key>
