@@ -23,6 +23,7 @@ class AppSettingsViewController : SettingBaseViewController {
         mainTableView.dataSource = self
         mainTableView.separatorStyle = .none
         mainTableView.estimatedRowHeight = 44
+        mainTableView.contentInsetAdjustmentBehavior = .automatic
         mainTableView.rowHeight = UITableView.automaticDimension
         mainTableView.register(DTSettingDescriptionCell.self, forCellReuseIdentifier: settingDescriptionCell_AppSettings)
         mainTableView.register(DTBlankCell.self, forCellReuseIdentifier: reuse_identifier_style_blank)
@@ -94,31 +95,6 @@ class AppSettingsViewController : SettingBaseViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         updateUserInfo()
-        if isiPhoneSE() {
-            DispatchQueue.main.async {
-                self.fixTableViewInset()
-            }
-        }
-    }
-    
-    private func fixTableViewInset() {
-        let safeBottom = view.safeAreaInsets.bottom
-        let bottomInset: CGFloat = max(safeBottom, 34)
-        mainTableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
-        mainTableView.scrollIndicatorInsets = mainTableView.contentInset
-    }
-    
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        if isiPhoneSE() {
-            mainTableView.contentInsetAdjustmentBehavior = .never // 再保险一次
-            mainTableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 34, right: 0)
-            mainTableView.scrollIndicatorInsets = mainTableView.contentInset
-        }
-    }
-    
-    private func isiPhoneSE() -> Bool {
-        return screenWidth == 667 || screenHeight == 667 || UIScreen.isDisplayZoomed
     }
     
     override func applyTheme() {
@@ -133,7 +109,6 @@ class AppSettingsViewController : SettingBaseViewController {
             self.dataSource = self.getDataSource(transaction: sdsAnyReadTransaction)
         } completion: {
             self.mainTableView.reloadData()
-//            self.tabBarItem.title = Localized("TABBAR_ME");
         }
     }
     
@@ -235,126 +210,133 @@ class AppSettingsViewController : SettingBaseViewController {
     
     func prepareHeaderView() {
         let headerView = UIView()
-        
+        headerView.backgroundColor = Theme.defaultBackgroundColor
+
         let headerContainerView = UIView()
         headerContainerView.clipsToBounds = true
         headerContainerView.layer.cornerRadius = 10
+        headerContainerView.backgroundColor = Theme.defaultTableCellBackgroundColor
         headerView.addSubview(headerContainerView)
-        
+
+        // MARK: Row Views
         let profileRowView = UIView()
-        profileRowView.backgroundColor = UIColor.clear
-        let tapProfileGesture = UITapGestureRecognizer(target: self, action: #selector(profileRowAction))
-        profileRowView.addGestureRecognizer(tapProfileGesture)
+        profileRowView.backgroundColor = .clear
+        profileRowView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(profileRowAction)))
+
         let shareContactRowView = UIView()
-        shareContactRowView.backgroundColor = UIColor.clear
-        let tapShareContactGesture = UITapGestureRecognizer(target: self, action: #selector(shareContactRowAction))
-        shareContactRowView.addGestureRecognizer(tapShareContactGesture)
-        
-        let seperateLineView: UIView = UIView()
+        shareContactRowView.backgroundColor = .clear
+        shareContactRowView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(shareContactRowAction)))
+
+        let seperateLineView = UIView()
         seperateLineView.backgroundColor = Theme.defaultBackgroundColor
-        headerContainerView.addSubview(seperateLineView)
-        
+
         headerContainerView.addSubview(profileRowView)
+        headerContainerView.addSubview(seperateLineView)
         headerContainerView.addSubview(shareContactRowView)
-        
-        let profileArrowIcon = UIImageView()
-        profileArrowIcon.image = UIImage(named: "default_accessory_arrow")
-        let shareContactArrowIcon = UIImageView()
-        shareContactArrowIcon.image = UIImage(named: "default_accessory_arrow")
+
+        // MARK: Icons + Labels
+        let profileArrowIcon = UIImageView(image: UIImage(named: "default_accessory_arrow"))
+        let shareContactArrowIcon = UIImageView(image: UIImage(named: "default_accessory_arrow"))
+
         let shareContactLabel = UILabel()
         shareContactLabel.font = UIFont.ows_dynamicTypeBody
         shareContactLabel.adjustsFontForContentSizeCategory = true
         shareContactLabel.textColor = Theme.primaryTextColor
         shareContactLabel.text = Localized("CONTACT_SHARE_CONTACT_TO_FRIENTS")
-        let shareContactQRIcon = UIImageView()
-        shareContactQRIcon.image = UIImage(named: "setting_qrcode")
-        
+
+        let shareContactQRIcon = UIImageView(image: UIImage(named: "setting_qrcode"))
+
         profileRowView.addSubview(userAvatarImageView)
         profileRowView.addSubview(nameLabel)
         profileRowView.addSubview(signatureLabel)
         profileRowView.addSubview(profileArrowIcon)
-        
+
         shareContactRowView.addSubview(shareContactLabel)
         shareContactRowView.addSubview(shareContactQRIcon)
         shareContactRowView.addSubview(shareContactArrowIcon)
-        
-        headerView.backgroundColor = Theme.defaultBackgroundColor
-        headerContainerView.backgroundColor = Theme.defaultTableCellBackgroundColor
+
+        // MARK: - Auto Layout (SnapKit)
+
+        // Important: headerView MUST NOT use AutoLayout, frame first
+        headerView.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: 1)
         mainTableView.tableHeaderView = headerView
-        
-        headerView.frame = CGRectMake(0, 0, CGRectGetWidth(self.view.bounds), 173)
-        //If use autolayout an exception may occur in datasource
-//        headerView.snp.makeConstraints { make in
-//            make.height.equalTo(235)
-//            make.width.equalTo(CGRectGetWidth(self.view.bounds))
-//        }
-        
+
+        // headerContainer fixed width = headerView width - 32
         headerContainerView.snp.makeConstraints { make in
-            make.height.equalTo(131)
             make.top.equalToSuperview().offset(16)
             make.left.equalTo(16)
             make.right.equalTo(-16)
         }
-        
+
         profileRowView.snp.makeConstraints { make in
-            make.top.equalTo(12)
-            make.left.equalTo(16)
+            make.top.equalToSuperview().offset(12)
+            make.left.right.equalToSuperview().inset(16)
             make.height.equalTo(54)
-            make.right.equalTo(-16)
         }
-        
+
         seperateLineView.snp.makeConstraints { make in
             make.top.equalTo(profileRowView.snp.bottom).offset(12)
             make.left.right.equalToSuperview()
             make.height.equalTo(1)
         }
-        
+
         shareContactRowView.snp.makeConstraints { make in
             make.top.equalTo(seperateLineView.snp.bottom).offset(12)
-            make.left.equalTo(16)
+            make.left.right.equalToSuperview().inset(16)
             make.height.equalTo(24)
-            make.right.equalTo(-16)
+            make.bottom.equalToSuperview().offset(-12)
         }
-        
+
+        // MARK: Subviews layout
+
         userAvatarImageView.snp.makeConstraints { make in
             make.width.height.equalTo(54)
             make.left.equalToSuperview()
             make.centerY.equalToSuperview()
         }
-        
+
         nameLabel.snp.makeConstraints { make in
             make.left.equalTo(userAvatarImageView.snp.right).offset(16)
             make.top.equalToSuperview()
         }
-        
+
         signatureLabel.snp.makeConstraints { make in
-            make.left.equalTo(nameLabel.snp.left)
+            make.left.equalTo(nameLabel)
             make.bottom.equalToSuperview()
         }
-        
+
         profileArrowIcon.snp.makeConstraints { make in
             make.width.height.equalTo(16)
             make.right.equalToSuperview()
             make.centerY.equalToSuperview()
         }
-        
+
         shareContactLabel.snp.makeConstraints { make in
-            make.height.equalTo(24)
             make.top.left.equalToSuperview()
+            make.height.equalTo(24)
         }
-        
+
         shareContactArrowIcon.snp.makeConstraints { make in
             make.width.height.equalTo(16)
             make.right.equalToSuperview()
             make.centerY.equalToSuperview()
         }
-        
+
         shareContactQRIcon.snp.makeConstraints { make in
             make.width.height.equalTo(24)
             make.right.equalTo(shareContactArrowIcon.snp.left).offset(-4)
             make.centerY.equalToSuperview()
         }
-        
+
+        // MARK: - Force AutoLayout calculate size
+        headerView.layoutIfNeeded()
+
+        // Calculate the final height
+        let targetHeight = headerContainerView.frame.maxY + 16
+        headerView.frame.size.height = targetHeight
+
+        // Important: Must reassign after changing frame
+        mainTableView.tableHeaderView = headerView
     }
 }
 
@@ -469,11 +451,4 @@ extension AppSettingsViewController  {
         self.navigationController?.pushViewController(editProfileController, animated: true)
     }
     
-}
-
-extension UIScreen {
-    static var isDisplayZoomed: Bool {
-        let screen = UIScreen.main
-        return screen.nativeScale > screen.scale
-    }
 }

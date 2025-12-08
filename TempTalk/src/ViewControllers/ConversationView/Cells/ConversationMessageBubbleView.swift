@@ -62,6 +62,12 @@ protocol ConversationMessageBubbleViewDelegate: AnyObject {
     @objc optional
     func messageBubbleView(
         _ bubbleView: ConversationMessageBubbleView,
+        didTapReadMoreMessageWith viewItem: ConversationViewItem
+    )
+    
+    @objc optional
+    func messageBubbleView(
+        _ bubbleView: ConversationMessageBubbleView,
         didTapConfidentialTextMessageWith viewItem: ConversationViewItem
     )
     

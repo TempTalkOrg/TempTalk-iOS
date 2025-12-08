@@ -22,6 +22,11 @@ import UIKit
 import DenoisePluginFilter
 import DTProto
 
+enum ErrorCategory {
+    case networkIssue      // 可以切换域名重试
+    case fatal             // 不要重试
+}
+
 @MainActor
 final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncryptor {
 
@@ -94,6 +99,8 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     var connectTimeoutTask: Task<Void, Never>?
     // 是否正在展示 screen share
     var isPresentingShareView = false
+    // 是否存在待展示的UI
+    private var pendingShowUI = false
 
     // MARK: - Init / Deinit
 
@@ -117,6 +124,20 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         #endif
 
         DTRTCAudioSession.shared.addObserver(self)
+        
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            Task { @MainActor in
+                if self.pendingShowUI {
+                    Logger.info("\(self.logTag) RoomContext become active show share view")
+                    self.pendingShowUI = false
+                    self.presentShareViewVC()
+                }
+            }
+        }
     }
 
     deinit {
@@ -128,6 +149,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
         // 移除观察者
         DTRTCAudioSession.shared.removeObserver(self)
+        NotificationCenter.default.removeObserver(self)
 
         // 清理音频处理
         AudioManager.shared.capturePostProcessingDelegate = nil
@@ -192,7 +214,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             } catch {
                 // handleConnectError 在 MainActor 中执行
                 try await self.handleConnectError(error, connectOptions: connectOptions)
-                throw error
+//                throw error
             }
         }
 
@@ -206,16 +228,13 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         _ error: Error,
         connectOptions: ConnectOptions
     ) async throws {
-        guard let httpError = error as? LiveKitError else {
-            Logger.error("\(logTag): unexpected connect error \(error)")
+        // 连接失败就切换下一个url
+        if needHangupError(error: error) {
+            Logger.error("\(logTag): connect failed with \(error.localizedDescription)")
+            DTMeetingManager.shared.showErrorTost = true
             await DTMeetingManager.shared.clearDisconnectErrorData()
-            return
-        }
-
-        switch httpError.type {
-        case .timedOut:
-            Logger.error("\(logTag): connect timed out")
-            // 尝试切换到下一个 URL
+            throw error
+        } else {
             if let serviceUrlManager,
                serviceUrlManager.switchToNextUrl(),
                let nextUrl = await serviceUrlManager.getCurrentUrl() {
@@ -226,13 +245,39 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
                 Logger.error("\(logTag): no more URLs to try")
                 await DTMeetingManager.shared.clearDisconnectErrorData()
                 DTToastHelper.toast(withText: Localized("METTING_CONNECT_EXCEPTION_TIPS"))
+                throw error
             }
-
-        default:
-            Logger.error("\(logTag): connect failed with \(httpError)")
-            DTMeetingManager.shared.showErrorTost = true
-            await DTMeetingManager.shared.clearDisconnectErrorData()
         }
+    }
+    
+    private func needHangupError(error: Error) -> Bool {
+        let category = classifyLiveKitError(error)
+        if category == .fatal {
+            return true
+        }
+        return false
+    }
+    
+    func classifyLiveKitError(_ error: Error) -> ErrorCategory {
+        if let lkError = error as? LiveKitError {
+            switch lkError.type {
+            case .network,
+                 .timedOut,
+                 .serverPingTimedOut,
+                 .reconnectFailure,
+                 .unknown:
+                return .networkIssue
+
+            default:
+                return .fatal
+            }
+        }
+
+        if (error as NSError).domain == NSURLErrorDomain { return .networkIssue }
+        if (error as NSError).domain == NSPOSIXErrorDomain { return .networkIssue }
+        if (error as NSError).domain == kCFErrorDomainCFNetwork as String { return .networkIssue }
+
+        return .networkIssue
     }
 
     func disconnect() async {
@@ -295,9 +340,14 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         // 检查应用状态，确保在前台
         guard CurrentAppContext().isMainAppAndActive else {
             Logger.info("\(logTag) app is not active")
+            self.pendingShowUI = true
             return
         }
 
+        presentShareViewVC(completion: completion)
+    }
+    
+    private func presentShareViewVC(completion: (() -> Void)? = nil) {
         let shareView = CallScreenShareView(minimizeAction: { [weak self] in
             guard let self = self else { return }
             self.toolbarMinimizeTaped()

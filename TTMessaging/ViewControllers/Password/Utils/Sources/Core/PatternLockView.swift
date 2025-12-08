@@ -301,3 +301,24 @@ open class PatternLockView: UIView {
         }
     }
 }
+
+extension PatternLockView {
+    func applyPalette(_ palette: PatternLockPalette, pathEnabled: Bool) {
+        for grid in grids {
+            guard let gridView = grid as? GridView else { continue }
+            palette.configure(gridView: gridView)
+            gridView.setNeedsLayout()
+            gridView.layoutIfNeeded()
+            gridView.setStatus(!shouldPatternEnable ? .normal : .enable)
+        }
+
+        if let lineView = config.connectLine as? ConnectLineView {
+            palette.configure(lineView: lineView, pathEnabled: pathEnabled)
+            lineView.setStatus(.normal)
+        }
+
+        setNeedsLayout()
+        layoutIfNeeded()
+        reset()
+    }
+}

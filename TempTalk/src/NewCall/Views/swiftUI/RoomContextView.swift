@@ -70,8 +70,6 @@ struct RoomContextView: View {
                 if  DTMeetingManager.shared.isFromCallkit && needLayoutTopVCScreenShare() {
                     Logger.info("[newCall] callkit open sharePresent")
                     DTMeetingManager.shared.isFromCallkit = false
-                    // 确保app处于活跃状态
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
                     roomCtx.presentShareView()
                 }
             }

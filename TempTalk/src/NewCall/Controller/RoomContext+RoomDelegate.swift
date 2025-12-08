@@ -177,8 +177,9 @@ extension RoomContext: RoomDelegate {
             guard let self else { return }
             if let error {
                 updateStale(with: error)
-                Logger.error("\(logTag) didFailToConnectWithError error: \(error)")
+                Logger.error("\(logTag) didFailToConnectWithError receive error: \(error)")
                 if callManager.inMeeting {
+                    Logger.error("\(logTag) didFailToConnectWithError inMeeting hangup error: \(error)")
                     await self.callManager.hangupCall(needSyncCallKit: true,
                                                  isByLocal: true,
                                                       roomId: self.currentCall.roomId,

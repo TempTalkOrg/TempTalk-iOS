@@ -85,6 +85,21 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
        // 布局手势
         updateUILayout(with: shouldShowPatternView())
     }
+
+    public override func refreshTheme() {
+        super.refreshTheme()
+
+        let hintColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0xB7BDC6) : UIColor.color(rgbHex: 0x474D57)
+        switchPasswordBtn.setTitleColor(hintColor, for: .normal)
+        switchPatternBtn.setTitleColor(hintColor, for: .normal)
+        forgotBtn.setTitleColor(hintColor, for: .normal)
+        seperatorView.backgroundColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x2B3139) : UIColor.color(rgbHex: 0xEAECEF)
+
+        patternView?.applyPalette(
+            PatternLockPalette.current(),
+            pathEnabled: ScreenLock.shared.isScreenLockPatternPathEnabled()
+        )
+    }
     
     func updateUILayout(with shouldShowPattern: Bool) {
         updateSubViews(with: shouldShowPattern)

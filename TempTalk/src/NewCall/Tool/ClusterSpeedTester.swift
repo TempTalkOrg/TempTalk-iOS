@@ -25,11 +25,11 @@ struct ClusterMetric {
 }
 
 protocol ClusterSource {
-    func fetchClusters(completion: @escaping ([ClusterMetric]) -> Void)
+    func fetchClusters(completion: @escaping (_ metrics: [ClusterMetric], _ servers: [String]) -> Void)
 }
 
 class MeetingClusterSource: ClusterSource {
-    func fetchClusters(completion: @escaping ([ClusterMetric]) -> Void) {
+    func fetchClusters(completion: @escaping (_ metrics: [ClusterMetric], _ servers: [String]) -> Void) {
         var result: [ClusterMetric] = []
         LiveKitServersApi().liveKitServers { entity in
             if let servers = entity?.data["serviceUrls"] as? [String],
@@ -41,7 +41,7 @@ class MeetingClusterSource: ClusterSource {
                         result.append(ClusterMetric(url: url))
                     }
                 }
-                completion(result)
+                completion(result, servers)
             } else {
                 Logger.error("[SpeedTest] entity data nil")
             }
@@ -129,10 +129,11 @@ class ClusterSpeedTester {
 
     private func performSpeedTest() {
         let source = MeetingClusterSource()
-        source.fetchClusters { [weak self] clusters in
+        source.fetchClusters { [weak self] clusters, servers in
             guard let self = self else { return }
             self.queue.async {
                 // 将数组转换为字典，处理重复 URL（保留第一个）
+                self.setSortedUrls(servers)
                 let dict = Dictionary(clusters.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
                 self.metricsDict = dict
                 self.testClusters()
@@ -171,7 +172,7 @@ class ClusterSpeedTester {
                 
                 let elapsed = Date().timeIntervalSince(start)
 
-                if error == nil, let http = response as? HTTPURLResponse, (200..<400).contains(http.statusCode) {
+                if let http = response as? HTTPURLResponse {
                     mutableMetric.lastResponseTime = elapsed * 1000
                     mutableMetric.lastTestTime = Date().timeIntervalSince1970
                 } else {

@@ -3888,3 +3888,5 @@
 "MEETING_CRITICAL_ALERT_FREQUENTLY" = "sent too frequently.  Please try again later.";
 
 "ATTACHMENT_ERROR_FILE_SIZE_TOO_LARGE_TIPS" = "Sorry, the selected file exceeds the 200MB limit and cannot be sent.";
+
+"CONVERSATION_CELL_OVERSIZE_TEXT_TAP_FOR_MORE" = "Read more";

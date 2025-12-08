@@ -639,6 +639,10 @@ NSString *const ThemeKeyCurrentMode = @"ThemeKeyCurrentMode";
     return (Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xF84035] : [UIColor colorWithRGBHex:0xD9271E]);
 }
 
++ (UIColor *)tinfoColor {
+    return (Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x82C1FC] : [UIColor colorWithRGBHex:0x056FFA]);
+}
+
 @end
 
 NS_ASSUME_NONNULL_END

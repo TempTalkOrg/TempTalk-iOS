@@ -25,8 +25,11 @@ extension ConversationMessageBubbleView {
         switch bodyTextItem.bodyTextStyle {
         case .normal:
             if bodyTextItem.hasTapForMore {
-                let tapForMoreLabel = createTapForMoreLabel(textColor: bodyTextItem.bodyTextColor.withAlphaComponent(0.85))
-                textViews.append(.init(view: tapForMoreLabel, height: renderItem.caption1FontHeight))
+                let readMoreButton = createReadMoreButton(
+                    textColor: Theme.tinfoColor,
+                    renderItem: renderItem
+                )
+                textViews.append(.init(view: readMoreButton, height: renderItem.caption1FontHeight))
             }
             bodyTextView.maskEnable = false
             
@@ -57,14 +60,39 @@ extension ConversationMessageBubbleView {
         bodyTextView.setNeedsDisplay()
     }
     
-    private func createTapForMoreLabel(textColor: UIColor) -> UIView {
-        let tapForMoreLabel = UILabel()
-        tapForMoreLabel.text = Localized("CONVERSATION_VIEW_OVERSIZE_TEXT_TAP_FOR_MORE")
-        tapForMoreLabel.font = .ows_dynamicTypeCaption1
-        tapForMoreLabel.textColor = textColor
-        tapForMoreLabel.textAlignment = tapForMoreLabel.textAlignmentUnnatural()
+    private func createReadMoreButton(textColor: UIColor, renderItem: CVMessageBubbleRenderItem) -> UIView {
+        // 创建一个容器视图，用于左对齐按钮
+        let containerView = UIView()
+        containerView.backgroundColor = .clear
         
-        return tapForMoreLabel
+        // 创建按钮
+        let readMoreButton = UIButton(type: .system)
+        readMoreButton.setTitle(Localized("CONVERSATION_CELL_OVERSIZE_TEXT_TAP_FOR_MORE"), for: .normal)
+        readMoreButton.titleLabel?.font = UIFont.systemFont(ofSize: 16.0)
+        readMoreButton.setTitleColor(textColor, for: .normal)
+        readMoreButton.contentHorizontalAlignment = .leading
+        
+        // 添加点击事件
+        readMoreButton.addTarget(self, action: #selector(readMoreButtonTapped), for: .touchUpInside)
+        
+        // 将按钮添加到容器视图
+        containerView.addSubview(readMoreButton)
+        readMoreButton.snp.makeConstraints { make in
+            make.leading.equalToSuperview()
+            make.top.bottom.equalToSuperview()
+            make.trailing.lessThanOrEqualToSuperview()
+        }
+        
+        return containerView
+    }
+    
+    @objc private func readMoreButtonTapped(_ sender: UIButton) {
+        guard let renderItem = self.renderItem else {
+            Logger.info("[bubble] read more renderItem is nil]")
+            return
+        }
+        let viewItem = renderItem.viewItem
+        delegate?.messageBubbleView?(self, didTapReadMoreMessageWith: viewItem)
     }
     
     private func createChatHistoryLabel(textColor: UIColor, lineColor: UIColor) -> UIView {

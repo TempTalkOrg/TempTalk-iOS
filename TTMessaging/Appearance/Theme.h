@@ -142,6 +142,8 @@ extern NSNotificationName const ThemeDidChangeNotification;
 
 @property (class, readonly, nonatomic) UIColor *destructiveRed;
 
+@property (class, readonly, nonatomic) UIColor *tinfoColor;
+
 @end
 
 NS_ASSUME_NONNULL_END

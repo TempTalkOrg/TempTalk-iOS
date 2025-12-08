@@ -21,6 +21,8 @@ struct CallScreenShareView: View {
     // 展示快速点击的弹幕
     @State private var showQuickPanel = false
     @State private var showPlaceholder = true
+    // 用于防抖的任务
+    @State private var debounceTask: Task<Void, Never>?
     
     @StateObject private var timerManager = TimerDataManager.shared
     @StateObject private var roomDataManager = RoomDataManager.shared
@@ -110,7 +112,15 @@ struct CallScreenShareView: View {
                     }
                 }
                 .onChange(of: isRendering) { rendering in
-                    showPlaceholder = !rendering
+                    debounceTask?.cancel()
+                    debounceTask = Task {
+                        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2秒
+                        guard !Task.isCancelled else { return }
+                        await MainActor.run {
+                            Logger.info("[newcall] video showPlaceholder status \(!isRendering)")
+                            showPlaceholder = !isRendering
+                        }
+                    }
                 }
                 .ignoresSafeArea()
                 .onTapGesture {
@@ -311,6 +321,8 @@ struct CallScreenShareView: View {
     
     
     private func cleanUpResources() async {
+        debounceTask?.cancel()
+        debounceTask = nil
         isRendering = false
         showQuickPanel = false
         isGroupMembers = false

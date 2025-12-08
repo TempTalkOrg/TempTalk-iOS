@@ -211,6 +211,17 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
         navigationController?.pushViewController(longTextVC, animated: true)
     }
     
+    /// 点击长消息的readMore
+    func messageBubbleView(
+        _ bubbleView: ConversationMessageBubbleView,
+        didTapReadMoreMessageWith viewItem: any ConversationViewItem
+    ) {
+        AssertIsOnMainThread()
+        
+        let longMessageVC = LongMessageViewController(viewItem: viewItem)
+        navigationController?.pushViewController(longMessageVC, animated: true)
+    }
+    
     /// 点击引用消息，滑动到被引用消息位置
     func messageBubbleView(
         _ bubbleView: ConversationMessageBubbleView,

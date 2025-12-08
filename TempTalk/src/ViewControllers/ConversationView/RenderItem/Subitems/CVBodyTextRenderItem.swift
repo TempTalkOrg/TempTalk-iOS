@@ -185,7 +185,16 @@ class CVBodyTextRenderItem: ConversationRenderItem {
         }
         
         var shouldIgnoreEvents = false
-        let hasTapMore = displayableBodyText.isTextTruncated
+        
+        let hMargins = conversationStyle.textInsetHorizontal * 2
+        let maxTextWidth = floor(conversationStyle.maxMessageWidth - hMargins)
+        let numberOfLines = calculateNumberOfLines(
+            attributedString: attributedString,
+            maxWidth: maxTextWidth
+        )
+        
+        let hasTapMore = displayableBodyText.isTextTruncated || numberOfLines > 20
+        
         if hasTapMore {
             shouldIgnoreEvents = true
         } else {
@@ -194,12 +203,16 @@ class CVBodyTextRenderItem: ConversationRenderItem {
             }
         }
         
+        let isLineTruncated = numberOfLines > 20
+        let maxLines = isLineTruncated ? 20 : 0
+        let lineBreakMode: NSLineBreakMode = .byWordWrapping
+        
         let textConfig = CVTextViewConfig.attributeText(
             attributedString,
             font: font,
             textColor: textColor,
-            maximumNumberOfLines: 0,
-            lineBreakMode: .byWordWrapping,
+            maximumNumberOfLines: maxLines,
+            lineBreakMode: lineBreakMode,
             linkTextAttributes: [.foregroundColor: Theme.themeBlueColor],
             shouldIgnoreEvents: shouldIgnoreEvents
         )
@@ -321,4 +334,32 @@ class CVBodyTextRenderItem: ConversationRenderItem {
         return CGSizeZero
     }
     
+    /// 计算文本的行数
+    private func calculateNumberOfLines(attributedString: NSAttributedString, maxWidth: CGFloat) -> Int {
+        let textContainer = NSTextContainer(size: CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
+        textContainer.lineFragmentPadding = 0
+        textContainer.maximumNumberOfLines = 0
+        textContainer.lineBreakMode = .byWordWrapping
+        
+        let layoutManager = NSLayoutManager()
+        layoutManager.addTextContainer(textContainer)
+        
+        let textStorage = NSTextStorage(attributedString: attributedString)
+        textStorage.addLayoutManager(layoutManager)
+        
+        var lineCount = 0
+        var glyphIndex = 0
+        let numberOfGlyphs = layoutManager.numberOfGlyphs
+        
+        while glyphIndex < numberOfGlyphs {
+            var lineRange = NSRange()
+            let lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &lineRange)
+            if lineRect.size.height > 0 {
+                lineCount += 1
+            }
+            glyphIndex = NSMaxRange(lineRange)
+        }
+        
+        return lineCount
+    }
 }

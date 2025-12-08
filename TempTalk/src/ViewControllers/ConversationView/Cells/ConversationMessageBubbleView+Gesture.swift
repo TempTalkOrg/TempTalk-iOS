@@ -63,8 +63,8 @@ extension ConversationMessageBubbleView {
         let gestureLocation = gestureLocationForLocation(locationInMessageBubbleView)
         switch gestureLocation {
         case .oversizeText:
-            delegate?.messageBubbleView?(self, didTapTruncatedTextMessageWith: viewItem)
-            
+//            delegate?.messageBubbleView?(self, didTapTruncatedTextMessageWith: viewItem)
+            break
         case .media:
             handleMediaTapGesture(viewItem: viewItem)
             

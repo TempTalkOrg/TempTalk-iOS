@@ -11,6 +11,13 @@ import UIKit
 let lessConnectPointsNum: Int = 4
 
 class WarnLabel: UILabel {
+    private enum WarnState {
+        case normal
+        case warn
+    }
+
+    private var state: WarnState = .normal
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         textAlignment = .center
@@ -22,13 +29,24 @@ class WarnLabel: UILabel {
 
     func showNormal(with message: String) {
         text = message
-        textColor = normalColor
+        state = .normal
+        textColor = PatternLockPalette.current().dotNormalColor
     }
 
     func showWarn(with message: String) {
         text = message
-        textColor = warnColor
+        state = .warn
+        textColor = PatternLockPalette.current().warningColor
         layer.gp_shake()
+    }
+
+    func refreshTheme() {
+        switch state {
+        case .normal:
+            textColor = PatternLockPalette.current().dotNormalColor
+        case .warn:
+            textColor = PatternLockPalette.current().warningColor
+        }
     }
 }
 
@@ -107,7 +125,10 @@ class DTGestureLockViewController: DTScreenLockBaseViewController {
     
     public override func refreshTheme() {
         super.refreshTheme()
-        exclamationLabel.textColor = normalColor
+        let palette = PatternLockPalette.current()
+        exclamationLabel.textColor = palette.dotNormalColor
+        warnLabel.refreshTheme()
+        lockView?.applyPalette(palette, pathEnabled: ScreenLock.shared.isScreenLockPatternPathEnabled())
     }
     
     @objc override public func doneButtonClick() {
@@ -143,7 +164,6 @@ extension DTGestureLockViewController: PatternLockViewDelegate {
         if password.count < lessConnectPointsNum {
             nameLabel.text = Localized("SETTINGS_CREATE_PATTERN")
             warnLabel.showWarn(with: Localized("SETTINGS_LEAST_DOTS_PATTERN"))
-            warnLabel.textColor = warnColor
         } else {
             setPassword()
         }
