@@ -3885,3 +3885,4 @@
 "NOTIFICATIONS_CRITICAL_ALERT_SETTING" = "Go to Setting";
 "NOTIFICATIONS_CRITICAL_EXTENSION_TITLE" = "Missed Call from %@";
 "NOTIFICATIONS_CRITICAL_EXTENSION_CONTENT" = "Urgent: Please answer the call now.";
+"MEETING_CRITICAL_ALERT_FREQUENTLY" = "sent too frequently.  Please try again later.";

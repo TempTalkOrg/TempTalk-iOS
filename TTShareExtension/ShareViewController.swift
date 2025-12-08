@@ -44,6 +44,8 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
         
         Logger.info("")
         
+        Logger.info("\(self.logTag) [ScreenShare] loadView - frame: \(self.view.frame), idiom: \(self.traitCollection.userInterfaceIdiom.rawValue), sizeClass: (\(self.traitCollection.horizontalSizeClass.rawValue), \(self.traitCollection.verticalSizeClass.rawValue))")
+        
         Cryptography.seedRandom()
         
         // We don't need to use DeviceSleepManager in the SAE.
@@ -360,6 +362,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
         super.viewDidLoad()
 
         Logger.debug("\(self.logTag) \(#function)")
+        Logger.info("\(self.logTag) [ScreenShare] viewDidLoad - frame: \(self.view.frame)")
         
         UINavigationBar.appearance().tintColor = .ows_signalBlue
 
@@ -370,6 +373,18 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
                 strongSelf.activate()
             })
         }
+    }
+    
+    override open func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if let presented = self.presentedViewController {
+            Logger.info("\(self.logTag) [ScreenShare] viewDidAppear - presented: \(type(of: presented)), frame: \(presented.view.frame), modalStyle: \(presented.modalPresentationStyle.rawValue)")
+        }
+    }
+    
+    override open func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        Logger.info("\(self.logTag) [ScreenShare] viewWillTransition - to size: \(size)")
     }
 
     @objc
@@ -443,13 +458,20 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
     private func showPrimaryViewController(_ viewController: UIViewController) {
         AssertIsOnMainThread()
 
+        // 确保全屏展示
+        shareViewNavigationController.modalPresentationStyle = .fullScreen
         shareViewNavigationController.presentationController?.delegate = self
         shareViewNavigationController.setViewControllers([viewController], animated: false)
+        
         if self.presentedViewController == nil {
-            Logger.debug("\(self.logTag) presenting modally: \(viewController)")
-            self.present(shareViewNavigationController, animated: true)
+            Logger.info("\(self.logTag) [ScreenShare] showPrimaryViewController - presenting \(type(of: viewController)), modalStyle: \(shareViewNavigationController.modalPresentationStyle.rawValue)")
+            self.present(shareViewNavigationController, animated: true) {
+                if let presented = self.presentedViewController {
+                    Logger.info("\(self.logTag) [ScreenShare] showPrimaryViewController - present completed, presented.frame: \(presented.view.frame), modalStyle: \(presented.modalPresentationStyle.rawValue)")
+                }
+            }
         } else {
-            Logger.debug("\(self.logTag) modal already presented. swapping modal content for: \(viewController)")
+            Logger.info("\(self.logTag) [ScreenShare] showPrimaryViewController - swapping content to \(type(of: viewController))")
             assert(self.presentedViewController == shareViewNavigationController)
         }
     }
@@ -458,6 +480,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
         AssertIsOnMainThread()
         
         guard let inputItems = self.extensionContext?.inputItems as? [NSExtensionItem] else {
+            Logger.error("\(self.logTag) [ScreenShare] buildAttachmentAndPresentConversationPicker - no input items")
             let error = ShareViewControllerError.assertionError(description: "no input item")
             self.showAlertWithError(error: error)
             return
@@ -483,6 +506,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
             .done { loadedItems in
                 self.buildAttachments(loadedItems: loadedItems).done { signalAttachmens in
                     if signalAttachmens.count == 0 {
+                        Logger.error("\(self.logTag) [ScreenShare] buildAttachmentAndPresentConversationPicker - no attachments")
                         let error = ShareViewControllerError.assertionError(description: "no attachments")
                         self.showAlertWithError(error: error)
                         return
@@ -496,12 +520,11 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
                     self.showPrimaryViewController(conversationPicker)
                     Logger.info("\(self.logTag) showing picker with attachments: \(signalAttachmens)")
                 }.catch { error in
-                    Logger.info("buildAttachments error -> \(error.localizedDescription)")
+                    Logger.error("\(self.logTag) [ScreenShare] buildAttachments error: \(error.localizedDescription)")
                 }
             }
             .catch { error in
-                // 处理错误
-                Logger.info("loadItems error -> \(error.localizedDescription)")
+                Logger.error("\(self.logTag) [ScreenShare] loadItems error: \(error.localizedDescription)")
             }
     }
     
@@ -537,7 +560,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
             // format directly, which behaves correctly for all our needs.
             // A radar has been opened with apple reporting this issue.
             let desiredTypeIdentifier: String
-            if #available(iOS 14, *), itemProvider.registeredTypeIdentifiers.contains("public.heic") {
+            if itemProvider.registeredTypeIdentifiers.contains("public.heic") {
                 desiredTypeIdentifier = "public.heic"
             } else {
                 desiredTypeIdentifier = kUTTypeImage as String
@@ -725,8 +748,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
             guard let itemProviders = inputItem.attachments else {
                 return nil
             }
-            Logger.info("NSExtensionItem.inputItem.attributedTitle = \(String(describing: inputItem.attributedTitle))")
-            Logger.info("NSExtensionItem.inputItem.attributedContentText = \(String(describing: inputItem.attributedContentText))")
+            Logger.info("\(self.logTag) [ScreenShare] itemsToLoad - inputItem.attributedTitle: \(String(describing: inputItem.attributedTitle))")
             let attributedContentText = inputItem.attributedContentText
             let itemsToLoad: [UnloadedItem] = itemProviders.compactMap { itemProvider in
                 if itemProvider.hasItemConformingToTypeIdentifier(kUTTypeMovie as String) {
@@ -765,9 +787,12 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
                     return UnloadedItem(attributedContentText: attributedContentText, itemProvider: itemProvider, itemType: .pkPass)
                 }
 
+                Logger.info("\(self.logTag) [ScreenShare] itemsToLoad - unexpected item: \(itemProvider.registeredTypeIdentifiers)")
                 owsFailDebug("unexpected share item: \(itemProvider)")
                 return nil
             }
+            
+            Logger.info("\(self.logTag) [ScreenShare] itemsToLoad - found \(itemsToLoad.count) items: \(itemsToLoad.map { $0.itemType })")
 
             if let urlItem = itemsToLoad.first(where: { $0.itemType == .webUrl }) {
                 return [urlItem]
@@ -1194,12 +1219,20 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
 
 extension ShareViewController: UIAdaptivePresentationControllerDelegate {
     public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        Logger.info("\(self.logTag) [ScreenShare] presentationControllerDidDismiss - presentationController: \(type(of: presentationController))")
         shareViewWasCancelled()
     }
     
     public func adaptivePresentationStyle(for controller: UIPresentationController,
                                    traitCollection: UITraitCollection) -> UIModalPresentationStyle {
+        Logger.info("\(self.logTag) [ScreenShare] adaptivePresentationStyle - returning .fullScreen")
         return .fullScreen
+    }
+    
+    public func presentationController(_ presentationController: UIPresentationController, 
+                                      willPresentWithAdaptiveStyle style: UIModalPresentationStyle, 
+                                      transitionCoordinator: UIViewControllerTransitionCoordinator?) {
+        Logger.info("\(self.logTag) [ScreenShare] willPresentWithAdaptiveStyle - style: \(style.rawValue), frame: \(presentationController.presentedViewController.view.frame)")
     }
 }
 

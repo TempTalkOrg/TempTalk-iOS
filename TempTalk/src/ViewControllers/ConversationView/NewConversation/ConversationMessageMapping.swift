@@ -125,6 +125,7 @@ public class ConversationMessageMapping: NSObject {
     @objc
     public func loadInitialMessagePage(focusMessageId: String?, transaction: SDSAnyReadTransaction) throws {
         try updateOldestUnreadInteraction(transaction: transaction)
+        Logger.info("[CMM:loadInitial] begin focusId=\(focusMessageId ?? "nil") oldestUnread=\(self.oldestUnreadInteraction?.uniqueId ?? "nil")")
 
         if let focusMessageId = focusMessageId {
             try ensureLoaded(.around(interactionUniqueId: focusMessageId),
@@ -137,6 +138,7 @@ public class ConversationMessageMapping: NSObject {
         } else {
            try loadNewestMessagePage(transaction: transaction)
         }
+        Logger.info("[CMM:loadInitial] end loadedIndices=\(loadedIndexSet.count) canLoadOlder=\(canLoadOlder) canLoadNewer=\(canLoadNewer)")
     }
 
     // MARK: -

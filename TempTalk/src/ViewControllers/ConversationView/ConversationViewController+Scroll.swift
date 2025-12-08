@@ -578,7 +578,7 @@ extension ConversationViewController {
         let closeToTop = collectionView.contentOffset.y < loadThreshold
         if closeToTop, !isScrollUp {
             
-            Logger.debug("[hot data] ------ ⬆️⬆️⬆️")
+            Logger.info("[hot data] ------ ⬆️⬆️⬆️")
             
             if isShowLoadOlderHeader {
                 BenchManager.bench(title: "loading older interactions") {
@@ -597,7 +597,7 @@ extension ConversationViewController {
         let closeToBottom = distanceFromBottom < loadThreshold
         if closeToBottom, isScrollUp {
             
-            Logger.debug("[hot data] ------ ⬇️⬇️⬇️")
+            Logger.info("[hot data] ------ ⬇️⬇️⬇️")
             
             if isShowLoadNewerHeader {
                 BenchManager.bench(title: "loading newer interactions") {
@@ -645,14 +645,16 @@ extension ConversationViewController {
         isShowLoadNewerHeader = canLoadNewerItems
         isShowFetchNewerHeader = canFetchNewerItems
         
-        Logger.debug("------ showLoadOlderHeader:\(isShowLoadOlderHeader) showLoadNewerHeader: \(isShowLoadNewerHeader)")
-        Logger.debug("------ [hot data] showFetchOlderHeader:\(isShowFetchOlderHeader) showFetchNewerHeader:\(isShowFetchNewerHeader)")
+        Logger.info("------ showLoadOlderHeader:\(isShowLoadOlderHeader) showLoadNewerHeader: \(isShowLoadNewerHeader)")
+        Logger.info("------ [hot data] showFetchOlderHeader:\(isShowFetchOlderHeader) showFetchNewerHeader:\(isShowFetchNewerHeader)")
         
         return valueChanged
     }
     
     @objc func resetContentAndLayoutWithSneakyTransaction() {
+        Logger.info("[CVC:resetSneaky] request uiRead")
         databaseStorage.uiRead { transaction in
+            Logger.info("[CVC:resetSneaky] got transaction, calling resetContentAndLayout")
             self.resetContentAndLayout(transaction: transaction)
         }
     }
@@ -662,6 +664,7 @@ extension ConversationViewController {
         forceRealodRange: ReloadRange = .all,
         completion: ((Bool) -> Void)? = nil
     ) {
+        Logger.info("[CVC:resetContentAndLayout] begin forceRange=\(forceRealodRange) items(before)=\(viewItems.count) renderItems=\(renderItems.count)")
         scrollContinuity = .bottom
         
         // Avoid layout corrupt issues and out-of-date message subtitles.
@@ -674,6 +677,7 @@ extension ConversationViewController {
                 // Try to update the lastKnownDistanceFromBottom; the content size may have changed.
                 self.updateLastKnownDistanceFromBottom()
             }
+            Logger.info("[CVC:resetContentAndLayout] end finished=\(isFinished) items(after)=\(self.viewItems.count) renderItems=\(self.renderItems.count) contentSize=\(self.collectionView.contentSize)")
             completion?(isFinished)
         }
     }
@@ -706,7 +710,7 @@ extension ConversationViewController {
             jump: { [weak self] focusMessage in
                 
                 guard let self else { return }
-                Logger.debug("jump to message.body = \(focusMessage.body ?? "")")
+                Logger.info("jump to message.body = \(focusMessage.body ?? "")")
                 
                 self.forcusMessage(focusMessage, animated: true)
                 DispatchQueue.main.async {

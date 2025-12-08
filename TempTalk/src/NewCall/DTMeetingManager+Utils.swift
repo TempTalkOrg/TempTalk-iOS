@@ -734,6 +734,27 @@ extension DTMeetingManager {
         let topVC = rootWindow.findTopViewController()
         DTToastHelper.toast(withText: message, in: topVC.view, durationTime: 3, afterDelay: 1)
     }
+    
+    func isPresentedShare() -> Bool {
+        return currentCall.isPresentedShare
+    }
+    
+    func requestAuthToken() async throws -> String {
+        return try await withCheckedThrowingContinuation { continuation in
+            DTTokenHelper.sharedInstance.asyncFetchGlobalAuthToken { token, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let token {
+                    continuation.resume(returning: token)
+                } else {
+                    let invalidError = NSError(domain: "com.temptalk.call.token",
+                                      code: -10000,
+                                      userInfo: [NSLocalizedDescriptionKey: "token invalid"])
+                    continuation.resume(throwing: invalidError)
+                }
+            }
+        }
+    }
 }
 
 // DTMeetingManagerProtocol

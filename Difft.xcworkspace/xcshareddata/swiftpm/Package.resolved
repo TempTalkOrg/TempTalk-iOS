@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/difftim/client-sdk-swift",
       "state" : {
-        "revision" : "7f4b4045c0ddfcefbec5c312fe628a2a01087a38",
-        "version" : "2.8.1"
+        "revision" : "4746786a4eb2325338e1dd86e7e03892e6b98ab9",
+        "version" : "2.9.0"
       }
     },
     {
@@ -78,8 +78,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/livekit/webrtc-xcframework.git",
       "state" : {
-        "revision" : "26be1457f076237df4d42c15c3bc23b0841d3c21",
-        "version" : "137.7151.9"
+        "revision" : "5b40f56c637369064b9c82e8f9cfa820f942658f",
+        "version" : "137.7151.10"
       }
     }
   ],

@@ -80,6 +80,12 @@ class SAEFailedViewController: UIViewController {
 
         self.navigationController?.isNavigationBarHidden = false
     }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        Logger.info("\(self.logTag) [ScreenShare] SAEFailedViewController loadView - frame: \(self.view.frame)")
+    }
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)

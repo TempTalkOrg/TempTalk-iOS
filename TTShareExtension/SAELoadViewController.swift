@@ -98,6 +98,11 @@ class SAELoadViewController: UIViewController {
         super.viewDidDisappear(animated)
 
     }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        Logger.info("\(self.logTag) [ScreenShare] SAELoadViewController viewDidLayoutSubviews - frame: \(self.view.frame)")
+    }
 
     // MARK: - Event Handlers
 

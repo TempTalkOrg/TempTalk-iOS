@@ -63,6 +63,8 @@ final class ConversationViewController: OWSViewController {
         
         actionOnOpen = action
         inputAccessoryPlaceholder.delegate = self
+
+        Logger.info("[CVC:init] threadId=\(thread.uniqueId) viewMode=\(viewMode) focusId=\(focusMessageId ?? "nil") action=\(action)")
     }
     
     deinit {
@@ -96,6 +98,9 @@ final class ConversationViewController: OWSViewController {
         
         prepareForMentionMessage()
         createVirtualContactIfNeeded()
+
+        // DEBUG: viewDidLoad state
+        Logger.info("[CVC:viewDidLoad] bounds=\(view.bounds) collectionFrame=\(collectionView.frame) shouldObserveDBModifications=\(shouldObserveDBModifications)")
     }
     
     override func viewIsAppearing(_ animated: Bool) {
@@ -135,6 +140,9 @@ final class ConversationViewController: OWSViewController {
         }
         
         setupJoinBarView()
+
+        // DEBUG: viewIsAppearing
+        Logger.info("[CVC:viewIsAppearing] isViewLoaded=\(isViewLoaded) items=\(viewItems.count) renderItems=\(renderItems.count) contentSize=\(collectionView.contentSize) inset=\(collectionView.contentInset)")
     }
     
     override func viewDidLayoutSubviews() {
@@ -150,6 +158,15 @@ final class ConversationViewController: OWSViewController {
         // Ensure the message list's contentInset is properly updated after input box height changes
         if viewHasEverAppeared {
             updateInputAccessoryPlaceholderHeight()
+        }
+        
+        let width = floor(view.width)
+        if conversationStyle.viewWidth != width {
+            Logger.info("[CVC:viewDidLayoutSubviews] updating conversationStyle.viewWidth from \(conversationStyle.viewWidth) -> \(width), bounds=\(view.bounds), collectionFrame=\(collectionView.frame)")
+            conversationStyle.viewWidth = width
+            layout.invalidateLayout()
+        } else {
+            Logger.info("[CVC:viewDidLayoutSubviews] width OK: \(width), contentSize=\(collectionView.contentSize)")
         }
     }
     
@@ -199,6 +216,9 @@ final class ConversationViewController: OWSViewController {
         ensureScrollDownButton()
         inputToolbar.viewDidAppear()
         loadDraftInCompose()
+
+        // DEBUG: viewDidAppear final state
+        Logger.info("[CVC:viewDidAppear] items=\(viewItems.count) renderItems=\(renderItems.count) contentSize=\(collectionView.contentSize) offset=\(collectionView.contentOffset) visible=\(collectionView.indexPathsForVisibleItems.count)")
     }
     
     // `viewWillDisappear` is called whenever the view *starts* to disappear,

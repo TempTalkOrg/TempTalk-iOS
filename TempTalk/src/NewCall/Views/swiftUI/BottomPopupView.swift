@@ -138,12 +138,14 @@ struct SwitchView: UIViewRepresentable {
         }
 
         @objc func toggleChanged(_ sender: UISwitch) {
-            isOn.wrappedValue = sender.isOn
-            guard let roomContext = DTMeetingManager.shared.roomContext else {
-                Logger.info("\(DTMeetingManager.shared.logTag) Room context is nil when changing noise settings")
-                return
+            Task { @MainActor in
+                isOn.wrappedValue = sender.isOn
+                guard let roomContext = DTMeetingManager.shared.roomContext else {
+                    Logger.info("\(DTMeetingManager.shared.logTag) Room context is nil when changing noise settings")
+                    return
+                }
+                roomContext.setDenoiseFilter(enabled: sender.isOn)
             }
-            roomContext.setDenoiseFilter(enabled: sender.isOn)
         }
     }
 }

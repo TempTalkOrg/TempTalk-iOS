@@ -62,6 +62,10 @@ public class CallCriticalAlertApi : DTBaseAPI {
             
         }, failure: { errorWrapper in
             guard let failure = failure else { return }
+            if errorWrapper.error.httpStatusCode == 413 {
+                DTToastHelper.toast(withText: Localized("MEETING_CRITICAL_ALERT_FREQUENTLY"), durationTime: 2.0)
+                return
+            }
             let error = errorWrapper.asNSError
             failure(error, nil);
         });

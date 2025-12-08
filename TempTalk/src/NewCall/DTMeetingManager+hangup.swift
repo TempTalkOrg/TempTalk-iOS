@@ -282,17 +282,10 @@ extension DTMeetingManager {
         }
         
         DispatchMainThreadSafe {
-            self.appContext = nil
-            self.roomContext = nil
-            self.clearCurrentCall()
-            self.stopCheckTalking()
-            // 持续响应的铃声需要停止
-            self.stopSound()
-            DTToastHelper.hide()
-            self.removeCallWindow()
-            Logger.info("\(self.logTag) clear data remvoe call window")
-            UIDevice.current.isProximityMonitoringEnabled = false
-            self.isMinimize = false
+            // 使用统一的清理方法
+            self.performCompleteCleanup()
+            
+            // 处理错误提示
             if self.showErrorTost {
                 let rootWindow = OWSWindowManager.shared().rootWindow
                 let topVC = rootWindow.findTopViewController()

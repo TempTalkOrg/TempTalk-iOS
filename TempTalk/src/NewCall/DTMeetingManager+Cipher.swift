@@ -9,6 +9,7 @@
 import Foundation
 import TTServiceKit
 import DTProto
+import LiveKit
 
 extension DTMeetingManager {
     
@@ -89,4 +90,40 @@ extension DTMeetingManager {
         }
     }
 
+    func parseCipherMessages(_ dictArray: [[String: Any]]) -> [Livekit_TTCipherMessages] {
+        return dictArray.compactMap { dict in
+            var msg = Livekit_TTCipherMessages()
+            
+            if let content = dict["content"] as? String {
+                msg.content = content
+            }
+            if let uid = dict["uid"] as? String {
+                msg.uid = uid
+            }
+            if let regID = dict["registrationId"] as? Int {
+                msg.registrationID = Int32(regID)
+            } else if let regID = dict["registrationId"] as? Int32 {
+                msg.registrationID = regID
+            } else if let regID = dict["registrationId"] as? String, let intVal = Int32(regID) {
+                msg.registrationID = intVal
+            }
+            
+            return msg
+        }
+    }
+    
+    func parseEncInfoArray(_ dictArray: [[String: Any]]) -> [Livekit_TTEncInfo] {
+        return dictArray.compactMap { dict in
+            var info = Livekit_TTEncInfo()
+            
+            if let uid = dict["uid"] as? String {
+                info.uid = uid
+            }
+            if let emk = dict["emk"] as? String {
+                info.emk = emk
+            }
+            
+            return info
+        }
+    }
 }

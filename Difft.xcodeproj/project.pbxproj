@@ -258,6 +258,9 @@
 		5B94409D2E339DF800C59EBA /* SMCallStackModel.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B94409C2E339DF800C59EBA /* SMCallStackModel.m */; };
 		5B9440A02E339EB200C59EBA /* SMCallLib.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B94409F2E339EB200C59EBA /* SMCallLib.m */; };
 		5B9440A32E33A1A400C59EBA /* fishhook.c in Sources */ = {isa = PBXBuildFile; fileRef = 5B9440A22E33A1A400C59EBA /* fishhook.c */; };
+		5BA173702EB0F13C0048F2DF /* DTMeetingManager+Clean.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA1736F2EB0F1210048F2DF /* DTMeetingManager+Clean.swift */; };
+		5BA173722EB0F2460048F2DF /* DTMeetingManager+Call.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA173712EB0F2440048F2DF /* DTMeetingManager+Call.swift */; };
+		5BA173742EB0F4FA0048F2DF /* DTMeetingManager+Sound.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA173732EB0F4F80048F2DF /* DTMeetingManager+Sound.swift */; };
 		5BA6A0302E03019D007C2C48 /* DTCircleLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA6A02F2E030193007C2C48 /* DTCircleLoadingView.swift */; };
 		5BA8497E2E9FC47C00577C87 /* FeedbackAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA8497D2E9FC47200577C87 /* FeedbackAPI.swift */; };
 		5BA849802E9FE21000577C87 /* CallRatingTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BA8497F2E9FE20D00577C87 /* CallRatingTrigger.swift */; };
@@ -274,7 +277,7 @@
 		5BB589A62DB6A67D000E7821 /* LivekitLoggerHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB589A52DB6A67A000E7821 /* LivekitLoggerHandler.swift */; };
 		5BB5A0082D9BECFD00A75C47 /* MemberContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB5A0072D9BECF200A75C47 /* MemberContainerView.swift */; };
 		5BB5A00A2D9C26A200A75C47 /* MultiMeetingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB5A0092D9C268500A75C47 /* MultiMeetingView.swift */; };
-		5BB62E9B2E14436200B20DBD /* DTMeetingManager+hangup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB62E9A2E14436000B20DBD /* DTMeetingManager+hangup.swift */; };
+		5BB62E9B2E14436200B20DBD /* DTMeetingManager+Hangup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB62E9A2E14436000B20DBD /* DTMeetingManager+Hangup.swift */; };
 		5BB62E9D2E1582BC00B20DBD /* HandsControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB62E9C2E15829900B20DBD /* HandsControlView.swift */; };
 		5BB62E9F2E15838B00B20DBD /* HandsControlViewRepresentable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB62E9E2E15838A00B20DBD /* HandsControlViewRepresentable.swift */; };
 		5BB64A2F2D954C2B0020FEAF /* TimerDataManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BB64A2E2D954C2B0020FEAF /* TimerDataManager.swift */; };
@@ -1259,6 +1262,9 @@
 		5B94409F2E339EB200C59EBA /* SMCallLib.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SMCallLib.m; sourceTree = "<group>"; };
 		5B9440A12E33A1A400C59EBA /* fishhook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = fishhook.h; sourceTree = "<group>"; };
 		5B9440A22E33A1A400C59EBA /* fishhook.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fishhook.c; sourceTree = "<group>"; };
+		5BA1736F2EB0F1210048F2DF /* DTMeetingManager+Clean.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DTMeetingManager+Clean.swift"; sourceTree = "<group>"; };
+		5BA173712EB0F2440048F2DF /* DTMeetingManager+Call.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DTMeetingManager+Call.swift"; sourceTree = "<group>"; };
+		5BA173732EB0F4F80048F2DF /* DTMeetingManager+Sound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DTMeetingManager+Sound.swift"; sourceTree = "<group>"; };
 		5BA6A02F2E030193007C2C48 /* DTCircleLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTCircleLoadingView.swift; sourceTree = "<group>"; };
 		5BA8497D2E9FC47200577C87 /* FeedbackAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackAPI.swift; sourceTree = "<group>"; };
 		5BA8497F2E9FE20D00577C87 /* CallRatingTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRatingTrigger.swift; sourceTree = "<group>"; };
@@ -1275,7 +1281,7 @@
 		5BB589A52DB6A67A000E7821 /* LivekitLoggerHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivekitLoggerHandler.swift; sourceTree = "<group>"; };
 		5BB5A0072D9BECF200A75C47 /* MemberContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberContainerView.swift; sourceTree = "<group>"; };
 		5BB5A0092D9C268500A75C47 /* MultiMeetingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiMeetingView.swift; sourceTree = "<group>"; };
-		5BB62E9A2E14436000B20DBD /* DTMeetingManager+hangup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DTMeetingManager+hangup.swift"; sourceTree = "<group>"; };
+		5BB62E9A2E14436000B20DBD /* DTMeetingManager+Hangup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DTMeetingManager+Hangup.swift"; sourceTree = "<group>"; };
 		5BB62E9C2E15829900B20DBD /* HandsControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandsControlView.swift; sourceTree = "<group>"; };
 		5BB62E9E2E15838A00B20DBD /* HandsControlViewRepresentable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandsControlViewRepresentable.swift; sourceTree = "<group>"; };
 		5BB64A2E2D954C2B0020FEAF /* TimerDataManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerDataManager.swift; sourceTree = "<group>"; };
@@ -3270,7 +3276,10 @@
 				CE9ED5242D59D108009E1BAC /* Views */,
 				CE9ED5252D59D108009E1BAC /* DTCallAPIManager.swift */,
 				CE9ED5262D59D108009E1BAC /* DTMeetingManager.swift */,
-				5BB62E9A2E14436000B20DBD /* DTMeetingManager+hangup.swift */,
+				5BA173732EB0F4F80048F2DF /* DTMeetingManager+Sound.swift */,
+				5BA173712EB0F2440048F2DF /* DTMeetingManager+Call.swift */,
+				5BA1736F2EB0F1210048F2DF /* DTMeetingManager+Clean.swift */,
+				5BB62E9A2E14436000B20DBD /* DTMeetingManager+Hangup.swift */,
 				5BFF65E52DAFA38B00D5A2F9 /* DTMeetingManager+Utils.swift */,
 				5BAB7EF42DF87E3700A34FF5 /* DTMeetingManager+LocalMessage.swift */,
 				CE9ED5272D59D108009E1BAC /* DTMeetingManager+CallAlert.swift */,
@@ -5177,6 +5186,7 @@
 				CE9ED5532D59D323009E1BAC /* DTCallKitManager.m in Sources */,
 				5B7F7E972DDC6A4900B2C3E9 /* DTRTCAudioSession.swift in Sources */,
 				5B94409A2E339DC700C59EBA /* SMCallStack.m in Sources */,
+				5BA173702EB0F13C0048F2DF /* DTMeetingManager+Clean.swift in Sources */,
 				CE9ED5542D59D323009E1BAC /* DTCallKitManager+LiveKit.swift in Sources */,
 				3496744F2076ACD000080B5F /* LongTextViewController.swift in Sources */,
 				CE8BE5D8277C22300099E57F /* DTGroupNoticeSettingController.m in Sources */,
@@ -5287,6 +5297,7 @@
 				5BA928F62E3B763100EAFC36 /* ClusterSpeedTester.swift in Sources */,
 				34D5CCA91EAE3D30005515DB /* AvatarViewHelper.m in Sources */,
 				34D1F0B71F87F8850066283D /* OWSGenericAttachmentView.m in Sources */,
+				5BA173722EB0F2460048F2DF /* DTMeetingManager+Call.swift in Sources */,
 				CE3BB4702BD6544A003E5CB9 /* ConversationSystemMessageCell.swift in Sources */,
 				CE94493628471FBE008AB8F0 /* DTSupportCopyCell.m in Sources */,
 				CE19459B28ADEBB600C0A2F4 /* DTRenderViewManager.swift in Sources */,
@@ -5308,11 +5319,12 @@
 				CE4F79F427434CD000DBCEE2 /* DTForwardPreviewViewController.swift in Sources */,
 				458E38371D668EBF0094BD24 /* OWSDeviceProvisioningURLParser.m in Sources */,
 				CEB9A94F289291130083D126 /* DTThumbsUpView.m in Sources */,
-				5BB62E9B2E14436200B20DBD /* DTMeetingManager+hangup.swift in Sources */,
+				5BB62E9B2E14436200B20DBD /* DTMeetingManager+Hangup.swift in Sources */,
 				CE4512F92864043100B9265C /* OWSConversationSettingsViewController+ConversationFeature.m in Sources */,
 				5BE985832E7D4D6D00D78913 /* LiveKitServersApi.swift in Sources */,
 				CE71D1822D11949A00CB424D /* LoadMoreMessagesView.swift in Sources */,
 				DCEE7F8C2810F9A100D7507D /* MessageReactionPicker.swift in Sources */,
+				5BA173742EB0F4FA0048F2DF /* DTMeetingManager+Sound.swift in Sources */,
 				CE94A6202DD7262F0029BC14 /* TTGroupAvatarGenerator.swift in Sources */,
 				CE32FDB0288845FF001D4769 /* DTImageBrowserView.m in Sources */,
 				34D8C0281ED3673300188D7C /* DebugUITableViewController.m in Sources */,
@@ -5652,7 +5664,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
@@ -5731,7 +5743,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -6077,7 +6089,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -6235,7 +6247,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
@@ -6536,7 +6548,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6610,7 +6622,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6896,7 +6908,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -7052,7 +7064,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -7196,7 +7208,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7252,7 +7264,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7309,7 +7321,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7367,7 +7379,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.4;
+				MARKETING_VERSION = 3.5.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7468,7 +7480,7 @@
 			repositoryURL = "https://github.com/difftim/client-sdk-swift";
 			requirement = {
 				kind = exactVersion;
-				version = 2.8.1;
+				version = 2.9.0;
 			};
 		};
 		CE45C7A82D71CD36008B8452 /* XCRemoteSwiftPackageReference "SFSafeSymbols" */ = {

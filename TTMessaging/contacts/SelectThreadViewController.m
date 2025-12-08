@@ -165,6 +165,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    OWSLogInfo(@"[ScreenShare] SelectThreadViewController viewDidAppear - view.frame: %@, tableView.frame: %@", NSStringFromCGRect(self.view.frame), NSStringFromCGRect(self.tableView.frame));
+    OWSLogInfo(@"[ScreenShare] SelectThreadViewController viewDidAppear - tableView.numberOfSections: %ld, dataSource: %@", (long)self.tableView.numberOfSections, self.tableView.dataSource ? @"exists" : @"nil");
 }
 
 - (void)btnSelectDoneAction:(id)sender {

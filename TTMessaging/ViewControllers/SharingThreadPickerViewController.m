@@ -70,6 +70,8 @@ typedef void (^SendMessageBlock)(SendCompletionBlock completion);
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    
+    OWSLogInfo(@"[ScreenShare] SharingThreadPickerViewController viewDidLoad - view.frame: %@", NSStringFromCGRect(self.view.frame));
 
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(attachmentUploadProgress:)

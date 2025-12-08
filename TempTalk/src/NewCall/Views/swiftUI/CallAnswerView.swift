@@ -10,6 +10,12 @@ import SwiftUI
 import TTMessaging
 import SFSafeSymbols
 
+enum AnswerVCPresentationStyle {
+    case windowManager
+    case modal
+    case navigation
+}
+
 struct CallAnswerView: View {
     
     private let logTag = "[newcall]"

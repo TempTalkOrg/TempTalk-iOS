@@ -310,24 +310,28 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)configure
 {
-    OWSLogInfo(@"");
+    OWSLogInfo(@"[CVM:configure] viewModel configure thread %@", self.thread.uniqueId);
 
-    [BenchManager benchWithTitle:@"loading initial interactions"
-                           block:^{
-                               [self.databaseStorage uiReadWithBlock:^(SDSAnyReadTransaction *transaction) {
-                                   NSError *error;
-                                   [self.messageMapping
-                                       loadInitialMessagePageWithFocusMessageId:self.focusMessageIdOnOpen
-                                                                    transaction:transaction
-                                                                          error:&error];
-                                   if (error != nil) {
-                                       OWSFailDebug(@"error: %@", error);
-                                   }
-//                                   if (![self reloadViewItemsWithTransaction:transaction]) {
-//                                       OWSFailDebug(@"failed to reload view items in configureForThread.");
-//                                   }
-                               }];
-                           }];
+    [BenchManager benchWithTitle:@"loading initial interactions" block:^{
+        OWSLogInfo(@"[CVM:configure] begin thread=%@ focus=%@", self.thread.uniqueId, self.focusMessageIdOnOpen);
+        [self.databaseStorage uiReadWithBlock:^(SDSAnyReadTransaction *transaction) {
+            NSError *error;
+            [self.messageMapping
+                loadInitialMessagePageWithFocusMessageId:self.focusMessageIdOnOpen
+                                             transaction:transaction
+                                                   error:&error];
+            if (error != nil) {
+                OWSLogInfo(@"[CVM:configure] loadInitial message error: %@", error);
+            } else {
+                OWSLogInfo(@"[CVM:configure] loadInitial message success");
+            }
+            OWSLogInfo(@"[CVM:configure] initial page loaded. canLoadOlder=%d canLoadNewer=%d", self.messageMapping.canLoadOlder, self.messageMapping.canLoadNewer);
+            if (![self reloadViewItemsWithTransaction:transaction]) {
+                OWSLogInfo(@"failed to reload view items in configureForThread.");
+            }
+        }];
+        OWSLogInfo(@"[CVM:configure] end");
+    }];
 }
 
 - (void)viewDidLoad
@@ -348,9 +352,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)viewDidResetContentAndLayoutWithTransaction:(SDSAnyReadTransaction *)transaction
 {
     self.collapseCutoffDate = [NSDate new];
+    OWSLogInfo(@"[CVM:resetContentAndLayout] begin thread=%@", self.thread.uniqueId);
     if (![self reloadViewItemsWithTransaction:transaction]) {
         OWSFailDebug(@"failed to reload view items in resetContentAndLayout.");
     }
+    OWSLogInfo(@"[CVM:resetContentAndLayout] end viewItems=%lu", (unsigned long)self.viewState.viewItems.count);
 }
 
 - (BOOL)canLoadOlderItems

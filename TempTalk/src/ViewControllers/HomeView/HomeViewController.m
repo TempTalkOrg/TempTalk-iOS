@@ -659,13 +659,14 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
 
     // Define a block to perform the second step.
     void (^dismissNavigationBlock)(void) = ^{
-        if (![self.navigationController.viewControllers.lastObject isKindOfClass:NSClassFromString(@"DTHomeViewController")]) {
+        if (self.navigationController.viewControllers.lastObject != self) {
             [CATransaction begin];
             [CATransaction setCompletionBlock:^{
                 presentationBlock();
             }];
 
-            [self.navigationController popToRootViewControllerAnimated:animateDismissal];
+            [self.navigationController popToViewController:self animated:animateDismissal];
+            
             [CATransaction commit];
         } else {
             presentationBlock();
@@ -686,6 +687,7 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
             BOOL isLandscape = screenSize.width > screenSize.height;
             
             if (isLandscape) {
+                OWSLogInfo(@"[HomeVC] layout Landscape");
                 // Force layout update before dismissal in landscape
                 [self.presentedViewController.view setNeedsLayout];
                 [self.presentedViewController.view layoutIfNeeded];

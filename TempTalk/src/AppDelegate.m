@@ -127,13 +127,15 @@ static NSTimeInterval launchStartedAt;
     // 初始化应用版本管理器（包含版本和名称管理）
     [AppVersion shared];
     
-    // 检查版本更新并执行通知清理
-    [self checkVersionUpdateAndCleanupNotifications];
-    
     [self setupNSEInteroperation];
     
-    [[DTServerConfigManager sharedManager] updateConfig];
-    [[DTServerUrlManager sharedManager] startSpeedTestAll];
+    // 服务器配置和测速 - 非关键操作，延迟执行避免阻塞启动
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+        // 检查版本更新并执行通知清理
+        [self checkVersionUpdateAndCleanupNotifications];
+        [[DTServerConfigManager sharedManager] updateConfig];
+        [[DTServerUrlManager sharedManager] startSpeedTestAll];
+    });
     
     // Prevent the device from sleeping during database view async registration
     // (e.g. long database upgrades).
@@ -142,7 +144,6 @@ static NSTimeInterval launchStartedAt;
     [DeviceSleepManager.shared addBlockWithBlockObject:self];
     
     [FTS5SimpleTokenizer registerTokenizer];
-    
     //fix keyspec group issues
     [GRDBDatabaseStorageAdapter runKeyspecMigrations];
     
@@ -226,7 +227,7 @@ static NSTimeInterval launchStartedAt;
     
     [CurrentAppContext() setColdStart:YES];
     
-    AppReadinessRunNowOrWhenAppDidBecomeReadySync(^{
+    AppReadinessRunNowOrWhenAppDidBecomeReadyAsync(^{
         if([TSAccountManager sharedInstance].isRegistered){
             [[DTCallManager sharedInstance] requestForConfigMeetingversion];
         }
@@ -262,7 +263,6 @@ static NSTimeInterval launchStartedAt;
         [DebugLogger.shared enableFileLoggingWithAppContext:CurrentAppContext() canLaunchInBackground:YES];
     }
         
-    
 #ifdef RELEASE_TEST
 //        NSString *filePath = [[NSBundle mainBundle] pathForResource:@"GoogleService-Info-chative" ofType:@"plist"];
 //        FIROptions *option = [[FIROptions alloc] initWithContentsOfFile:filePath];
@@ -404,13 +404,18 @@ static NSTimeInterval launchStartedAt;
 
     [self ensureRootViewController];
 
+    // 使用Sync确保立即执行
     AppReadinessRunNowOrWhenAppDidBecomeReadySync(^{
-        [self handleActivation];
-        [DTMeetingManager.shared syncServerCalls];
         // There is a sequence of actions a user can take where we present a conversation from a notification
         // multiple times, producing an undesirable "stack" of multiple conversation view controllers.
         // So we ensure that we only present conversations once per activate.
         [PushManager sharedManager].hasPresentedConversationSinceLastDeactivation = NO;
+    });
+
+    // 使用Async避免阻塞主线程
+    AppReadinessRunNowOrWhenAppDidBecomeReadyAsync(^{
+        [self handleActivation];
+        [DTMeetingManager.shared syncServerCalls];
     });
 
     // Clear all notifications whenever we become active.
@@ -424,14 +429,17 @@ static NSTimeInterval launchStartedAt;
 //TODO: 待处理
 - (void)enableBackgroundRefreshIfNecessary
 {
-    AppReadinessRunNowOrWhenAppDidBecomeReadySync(^{
-        if (OWS2FAManager.sharedManager.is2FAEnabled && [TSAccountManager isRegistered]) {
-            // Ping server once a day to keep-alive 2FA clients.
-            const NSTimeInterval kBackgroundRefreshInterval = 24 * 60 * 60;
-            [[UIApplication sharedApplication] setMinimumBackgroundFetchInterval:kBackgroundRefreshInterval];
-        } else {
-            [[UIApplication sharedApplication] setMinimumBackgroundFetchInterval:UIApplicationBackgroundFetchIntervalNever];
-        }
+    // 后台刷新设置 - 非关键操作，使用异步避免阻塞
+    AppReadinessRunNowOrWhenAppDidBecomeReadyAsync(^{
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (OWS2FAManager.sharedManager.is2FAEnabled && [TSAccountManager isRegistered]) {
+                // Ping server once a day to keep-alive 2FA clients.
+                const NSTimeInterval kBackgroundRefreshInterval = 24 * 60 * 60;
+                [[UIApplication sharedApplication] setMinimumBackgroundFetchInterval:kBackgroundRefreshInterval];
+            } else {
+                [[UIApplication sharedApplication] setMinimumBackgroundFetchInterval:UIApplicationBackgroundFetchIntervalNever];
+            }
+        });
     });
 }
 
@@ -469,23 +477,31 @@ extern bool bScreenLockDone;
                 // Mark all "incomplete" calls as missed, e.g. any incoming or outgoing calls that were not
                 // connected, failed or hung up before the app existed should be marked as missed.
 //                [[[OWSIncompleteCallsJob alloc] initWithPrimaryStorage:[OWSPrimaryStorage sharedManager]] run];
-                [[FailedAttachmentDownloadsJob new] runSync];
-                [[FailedMessagesJob new] runSync];
+                
+                // 数据库清理操作 - 异步执行避免阻塞
+                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+                    [[FailedAttachmentDownloadsJob new] runSync];
+                    [[FailedMessagesJob new] runSync];
+                });
                 [self.notificationsManager syncApnSoundIfNeeded];
                 
                 [self initializeMeetingManager];
                 
-                // 更新一次网络本地配置
-                [[DTSettingsManager shared] syncRemoteProfileInfo];
-                // 卡顿检测
+                // 非关键网络操作 - 延迟执行避免阻塞app激活
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+                    // 更新一次网络本地配置
+                    [[DTSettingsManager shared] syncRemoteProfileInfo];
+                    // 将之前打断的数据再次进行
+                    [[DTSettingsManager shared] checkResetKeyMap];
+                    // 开始测速
+                    [[DTMeetingManager shared] startSpeedTest];
+                });
+                
+                // 卡顿检测 - 调试功能，可以立即执行
 #if DEBUG_TEST || RELEASE_TEST || RELEASE_CHATIVETEST
                 [SMCallTrace start];
                 [[SMLagMonitor shareInstance] beginMonitor];
 #endif
-                // 将之前打断的数据再次进行
-                [[DTSettingsManager shared] checkResetKeyMap];
-                // 开始测速
-                [[DTMeetingManager shared] startSpeedTest];
             });
             
             [self addUpLoadTimeZonObserver];
@@ -506,14 +522,7 @@ extern bool bScreenLockDone;
         // At this point, potentially lengthy DB locking migrations could be running.
         // Avoid blocking app launch by putting all further possible DB access in async block
         dispatch_async(dispatch_get_main_queue(), ^{
-//            [TSSocketManager requestSocketOpen];
-            [self reportBackgroundStatusByWebSocket:NO];
             
-            [self uploadTimeZone];
-
-            // modified: do not access system contacts.
-            //[Environment.shared.contactsManager fetchSystemContactsOnceIfAlreadyAuthorized];
-            // This will fetch new messages, if we're using domain fronting.
             if (![UIApplication sharedApplication].isRegisteredForRemoteNotifications) {
                 OWSLogInfo(
                     @"%@ Retrying to register for remote notifications since user hasn't registered yet.", self.logTag);
@@ -538,7 +547,12 @@ extern bool bScreenLockDone;
                     [rootViewController presentViewController:reminderNavController animated:YES completion:nil];
                 }
             }
-            
+        });
+        
+        // 非关键网络操作 - 在后台线程执行，延迟执行避免阻塞
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+            [self reportBackgroundStatusByWebSocket:NO];
+   
             [[DTConversationSettingHelper sharedInstance] requestAllActiveThreadsConversationSettingAndSaveResult];
         });
     }
@@ -800,7 +814,7 @@ extern bool bScreenLockDone;
 
     [AppVersion.shared mainAppLaunchDidComplete];
     
-    [Environment.shared.contactsManager loadSignalAccountsFromCache];
+//    [Environment.shared.contactsManager loadSignalAccountsFromCache];
     
 //    [self.databaseStorage asyncWriteWithBlock:^(SDSAnyWriteTransaction * transaction) {
 //        [TSGroupThread anyEnumerateWithTransaction:transaction

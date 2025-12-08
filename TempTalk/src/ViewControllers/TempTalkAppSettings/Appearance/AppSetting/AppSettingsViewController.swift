@@ -118,7 +118,7 @@ class AppSettingsViewController : SettingBaseViewController {
     }
     
     private func isiPhoneSE() -> Bool {
-        return screenWidth == 667 || screenHeight == 667
+        return screenWidth == 667 || screenHeight == 667 || UIScreen.isDisplayZoomed
     }
     
     override func applyTheme() {
@@ -469,4 +469,11 @@ extension AppSettingsViewController  {
         self.navigationController?.pushViewController(editProfileController, animated: true)
     }
     
+}
+
+extension UIScreen {
+    static var isDisplayZoomed: Bool {
+        let screen = UIScreen.main
+        return screen.nativeScale > screen.scale
+    }
 }

@@ -115,6 +115,10 @@ open class OWSNavigationController: UINavigationController {
 
     open override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        
+        if !CurrentAppContext().isMainApp {
+            Logger.info("[ScreenShare] OWSNavigationController viewWillAppear - frame: \(self.view.frame), topVC: \(String(describing: self.topViewController))")
+        }
 
         updateNavbarAppearance(animated: animated)
     }

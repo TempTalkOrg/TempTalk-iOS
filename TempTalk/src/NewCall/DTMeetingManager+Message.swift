@@ -709,7 +709,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
         do {
             if let localPriKey = OWSIdentityManager.shared().identityKeyPair()?.privateKey as? Data,
                 let roomCtx = self.roomContext,
-                let mkey = roomCtx.currentCall.mKey {
+               let mkey = await roomCtx.currentCall.mKey {
                 let msgData = try roomCtx.jsonEncoder.encode([RTMKeys.topic: "chat",
                                                               RTMKeys.text: message])
                 //会议密钥截取前32位即可
@@ -733,7 +733,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
         }
     }
     
-    func decryptRemoteRoom(signature: Data, decryptData: Data, participantId: String) {
+    @MainActor func decryptRemoteRoom(signature: Data, decryptData: Data, participantId: String) {
         var result: DTDecryptedRtmMsgResult
         do {
             if  let roomCtx = self.roomContext,
@@ -786,11 +786,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
     }
     
     func criticalAlertFailedBarrage() {
-        if let roomCtx = self.roomContext {
-            let pid = roomCtx.room.localParticipant.identity?.stringValue
-                .components(separatedBy: ".").first ?? ""
-            RoomDataManager.shared.sendRTMBarrageMessage(pid: pid, message: Localized("MEETING_CRITICAL_ALERT_ERROR_TIPS"))
-        }
+        DTToastHelper.toast(withText: Localized("MEETING_CRITICAL_ALERT_ERROR_TIPS"), durationTime: 2.0)
     }
     
     // MARK: 控制他人关麦
@@ -805,7 +801,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
             
             if let localPriKey = OWSIdentityManager.shared().identityKeyPair()?.privateKey as? Data,
                 let roomCtx = self.roomContext,
-                let mkey = roomCtx.currentCall.mKey {
+               let mkey = await roomCtx.currentCall.mKey {
 
                 // 从 remoteParticipants 里查找匹配 identity 的 participant
                 if let matchedParticipant = roomCtx.room.remoteParticipants.values.first(where: {
@@ -846,7 +842,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
     }
     
     /// 关闭他人麦克风
-    func decryptRemoteMicOffRoom(signature: Data, decryptData: Data) {
+    @MainActor func decryptRemoteMicOffRoom(signature: Data, decryptData: Data) {
         var result: DTDecryptedRtmMsgResult
         do {
             if  let roomCtx = self.roomContext,
@@ -889,7 +885,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
             
             if let localPriKey = OWSIdentityManager.shared().identityKeyPair()?.privateKey as? Data,
                 let roomCtx = self.roomContext,
-                let mkey = roomCtx.currentCall.mKey {
+               let mkey = await roomCtx.currentCall.mKey {
 
                 // 从 remoteParticipants 里查找匹配 identity 的 participant
                 if let matchedParticipant = roomCtx.room.remoteParticipants.values.first(where: {
@@ -929,7 +925,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
     }
     
     /// 静音继续
-    func decryptRemoteSyncContinueStatus(signature: Data, decryptData: Data) {
+    @MainActor func decryptRemoteSyncContinueStatus(signature: Data, decryptData: Data) {
         var result: DTDecryptedRtmMsgResult
         do {
             if currentCall.callType != .private {
@@ -1052,7 +1048,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
         do {
             if let localPriKey = OWSIdentityManager.shared().identityKeyPair()?.privateKey as? Data,
                 let roomCtx = self.roomContext,
-                let mkey = roomCtx.currentCall.mKey {
+               let mkey = await roomCtx.currentCall.mKey {
                 let msgData = try roomCtx.jsonEncoder.encode([RTMKeys.topic: "end-call"])
                 //会议密钥截取前32位即可
                 result = try DTProtoAdapter().encryptRtmMessage(version: MESSAGE_CURRENT_VERSION,
