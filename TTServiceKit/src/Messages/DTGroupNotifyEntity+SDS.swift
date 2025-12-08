@@ -75,8 +75,9 @@ class DTGroupBaseInfoNotifyEntitySerializer: SDSSerializer {
         let ext: Bool = model.ext
         let publishRule: UInt32? = archiveOptionalNSNumber(model.publishRule, conversion: { $0.uint32Value })
         let messageClearAnchor: UInt64 = model.messageClearAnchor
+        let criticalAlert: Bool = model.criticalAlert
 
-        return DTGroupBaseInfoEntityRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, action: action, anyoneRemove: anyoneRemove, avatar: avatar, gid: gid, invitationRule: invitationRule, messageExpiry: messageExpiry, name: name, rejoin: rejoin, remindCycle: remindCycle, ext: ext, publishRule: publishRule, messageClearAnchor: messageClearAnchor)
+        return DTGroupBaseInfoEntityRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, action: action, anyoneRemove: anyoneRemove, avatar: avatar, gid: gid, invitationRule: invitationRule, messageExpiry: messageExpiry, name: name, rejoin: rejoin, remindCycle: remindCycle, ext: ext, publishRule: publishRule, messageClearAnchor: messageClearAnchor, criticalAlert: criticalAlert)
     }
 }
-                                                                          
+                                                                                         

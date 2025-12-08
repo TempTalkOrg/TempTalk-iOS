@@ -104,7 +104,11 @@ extension DTMeetingManager {
                     let conversationIdBulider = DSKProtoConversationId.builder()
                     if let conversationId {
                         if case .private = callType {
-                            conversationIdBulider.setNumber(conversationId)
+                            if key != localNumber {
+                                conversationIdBulider.setNumber(localNumber)
+                            } else {
+                                conversationIdBulider.setNumber(conversationId)
+                            }
                         } else if case .group = callType, let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId) {
                             conversationIdBulider.setGroupID(groupId)
                         }
@@ -764,8 +768,19 @@ extension DTMeetingManager: DTCallMessageDelegate {
     }
     
     func sendCriticalAlertWithBarrage(_ message: String) async {
-        if let otherParticipantId = currentCall.conversationId {
-            CallCriticalAlertApi().criticalAlertServers(["destination": otherParticipantId]) { [weak self] entity in
+        var params: [String: Any] = [:]
+        if DTMeetingManager.shared.currentCall.callType == .private {
+            if let otherParticipantId = currentCall.conversationId {
+                params = ["destination": otherParticipantId]
+            }
+        } else {
+            if let gid = currentCall.conversationId {
+                params = ["gid": gid]
+            }
+        }
+        
+        if DTParamsUtils.validateDictionary(params).boolValue {
+            CallCriticalAlertApi().criticalAlertServers(params) { [weak self] entity in
                 guard let self = self else { return }
                 if let result = entity?.data["result"] as? Bool, result {
                     Logger.info("[newCall] CallCriticalAlert success")

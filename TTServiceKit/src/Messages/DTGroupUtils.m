@@ -29,6 +29,7 @@ NSString *const DTGroupPeriodicRemindNotification = @"DTGroupPeriodicRemindNotif
 NSString *const DTGroupMemberRapidRoleChangedNotification = @"DTGroupMemberRapidRoleChangedNotification";
 NSString *const DTGroupExternalChangedNotification = @"DTGroupExternalChangedNotification";
 NSString *const DTGroupBaseInfoChangedNotification = @"DTGroupBaseInfoChangedNotification";
+NSString *const DTGroupCriticalAlertChangedNotification = @"DTGroupCriticalAlertChangedNotification";
 
 NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
 
@@ -389,6 +390,7 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
         groupModel.anyoneChangeAutoClear = baseInfo.anyoneChangeAutoClear;
         groupModel.autoClear = baseInfo.autoClear;
         groupModel.privilegeConfidential = baseInfo.privilegeConfidential;
+        groupModel.criticalAlert = baseInfo.criticalAlert;
     };
     
     void (^saveNewThreadBlock)(DTGroupBaseInfoEntity *, SDSAnyWriteTransaction *) = ^(DTGroupBaseInfoEntity *baseInfo, SDSAnyWriteTransaction *transaction) {
@@ -582,6 +584,14 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
     if (targetIds.allKeys.count == 0) return;
     
     [[NSNotificationCenter defaultCenter] postNotificationNameAsync:DTGroupExternalChangedNotification
+                                                             object:nil
+                                                           userInfo:targetIds];
+}
+
++ (void)postCriticalAlertChangeNotificationWithTargetIds:(NSDictionary <NSString *, NSNumber *> *)targetIds {
+    if (targetIds.allKeys.count == 0) return;
+    
+    [[NSNotificationCenter defaultCenter] postNotificationNameAsync:DTGroupCriticalAlertChangedNotification
                                                              object:nil
                                                            userInfo:targetIds];
 }

@@ -184,6 +184,7 @@
         groupModel.anyoneRemove = baseInfo.anyoneRemove;
         groupModel.rejoin = baseInfo.rejoin;
         groupModel.ext = baseInfo.ext;
+        groupModel.criticalAlert = baseInfo.criticalAlert;
         
         groupThread = [TSGroupThread getOrCreateThreadWithGroupModel:groupModel transaction:transaction];
     });

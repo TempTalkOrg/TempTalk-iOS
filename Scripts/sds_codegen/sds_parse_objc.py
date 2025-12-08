@@ -214,9 +214,9 @@ def process_objc_ast(namespace: Namespace, file_path: str, raw_ast: str) -> None
             process_objc_enum_declaration(namespace, file_path, lines, prefix, remainder)
 
 
-# |-EnumDecl 0x7fd576047310 </Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS12.2.sdk/System/Library/Frameworks/CoreFoundation.framework/Headers/CFAvailability.h:127:43, /Users/matthew/code/workspace/ows/Signal-iOS-2/SignalServiceKit/src/Messages/TSCall.h:12:29> col:29 RPRecentCallType 'NSUInteger':'unsigned long'
+# |-EnumDecl 0x7fd576047310 </Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS12.2.sdk/System/Library/Frameworks/CoreFoundation.framework/Headers/CFAvailability.h:127:43, /Users/matthew/code/workspace/ows/Signal-iOS-2/TTServiceKit/src/Messages/TSCall.h:12:29> col:29 RPRecentCallType 'NSUInteger':'unsigned long'
 # | `-EnumExtensibilityAttr 0x7fd5760473f0 </Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS12.2.sdk/System/Library/Frameworks/CoreFoundation.framework/Headers/CFAvailability.h:116:45, col:68> Open
-# |-TypedefDecl 0x7fd576047488 </Users/matthew/code/workspace/ows/Signal-iOS-2/SignalServiceKit/src/Messages/TSCall.h:12:1, col:29> col:29 referenced RPRecentCallType 'enum RPRecentCallType':'enum RPRecentCallType'
+# |-TypedefDecl 0x7fd576047488 </Users/matthew/code/workspace/ows/Signal-iOS-2/TTServiceKit/src/Messages/TSCall.h:12:1, col:29> col:29 referenced RPRecentCallType 'enum RPRecentCallType':'enum RPRecentCallType'
 # | `-ElaboratedType 0x7fd576047430 'enum RPRecentCallType' sugar
 # |   `-EnumType 0x7fd5760473d0 'enum RPRecentCallType'
 # |     `-Enum 0x7fd576047518 'RPRecentCallType'
@@ -667,7 +667,7 @@ def find_header_include_paths(include_path):
 #
 # For example:
 #
-# #import <SignalServiceKit/OWSFailedAttachmentDownloadsJob.h>
+# #import <TTServiceKit/OWSFailedAttachmentDownloadsJob.h>
 #
 # To simulate this, we walk the Pods directory and copy
 # headers into per-framework directories.
@@ -705,9 +705,9 @@ def gather_module_headers(pods_dir_path):
     gather_pod_headers(pods_dir_path, module_header_dir_path)
 
     for project_name in (
-        'SignalServiceKit',
-        'SignalMessaging',
-        'Signal',
+        'TTServiceKit',
+        'TTMessaging',
+        'TempTalk',
         ):
         src_dir_path = os.path.join(git_repo_path, project_name)
         copy_module_headers(src_dir_path, project_name, module_header_dir_path)
@@ -720,22 +720,22 @@ def gather_module_headers(pods_dir_path):
 
 def get_pch_include(file_path):
     print('file_path', file_path)
-    ssk_path = os.path.join(git_repo_path, 'SignalServiceKit') + os.sep
-    sm_path = os.path.join(git_repo_path, 'SignalMessaging') + os.sep
-    s_path = os.path.join(git_repo_path, 'Signal') + os.sep
-    sae_path = os.path.join(git_repo_path, 'SignalShareExtension') + os.sep
+    ssk_path = os.path.join(git_repo_path, 'TTServiceKit') + os.sep
+    sm_path = os.path.join(git_repo_path, 'TTMessaging') + os.sep
+    s_path = os.path.join(git_repo_path, 'TempTalk') + os.sep
+    sae_path = os.path.join(git_repo_path, 'TTShareExtension') + os.sep
     print('ssk_path', ssk_path)
     print('sm_path', sm_path)
     print('s_path', s_path)
     print('sae_path', sae_path)
     if file_path.startswith(ssk_path):
-        return os.path.join(git_repo_path, "Pods/Target Support Files/SignalServiceKit/SignalServiceKit-prefix.pch")
+        return os.path.join(git_repo_path, "Pods/Target Support Files/TTServiceKit/TTServiceKit-prefix.pch")
     elif file_path.startswith(sm_path):
-        return os.path.join(git_repo_path, "SignalMessaging/SignalMessaging-Prefix.pch")
+        return os.path.join(git_repo_path, "TTMessaging/TTMessaging-Prefix.pch")
     elif file_path.startswith(s_path):
-        return os.path.join(git_repo_path, "Signal/Signal-Prefix.pch")
+        return os.path.join(git_repo_path, "TempTalk/TempTalk-Prefix.pch")
     elif file_path.startswith(sae_path):
-        return os.path.join(git_repo_path, "SignalShareExtension/SignalShareExtension-Prefix.pch")
+        return os.path.join(git_repo_path, "TTShareExtension/TTShareExtension-Prefix.pch")
     else:
         fail("Couldn't determine .pch for file:", file_path)
 
@@ -775,8 +775,8 @@ def process_objc(file_path: str, swift_bridging_path: str) -> None:
         ] + clang_args + [
         '-isysroot',
         iphoneos_sdk_path,
-        ] + find_header_include_paths('SignalServiceKit/src') + [
-        ] + find_header_include_paths('SignalMessaging') + [
+        ] + find_header_include_paths('TTServiceKit/src') + [
+        ] + find_header_include_paths('TTMessaging') + [
         # ] + find_header_include_paths('Pods') + [
         ('-I' + module_header_dir_path),
         ('-I' + swift_bridging_path),

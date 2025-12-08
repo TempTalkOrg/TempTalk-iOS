@@ -42,6 +42,7 @@ public struct DTGroupBaseInfoEntityRecord: SDSRecord {
     public let ext: Bool
     public let publishRule: UInt32?
     public let messageClearAnchor: UInt64
+    public let criticalAlert: Bool
 
     public enum CodingKeys: String, CodingKey, ColumnExpression, CaseIterable {
         case id
@@ -59,6 +60,7 @@ public struct DTGroupBaseInfoEntityRecord: SDSRecord {
         case ext
         case publishRule
         case messageClearAnchor
+        case criticalAlert
     }
 
     public static func columnName(_ column: DTGroupBaseInfoEntityRecord.CodingKeys, fullyQualified: Bool = false) -> String {
@@ -97,6 +99,7 @@ public extension DTGroupBaseInfoEntityRecord {
         ext = row[12]
         publishRule = row[13]
         messageClearAnchor = row[14]
+        criticalAlert = row[15]
     }
 }
 
@@ -130,6 +133,7 @@ extension DTGroupBaseInfoEntity {
             let uniqueId: String = record.uniqueId
             let anyoneRemove: Bool = record.anyoneRemove
             let avatar: String = record.avatar
+            let criticalAlert: Bool = record.criticalAlert
             let ext: Bool = record.ext
             let gid: String = record.gid
             let invitationRule: NSNumber? = SDSDeserialization.optionalNumericAsNSNumber(record.invitationRule, name: "invitationRule", conversion: { NSNumber(value: $0) })
@@ -144,6 +148,7 @@ extension DTGroupBaseInfoEntity {
                                          uniqueId: uniqueId,
                                          anyoneRemove: anyoneRemove,
                                          avatar: avatar,
+                                         criticalAlert: criticalAlert,
                                          ext: ext,
                                          gid: gid,
                                          invitationRule: invitationRule,
@@ -159,6 +164,7 @@ extension DTGroupBaseInfoEntity {
             let uniqueId: String = record.uniqueId
             let anyoneRemove: Bool = record.anyoneRemove
             let avatar: String = record.avatar
+            let criticalAlert: Bool = record.criticalAlert
             let ext: Bool = record.ext
             let gid: String = record.gid
             let invitationRule: NSNumber? = SDSDeserialization.optionalNumericAsNSNumber(record.invitationRule, name: "invitationRule", conversion: { NSNumber(value: $0) })
@@ -176,6 +182,7 @@ extension DTGroupBaseInfoEntity {
                                                uniqueId: uniqueId,
                                                anyoneRemove: anyoneRemove,
                                                avatar: avatar,
+                                               criticalAlert: criticalAlert,
                                                ext: ext,
                                                gid: gid,
                                                invitationRule: invitationRule,
@@ -240,6 +247,7 @@ extension DTGroupBaseInfoEntity: DeepCopyable {
             let uniqueId: String = modelToCopy.uniqueId
             let anyoneRemove: Bool = modelToCopy.anyoneRemove
             let avatar: String = modelToCopy.avatar
+            let criticalAlert: Bool = modelToCopy.criticalAlert
             let ext: Bool = modelToCopy.ext
             let gid: String = modelToCopy.gid
             let invitationRule: NSNumber? = modelToCopy.invitationRule
@@ -255,6 +263,7 @@ extension DTGroupBaseInfoEntity: DeepCopyable {
                                                uniqueId: uniqueId,
                                                anyoneRemove: anyoneRemove,
                                                avatar: avatar,
+                                               criticalAlert: criticalAlert,
                                                ext: ext,
                                                gid: gid,
                                                invitationRule: invitationRule,
@@ -273,6 +282,7 @@ extension DTGroupBaseInfoEntity: DeepCopyable {
             let uniqueId: String = modelToCopy.uniqueId
             let anyoneRemove: Bool = modelToCopy.anyoneRemove
             let avatar: String = modelToCopy.avatar
+            let criticalAlert: Bool = modelToCopy.criticalAlert
             let ext: Bool = modelToCopy.ext
             let gid: String = modelToCopy.gid
             let invitationRule: NSNumber? = modelToCopy.invitationRule
@@ -287,6 +297,7 @@ extension DTGroupBaseInfoEntity: DeepCopyable {
                                          uniqueId: uniqueId,
                                          anyoneRemove: anyoneRemove,
                                          avatar: avatar,
+                                         criticalAlert: criticalAlert,
                                          ext: ext,
                                          gid: gid,
                                          invitationRule: invitationRule,
@@ -323,6 +334,7 @@ extension DTGroupBaseInfoEntitySerializer {
     static var extColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "ext", columnType: .int) }
     static var publishRuleColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "publishRule", columnType: .int64, isOptional: true) }
     static var messageClearAnchorColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "messageClearAnchor", columnType: .int64) }
+    static var criticalAlertColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "criticalAlert", columnType: .int) }
 
     // TODO: We should decide on a naming convention for
     //       tables that store models.
@@ -344,7 +356,8 @@ extension DTGroupBaseInfoEntitySerializer {
         remindCycleColumn,
         extColumn,
         publishRuleColumn,
-        messageClearAnchorColumn
+        messageClearAnchorColumn,
+        criticalAlertColumn
         ])
     }
 }
@@ -753,8 +766,9 @@ class DTGroupBaseInfoEntitySerializer: SDSSerializer {
         let ext: Bool = model.ext
         let publishRule: UInt32? = archiveOptionalNSNumber(model.publishRule, conversion: { $0.uint32Value })
         let messageClearAnchor: UInt64 = model.messageClearAnchor
+        let criticalAlert: Bool = model.criticalAlert
 
-        return DTGroupBaseInfoEntityRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, action: action, anyoneRemove: anyoneRemove, avatar: avatar, gid: gid, invitationRule: invitationRule, messageExpiry: messageExpiry, name: name, rejoin: rejoin, remindCycle: remindCycle, ext: ext, publishRule: publishRule, messageClearAnchor: messageClearAnchor)
+        return DTGroupBaseInfoEntityRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, action: action, anyoneRemove: anyoneRemove, avatar: avatar, gid: gid, invitationRule: invitationRule, messageExpiry: messageExpiry, name: name, rejoin: rejoin, remindCycle: remindCycle, ext: ext, publishRule: publishRule, messageClearAnchor: messageClearAnchor, criticalAlert: criticalAlert)
     }
 }
 

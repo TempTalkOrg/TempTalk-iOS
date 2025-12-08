@@ -793,7 +793,6 @@ static dispatch_source_t _timer;
 
 - (void)verificationWasCompleted {
     [[DTCallManager sharedInstance] requestForConfigMeetingversion];
-    [[DTMeetingManager shared] syncCriticalAlertNotificationSettingsIfNeeded];
     OWSLogInfo(@"verificationWasCompleted ");
     /// 通过邮箱注册
     if(self.loginModeType == DTLoginModeTypeRegisterEmailFromLogin) {

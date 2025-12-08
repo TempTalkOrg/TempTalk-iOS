@@ -66,11 +66,7 @@ struct CallNavigationView: View {
                 // 网络状态 or 通话时长
                 switch connectState {
                 case .reconnecting:
-                    HStack(spacing: 8) {
-                        DTCircleLoadingView(connectState: .connecting)
-                        statusText(Localized("MEETING_NAVAGATION_CONNECTING"))
-                    }
-                    .fixedSize()
+                    statusText(Localized("MEETING_NAVAGATION_CONNECTING"))
                 case .disconnected:
                     statusText("disconnected")
                 default:

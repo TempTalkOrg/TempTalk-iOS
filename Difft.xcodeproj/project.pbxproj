@@ -234,6 +234,8 @@
 		5B30999E2E3C70A700925AD5 /* tt_loading_dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 5B30999D2E3C70A700925AD5 /* tt_loading_dark.json */; };
 		5B3099A62E3C759900925AD5 /* tt_loading_light.json in Resources */ = {isa = PBXBuildFile; fileRef = 5B3099A52E3C759900925AD5 /* tt_loading_light.json */; };
 		5B3099A82E3C759E00925AD5 /* tt_loading_dark.json in Resources */ = {isa = PBXBuildFile; fileRef = 5B3099A72E3C759E00925AD5 /* tt_loading_dark.json */; };
+		5B31F7952EC1AD5C003158EC /* ConversationTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B31F7942EC1AD50003158EC /* ConversationTool.swift */; };
+		5B31F7A92EC4B3C9003158EC /* DTMetricKitMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B31F7A82EC4B3C9003158EC /* DTMetricKitMonitor.swift */; };
 		5B4615162E28ECE200143F4A /* DTUpdateNoiseController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B4615152E28ECCC00143F4A /* DTUpdateNoiseController.swift */; };
 		5B4615182E2924E300143F4A /* BottomPopupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B4615172E2924C500143F4A /* BottomPopupView.swift */; };
 		5B5E462A2D78A6D4000BA2DC /* ConversationViewController+Translate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B5E46292D78A6D4000BA2DC /* ConversationViewController+Translate.swift */; };
@@ -1229,6 +1231,8 @@
 		5B30999D2E3C70A700925AD5 /* tt_loading_dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tt_loading_dark.json; sourceTree = "<group>"; };
 		5B3099A52E3C759900925AD5 /* tt_loading_light.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tt_loading_light.json; sourceTree = "<group>"; };
 		5B3099A72E3C759E00925AD5 /* tt_loading_dark.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tt_loading_dark.json; sourceTree = "<group>"; };
+		5B31F7942EC1AD50003158EC /* ConversationTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTool.swift; sourceTree = "<group>"; };
+		5B31F7A82EC4B3C9003158EC /* DTMetricKitMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTMetricKitMonitor.swift; sourceTree = "<group>"; };
 		5B4615152E28ECCC00143F4A /* DTUpdateNoiseController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTUpdateNoiseController.swift; sourceTree = "<group>"; };
 		5B4615172E2924C500143F4A /* BottomPopupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomPopupView.swift; sourceTree = "<group>"; };
 		5B5E46292D78A6D4000BA2DC /* ConversationViewController+Translate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationViewController+Translate.swift"; sourceTree = "<group>"; };
@@ -2554,6 +2558,7 @@
 		34D1F0BE1F8EC1760066283D /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				5B31F7942EC1AD50003158EC /* ConversationTool.swift */,
 				5BEBD90F2D6ECB8A005FC4D1 /* SHA256Tool.swift */,
 				34D1F0BF1F8EC1760066283D /* MessageRecipientStatusUtils.swift */,
 				CED851EF2A722DF700E87226 /* DTLeaveOrDisbandGroup.swift */,
@@ -2894,6 +2899,7 @@
 		5BC2A70C2D9034470063C4FA /* Tool */ = {
 			isa = PBXGroup;
 			children = (
+				5B31F7A82EC4B3C9003158EC /* DTMetricKitMonitor.swift */,
 				5BCB1E982EA8ED9F009A5AF6 /* CallCriticalAlertApi.swift */,
 				5BA8497F2E9FE20D00577C87 /* CallRatingTrigger.swift */,
 				5BA8497D2E9FC47200577C87 /* FeedbackAPI.swift */,
@@ -5180,6 +5186,7 @@
 				DC2564FD28AE82F60019EA2A /* UIAlertController+rotation.swift in Sources */,
 				CE4B1E7428C1DE8400AD1DF3 /* DTPersonalStatusHeader.m in Sources */,
 				CE04098F2C24218A004E9915 /* ConversationActionMenuContainerView.swift in Sources */,
+				5B31F7A92EC4B3C9003158EC /* DTMetricKitMonitor.swift in Sources */,
 				5BD9782A2D797AA8007DFB4C /* DTTransLateTool.m in Sources */,
 				4C090A1B210FD9C7001FD7F9 /* HapticFeedback.swift in Sources */,
 				CE9ED5512D59D323009E1BAC /* DTCallKitManager+CallerMapTool.m in Sources */,
@@ -5317,6 +5324,7 @@
 				CE89BF972A31AA0200E69F19 /* DTLottieBridge.swift in Sources */,
 				CEE492EF2BF05D7B006FE189 /* ConversationMessageBubbleView+BodyMedia.swift in Sources */,
 				CE4F79F427434CD000DBCEE2 /* DTForwardPreviewViewController.swift in Sources */,
+				5B31F7952EC1AD5C003158EC /* ConversationTool.swift in Sources */,
 				458E38371D668EBF0094BD24 /* OWSDeviceProvisioningURLParser.m in Sources */,
 				CEB9A94F289291130083D126 /* DTThumbsUpView.m in Sources */,
 				5BB62E9B2E14436200B20DBD /* DTMeetingManager+Hangup.swift in Sources */,
@@ -5664,7 +5672,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
@@ -5743,7 +5751,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -6089,7 +6097,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -6247,7 +6255,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
@@ -6548,7 +6556,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6622,7 +6630,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6908,7 +6916,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -7064,7 +7072,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -7208,7 +7216,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7264,7 +7272,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7321,7 +7329,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7379,7 +7387,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.5.6;
+				MARKETING_VERSION = 3.5.7;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;

@@ -125,7 +125,7 @@ public class ConversationMessageMapping: NSObject {
     @objc
     public func loadInitialMessagePage(focusMessageId: String?, transaction: SDSAnyReadTransaction) throws {
         try updateOldestUnreadInteraction(transaction: transaction)
-        Logger.info("[CMM:loadInitial] begin focusId=\(focusMessageId ?? "nil") oldestUnread=\(self.oldestUnreadInteraction?.uniqueId ?? "nil")")
+        Logger.info("[CMM:loadInitial] begin focusId=\(focusMessageId ?? "nil") oldestUnread=\(self.oldestUnreadInteraction?.uniqueId ?? "nil") thread=\(thread.uniqueId)")
 
         if let focusMessageId = focusMessageId {
             try ensureLoaded(.around(interactionUniqueId: focusMessageId),
@@ -138,7 +138,8 @@ public class ConversationMessageMapping: NSObject {
         } else {
            try loadNewestMessagePage(transaction: transaction)
         }
-        Logger.info("[CMM:loadInitial] end loadedIndices=\(loadedIndexSet.count) canLoadOlder=\(canLoadOlder) canLoadNewer=\(canLoadNewer)")
+
+        Logger.info("[CMM:loadInitial] end loadedIndices=\(loadedIndexSet.count) canLoadOlder=\(canLoadOlder) canLoadNewer=\(canLoadNewer) loadedInteractions=\(loadedInteractions.count) thread=\(thread.uniqueId)")
     }
 
     // MARK: -
@@ -153,7 +154,7 @@ public class ConversationMessageMapping: NSObject {
     private func _ensureLoaded(_ direction: LoadWindowDirection, count: Int, transaction: SDSAnyReadTransaction) throws -> ConversationMessageMappingDiff {
         let conversationSize = interactionFinder.count(transaction: transaction)
         
-        OWSLogger.debug("[hot data] ------ conversationSize:\(conversationSize).")
+        Logger.info("[hot data] ------ conversationSize:\(conversationSize). thread=\(thread.uniqueId)")
         
         // The "sortIndex" is a zero relative number representing where
         // this interaction is in the conversation, with the first message
@@ -193,7 +194,7 @@ public class ConversationMessageMapping: NSObject {
         guard unfetchedSet.count > 0 else {
             //.newest 初始化没有数据，尝试拉取 hotdata
             
-            Logger.debug("ignoring empty fetch request: \(unfetchedSet.count)")
+            Logger.info("ignoring empty fetch request: \(unfetchedSet.count) thread=\(thread.uniqueId)")
             updateCanLoadMore(conversationSize: conversationSize)
             return ConversationMessageMappingDiff(addedItemIds: [], removedItemIds: [], updatedItemIds: [])
         }
@@ -204,14 +205,14 @@ public class ConversationMessageMapping: NSObject {
         let isFetchingEdge = unfetchedSet.contains(0) || unfetchedSet.contains(Int(conversationSize - 1))
 
         guard isSubstantialRequest || isFetchingEdge else {
-            Logger.debug("ignoring small fetch request: \(unfetchedSet.count)")
+            Logger.info("ignoring small fetch request: \(unfetchedSet.count) thread=\(thread.uniqueId)")
             return ConversationMessageMappingDiff(addedItemIds: [], removedItemIds: [], updatedItemIds: [])
         }
         
         let oldItemIds = Set(self.loadedUniqueIds)
         
         let nsRange: NSRange = NSRange(location: unfetchedSet.min()!, length: unfetchedSet.count)
-        Logger.debug("------ unfetching set: \(unfetchedSet), nsRange: \(nsRange)")
+        Logger.info("------ unfetching set: \(unfetchedSet), nsRange: \(nsRange) thread=\(thread.uniqueId)")
         let newItems = try fetchInteractions(nsRange: nsRange, transaction: transaction)
         
         let isFetchContiguousWithAlreadyLoadedItems = requestSet.union(loadedIndexSet).isContiguous
@@ -307,7 +308,7 @@ public class ConversationMessageMapping: NSObject {
             self.canLoadOlder = false
             self.canLoadNewer = false
         }
-        Logger.verbose("------ conversationSize:\(conversationSize) canLoadOlder: \(canLoadOlder) canLoadNewer: \(canLoadNewer)")
+        Logger.info("------ conversationSize:\(conversationSize) canLoadOlder: \(canLoadOlder) canLoadNewer: \(canLoadNewer) thread=\(thread.uniqueId)")
     }
 
     private func fetchInteractions(nsRange: NSRange, transaction: SDSAnyReadTransaction) throws -> [TSInteraction] {
@@ -370,6 +371,9 @@ public class ConversationMessageMapping: NSObject {
             }
             interactions.append(interaction)
         }
+        
+        Logger.info("message mapping interactions: \(interactions.count) thread=\(thread.uniqueId)")
+        
         return interactions
     }
 
@@ -389,7 +393,7 @@ public class ConversationMessageMapping: NSObject {
         guard hasLoadedBottomEdge else {
             let reloadingSet = loadedIndexSet
             let nsRange: NSRange = NSRange(location: reloadingSet.min()!, length: reloadingSet.count)
-            Logger.debug("reloadingSet: \(reloadingSet), nsRange: \(nsRange)")
+            Logger.info("reloadingSet: \(reloadingSet), nsRange: \(nsRange) thread=\(thread.uniqueId)")
             loadedInteractions = try fetchInteractions(nsRange: nsRange, transaction: transaction)
             updateCanLoadMore(conversationSize: conversationSize)
             return
@@ -419,10 +423,10 @@ public class ConversationMessageMapping: NSObject {
             return
         }
 
-        Logger.debug("loadedIndexSet: \(loadedIndexSet)")
+        Logger.info("loadedIndexSet: \(loadedIndexSet) thread=\(thread.uniqueId)")
         loadedIndexSet = updatingSet
         let nsRange: NSRange = NSRange(location: updatingSet.min()!, length: updatingSet.count)
-        Logger.debug("updatingSet: \(updatingSet), nsRange: \(nsRange)")
+        Logger.info("updatingSet: \(updatingSet), nsRange: \(nsRange) thread=\(thread.uniqueId)")
         loadedInteractions = try fetchInteractions(nsRange: nsRange, transaction: transaction)
         updateCanLoadMore(conversationSize: conversationSize)
     }

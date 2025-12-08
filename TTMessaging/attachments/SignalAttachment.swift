@@ -44,7 +44,7 @@ extension SignalAttachmentError: LocalizedError {
         case .missingData:
             return Localized("ATTACHMENT_ERROR_MISSING_DATA", comment: "Attachment error message for attachments without any data")
         case .fileSizeTooLarge:
-            return Localized("ATTACHMENT_ERROR_FILE_SIZE_TOO_LARGE", comment: "Attachment error message for attachments whose data exceed file size limits")
+            return Localized("ATTACHMENT_ERROR_FILE_SIZE_TOO_LARGE_TIPS", comment: "Attachment error message for attachments whose data exceed file size limits")
         case .invalidData:
             return Localized("ATTACHMENT_ERROR_INVALID_DATA", comment: "Attachment error message for attachments with invalid data")
         case .couldNotParseImage:
@@ -1067,7 +1067,7 @@ public class SignalAttachment: NSObject {
                                                                shouldDeleteOnDeallocation: true)
                 dataSource.sourceFilename = mp4Filename
                 
-                let attachment = SignalAttachment(dataSource: dataSource, dataUTI: kUTTypeMPEG4 as String)
+                let attachment = SignalAttachment.attachment(dataSource: dataSource, dataUTI: kUTTypeMPEG4 as String)
                 resolver.resolve(attachment)
             } catch {
                 owsFailDebug("Failed to build data source for exported video URL")
@@ -1139,7 +1139,7 @@ public class SignalAttachment: NSObject {
                                                            shouldDeleteOnDeallocation: true)
             dataSource.sourceFilename = mp4Filename
 
-            return SignalAttachment(dataSource: dataSource, dataUTI: kUTTypeMPEG4 as String)
+            return SignalAttachment.attachment(dataSource: dataSource, dataUTI: kUTTypeMPEG4 as String)
         } catch {
             owsFailDebug("Failed to build data source for exported video URL")
             let attachment = SignalAttachment(dataSource: DataSourceValue.emptyDataSource(), dataUTI: dataUTI)

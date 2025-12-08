@@ -41,7 +41,7 @@ extension ConversationViewController: ConversationViewModelDelegate {
         transaction: SDSAnyReadTransaction?,
         completion: ((Bool) -> Void)? = nil
     ) {
-        Logger.info("[CVC:VMDidUpdate] type=\(conversationUpdate.conversationUpdateType) hasTx=\(transaction != nil) shouldObserve=\(shouldObserveDBModifications) isViewLoaded=\(isViewLoaded)")
+        Logger.info("[Conversation] type=\(conversationUpdate.conversationUpdateType) hasTx=\(transaction != nil) shouldObserve=\(shouldObserveDBModifications) isViewLoaded=\(isViewLoaded)")
         if let transaction {
             _conversationViewModelDidUpdate(
                 conversationUpdate,
@@ -68,10 +68,9 @@ extension ConversationViewController: ConversationViewModelDelegate {
         
         // FIX: https://developer.apple.com/forums/thread/728797
         if !isViewLoaded || !shouldObserveDBModifications {
-            Logger.info("[CVC:VMDidUpdate] ignored (isViewLoaded=\(isViewLoaded), shouldObserve=\(shouldObserveDBModifications)) updateType=\(conversationUpdate.conversationUpdateType)")
+            Logger.info("[Conversation] ignored (isViewLoaded=\(isViewLoaded), shouldObserve=\(shouldObserveDBModifications)) updateType=\(conversationUpdate.conversationUpdateType) threadId:\(thread.uniqueId)")
             // It's safe to ignore updates before the view loads;
             // viewWillAppear will call resetContentAndLayout.
-            Logger.info("------>>>>>> abord.")
             completion?(false)
             
             
@@ -80,8 +79,10 @@ extension ConversationViewController: ConversationViewModelDelegate {
             // 为了解决上述问题，当应用进入后台且接收到 database change 时，记录下标志位 isNeedReloadAfterAppEnterForeground，
             // 在应用返回前台时进行刷新
             if CurrentAppContext().isInBackground() {
-                Logger.info("=== Conversation ignore refresh when app in background ===")
+                Logger.info("[Conversation] ignore refresh when app in background, threadId:\(thread.uniqueId)")
                 isNeedReloadAfterAppEnterForeground = true
+            } else {
+                Logger.info("[Conversation] ignore refresh when isViewDidLoaded:\(isViewLoaded), shouldObserveDBModifications:\(shouldObserveDBModifications) threadId:\(thread.uniqueId)")
             }
             
             return
@@ -105,17 +106,17 @@ extension ConversationViewController: ConversationViewModelDelegate {
                 
         switch conversationUpdate.conversationUpdateType {
         case .reload:
-            Logger.info("[CVC:VMDidUpdate] will resetContentAndLayout (reload)")
+            Logger.info("[Conversation] will resetContentAndLayout (reload) threadId:\(thread.uniqueId)")
             resetContentAndLayout(transaction: transaction) { [weak self] isFinished in
                 guard let self else { return }
-                Logger.info("[CVC:VMDidUpdate] resetContentAndLayout finished=\(isFinished) contentSize=\(self.collectionView.contentSize)")
+                Logger.info("[Conversation] resetContentAndLayout finished=\(isFinished) contentSize=\(self.collectionView.contentSize) threadId:\(thread.uniqueId)")
                 if isFinished {
                     self.updateLastVisibleSortId()
                 }
                 completion?(isFinished)
             }
         case .diff:
-            Logger.info("[CVC:VMDidUpdate] diff update, items before=\(viewItems.count)")
+            Logger.info("[Conversation] diff update, items before=\(viewItems.count) threadId:\(thread.uniqueId)")
             updateWithDiff(conversationUpdate, completion: completion)
         default:
             completion?(true)
@@ -227,7 +228,7 @@ extension ConversationViewController: ConversationViewModelDelegate {
     }
     
     private func updateWithDiff(_ updateContext: ConversationUpdate, completion: ((Bool) -> Void)? = nil) {
-        Logger.info("[CVC:updateWithDiff] begin items=\(viewItems.count) renderItems=\(renderItems.count)")
+        Logger.info("[Conversation] begin items=\(viewItems.count) renderItems=\(renderItems.count) threadId:\(thread.uniqueId)")
         var scrollToBottom = false
         let isScrolledToBottom = self.isScrolledToBottom
         scrollContinuity = isScrolledToBottom ? .bottom : .top
@@ -277,7 +278,7 @@ extension ConversationViewController: ConversationViewModelDelegate {
             
             // Try to update the lastKnownDistanceFromBottom; the content size may have changed.
             self.updateLastKnownDistanceFromBottom()
-            Logger.info("[CVC:updateWithDiff] end items=\(self.viewItems.count) renderItems=\(self.renderItems.count) contentSize=\(self.collectionView.contentSize)")
+            Logger.info("[Conversation] end items=\(self.viewItems.count) renderItems=\(self.renderItems.count) contentSize=\(self.collectionView.contentSize) threadId:\(thread.uniqueId)")
         }
         
         self.lastReloadDate = Date()

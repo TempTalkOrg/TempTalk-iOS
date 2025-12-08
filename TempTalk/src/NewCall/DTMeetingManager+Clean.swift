@@ -32,6 +32,7 @@ extension DTMeetingManager {
         showErrorTost = false
         otherCriticalAlert = false
         hasTriggeredRating = false
+        openCallCamera = false
 
         DispatchMainThreadSafe {
             UIDevice.current.isProximityMonitoringEnabled = false

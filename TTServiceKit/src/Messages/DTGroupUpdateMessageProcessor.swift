@@ -127,7 +127,8 @@ extension DTGroupUpdateMessageProcessor {
                 .anyoneChangeAutoClearChange,
                 .autoClearChange,
                 .privilegeConfidential,
-                .groupRapidRoleChange:
+                .groupRapidRoleChange,
+                .criticalAlertChange :
             return GroupNotifyGroupInfoHandler()
           
         case .groupSelfInfoChange:

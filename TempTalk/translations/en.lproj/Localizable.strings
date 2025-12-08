@@ -2984,7 +2984,7 @@
 "SINGLE_CALL_BUSY" = "Busy...";
 "SINGLE_CALL_TIMEOUT" = "Timed out";
 "SINGLE_CALL_CALLER_NETWORK_POOR" = "The other party's network is poor";
-"SINGLE_CALL_CALLER_NETWORK_ABNORMAL" = "The current network is abnormal, it is recommended to try again later";
+"SINGLE_CALL_CALLER_NETWORK_ABNORMAL" = "No internet connection. Please check your network and try again.";
 "SINGLE_CALL_APPLY_MEETING_FAIL" = "Failed to apply for meeting";
 "SINGLE_CALL_MAY_NOT_ONLINE" = "The other party is temporarily unable to answer, please try later";
 "SINGLE_CALL_CALLING" = "Calling...";
@@ -3765,7 +3765,7 @@
 "REPORT_INFO_TIPS_OK" = "OK";
 "REPORT_INFO_REPORTED_SUCCESS" = "Report submitted successfully";
 
-"RAISE_HANDS_TITLE" = "Raise Hand";
+"RAISE_HANDS_TITLE" = "Raise";
 
 "CALLING_NOISE_TITLE" = "Mic Noise Suppression";
 
@@ -3886,3 +3886,5 @@
 "NOTIFICATIONS_CRITICAL_EXTENSION_TITLE" = "Missed Call from %@";
 "NOTIFICATIONS_CRITICAL_EXTENSION_CONTENT" = "Urgent: Please answer the call now.";
 "MEETING_CRITICAL_ALERT_FREQUENTLY" = "sent too frequently.  Please try again later.";
+
+"ATTACHMENT_ERROR_FILE_SIZE_TOO_LARGE_TIPS" = "Sorry, the selected file exceeds the 200MB limit and cannot be sent.";

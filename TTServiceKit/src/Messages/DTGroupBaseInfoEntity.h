@@ -23,6 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong, nullable) NSNumber *publishRule;
 @property (nonatomic, assign) BOOL ext;
 @property (nonatomic, assign) UInt64 messageClearAnchor;
+@property (nonatomic, assign) BOOL criticalAlert;
 
 ///不需要入库字段
 /// 需要在{Project}/Scripts/sds_codegen/sds_config/sds-config.json 文件中进行忽略
@@ -45,6 +46,7 @@ NS_ASSUME_NONNULL_BEGIN
                       uniqueId:(NSString *)uniqueId
                     anyoneRemove:(BOOL)anyoneRemove
                           avatar:(NSString *)avatar
+                   criticalAlert:(BOOL)criticalAlert
                              ext:(BOOL)ext
                              gid:(NSString *)gid
                   invitationRule:(nullable NSNumber *)invitationRule
@@ -54,7 +56,7 @@ NS_ASSUME_NONNULL_BEGIN
                      publishRule:(nullable NSNumber *)publishRule
                           rejoin:(BOOL)rejoin
                      remindCycle:(NSString *)remindCycle
-NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:anyoneRemove:avatar:ext:gid:invitationRule:messageClearAnchor:messageExpiry:name:publishRule:rejoin:remindCycle:));
+NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:anyoneRemove:avatar:criticalAlert:ext:gid:invitationRule:messageClearAnchor:messageExpiry:name:publishRule:rejoin:remindCycle:));
 
 // clang-format on
 

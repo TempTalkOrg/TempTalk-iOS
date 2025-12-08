@@ -31,6 +31,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 ///0是仅群主，1群主和管理员可发言， 2是所有人可发言（普通消息（除了reaction）和语音）
 @property (nonatomic, strong) NSNumber *publishRule;
+/// 群管理的critical
+@property (nonatomic, assign) BOOL criticalAlert;
 
 @property (nonatomic, assign) BOOL anyoneChangeName;
 @property (nonatomic, assign) BOOL anyoneChangeAutoClear;

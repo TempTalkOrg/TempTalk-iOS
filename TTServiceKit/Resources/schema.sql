@@ -110,6 +110,7 @@ CREATE
             ,"ext" BOOLEAN
             ,"publishRule" INTEGER
             ,"messageClearAnchor" DOUBLE
+            ,"criticalAlert" BOOLEAN
         )
 ;
 

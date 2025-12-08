@@ -15,6 +15,8 @@ struct RoomContextView: View {
     @State private var showQuickPanel = false
     @State private var isPopupPresented = false
     
+    @State private var delayTask: Task<Void, Never>?
+    
     var body: some View {
         ZStack {
             // 背景色
@@ -62,6 +64,21 @@ struct RoomContextView: View {
             .padding(.bottom, 60)
             .ignoresSafeArea(edges: .bottom)
         }
+        .onAppear {
+            delayTask = Task {
+                // 检查启动的视频分享
+                if  DTMeetingManager.shared.isFromCallkit && needLayoutTopVCScreenShare() {
+                    Logger.info("[newCall] callkit open sharePresent")
+                    DTMeetingManager.shared.isFromCallkit = false
+                    // 确保app处于活跃状态
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    roomCtx.presentShareView()
+                }
+            }
+        }
+        .onDisappear {
+            delayTask?.cancel()
+        }
     }
     
     private var backgroundView: some View {
@@ -82,6 +99,19 @@ struct RoomContextView: View {
             }
             try await cameraCapturer.switchCameraPosition()
         }
+    }
+    
+    private func needLayoutTopVCScreenShare() -> Bool {
+        let callWindow = OWSWindowManager.shared().callViewWindow
+        let topVC = callWindow.findTopViewController()
+        let topName = String(describing: type(of: topVC))
+        Logger.info("[RoomContext] current screnen top name \(topName)")
+        let isShare = DTMeetingManager.shared.roomContext?.room.isScreenShareActive() ?? false
+        let isTopScreenVC = topName.contains("DTHostingController") && topName.contains("CallScreenShareView")
+        if isShare && !isTopScreenVC {
+            return true
+        }
+        return false
     }
 }
 
@@ -201,17 +231,11 @@ struct CallerWaitingView: View {
         callingStartTime = Date()
         showTimeoutAlert = false
         
-        if let otherParticipantId = currentCall.conversationId {
-            DTMeetingManager.shared.getProfileInfo(uid: otherParticipantId) { value in
-                DTMeetingManager.shared.otherCriticalAlert = value
-            }
-            
-            // 15秒后显示超时提示
-            callingTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
-                DispatchQueue.main.async {
-                    if callingStartTime != nil {
-                        showTimeoutAlert = DTMeetingManager.shared.otherCriticalAlert
-                    }
+        // 15秒后显示超时提示
+        callingTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: false) { _ in
+            DispatchQueue.main.async {
+                if callingStartTime != nil {
+                    showTimeoutAlert = true
                 }
             }
         }

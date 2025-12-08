@@ -15,8 +15,24 @@ struct BottomPopupView: View {
 
     @GestureState private var dragOffset = CGSize.zero
     @State private var offsetY: CGFloat = 0
+    let meetingManager = DTMeetingManager.shared
 
     var body: some View {
+        
+        let buttons = buildButtons()
+        let count = buttons.count
+        
+        // 根据数量自适应 spacing
+        let spacing: CGFloat = {
+            switch count {
+            case 1: return 0
+            case 2: return 100
+            case 3: return 50
+            case 4: return 15
+            default: return 40
+            }
+        }()
+        
         ZStack {
             // 背景层，点击时触发收起
             Color.black.opacity(0.4)
@@ -29,49 +45,16 @@ struct BottomPopupView: View {
             VStack {
                 Spacer()
                 VStack {
-                    HStack(spacing: 50) {
-                        VerticalIconTextButton(
-                            normalImage: Image("calling_invite"),
-                            title: Localized("CALL_INVITE_MEMBERS"),
-                            action: {
-                                DTMeetingManager.shared.roomContext?.presentInviteView()
-                            }
-                        ).frame(width: 80, height: 76)
-                        
-                        if DTMeetingManager.shared.currentCall.callType != .private {
-                            VerticalIconTextButton(
-                                normalImage: Image("calling_lowerHand"),
-                                selectedImage: Image("calling_raiseHand"),
-                                title: Localized("RAISE_HANDS_TITLE"),
-                                isSelected: $roomDataManager.localRaiseHand,
-                                action: {
-                                    if RoomDataManager.shared.localRaiseHand {
-                                        Task {
-                                            await DTMeetingManager.shared.handCancelRemoteSyncStatus(participantId: DTMeetingManager.shared.roomContext?.room.localParticipant.identity?.stringValue.components(separatedBy: ".").first ?? "")
-                                            RoomDataManager.shared.localRaiseHand = false
-                                        }
-                                    } else {
-                                        Task {
-                                            await DTMeetingManager.shared.handRaiseRemoteSyncStatus()
-                                            RoomDataManager.shared.localRaiseHand = true
-                                        }
-                                    }
-                                }
-                            ).frame(width: 80, height: 76)
+                    HStack(spacing: spacing) {
+                        ForEach(buttons.indices, id: \.self) { idx in
+                            buttons[idx]
                         }
-                        
-                        VerticalIconTextButton(
-                            normalImage: Image("call_switch"),
-                            title: Localized("CALL_MORE_SWITCH_CAMERA"),
-                            action: {
-                                DTMeetingManager.shared.switchCamera()
-                            }
-                        ).frame(width: 80, height: 76)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 50)
                     .padding(.top, 20)
                     .padding(.bottom, 24)
+                    .animation(.easeInOut(duration: 0.25), value: count)
                     
                     HStack {
                         Text(Localized("CALLING_NOISE_TITLE"))
@@ -110,6 +93,80 @@ struct BottomPopupView: View {
             }
         }
     }
+    
+    private func buildButtons() -> [AnyView] {
+            var result: [AnyView] = []
+            let call = meetingManager.currentCall
+            
+            result.append(AnyView(
+                VerticalIconTextButton(
+                    normalImage: Image("calling_invite"),
+                    title: Localized("CALL_INVITE_MEMBERS")
+                ) {
+                    meetingManager.roomContext?.presentInviteView()
+                }
+                .frame(width: 80, height: 76)
+            ))
+            
+            if call.callType != .private {
+                result.append(AnyView(
+                    VerticalIconTextButton(
+                        normalImage: Image("calling_lowerHand"),
+                        selectedImage: Image("calling_raiseHand"),
+                        title: Localized("RAISE_HANDS_TITLE"),
+                        isSelected: $roomDataManager.localRaiseHand
+                    ) {
+                        Task {
+                            if roomDataManager.localRaiseHand {
+                                await meetingManager.handCancelRemoteSyncStatus(
+                                    participantId: meetingManager.roomContext?
+                                        .room.localParticipant.identity?.stringValue
+                                        .components(separatedBy: ".").first ?? ""
+                                )
+                                roomDataManager.localRaiseHand = false
+                            } else {
+                                await meetingManager.handRaiseRemoteSyncStatus()
+                                roomDataManager.localRaiseHand = true
+                            }
+                        }
+                    }
+                    .frame(width: 80, height: 76)
+                ))
+            }
+            
+            if meetingManager.openCallCamera {
+                result.append(AnyView(
+                    VerticalIconTextButton(
+                        normalImage: Image("call_switch"),
+                        title: Localized("CALL_MORE_SWITCH_CAMERA")
+                    ) {
+                        meetingManager.switchCamera()
+                    }
+                    .frame(width: 80, height: 76)
+                ))
+            }
+            
+            if let gid = call.conversationId,
+               let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid),
+               let groupThread = TSGroupThread.getWithGroupId(groupId),
+               groupThread.groupModel.criticalAlert {
+                result.append(AnyView(
+                    VerticalIconTextButton(
+                        normalImage: Image("call_critical"),
+                        title: Localized("CALL_MORE_CRITICAL_ALERT")
+                    ) {
+                        Task {
+                            await meetingManager.sendCriticalAlertWithBarrage(
+                                Localized("MEETING_CRITICAL_ALERT_DANMU")
+                            )
+                        }
+                    }
+                    .frame(width: 80, height: 76)
+                ))
+            }
+            
+            return result
+        }
 }
 
 

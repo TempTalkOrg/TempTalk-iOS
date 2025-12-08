@@ -276,13 +276,13 @@ extension DTMeetingManager {
                 }
                 return
             }
+            // 先连接
+            await connectRoomSafely(fromCallKit: fromCallKit, connectOptions: connectOptions)
+            // 后出UI
             await MainActor.run {
                 DTToastHelper.hide()
                 presentCallUI(callType: callType, isCaller: isCaller, fromCallKit: fromCallKit)
             }
-            
-            // 4. 连接
-            await connectRoomSafely(fromCallKit: fromCallKit, connectOptions: connectOptions)
         } catch {
             Logger.error("\(logTag) request token error: \(error)")
             await hangupCall(needSyncCallKit: false,
@@ -369,9 +369,21 @@ extension DTMeetingManager {
     
     @MainActor
     private func presentCallUI(callType: CallType, isCaller: Bool, fromCallKit: Bool) {
+        let reachable = Reachability.forInternetConnection()?.isReachable() ?? false
+        if reachable == false {
+            DTToastHelper.show(withInfo: Localized("SINGLE_CALL_CALLER_NETWORK_ABNORMAL"))
+            return
+        }
+        
+        guard let appContext = appContext, let roomContext = roomContext else {
+            Logger.info("\(logTag) appcontext roomContext init exception")
+            DTToastHelper.show(withInfo: Localized("ERROR_DESCRIPTION_UNKNOWN_ERROR"))
+            return
+        }
+        
         let contextView = RoomContextView()
-            .environmentObject(appContext!)
-            .environmentObject(roomContext!)
+            .environmentObject(appContext)
+            .environmentObject(roomContext)
         
         let callVC = DTHostingController(rootView: AnyView(contextView))
         self.hostRoomContentVC = callVC
@@ -433,6 +445,7 @@ extension DTMeetingManager {
         currentCall = call
         hasMeeting = true
         hasTriggeredRating = false
+        isFromCallkit = fromCallKit
 
         guard let publicKey = call.publicKey, let emk = call.emk else {
             Logger.error("\(logTag) publicKey or emk is nil.")
@@ -453,7 +466,38 @@ extension DTMeetingManager {
         }
               
         Task {
-            if let result = await DTMeetingManager.checkRoomIdValid(roomId) {
+            if fromCallKit {
+                Logger.info("\(logTag) answer from CallKit")
+                handleMeetingBar(call: call, action: .add)
+
+                guard !isAnswering else {
+                    Logger.info("\(logTag) already answering, ignore duplicate answerCall from CallKit")
+                    return
+                }
+
+                answerCall(caller: caller, roomId: roomId, publicKey: publicKey, emk: emk, fromCallKit: true)
+                onPlaySound?()
+
+                Task.detached { [weak self] in
+                    guard let self = self else { return }
+                    if let result = await DTMeetingManager.checkRoomIdValid(roomId) {
+                        if result.anotherDeviceJoined || result.userStopped {
+                            Logger.info("\(self.logTag) roomId invalid, hanging up after CallKit answer")
+                            await self.hangupCall(
+                                needSyncCallKit: true,
+                                isByLocal: true,
+                                roomId: roomId,
+                                removeMeetingBar: true,
+                                showErrorToast: true
+                            )
+                        }
+                    }
+                }
+            } else {
+                guard let result = await DTMeetingManager.checkRoomIdValid(roomId) else {
+                    return
+                }
+                
                 if result.anotherDeviceJoined || result.userStopped {
                     Logger.info("\(logTag) checkRoomIdValid anotherDeviceJoined\(result.anotherDeviceJoined) userStopped\(result.userStopped)")
                     return
@@ -461,19 +505,9 @@ extension DTMeetingManager {
                 
                 onPlaySound?()
                 
-                if fromCallKit {
-                    Logger.info("\(logTag) answer from CallKit")
-                    handleMeetingBar(call: call, action: .add)
-                    guard !isAnswering else {
-                        Logger.info("\(logTag) already answering, ignore duplicate answerCall from CallKit")
-                        return
-                    }
-                    answerCall(caller: caller, roomId: roomId, publicKey: publicKey, emk: emk, fromCallKit: true)
-                } else {
-                    DispatchMainThreadSafe {
-                        self.startCallTimeoutTimer()
-                        self.presentAnswerVC(call: call, caller: caller, roomId: roomId, publicKey: publicKey, emk: emk)
-                    }
+                DispatchMainThreadSafe {
+                    self.startCallTimeoutTimer()
+                    self.presentAnswerVC(call: call, caller: caller, roomId: roomId, publicKey: publicKey, emk: emk)
                 }
             }
         }

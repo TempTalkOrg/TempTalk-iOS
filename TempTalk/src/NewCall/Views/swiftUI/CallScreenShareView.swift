@@ -145,6 +145,7 @@ struct CallScreenShareView: View {
                     .foregroundColor(.gray.opacity(0.8))
             }
         }
+        .allowsHitTesting(false)
     }
     
     

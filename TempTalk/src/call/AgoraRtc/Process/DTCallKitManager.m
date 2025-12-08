@@ -191,6 +191,7 @@
         [_provider reportNewIncomingCallWithUUID:uuid update:self.callUpdate completion:^(NSError * _Nullable error) {
             //Report completion to CallKit
             OWSLogInfo(@"%@ Report completion to CallKit - %@", self.logTag, callerID);
+            completion();
             
             @strongify(self)
             [self startTimeoutTimerWithCallerId:callerID];
@@ -201,7 +202,6 @@
 
             OWSLogInfo(@"[call]========>CallKit: startCallTimeoutTimer");
             
-            completion();
             if (error) {
                 OWSLogError(@"[call]========>CallKit: Current error %@",error.userInfo);
                 
@@ -618,7 +618,7 @@
 
 - (void)handleVoipCallNotify:(NSDictionary *)apnsInfo completion:(void (^__nullable)(void))completion {
 
-    OWSLogDebug(@"========>CallKit: apnsInfo:%@", apnsInfo);
+    OWSLogInfo(@"========>CallKit: apnsInfo:%@", apnsInfo);
     
     NSDictionary *callInfo = apnsInfo[@"callInfo"];
     NSString *encMsg = apnsInfo[@"msg"];

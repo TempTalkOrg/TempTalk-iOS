@@ -64,7 +64,7 @@ final class ConversationViewController: OWSViewController {
         actionOnOpen = action
         inputAccessoryPlaceholder.delegate = self
 
-        Logger.info("[CVC:init] threadId=\(thread.uniqueId) viewMode=\(viewMode) focusId=\(focusMessageId ?? "nil") action=\(action)")
+        Logger.info("[Conversation] threadId=\(thread.uniqueId) viewMode=\(viewMode) focusId=\(focusMessageId ?? "nil") action=\(action)")
     }
     
     deinit {
@@ -100,7 +100,7 @@ final class ConversationViewController: OWSViewController {
         createVirtualContactIfNeeded()
 
         // DEBUG: viewDidLoad state
-        Logger.info("[CVC:viewDidLoad] bounds=\(view.bounds) collectionFrame=\(collectionView.frame) shouldObserveDBModifications=\(shouldObserveDBModifications)")
+        Logger.info("[Conversation] bounds=\(view.bounds) collectionFrame=\(collectionView.frame) shouldObserveDBModifications=\(shouldObserveDBModifications)")
     }
     
     override func viewIsAppearing(_ animated: Bool) {
@@ -142,7 +142,7 @@ final class ConversationViewController: OWSViewController {
         setupJoinBarView()
 
         // DEBUG: viewIsAppearing
-        Logger.info("[CVC:viewIsAppearing] isViewLoaded=\(isViewLoaded) items=\(viewItems.count) renderItems=\(renderItems.count) contentSize=\(collectionView.contentSize) inset=\(collectionView.contentInset)")
+        Logger.info("[Conversation] isViewLoaded=\(isViewLoaded) items=\(viewItems.count) renderItems=\(renderItems.count) contentSize=\(collectionView.contentSize) inset=\(collectionView.contentInset)")
     }
     
     override func viewDidLayoutSubviews() {
@@ -163,6 +163,8 @@ final class ConversationViewController: OWSViewController {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        
+        Logger.info("[Conversation] viewDidAppear, threadId: \(thread.uniqueId)")
         
         // recover status bar when returning from PhotoPicker, which is dark (uses light status bar)
         setNeedsStatusBarAppearanceUpdate()
@@ -209,7 +211,7 @@ final class ConversationViewController: OWSViewController {
         loadDraftInCompose()
 
         // DEBUG: viewDidAppear final state
-        Logger.info("[CVC:viewDidAppear] items=\(viewItems.count) renderItems=\(renderItems.count) contentSize=\(collectionView.contentSize) offset=\(collectionView.contentOffset) visible=\(collectionView.indexPathsForVisibleItems.count)")
+        Logger.info("[Conversation] items=\(viewItems.count) renderItems=\(renderItems.count) contentSize=\(collectionView.contentSize) offset=\(collectionView.contentOffset) visible=\(collectionView.indexPathsForVisibleItems.count)")
     }
     
     // `viewWillDisappear` is called whenever the view *starts* to disappear,

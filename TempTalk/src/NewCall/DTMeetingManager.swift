@@ -56,6 +56,10 @@ import DTProto
     var fromSource: String?
     // 1v1的另一端是否开启CriticalAlert
     var otherCriticalAlert: Bool = false
+    // 是否开启摄像头
+    var openCallCamera: Bool = false
+    // 是否来自于callkit
+    var isFromCallkit: Bool = false
     
     var allParticipantIds: [String] {
         guard let roomContext else {

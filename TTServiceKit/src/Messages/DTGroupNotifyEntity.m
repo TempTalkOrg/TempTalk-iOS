@@ -27,6 +27,7 @@
                       uniqueId:(NSString *)uniqueId
                     anyoneRemove:(BOOL)anyoneRemove
                           avatar:(NSString *)avatar
+                   criticalAlert:(BOOL)criticalAlert
                              ext:(BOOL)ext
                              gid:(NSString *)gid
                   invitationRule:(nullable NSNumber *)invitationRule
@@ -42,6 +43,7 @@
                         uniqueId:uniqueId
                       anyoneRemove:anyoneRemove
                             avatar:avatar
+                     criticalAlert:criticalAlert
                                ext:ext
                                gid:gid
                     invitationRule:invitationRule

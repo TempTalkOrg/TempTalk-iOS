@@ -176,6 +176,17 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
                                                   newGroupThread: newGroupThread,
                                                   timeStamp: timeStamp,
                                                   transaction: transaction)
+        } else if groupNotifyEntity.groupNotifyDetailedType == .criticalAlertChange {
+            
+            self.updateCriticalAlertChange(envelope: envelope,
+                                              groupNotifyEntity: groupNotifyEntity,
+                                              display: display,
+                                              oldGroupModel: oldGroupModel,
+                                              newGroupModel: newGroupModel,
+                                              newGroupThread: newGroupThread,
+                                              timeStamp: timeStamp,
+                                              transaction: transaction)
+            
         } else {
             
             Logger.info("unsupported type")
@@ -369,6 +380,31 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
         let publishRuleChangeSystemMessage = DTGroupUpdateInfoMessageHelper.groupUpdatePublishRuleInfoMessage(publishRule, timestamp: timeStamp, serverTimestamp: envelope.systemShowTimestamp, in: newGroupThread)
         publishRuleChangeSystemMessage.anyInsert(transaction: transaction)
         
+    }
+    
+    func updateCriticalAlertChange(envelope: DSKProtoEnvelope,
+                                      groupNotifyEntity: DTGroupNotifyEntity,
+                                      display: Bool,
+                                      oldGroupModel: TSGroupModel,
+                                      newGroupModel: TSGroupModel,
+                                      newGroupThread: TSGroupThread,
+                                      timeStamp: UInt64,
+                                      transaction: SDSAnyWriteTransaction) {
+        
+        guard let criticalAlert = groupNotifyEntity.group?.criticalAlert else {
+            Logger.info("group.criticalAlert = nil")
+            return
+        }
+        
+        newGroupModel.criticalAlert = criticalAlert
+        Logger.info("update group criticalAlert = \(criticalAlert).")
+        newGroupThread.anyUpdateGroupThread(transaction: transaction) { gthread in
+            gthread.groupModel = newGroupModel
+        }
+        
+        transaction.addAsyncCompletionOnMain {            
+            DTGroupUtils.postCriticalAlertChangeNotification(withTargetIds: [newGroupThread.uniqueId: NSNumber(value: criticalAlert)])
+        }
     }
     
     func updatePrivateChatChange(envelope: DSKProtoEnvelope,

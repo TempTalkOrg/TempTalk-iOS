@@ -253,7 +253,8 @@ public extension DTCallKitManager {
             guard let result else {
                 Logger.info("\(logTag) roomId invalid")
                 stopTimeroutTimer()
-                endCallAction(callerId)
+                // 只有48s超时
+//                endCallAction(callerId)
                 return
             }
             

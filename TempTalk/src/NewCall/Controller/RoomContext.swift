@@ -513,3 +513,16 @@ extension RoomContext {
         return k_e2eeKey
     }
 }
+
+extension Room {
+    func isScreenShareActive() -> Bool {
+        for participant in self.allParticipants.values {
+            for pub in participant.videoTracks {
+                if pub.source == .screenShareVideo {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+}

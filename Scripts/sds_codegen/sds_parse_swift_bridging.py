@@ -220,7 +220,7 @@ if __name__ == "__main__":
             continue
         process_dir(pods_dir_path, dirname, swift_bridging_path)
 
-    process_dir(src_dir_path, 'SignalServiceKit', swift_bridging_path)
-    process_dir(src_dir_path, 'SignalMessaging', swift_bridging_path)
-    process_dir(src_dir_path, 'Signal', swift_bridging_path)
+    process_dir(src_dir_path, 'TTServiceKit', swift_bridging_path)
+    process_dir(src_dir_path, 'TTMessaging', swift_bridging_path)
+    process_dir(src_dir_path, 'TempTalk', swift_bridging_path)
 

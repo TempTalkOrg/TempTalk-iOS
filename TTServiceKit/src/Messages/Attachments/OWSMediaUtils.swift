@@ -146,9 +146,9 @@ public enum OWSMediaError: Error {
      * https://github.com/signalapp/Signal-Android/blob/master/src/org/thoughtcrime/securesms/mms/PushMediaConstraints.java
      */
     @objc
-    public static let kMaxFileSizeAnimatedImage = UInt(30 * 1024 * 1024)
+    public static let kMaxFileSizeAnimatedImage = UInt(200 * 1024 * 1024)
     @objc
-    public static let kMaxFileSizeImage = UInt(30 * 1024 * 1024)
+    public static let kMaxFileSizeImage = UInt(200 * 1024 * 1024)
     @objc
     public static let kMaxFileSizeVideo = UInt(200 * 1024 * 1024)
     @objc

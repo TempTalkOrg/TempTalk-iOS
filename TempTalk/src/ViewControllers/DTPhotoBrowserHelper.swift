@@ -38,9 +38,6 @@ public class DTPhotoBrowserHelper: NSObject {
             config.allowEditVideo = true
             config.maxEditVideoTime = 120
         }
-        config.canSelectAsset = { asset -> Bool in
-            true
-        }
 
         let uiConfig = ZLPhotoUIConfiguration.default()
         uiConfig.indexLabelBgColor = .ows_themeBlue
@@ -50,6 +47,11 @@ public class DTPhotoBrowserHelper: NSObject {
         uiConfig.selectedBorderColor = .ows_themeBlue
         
         super.init()
+        
+        config.canSelectAsset = { [weak self] asset -> Bool in
+            guard let self = self else { return false }
+            return ConversationTool.shared.checkAssetSize(asset: asset)
+        }
     }
     
     deinit {

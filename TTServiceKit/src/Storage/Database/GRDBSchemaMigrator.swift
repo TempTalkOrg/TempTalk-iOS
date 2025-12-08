@@ -116,6 +116,7 @@ public class GRDBSchemaMigrator: NSObject {
         case addResetIdentifyKeyRecord
         case addExpiresInSecondsAndMessageClearAnchor
         case addRemarkNameToSignalAccountSecondary
+        case addGroupManagerCriticalAlert
         
         //MARK GRDB need to focus on
 
@@ -149,7 +150,7 @@ public class GRDBSchemaMigrator: NSObject {
     
     /// Attention: matters
     ///model_TSMessageSecondary_virtual 虚表，集成自定义 FTS5 分词器 simple
-    public static let grdbSchemaVersionLatest: UInt = 1
+    public static let grdbSchemaVersionLatest: UInt = 2
 
     // An optimization for new users, we have the first migration import the latest schema
     // and mark any other migrations as "already run".
@@ -315,6 +316,16 @@ public class GRDBSchemaMigrator: NSObject {
             do {
                 try db.alter(table: "model_SignalAccountSecondary") { (table: TableAlteration) -> Void in
                     table.add(column: "remarkName", .text).defaults(to: "")
+                }
+            } catch {
+                owsFail("Error: \(error)")
+            }
+        }
+        
+        migrator.registerMigration(.addGroupManagerCriticalAlert) { db in
+            do {
+                try db.alter(table: "model_DTGroupBaseInfoEntity") { (table: TableAlteration) -> Void in
+                    table.add(column: "criticalAlert", .boolean).defaults(to: false)
                 }
             } catch {
                 owsFail("Error: \(error)")

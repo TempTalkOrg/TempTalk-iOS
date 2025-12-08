@@ -302,6 +302,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     newGroupModel.rejoin = groupInfo.rejoin;
     newGroupModel.publishRule = groupInfo.publishRule;
     newGroupModel.ext = groupInfo.ext;
+    newGroupModel.criticalAlert = groupInfo.criticalAlert;
     
     newGroupModel.anyoneChangeName = groupInfo.anyoneChangeName;
     newGroupModel.anyoneChangeAutoClear = groupInfo.anyoneChangeAutoClear;

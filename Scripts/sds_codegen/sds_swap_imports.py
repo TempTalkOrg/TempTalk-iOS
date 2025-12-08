@@ -77,6 +77,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Parse Objective-C AST.')
     args = parser.parse_args()
 
-    search_path('Signal')
-    search_path('SignalMessaging')
-    search_path('SignalServiceKit')
+    search_path('TempTalk')
+    search_path('TTMessaging')
+    search_path('TTServiceKit')

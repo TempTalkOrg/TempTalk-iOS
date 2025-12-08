@@ -804,8 +804,13 @@ extension DTMeetingManager {
         }
         // 获取系统CriticalAlert状态
         let enabled = isCriticalAlertEnabled()
-        self.getProfileInfo(uid: localNumber) { value in
-            if value != enabled {
+        //
+        self.databaseStorage.asyncRead { transaction in
+            guard let localNum = TSAccountManager.sharedInstance().localNumber() else {return}
+            
+            let contactsManager = Environment.shared.contactsManager;
+            let account = contactsManager?.signalAccount(forRecipientId: localNum, transaction: transaction)
+            if account?.contact?.publicConfigs?.criticalAlert != enabled {
                 DTChatSetProfileApi().setProfileCriticalInfo(enabled) { entity in
                     if entity?.status == 0 {
                         Logger.info("\(self.logTag) set profile critical success enable\(enabled)")
@@ -829,6 +834,15 @@ extension DTMeetingManager {
 
         semaphore.wait()
         return enabled
+    }
+    
+    func syncContactCriticallAlert(uid: String) {
+        self.databaseStorage.asyncRead { transaction in
+            let contactsManager = Environment.shared.contactsManager;
+            let account = contactsManager?.signalAccount(forRecipientId: uid, transaction: transaction)
+            self.otherCriticalAlert = account?.contact?.publicConfigs?.criticalAlert ?? false
+            Logger.info("[newcall] update otherCriticalAlert \(self.otherCriticalAlert)")
+        }
     }
 }
 

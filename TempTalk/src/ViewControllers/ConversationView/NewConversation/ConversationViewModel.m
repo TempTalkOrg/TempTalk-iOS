@@ -352,11 +352,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)viewDidResetContentAndLayoutWithTransaction:(SDSAnyReadTransaction *)transaction
 {
     self.collapseCutoffDate = [NSDate new];
-    OWSLogInfo(@"[CVM:resetContentAndLayout] begin thread=%@", self.thread.uniqueId);
+    OWSLogInfo(@"[Conversation] begin thread=%@", self.thread.uniqueId);
     if (![self reloadViewItemsWithTransaction:transaction]) {
         OWSFailDebug(@"failed to reload view items in resetContentAndLayout.");
     }
-    OWSLogInfo(@"[CVM:resetContentAndLayout] end viewItems=%lu", (unsigned long)self.viewState.viewItems.count);
+    OWSLogInfo(@"[Conversation] end viewItems=%lu thread=%@", (unsigned long)self.viewState.viewItems.count, self.thread.uniqueId);
 }
 
 - (BOOL)canLoadOlderItems
@@ -1334,7 +1334,7 @@ NS_ASSUME_NONNULL_BEGIN
 //        viewItem.accessibilityAuthorName = accessibilityAuthorName;
     }
 
-    OWSLogInfo(@"==== reloadItems total rows: %ld ====", viewItems.count);
+    OWSLogInfo(@"==== reloadItems total rows: %ld ==== =threadid=%@", viewItems.count, self.thread.uniqueId);
     
     ConversationViewState *viewState = [[ConversationViewState alloc] initWithViewItems:viewItems
                                                                          needRefreshIds:needRefreshIds

@@ -23,6 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL rejoin;
 @property (nonatomic, strong) NSNumber *publishRule;
 @property (nonatomic, assign) BOOL ext;
+@property (nonatomic, assign) BOOL criticalAlert;
 
 @property (nonatomic, assign) BOOL anyoneChangeName;
 @property (nonatomic, assign) BOOL anyoneChangeAutoClear;

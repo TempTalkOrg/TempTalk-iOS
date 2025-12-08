@@ -206,6 +206,13 @@ class DTNotificationSettingsController : SettingBaseViewController {
         super.viewDidLoad()
         self.title = Localized("SETTINGS_NOTIFICATIONS", comment: "")
         prepareTheme()
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -258,6 +265,10 @@ class DTNotificationSettingsController : SettingBaseViewController {
     
     func prepareLayout() {
         mainTableView.autoPinEdgesToSuperviewEdges()
+    }
+    
+    @objc func appDidBecomeActive() {
+        updateCriticalAlertStatus()
     }
 }
 

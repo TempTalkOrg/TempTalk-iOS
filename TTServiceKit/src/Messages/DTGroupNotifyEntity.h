@@ -125,6 +125,7 @@ typedef NS_ENUM(NSInteger, DTGroupNotifyDetailType) {
     DTGroupNotifyDetailTypeArchive = 39, // 群解散归档 （已废弃）
     DTGroupNotifyDetailTypeGroupCostChange = 40,
     DTGroupNotifyDetailTypePrivateChatChange = 41,
+    DTGroupNotifyDetailTypeCriticalAlertChange = 47,
     DTGroupNotifyDetailTypeGroupAccountInvalid = 999
 };
 
@@ -150,6 +151,7 @@ typedef NS_ENUM(NSInteger, DTGroupNotifyDetailType) {
                       uniqueId:(NSString *)uniqueId
                     anyoneRemove:(BOOL)anyoneRemove
                           avatar:(NSString *)avatar
+                   criticalAlert:(BOOL)criticalAlert
                              ext:(BOOL)ext
                              gid:(NSString *)gid
                   invitationRule:(nullable NSNumber *)invitationRule
@@ -160,7 +162,7 @@ typedef NS_ENUM(NSInteger, DTGroupNotifyDetailType) {
                           rejoin:(BOOL)rejoin
                      remindCycle:(NSString *)remindCycle
                           action:(DTGroupNotifyAction)action
-NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:anyoneRemove:avatar:ext:gid:invitationRule:messageClearAnchor:messageExpiry:name:publishRule:rejoin:remindCycle:action:));
+NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:anyoneRemove:avatar:criticalAlert:ext:gid:invitationRule:messageClearAnchor:messageExpiry:name:publishRule:rejoin:remindCycle:action:));
 
 // clang-format on
 

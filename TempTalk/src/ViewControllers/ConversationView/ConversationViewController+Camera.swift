@@ -65,6 +65,12 @@ extension ConversationViewController: UIImagePickerControllerDelegate, UINavigat
     ) {
         AssertIsOnMainThread()
         
+        guard ConversationTool.shared.checkAttachmentSize(from: info) else {
+            Logger.warn("Attachment exceeds size limit.")
+            picker.dismiss(animated: true)
+            return
+        }
+        
         let mediaType = info[.mediaType] as? String ?? ""
         Logger.debug("Picked mediaType <\(mediaType)> for file: \(fileName ?? "")")
         if mediaType == (kUTTypeMovie as String) {

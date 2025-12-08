@@ -25,6 +25,7 @@ extern NSString *const DTGroupMemberRapidRoleChangedNotification;
 extern NSString *const DTGroupExternalChangedNotification;
 extern NSString *const DTGroupBaseInfoChangedNotification;
 extern NSString *const DTRapidRolesKey;
+extern NSString *const DTGroupCriticalAlertChangedNotification;
 
 @interface DTGroupUtils : NSObject
 
@@ -83,6 +84,8 @@ extern NSString *const DTRapidRolesKey;
 + (void)postRapidRoleChangeNotificationWithGroupModel:(TSGroupModel *)groupModel
                                       targedMemberIds:(NSArray <NSString *> *)targetMemberIds;
 + (void)postExternalChangeNotificationWithTargetIds:(NSDictionary <NSString *, NSNumber *> *)targetIds;
+
++ (void)postCriticalAlertChangeNotificationWithTargetIds:(NSDictionary <NSString *, NSNumber *> *)targetIds;
 
 + (void)postGroupBaseInfoChangeWith:(DTGroupBaseInfoEntity *)baseInfo
                              remove:(BOOL)remove;

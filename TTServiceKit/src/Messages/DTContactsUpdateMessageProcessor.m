@@ -77,6 +77,29 @@ NSString *const kContactsUpdateMembersKey = @"contactsUpdateMembersKey";
         }
     }
     
+    // 更新 通讯录数据
+    NSArray<Contact *> *membersCopy = [contactsNotifyEntity.members copy];
+
+    [membersCopy enumerateObjectsWithOptions:NSEnumerationReverse usingBlock:^(Contact * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
+            if(obj){
+                SignalAccount *account = [[TextSecureKitEnv sharedEnv].contactsManager signalAccountForRecipientId:obj.number transaction:writeTransaction];
+                if (!account) {
+                    account = [[SignalAccount alloc] initWithRecipientId:obj.number];
+                }
+
+                account.contact = obj;
+                SignalAccount *newAccount = [account copy];
+                
+                OWSLogInfo(@"[contacts] update contact publicConfigs criticalAlert %@", @(obj.publicConfigs.criticalAlert));
+
+                [[TextSecureKitEnv sharedEnv].contactsManager updateSignalAccountWithRecipientId:obj.number
+                                                                           withNewSignalAccount:newAccount
+                                                                             withTransaction:writeTransaction];
+            }
+        });
+    }];
+    
     NSInteger previousVersion = [[self class] currentContactsVersion];
     NSInteger diff = contactsNotifyEntity.directoryVersion - previousVersion;
     OWSLogInfo(@"[contacts]:%ld---%ld", contactsNotifyEntity.directoryVersion, previousVersion);

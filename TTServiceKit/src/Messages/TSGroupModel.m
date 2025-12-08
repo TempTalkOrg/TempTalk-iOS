@@ -205,6 +205,9 @@ NS_ASSUME_NONNULL_BEGIN
     if (_publishRule != other.publishRule) {
         return NO;
     }
+    if (_criticalAlert != other.criticalAlert) {
+        return NO;
+    }
     if (_privateChat != other.privateChat) {
         return NO;
     }

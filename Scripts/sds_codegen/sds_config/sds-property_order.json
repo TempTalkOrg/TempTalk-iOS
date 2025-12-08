@@ -54,6 +54,7 @@
     "DTGroupBaseInfoEntityRecord.action": 1,
     "DTGroupBaseInfoEntityRecord.anyoneRemove": 2,
     "DTGroupBaseInfoEntityRecord.avatar": 3,
+    "DTGroupBaseInfoEntityRecord.criticalAlert": 13,
     "DTGroupBaseInfoEntityRecord.ext": 10,
     "DTGroupBaseInfoEntityRecord.gid": 4,
     "DTGroupBaseInfoEntityRecord.invitationRule": 5,

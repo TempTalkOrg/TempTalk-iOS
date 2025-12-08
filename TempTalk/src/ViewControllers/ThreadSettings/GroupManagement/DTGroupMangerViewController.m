@@ -20,6 +20,8 @@
 #import <TTServiceKit/TSInfoMessage.h>
 #import "DTGroupSettingChangedProcessor.h"
 
+@import TTServiceKit;
+
 CGFloat const kSelectedItemHeight = 40;
 CGFloat const kItemNumber = 7;
 
@@ -50,6 +52,11 @@ extern NSString *const kDTAddToGroupItemIdentifier;
             [self.collectionView scrollToItemAtIndexPath:indexPath atScrollPosition:UICollectionViewScrollPositionNone animated:false];
         }
     }
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(criticalAlertNotifyDidChange:)
+                                                 name:DTGroupCriticalAlertChangedNotification
+                                               object:nil];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -424,10 +431,16 @@ extern NSString *const kDTAddToGroupItemIdentifier;
         return cell;
     } actionBlock:nil]];
     
+    [groupSection addItem:[OWSTableItem itemWithCustomCellBlock:^{
+        @strongify(self)
+        UITableViewCell *cell = [self cellWithName:Localized(@"CALL_MORE_CRITICAL_ALERT", @"table cell label in conversation settings")
+                                        isSwitchOn:self.thread.groupModel.criticalAlert
+                                      switchAction:@selector(criticalAlertDidChange:)];
+        
+        return cell;
+    } actionBlock:nil]];
+    
     [contents addSection:groupSection];
-    
-    
-    
     self.contents = contents;
 }
     
@@ -512,6 +525,26 @@ extern NSString *const kDTAddToGroupItemIdentifier;
     
 }
 
+- (void)criticalAlertDidChange:(UISwitch *)sender {
+    
+    if(!self.thread.isGroupThread) return;
+    
+    BOOL criticalAlert = sender.isOn;
+    
+    [DTToastHelper showHudInView:self.view];
+    
+    [self.groupSettingChangedProcessor changeGroupSettingWithPropertyName:@"criticalAlert"
+                                                                    value:@(criticalAlert)
+                                                                  success:^(SDSAnyWriteTransaction *writeTransaction){
+        [DTToastHelper hide];
+        [self updateTableContents];
+    } failure:^{
+        [DTToastHelper hide];
+        sender.on = !sender.isOn;;
+    }];
+    
+}
+
 - (void)anyoneChangeNameChanged:(UISwitch *)sender {
     
     if(!self.thread.isGroupThread) return;
@@ -577,6 +610,35 @@ extern NSString *const kDTAddToGroupItemIdentifier;
     [actionSheet addAction:[OWSActionSheets cancelAction]];
     
     [self presentActionSheet:actionSheet];
+}
+
+
+- (void)criticalAlertNotifyDidChange:(NSNotification *)noti
+{
+    if(!self.thread.isGroupThread) return;
+    
+    if (!noti.userInfo || noti.userInfo.allKeys.count == 0) {
+        return;
+    }
+    NSArray <NSString *> *changedIds = noti.userInfo.allKeys;
+    if (![changedIds containsObject:self.thread.uniqueId]) {
+        return;
+    }
+    
+    NSNumber *criticalAlert = noti.userInfo[self.thread.uniqueId];
+    BOOL isCriticalAlert = criticalAlert.boolValue;
+    
+    [DTToastHelper showHudInView:self.view];
+    
+    [self.groupSettingChangedProcessor changeGroupSettingWithPropertyName:@"criticalAlert"
+                                                                    value:@(isCriticalAlert)
+                                                                  success:^(SDSAnyWriteTransaction *writeTransaction){
+        [DTToastHelper hide];
+        [self updateTableContents];
+    } failure:^{
+        [DTToastHelper hide];
+        [self updateTableContents];
+    }];
 }
 
 @end

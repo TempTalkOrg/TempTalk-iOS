@@ -521,7 +521,11 @@ extension RoomContext: RoomDelegate {
             callManager.currentCallTalkingPop()
             if trackPublication.track is AudioTrack {
                 // 只处理音频的弹幕
-                RoomDataManager.shared.updateMuteParticipant(participant: participant, isMuted: isMuted)
+                if let identity = participant.identity?.stringValue, let localNumber = TSAccountManager.localNumber() {
+                    if identity != "\(localNumber).2" {
+                        RoomDataManager.shared.updateMuteParticipant(participant: participant, isMuted: isMuted)
+                    }
+                }
             } else if trackPublication.track is VideoTrack {
                 // 视频
                 RoomDataManager.shared.updateVideoMuteParticipant(participant: participant)

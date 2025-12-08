@@ -135,6 +135,7 @@ static NSTimeInterval launchStartedAt;
         [self checkVersionUpdateAndCleanupNotifications];
         [[DTServerConfigManager sharedManager] updateConfig];
         [[DTServerUrlManager sharedManager] startSpeedTestAll];
+//        [[DTMetricKitMonitor shared] startMonitoring];
     });
     
     // Prevent the device from sleeping during database view async registration
@@ -416,8 +417,6 @@ static NSTimeInterval launchStartedAt;
     AppReadinessRunNowOrWhenAppDidBecomeReadyAsync(^{
         [self handleActivation];
         [DTMeetingManager.shared syncServerCalls];
-        // 同步服务端配置
-        [[DTMeetingManager shared] syncCriticalAlertNotificationSettingsIfNeeded];
     });
 
     // Clear all notifications whenever we become active.

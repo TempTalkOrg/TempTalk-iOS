@@ -129,7 +129,10 @@ public struct BottomToolbarView: View {
                     barClickHandler()
                     isSpeakerPhoneChangingBusy = true
                     defer { Task { @MainActor in isSpeakerPhoneChangingBusy = false } }
-                    DTRTCAudioSession.shared.switchToSpeaker(!speakerEnabled)
+                    let newSpeakerState = !speakerEnabled
+                    // 保存用户选择的扬声器状态
+                    appCtx.setUserPreferredSpeakerState(newSpeakerState)
+                    DTRTCAudioSession.shared.switchToSpeaker(newSpeakerState)
                     Logger.info("\(logTag) speaker pressed \(speakerEnabled ? "on" : "off")")
                 }
             }
@@ -237,6 +240,8 @@ public struct BottomToolbarView: View {
                 }
             }
         }
+        
+        DTMeetingManager.shared.openCallCamera = !isCameraEnabled
         
         Task {
             isCameraPublishingBusy = true

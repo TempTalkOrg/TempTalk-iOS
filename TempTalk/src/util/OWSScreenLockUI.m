@@ -359,6 +359,11 @@ bool bScreenLockDone = false;
 // Determines what the state of the app should be.
 - (ScreenLockUIState)desiredUIState
 {
+    if (self.hasActiveMeeting) {
+        DDLogVerbose(@"%@ desiredUIState: hasActiveMeeting", self.logTag);
+        return ScreenLockUIStateNone;
+    }
+    
     if (self.isScreenLockLocked && [TSAccountManager sharedInstance].isRegistered) {
         if (self.appIsInactiveOrBackground) {
             DDLogVerbose(@"%@ desiredUIState: screen protection 1.", self.logTag);
@@ -377,34 +382,6 @@ bool bScreenLockDone = false;
     } else {
         return ScreenLockUIStateNone;
     }
-
-//    if (self.appIsInactiveOrBackground) {
-//        // App is inactive or background.
-//        if (self.lastState == ScreenLockUIStateOffline) {
-//            return ScreenLockUIStateOffline;
-//        }
-//    } else {
-//        DDLogVerbose(@"%@ desiredUIState: none 3.", self.logTag);
-//        ScreenLockUIState uiState = ScreenLockUIStateNone;
-//
-//        if ([TSAccountManager isRegistered]) {
-//            switch ([TSSocketManager sharedManager].state) {
-//                case SocketManagerStateClosed:
-//                    uiState = self.socketLockState;
-//                    break;
-//                case SocketManagerStateConnecting: {
-//
-//                    uiState = self.reachability.isReachable ? ScreenLockUIStateNone : ScreenLockUIStateOffline;
-//                }
-//                    break;
-//                case SocketManagerStateOpen:
-//                    break;
-//            }
-//        } else if (TSAccountManager.sharedInstance.isDeregistered) {
-//            uiState = ScreenLockUIStateOffline;
-//        }
-//        return uiState;
-//    }
 
     if (Environment.preferences.screenSecurityIsEnabled) {
         DDLogVerbose(@"%@ desiredUIState: screen protection 4.", self.logTag);
@@ -542,6 +519,13 @@ bool bScreenLockDone = false;
     // which is desirable.  Don't assume that though; call ensureUI
     // just in case it's necessary.
     [self ensureUI];
+}
+
+- (BOOL)hasActiveMeeting {
+    BOOL haveMeeting = [DTMeetingManager shared].inMeeting;
+    BOOL isCallKitActive = DTCallKitManager.shared.callsCount > 0;
+    
+    return haveMeeting || isCallKitActive;
 }
 
 - (void)socketStateDidChange
