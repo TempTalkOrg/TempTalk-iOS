@@ -89,6 +89,9 @@ public class InteractionFinder: NSObject, InteractionFinderAdapter {
     public static let messageDatabaseViewExtensionName: String = "TSMessageDatabaseViewExtensionName"
     
     @objc
+    public static let messageDatabaseViewForAllThreadMessageExtensionName: String = "TSMessageDatabaseViewForAllThreadMessageExtensionName"
+    
+    @objc
     public init(threadUniqueId: String) {
         self.grdbAdapter = GRDBInteractionFinderAdapter(threadUniqueId: threadUniqueId)
     }

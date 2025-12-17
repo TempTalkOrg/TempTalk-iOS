@@ -59,17 +59,21 @@ final class ConversationViewController: OWSViewController {
         
         super.init()
         
-        conversationViewModel.config(with: self)
+        Logger.info("[Conversation] init threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
+        
+        conversationViewModel.delegate = self
+        conversationViewModel.loadInitialMessages()
         
         actionOnOpen = action
         inputAccessoryPlaceholder.delegate = self
-
-        Logger.info("[Conversation] threadId=\(thread.uniqueId) viewMode=\(viewMode) focusId=\(focusMessageId ?? "nil") action=\(action)")
     }
     
     deinit {
+        Logger.info("[Conversation] deinit threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
+        
         stopRefreshUITimer()
         stopScrollUpdateTimer()
+        cancelPendingInitialMessagesIfNeeded()
         
         NotificationCenter.default.removeObserver(self)
         
@@ -85,6 +89,8 @@ final class ConversationViewController: OWSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        Logger.info("[Conversation] viewDidLoad threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
+        
         OWSArchivedMessageJob.shared().inConversation = true
         
         createContents()
@@ -98,13 +104,26 @@ final class ConversationViewController: OWSViewController {
         
         prepareForMentionMessage()
         createVirtualContactIfNeeded()
-
-        // DEBUG: viewDidLoad state
-        Logger.info("[Conversation] bounds=\(view.bounds) collectionFrame=\(collectionView.frame) shouldObserveDBModifications=\(shouldObserveDBModifications)")
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            Logger.info("[Conversation]== Conversation VC ==")
+            if let window = self.view.window {
+                Logger.info("[Conversation] view.window = \(window)")
+            } else {
+                Logger.info("[Conversation] view.window = empty")
+            }
+        }
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        Logger.info("[Conversation] viewWillAppear threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
     }
     
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
+        
+        Logger.info("[Conversation] viewIsAppearing threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
         
         checkBotBlock()
         safeUpdateBlockStatus()
@@ -142,11 +161,13 @@ final class ConversationViewController: OWSViewController {
         setupJoinBarView()
 
         // DEBUG: viewIsAppearing
-        Logger.info("[Conversation] isViewLoaded=\(isViewLoaded) items=\(viewItems.count) renderItems=\(renderItems.count) contentSize=\(collectionView.contentSize) inset=\(collectionView.contentInset)")
+        Logger.info("[Conversation] viewIsAppearing isViewVisible is \(isViewVisible) conversation controller \(self)")
     }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        
+        Logger.info("[Conversation] viewDidLayoutSubviews threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
         
         // We resize the inputToolbar whenever it's text is modified, including when setting saved draft-text.
         // However it's possible this draft-text is set before the inputToolbar (an inputAccessoryView) is mounted
@@ -164,7 +185,7 @@ final class ConversationViewController: OWSViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
-        Logger.info("[Conversation] viewDidAppear, threadId: \(thread.uniqueId)")
+        Logger.info("[Conversation] viewDidAppear threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
         
         // recover status bar when returning from PhotoPicker, which is dark (uses light status bar)
         setNeedsStatusBarAppearanceUpdate()
@@ -209,9 +230,7 @@ final class ConversationViewController: OWSViewController {
         ensureScrollDownButton()
         inputToolbar.viewDidAppear()
         loadDraftInCompose()
-
-        // DEBUG: viewDidAppear final state
-        Logger.info("[Conversation] items=\(viewItems.count) renderItems=\(renderItems.count) contentSize=\(collectionView.contentSize) offset=\(collectionView.contentOffset) visible=\(collectionView.indexPathsForVisibleItems.count)")
+        
     }
     
     // `viewWillDisappear` is called whenever the view *starts* to disappear,
@@ -221,6 +240,8 @@ final class ConversationViewController: OWSViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         
+        Logger.info("[Conversation] viewWillDisappear threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
+        
         saveDraft()
         isViewCompletelyAppeared = false
         dismissKeyBoard()
@@ -229,6 +250,8 @@ final class ConversationViewController: OWSViewController {
     
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        
+        Logger.info("[Conversation] viewDidDisappear threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
         
         userHasScrolled = false
         isViewVisible = false
@@ -406,7 +429,8 @@ extension ConversationViewController {
                     return
                 }
                 memberIds.remove(at: index)
-                self.databaseStorage.asyncWrite { transaction in
+                self.databaseStorage.asyncWrite { [weak self] transaction in
+                    guard let self = self else { return }
                     groupThread.anyUpdateGroupThread(transaction: transaction) { instance in
                         instance.groupModel.groupMemberIds = Array(memberIds)
                     }
@@ -422,12 +446,13 @@ extension ConversationViewController {
     }
     
     private func fetchThreadConfig() {
-        guard let contactThread = thread as? TSContactThread else {
+        guard let contractThread = thread as? TSContactThread,
+              thread.threadConfig?.messageExpiry == nil else {
             return
         }
         
-        let contactIdentifier = contactThread.contactIdentifier()
-        fetchThreadConfigAPI.fetchThreadConfigRequest(withNumber: contactThread.generateConversationId()) { [weak self] entity in
+        let contactIdentifier = contractThread.contactIdentifier()
+        fetchThreadConfigAPI.fetchThreadConfigRequest(withNumber: contactIdentifier) { [weak self] entity in
             
             guard let self, let entity else { return }
             
@@ -522,6 +547,8 @@ extension ConversationViewController {
     }
     
     func markVisibleMessagesAsRead() {
+        guard !conversationViewModel.isLoadingInitialMessages() else { return }
+        
         // Don't mark messages as read until the message request has been processed
         guard presentedViewController == nil else { return }
         guard !OWSWindowManager.shared().shouldShowCallView else { return }
@@ -648,7 +675,8 @@ extension ConversationViewController {
                     withNewSignalAccount: newSignalAccount,
                     with: transaction
                 )
-                transaction.addAsyncCompletionOnMain {
+                transaction.addAsyncCompletionOnMain { [weak self] in
+                    guard let self = self else { return }
                     self.updateNavigationTitle()
                     self.conversationTagInfo[contactIdentifier] = true
                 }

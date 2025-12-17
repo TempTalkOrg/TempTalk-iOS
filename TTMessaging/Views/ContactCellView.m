@@ -399,7 +399,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
 {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 
-    self.backgroundColor = Theme.tableCellBackgroundColor;
+    self.backgroundColor = Theme.bg1Color;
 
     self.thread = nil;
     self.accessoryMessage = nil;

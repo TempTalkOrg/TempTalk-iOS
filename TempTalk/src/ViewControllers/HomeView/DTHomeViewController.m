@@ -13,6 +13,7 @@
 #import "HomeViewController.h"
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import <TTMessaging/TTMessaging-Swift.h>
+#import <TTMessaging/OWSWindowManager.h>
 #import <TTServiceKit/DTThreadHelper.h>
 #import <TTMessaging/Theme.h>
 #import "DTCallInviteMemberVC.h"
@@ -871,6 +872,50 @@
 
 - (UIColor * _Nullable)navbarTintColorOverride {
     return nil;
+}
+
+- (void)logWindowHierarchyWithTag:(NSString *)tag {
+    NSString *logTag = tag ?: @"";
+    UIWindow *keyWindow = nil;
+    NSSet<UIScene *> *connectedScenes = UIApplication.sharedApplication.connectedScenes;
+    for (UIScene *scene in connectedScenes) {
+        if (scene.activationState != UISceneActivationStateForegroundActive) continue;
+        if (![scene isKindOfClass:UIWindowScene.class]) continue;
+        UIWindowScene *windowScene = (UIWindowScene *)scene;
+        keyWindow = windowScene.windows.firstObject;
+        break;
+    }
+    
+    // 安全打印 keyWindow 信息
+    if (keyWindow) {
+        OWSLogInfo(@"[WindowCheck-%@] keyWindow=%@ hidden=%d level=%.2f rootVC=%@",
+                   logTag,
+                   keyWindow,
+                   keyWindow.isHidden,
+                   keyWindow.windowLevel,
+                   keyWindow.rootViewController);
+    } else {
+        OWSLogInfo(@"[WindowCheck-%@] keyWindow=nil", logTag);
+    }
+    
+    // 打印 OWSWindowManager 窗口信息
+    OWSWindowManager *windowManager = [OWSWindowManager sharedManager];
+    UIWindow *rootWindow = windowManager.rootWindow;
+    UIWindow *callWindow = windowManager.callViewWindow;
+    
+    OWSLogInfo(@"[WindowCheck-%@] rootWindow hidden=%d level=%.2f callWindow hidden=%d",
+               logTag,
+               rootWindow ? rootWindow.isHidden : -1,
+               rootWindow ? rootWindow.windowLevel : -1,
+               callWindow ? callWindow.isHidden : -1);
+    
+    // 打印当前 view 的 window 和导航栈信息
+    UIWindow *homeWindow = self.view.window;
+    OWSLogInfo(@"[WindowCheck-%@] homeViewWindow=%@ isKey=%d navStack=%@",
+               logTag,
+               homeWindow,
+               homeWindow ? homeWindow.isKeyWindow : -1,
+               self.navigationController.viewControllers);
 }
 
 @end

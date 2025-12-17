@@ -72,7 +72,7 @@ extension ConversationViewController {
         setupBackgroundView()
 
         // DEBUG: collection setup metrics
-        Logger.info("[CVC:setupCollectionView] viewWidth=\(conversationStyle.viewWidth) bounds=\(view.bounds) collectionFrame=\(collectionView.frame) safeInsets=\(view.safeAreaInsets)")
+        Logger.info("[Conversation] viewWidth=\(conversationStyle.viewWidth) bounds=\(view.bounds) collectionFrame=\(collectionView.frame) safeInsets=\(view.safeAreaInsets)")
     }
     
     func setupBackgroundView() {
@@ -206,7 +206,7 @@ extension ConversationViewController {
         animated: Bool = false,
         completion: ((Bool) -> Void)? = nil
     ) {
-        Logger.info("[CVC:reloadData] start items(viewItems)=\(viewItems.count) forceRange=\(forceRealodRange) animated=\(animated)")
+        Logger.info("[Conversation] start items(viewItems)=\(viewItems.count) forceRange=\(forceRealodRange) animated=\(animated)")
         // 默认不进行离线操作
         DatabaseOfflineManager.shared.canOfflineUpdateDatabase = false
         // 每一次都重新获取当前最新数据源的所有 uniqueId，确保外部数据源始终和快照中的数据源一致
@@ -248,14 +248,14 @@ extension ConversationViewController {
             DispatchMainThreadSafe {
                 self.renderItems = renderItems
                 self.renderItemsMap = renderItemsMap
-                Logger.info("[CVC:reloadData] built renderItems=\(renderItems.count), applying snapshot ids=\(newSnapshot.itemIdentifiers.count)")
+                Logger.info("[Conversation] built renderItems=\(renderItems.count), applying snapshot ids=\(newSnapshot.itemIdentifiers.count)")
                 self.dataSource.apply(newSnapshot, animatingDifferences: animated) {
                     completion?(true)
-                    Logger.info("[CVC:reloadData] applied snapshot, contentSize=\(self.collectionView.contentSize) visible=\(self.collectionView.indexPathsForVisibleItems.count)")
+                    Logger.info("[Conversation] applied snapshot, contentSize=\(self.collectionView.contentSize) visible=\(self.collectionView.indexPathsForVisibleItems.count)")
                 }
             }
         }.catch { error in
-            Logger.error("[CVC:reloadData] failure: \(error)")
+            Logger.error("[Conversation] failure: \(error)")
             completion?(false)
         }
     }

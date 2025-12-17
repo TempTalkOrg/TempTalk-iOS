@@ -114,7 +114,7 @@ static BOOL isLoadInternalContactsOver = NO;
 - (UITableView *)tableView {
     if (!_tableView) {
         _tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
-        _tableView.backgroundColor = Theme.backgroundColor;
+        _tableView.backgroundColor = Theme.bg1Color;
         _tableView.delegate = self;
         _tableView.dataSource = self;
         _tableView.estimatedRowHeight = 0;
@@ -312,7 +312,7 @@ static BOOL isLoadInternalContactsOver = NO;
 - (void)applyTheme
 {
     OWSAssertIsOnMainThread();
-    self.tableView.backgroundColor = Theme.backgroundColor;
+    self.tableView.backgroundColor = Theme.bg1Color;
     self.tableView.sectionIndexColor = Theme.tabbarTitleSelectedColor;
     [super applyTheme];
     [self.tableView reloadData];
@@ -396,7 +396,7 @@ static BOOL isLoadInternalContactsOver = NO;
         UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"DTNoContactsCellID" forIndexPath:indexPath];
         cell.userInteractionEnabled = NO;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        cell.contentView.backgroundColor = Theme.backgroundColor;
+        cell.contentView.backgroundColor = Theme.bg1Color;
         if (self.hasRequestData) {
             for (UIView *subview in cell.contentView.subviews) {
                 if ([subview isKindOfClass:UIActivityIndicatorView.class]) {
@@ -483,7 +483,7 @@ static BOOL isLoadInternalContactsOver = NO;
 - (UIView *)headerWithTitle:(NSString *)title {
     
     UIView *headerView = [UIView new];
-    headerView.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor blackColor] : [UIColor colorWithRGBHex:0xFAFAFA];
+    headerView.backgroundColor = Theme.bgelevateColor;
     
     UILabel *lbTitle = [UILabel new];
     lbTitle.font = [UIFont systemFontOfSize:14];

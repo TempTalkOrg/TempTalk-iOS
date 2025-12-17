@@ -253,6 +253,7 @@ const CGFloat kIconViewLength = 24;
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    OWSLogInfo(@"[Conversation Settings] viewDidLoad %@", self);
     self.disappearanceTimeIntervalEntity = [DTDisappearanceTimeIntervalConfig fetchDisappearanceTimeInterval];
     self.tableView.estimatedRowHeight = 45;
     self.tableView.rowHeight = UITableViewAutomaticDimension;
@@ -319,6 +320,7 @@ const CGFloat kIconViewLength = 24;
 - (void)viewDidAppear:(BOOL)animated
 {
     [super viewDidAppear:animated];
+    OWSLogInfo(@"[Conversation Settings] viewDidAppear %@", self);
     if (self.showVerificationOnAppear) {
         self.showVerificationOnAppear = NO;
         if (self.isGroupThread) {
@@ -331,6 +333,7 @@ const CGFloat kIconViewLength = 24;
 
 - (void)viewDidDisappear:(BOOL)animated {
     [super viewDidDisappear:animated];
+    OWSLogInfo(@"[Conversation Settings] viewDidDisappear %@", self);
 }
 
 - (void)applyTheme {
@@ -1324,6 +1327,7 @@ const CGFloat kIconViewLength = 24;
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    OWSLogInfo(@"[Conversation Settings] viewWillAppear %@", self);
     if (self.thread.isGroupThread) {
         [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
             [self.thread anyReloadWithTransaction:readTransaction];
@@ -1342,7 +1346,7 @@ const CGFloat kIconViewLength = 24;
 - (void)viewWillDisappear:(BOOL)animated
 {
     [super viewWillDisappear:animated];
-
+    OWSLogInfo(@"[Conversation Settings] viewWillDisappear %@", self);
     if (self.disappearingMessagesConfiguration.isNewRecord && !self.disappearingMessagesConfiguration.isEnabled) {
         // don't save defaults, else we'll unintentionally save the configuration and notify the contact.
         return;

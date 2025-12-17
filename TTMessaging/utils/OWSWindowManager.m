@@ -68,6 +68,12 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
 
 #pragma mark -
 
+typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
+    OWSRootWindowVisibilityStateUnknown = 0,
+    OWSRootWindowVisibilityStateVisible,
+    OWSRootWindowVisibilityStateHidden,
+};
+
 @interface OWSWindowManager () <ReturnToCallViewControllerDelegate>
 
 // UIWindowLevelNormal
@@ -80,15 +86,6 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
 // UIWindowLevel_CallView
 @property (nonatomic) UIWindow *callViewWindow;
 @property (nonatomic) UINavigationController *callNavigationController;
-
-// UIWindowLevel_AlertCallView
-//@property (nonatomic) UIWindow *alertCallViewWindow;
-//@property (nonatomic) UINavigationController *alertCallNavigationController;
-//@property (nonatomic, nullable) UIViewController *alertCallViewController;
-
-// UIWindowLevel_MessageActions
-//@property (nonatomic) UIWindow *menuActionsWindow;
-//@property (nonatomic, nullable) UIViewController *menuActionsViewController;
 
 // UIWindowLevel_Background if inactive,
 // UIWindowLevel_ScreenBlocking() if active.
@@ -103,6 +100,10 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
 @property (nonatomic) BOOL isPhotoLibraryAuth;
 
 @property (nonatomic, nullable) UIViewController *callViewController;
+
+@property (nonatomic) OWSRootWindowVisibilityState rootWindowVisibilityState;
+@property (nonatomic) BOOL isRootAppearanceTransitionInProgress;
+@property (nonatomic) BOOL rootAppearanceTargetVisible;
 
 @end
 
@@ -148,6 +149,10 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
     self.callViewWindow = [self createCallViewWindow:rootWindow];
     self.callViewWindow.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     
+    self.rootWindowVisibilityState = rootWindow.hidden ? OWSRootWindowVisibilityStateHidden : OWSRootWindowVisibilityStateVisible;
+    self.isRootAppearanceTransitionInProgress = NO;
+    self.rootAppearanceTargetVisible = self.rootWindowVisibilityState == OWSRootWindowVisibilityStateVisible;
+    
     [self ensureWindowState];
 }
 
@@ -188,34 +193,6 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
 
     [self ensureWindowState];
 }
-
-#pragma mark - Message Actions
-
-//- (BOOL)isPresentingMenuActions
-//{
-//    return self.menuActionsViewController != nil;
-//}
-
-//- (void)showMenuActionsWindow:(UIViewController *)menuActionsViewController
-//{
-//    OWSAssertDebug(self.menuActionsViewController == nil);
-
-//    self.menuActionsViewController = menuActionsViewController;
-//    self.menuActionsWindow.rootViewController = menuActionsViewController;
-//
-//    [self ensureWindowState];
-//}
-
-//- (void)hideMenuActionsWindow
-//{
-//    if (self.menuActionsWindow.rootViewController || self.menuActionsViewController) {
-//        
-//        self.menuActionsWindow.rootViewController = nil;
-//        self.menuActionsViewController = nil;
-//        
-//        [self ensureWindowState];
-//    }
-//}
 
 #pragma mark - Calls
 
@@ -368,7 +345,6 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
 {
     OWSAssertIsOnMainThread();
     OWSAssertDebug(self.rootWindow);
-//    OWSAssertDebug(self.returnToCallWindow);
     OWSAssertDebug(self.callViewWindow);
     OWSAssertDebug(self.screenBlockingWindow);
 
@@ -384,31 +360,28 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
     
     if (self.isScreenBlockActive) {
         // Show Screen Block.
-
+        OWSLogInfo(@"[Window] show screen windows");
         [self ensureScreenBlockWindowShown];
         [self ensureRootWindowHidden];
         [self ensureCallViewWindowHidden];
-//        [self ensureMessageActionsWindowHidden];
     } else if (self.callViewController && self.shouldShowCallView) {
         // Show Call View.
-
+        OWSLogInfo(@"[Window] show call windows");
         [self ensureCallViewWindowShown];
         [self ensureRootWindowHidden];
-//        [self ensureMessageActionsWindowHidden];
         [self ensureScreenBlockWindowHidden];
     } else if (self.callViewController) {
         // Show Root Window
-
+        OWSLogInfo(@"[Window] show Root windows call controller");
         [self ensureRootWindowShown];
         [self ensureCallViewWindowHidden];
         [self ensureScreenBlockWindowHidden];
         
     } else {
         // Show Root Window
-
+        OWSLogInfo(@"[Window] show Root windows default");
         [self ensureRootWindowShown];
         [self ensureCallViewWindowHidden];
-//        [self ensureMessageActionsWindowHidden];
         [self ensureScreenBlockWindowHidden];
     }
     
@@ -472,30 +445,6 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
     [self.returnToCallViewController stopAnimating];
 }
 
-/*
-- (void)ensureAlertCallViewWindowShown
-{
-    OWSAssertIsOnMainThread();
-
-    if (self.alertCallViewWindow.hidden) {
-        OWSLogInfo(@"%@ showing alert call view window.", self.logTag);
-    }
-
-    self.alertCallViewWindow.hidden = NO;
-}
-
-- (void)ensureAlertCallViewWindowHidden
-{
-    OWSAssertIsOnMainThread();
-
-    if (!self.alertCallViewWindow.hidden) {
-        OWSLogInfo(@"%@ hiding call window.", self.logTag);
-    }
-
-    self.alertCallViewWindow.hidden = YES;
-}
- */
-
 - (void)ensureCallViewWindowShown
 {
     OWSAssertIsOnMainThread();
@@ -522,29 +471,6 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
 
     self.callViewWindow.hidden = YES;
 }
-
-//- (void)ensureMessageActionsWindowShown
-//{
-//    OWSAssertIsOnMainThread();
-//
-//    if (self.menuActionsWindow.hidden) {
-//        OWSLogInfo(@"%@ showing message actions window.", self.logTag);
-//    }
-//
-//    // Do not make key, we want the keyboard to stay popped.
-//    self.menuActionsWindow.hidden = NO;
-//}
-//
-//- (void)ensureMessageActionsWindowHidden
-//{
-//    OWSAssertIsOnMainThread();
-//
-//    if (!self.menuActionsWindow.hidden) {
-//        OWSLogInfo(@"%@ hiding message actions window.", self.logTag);
-//    }
-//
-//    self.menuActionsWindow.hidden = YES;
-//}
 
 - (void)ensureScreenBlockWindowShown
 {

@@ -292,6 +292,19 @@ extension ConversationViewController {
             Logger.error("Message text is nil")
             return
         }
+        let maxTextBytes = 10 * 1024 * 1024
+        let inputByteCount = messageText.lengthOfBytes(using: .utf8)
+        if inputByteCount > maxTextBytes {
+            showAlert(
+                .alert,
+                title: nil,
+                msg: Localized("CONVERSATION_TOOLBAR_BYTE_LIMIT"),
+                cancelTitle: nil,
+                confirmTitle: Localized("TXT_CONFIRM_TITLE"),
+                confirmStyle: .default
+            )
+            return
+        }
         
         if let sensitiveWord = DTSensitiveWordsConfig.checkSensitiveWords(messageText) {
             let warning = String(format: Localized("SENSITIVE_WORDS_WARNING_TEXT"), sensitiveWord)

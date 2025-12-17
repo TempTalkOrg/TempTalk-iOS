@@ -23,24 +23,32 @@ public class ConversationMessageMapping: NSObject {
 
     @objc
     public var loadedUniqueIds: [String] {
-        return loadedInteractions.map { $0.uniqueId }
+        loadedInteractions.map { $0.uniqueId }
     }
-
-    @objc
-    public private(set) var loadedInteractions: [TSInteraction] = []
-
-    @objc
-    public var canLoadOlder = false
-
-    @objc
-    public var canLoadNewer = false
     
     @objc
-    public var canFetchOlder = false
+    private(set) var loadedInteractions: [TSInteraction] {
+        get {
+            _loadedInteractions.get()
+        }
+        set {
+            _loadedInteractions.set(newValue)
+        }
+    }
+    
+    private var _loadedInteractions: AtomicArray<TSInteraction> = AtomicArray(lock: .sharedGlobal)
     
     @objc
-    public var canFetchNewer = false
+    public var canLoadOlder = AtomicBool(false, lock: .sharedGlobal)
 
+    @objc
+    public var canLoadNewer = AtomicBool(false, lock: .sharedGlobal)
+    
+    @objc
+    public var canFetchOlder = AtomicBool(false, lock: .sharedGlobal)
+    
+    @objc
+    public var canFetchNewer = AtomicBool(false, lock: .sharedGlobal)
     
     @objc
     public required init(viewModel: ConversationViewModel, thread: TSThread, threadUniqueId: String) {
@@ -75,7 +83,7 @@ public class ConversationMessageMapping: NSObject {
     private let maxInteractionLimit: Int = 200
 
     // oldest saved message in a conversation has an index of 0, the most recent message has index conversationCount - 1.
-    private var loadedIndexSet = IndexSet()
+    private var loadedIndexSet = AtomicIndexSet(lock: .sharedGlobal)
 
     enum LoadWindowDirection {
         case before(interactionUniqueId: String)
@@ -125,7 +133,7 @@ public class ConversationMessageMapping: NSObject {
     @objc
     public func loadInitialMessagePage(focusMessageId: String?, transaction: SDSAnyReadTransaction) throws {
         try updateOldestUnreadInteraction(transaction: transaction)
-        Logger.info("[CMM:loadInitial] begin focusId=\(focusMessageId ?? "nil") oldestUnread=\(self.oldestUnreadInteraction?.uniqueId ?? "nil") thread=\(thread.uniqueId)")
+        Logger.info("[Conversation] begin focusId=\(focusMessageId ?? "nil") oldestUnread=\(self.oldestUnreadInteraction?.uniqueId ?? "nil") thread=\(thread.uniqueId)")
 
         if let focusMessageId = focusMessageId {
             try ensureLoaded(.around(interactionUniqueId: focusMessageId),
@@ -139,7 +147,7 @@ public class ConversationMessageMapping: NSObject {
            try loadNewestMessagePage(transaction: transaction)
         }
 
-        Logger.info("[CMM:loadInitial] end loadedIndices=\(loadedIndexSet.count) canLoadOlder=\(canLoadOlder) canLoadNewer=\(canLoadNewer) loadedInteractions=\(loadedInteractions.count) thread=\(thread.uniqueId)")
+        Logger.info("[Conversation] end loadedIndices=\(loadedIndexSet.count) canLoadOlder=\(canLoadOlder) canLoadNewer=\(canLoadNewer) loadedInteractions=\(loadedInteractions.count) thread=\(thread.uniqueId)")
     }
 
     // MARK: -
@@ -190,7 +198,7 @@ public class ConversationMessageMapping: NSObject {
         let requestRange = (lowerBound..<upperBound).clamped(to: 0..<Int(conversationSize))
         let requestSet = IndexSet(integersIn: requestRange)
 
-        let unfetchedSet = requestSet.subtracting(loadedIndexSet)
+        let unfetchedSet = requestSet.subtracting(loadedIndexSet.get())
         guard unfetchedSet.count > 0 else {
             //.newest 初始化没有数据，尝试拉取 hotdata
             
@@ -215,30 +223,34 @@ public class ConversationMessageMapping: NSObject {
         Logger.info("------ unfetching set: \(unfetchedSet), nsRange: \(nsRange) thread=\(thread.uniqueId)")
         let newItems = try fetchInteractions(nsRange: nsRange, transaction: transaction)
         
-        let isFetchContiguousWithAlreadyLoadedItems = requestSet.union(loadedIndexSet).isContiguous
-        if isFetchContiguousWithAlreadyLoadedItems, let minLoaded = loadedIndexSet.min() {
+        let isFetchContiguousWithAlreadyLoadedItems = requestSet.union(loadedIndexSet.get()).isContiguous
+        if isFetchContiguousWithAlreadyLoadedItems, let minLoaded = loadedIndexSet.get().min() {
             // If fetched items are just before the already loaded ones...
             if unfetchedSet.max()! < minLoaded {
-                self.loadedIndexSet = loadedIndexSet.union(requestSet)
+                self.loadedIndexSet.update { $0.formUnion(requestSet) }
                 let items = (newItems + self.loadedInteractions)
                 let trimmedItems = items.prefix(maxInteractionLimit)
                 if items.count != trimmedItems.count {
                     let trimCount = items.count - trimmedItems.count
-                    let trimmedSet = loadedIndexSet.suffix(trimCount)
-                    loadedIndexSet.subtract(IndexSet(trimmedSet))
+                    self.loadedIndexSet.update { current in
+                        let trimmedSet = current.suffix(trimCount)
+                        current.subtract(IndexSet(trimmedSet))
+                    }
                     Logger.verbose("trimmed newest \(trimCount) items")
                 }
                 self.loadedInteractions = Array(trimmedItems)
                 
                 // If fetched items are just after the already loaded ones...
             } else {
-                self.loadedIndexSet = loadedIndexSet.union(requestSet)
+                self.loadedIndexSet.update { $0.formUnion(requestSet) }
                 let items = (self.loadedInteractions + newItems)
                 let trimmedItems = items.suffix(maxInteractionLimit)
                 if items.count != trimmedItems.count {
                     let trimCount = items.count - trimmedItems.count
-                    let trimmedSet = loadedIndexSet.prefix(trimCount)
-                    loadedIndexSet.subtract(IndexSet(trimmedSet))
+                    self.loadedIndexSet.update { current in
+                        let trimmedSet = current.prefix(trimCount)
+                        current.subtract(IndexSet(trimmedSet))
+                    }
                     Logger.verbose("trimmed oldest \(trimCount) items")
                 }
                 self.loadedInteractions = Array(trimmedItems)
@@ -246,7 +258,7 @@ public class ConversationMessageMapping: NSObject {
         } else {
             // replace, rather than append, because the fetched records are not contiguous
             // with the existing loadedIndexSet
-            self.loadedIndexSet = requestSet
+            self.loadedIndexSet.set(requestSet)
             self.loadedInteractions = newItems
         }
 
@@ -301,12 +313,12 @@ public class ConversationMessageMapping: NSObject {
     func updateCanLoadMore(conversationSize: UInt) {
         if conversationSize > 0 {
             
-            self.canLoadOlder = !loadedIndexSet.contains(0)
-            self.canLoadNewer = !loadedIndexSet.contains(Int(conversationSize) - 1)
+            self.canLoadOlder.set(!loadedIndexSet.contains(0))
+            self.canLoadNewer.set(!loadedIndexSet.contains(Int(conversationSize) - 1))
         } else {
             
-            self.canLoadOlder = false
-            self.canLoadNewer = false
+            self.canLoadOlder.set(false)
+            self.canLoadNewer.set(false)
         }
         Logger.info("------ conversationSize:\(conversationSize) canLoadOlder: \(canLoadOlder) canLoadNewer: \(canLoadNewer) thread=\(thread.uniqueId)")
     }
@@ -378,7 +390,16 @@ public class ConversationMessageMapping: NSObject {
     }
 
     @objc
-    var oldestUnreadInteraction: TSInteraction?
+    var oldestUnreadInteraction: TSInteraction? {
+        get {
+            _oldestUnreadInteraction.get()
+        }
+        set {
+            _oldestUnreadInteraction.set(newValue)
+        }
+    }
+    private var _oldestUnreadInteraction: AtomicOptional<TSInteraction> = .init(nil, lock: .sharedGlobal)
+    
     private func updateOldestUnreadInteraction(transaction: SDSAnyReadTransaction) throws {
         self.oldestUnreadInteraction = try interactionFinder.oldestUnseenInteraction(transaction: transaction)
     }
@@ -389,9 +410,9 @@ public class ConversationMessageMapping: NSObject {
         }
         let conversationSize = interactionFinder.count(transaction: transaction)
 
-        let hasLoadedBottomEdge = !canLoadNewer // contain conversationSize-1
+        let hasLoadedBottomEdge = !canLoadNewer.get() // contain conversationSize-1
         guard hasLoadedBottomEdge else {
-            let reloadingSet = loadedIndexSet
+            let reloadingSet = loadedIndexSet.get()
             let nsRange: NSRange = NSRange(location: reloadingSet.min()!, length: reloadingSet.count)
             Logger.info("reloadingSet: \(reloadingSet), nsRange: \(nsRange) thread=\(thread.uniqueId)")
             loadedInteractions = try fetchInteractions(nsRange: nsRange, transaction: transaction)
@@ -399,7 +420,7 @@ public class ConversationMessageMapping: NSObject {
             return
         }
 
-        guard var oldestLoadedIndex = loadedIndexSet.min() else {
+        guard var oldestLoadedIndex = loadedIndexSet.get().min() else {
             // no existing interactions until now
             try loadInitialMessagePage(focusMessageId: nil, transaction: transaction)
             return
@@ -417,14 +438,14 @@ public class ConversationMessageMapping: NSObject {
         let updatingSet = IndexSet(integersIn: oldestLoadedIndex..<Int(conversationSize))
         guard updatingSet.count > 0 else {
             Logger.verbose("conversation is now empty")
-            loadedIndexSet = []
+            loadedIndexSet.set([])
             loadedInteractions = []
             updateCanLoadMore(conversationSize: conversationSize)
             return
         }
 
         Logger.info("loadedIndexSet: \(loadedIndexSet) thread=\(thread.uniqueId)")
-        loadedIndexSet = updatingSet
+        loadedIndexSet.set(updatingSet)
         let nsRange: NSRange = NSRange(location: updatingSet.min()!, length: updatingSet.count)
         Logger.info("updatingSet: \(updatingSet), nsRange: \(nsRange) thread=\(thread.uniqueId)")
         loadedInteractions = try fetchInteractions(nsRange: nsRange, transaction: transaction)

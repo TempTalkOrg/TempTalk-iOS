@@ -110,6 +110,8 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:archivalDate:conver
 
 - (BOOL)businessFromVega;
 
+- (NSString *)groupThreadNameWithMemberCount;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -101,12 +101,15 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
     
     if(!forceDownload){
         for (TSAttachmentPointer *attachmentPointer in items) {
+            
             UInt32 byteCount = attachmentPointer.byteCount;
             
             if (byteCount >= kAttachmentAutoDownloadMaxSize) {
                 OWSLogInfo(@"Ignore download for message: %@, reason: over max file size", message.uniqueId);
                 [items removeObject:attachmentPointer];
                 
+            } else if ([attachmentPointer.contentType isEqualToString:OWSMimeTypeOversizeTextMessage]) {
+                // auto download
             } else if ([MIMETypeUtil isAudio:attachmentPointer.contentType]) {
                 // auto download
             } else if (CurrentAppContext().isNSE) { // 如果是 NSE 入库的消息，不自动下载, 历史消息

@@ -21,27 +21,37 @@ extension ConversationViewController: ConversationViewModelDelegate {
            set { viewState.isNeedReloadAfterAppEnterForeground = newValue }
        }
 
-       func reloadAfterAppEnterForegroundIfNeed() {
-           if isNeedReloadAfterAppEnterForeground {
-               isNeedReloadAfterAppEnterForeground = false
+    func reloadAfterAppEnterForegroundIfNeed() {
+        if isNeedReloadAfterAppEnterForeground {
+            isNeedReloadAfterAppEnterForeground = false
 
-               let reloadUpdate = ConversationUpdate.reload()
-               databaseStorage.uiRead { transation in
-                   self._conversationViewModelDidUpdate(
-                       reloadUpdate,
-                       transaction: transation,
-                       completion: nil
-                   )
-               }
-           }
-       }
+            let reloadUpdate = ConversationUpdate.reload()
+            databaseStorage.uiRead { transation in
+                self._conversationViewModelDidUpdate(
+                    reloadUpdate,
+                    transaction: transation,
+                    completion: nil
+                )
+            }
+        }
+    }
+    
+    func conversationViewModelDidLoadInitialMessages(completion: @escaping ((Bool) -> Void)) {
+        guard isViewVisible else {
+            Logger.info("[Conversation] queue refresh ui for initial messages until view visible, threadId:\(thread.uniqueId)")
+            storePendingInitialLoadCompletion(completion)
+            return
+        }
+        Logger.info("[Conversation] handle initial messages, threadId:\(thread.uniqueId)")
+        performInitialMessagesRefresh(completion: completion)
+    }
     
     func conversationViewModelDidUpdate(
         _ conversationUpdate: ConversationUpdate,
         transaction: SDSAnyReadTransaction?,
         completion: ((Bool) -> Void)? = nil
     ) {
-        Logger.info("[Conversation] type=\(conversationUpdate.conversationUpdateType) hasTx=\(transaction != nil) shouldObserve=\(shouldObserveDBModifications) isViewLoaded=\(isViewLoaded)")
+        Logger.info("[Conversation] type=\(conversationUpdate.conversationUpdateType)  shouldObserve=\(shouldObserveDBModifications) isViewLoaded=\(isViewLoaded)")
         if let transaction {
             _conversationViewModelDidUpdate(
                 conversationUpdate,
@@ -67,24 +77,16 @@ extension ConversationViewController: ConversationViewModelDelegate {
         AssertIsOnMainThread()
         
         // FIX: https://developer.apple.com/forums/thread/728797
-        if !isViewLoaded || !shouldObserveDBModifications {
+        if !isViewLoaded {
             Logger.info("[Conversation] ignored (isViewLoaded=\(isViewLoaded), shouldObserve=\(shouldObserveDBModifications)) updateType=\(conversationUpdate.conversationUpdateType) threadId:\(thread.uniqueId)")
             // It's safe to ignore updates before the view loads;
             // viewWillAppear will call resetContentAndLayout.
             completion?(false)
+            return
             
-            
-            // 3.1.8 当应用进入后台，websocket 还未断开时，仍然能接收到 database change，
-            // 但此时 shouldObserveDBModifications = false，无法触发刷新，而 app 返回前台后，若没有新的数据，也无法刷新
-            // 为了解决上述问题，当应用进入后台且接收到 database change 时，记录下标志位 isNeedReloadAfterAppEnterForeground，
-            // 在应用返回前台时进行刷新
-            if CurrentAppContext().isInBackground() {
-                Logger.info("[Conversation] ignore refresh when app in background, threadId:\(thread.uniqueId)")
-                isNeedReloadAfterAppEnterForeground = true
-            } else {
-                Logger.info("[Conversation] ignore refresh when isViewDidLoaded:\(isViewLoaded), shouldObserveDBModifications:\(shouldObserveDBModifications) threadId:\(thread.uniqueId)")
-            }
-            
+        } else if !shouldObserveDBModifications && CurrentAppContext().isInBackground() {
+            Logger.info("[Conversation] ignore refresh when isViewDidLoaded:\(isViewLoaded), shouldObserveDBModifications:\(shouldObserveDBModifications) threadId:\(thread.uniqueId)")
+            isNeedReloadAfterAppEnterForeground = true
             return
         }
         
@@ -119,6 +121,7 @@ extension ConversationViewController: ConversationViewModelDelegate {
             Logger.info("[Conversation] diff update, items before=\(viewItems.count) threadId:\(thread.uniqueId)")
             updateWithDiff(conversationUpdate, completion: completion)
         default:
+            Logger.info("[Conversation] default update threadId:\(thread.uniqueId)")
             completion?(true)
             break
         }
@@ -285,6 +288,66 @@ extension ConversationViewController: ConversationViewModelDelegate {
     }
 }
 
+// MARK: - Initial Load Coordination
+
+extension ConversationViewController {
+    private func performInitialMessagesRefresh(completion: @escaping ((Bool) -> Void)) {
+        Logger.info("[Conversation] refresh ui for initial messages, threadId:\(thread.uniqueId)")
+        updateShowLoadMoreHeaders()
+        databaseStorage.uiRead { transaction in
+            self.resetContentAndLayout(transaction: transaction) { [weak self] isFinished in
+                guard let self else { return }
+                if isFinished {
+                    self.updateLastVisibleSortId()
+                }
+                
+                completion(isFinished)
+                
+                self.updateContentInsets(animated: false, forceScrollToDefaultPosition: true)
+                self.conversationViewModel.focusMessageIdOnOpen = nil
+                
+                if self.viewHasEverAppeared {
+                    self.markVisibleMessagesAsRead()
+                }
+            }
+        }
+    }
+    
+    private func storePendingInitialLoadCompletion(_ completion: @escaping (Bool) -> Void) {
+        if let staleCompletion = consumePendingInitialLoadCompletion() {
+            staleCompletion(false)
+        }
+        Logger.info("[Conversation] storePendingInitialLoadCompletion messages, threadId:\(thread.uniqueId)")
+        viewState.pendingInitialLoadCompletion = completion
+        viewState.hasPendingInitialLoad = true
+    }
+    
+    private func consumePendingInitialLoadCompletion() -> ((Bool) -> Void)? {
+        let completion = viewState.pendingInitialLoadCompletion
+        viewState.pendingInitialLoadCompletion = nil
+        viewState.hasPendingInitialLoad = false
+        Logger.info("[Conversation] consumePendingInitialLoadCompletion messages, threadId:\(thread.uniqueId)")
+        return completion
+    }
+    
+    func processPendingInitialMessagesIfNeeded() {
+        guard isViewVisible,
+              viewState.hasPendingInitialLoad,
+              let completion = consumePendingInitialLoadCompletion() else {
+            Logger.error("[Conversation] resume pending initial messages refresh,isViewVisible=\(isViewVisible) hasPendingInitialLoad = \(viewState.hasPendingInitialLoad) threadId:\(thread.uniqueId)")
+            return
+        }
+        Logger.info("[Conversation] resume pending initial messages refresh, threadId:\(thread.uniqueId)")
+        performInitialMessagesRefresh(completion: completion)
+    }
+    
+    func cancelPendingInitialMessagesIfNeeded() {
+        guard let completion = consumePendingInitialLoadCompletion() else { return }
+        Logger.info("[Conversation] cancel pending initial messages refresh, threadId:\(thread.uniqueId)")
+        completion(false)
+    }
+}
+
 // MARK: - Refresh UI Timer
 
 extension ConversationViewController {
@@ -310,6 +373,7 @@ extension ConversationViewController {
     
     @objc func updateShouldObserveDBModifications() {
         let isAppForegroundAndActive = CurrentAppContext().isAppForegroundAndActive()
+        Logger.info("[Conversation] ObserveDBModifications isViewVisible is \(isViewVisible) isAppForegroundAndActive is \(isAppForegroundAndActive)")
         shouldObserveDBModifications = isViewVisible && isAppForegroundAndActive
     }
     
@@ -333,7 +397,7 @@ extension ConversationViewController {
             !isViewCompletelyAppeared ||
             !isViewVisible ||
             !CurrentAppContext().isAppForegroundAndActive() ||
-            !viewHasEverAppeared {
+            !viewHasEverAppeared || conversationViewModel.isLoadingInitialMessages() {
             return
         }
         

@@ -391,6 +391,12 @@ public class AtomicSet<T: Hashable> {
         self.lock = lock
     }
     
+    public func set(_ values: Set<T>) {
+        lock.withLock {
+            self.values = values
+        }
+    }
+    
     public func insert(_ value: T) {
         lock.withLock { _ = self.values.insert(value) }
     }
@@ -447,3 +453,93 @@ public struct Atomic<Value> {
     }
 }
 
+// MARK: -
+
+public class AtomicIndexSet {
+    private let lock: UnfairLock
+    private var values: IndexSet
+    
+    public init(_ values: IndexSet = IndexSet(), lock: UnfairLock) {
+        self.values = values
+        self.lock = lock
+    }
+    
+    public func get() -> IndexSet {
+        lock.withLock { values }
+    }
+    
+    public func set(_ values: IndexSet) {
+        lock.withLock { self.values = values }
+    }
+    
+    public func contains(_ index: Int) -> Bool {
+        lock.withLock { values.contains(index) }
+    }
+    
+    public var isEmpty: Bool {
+        lock.withLock { values.isEmpty }
+    }
+    
+    public var count: Int {
+        lock.withLock { values.count }
+    }
+    
+    public var first: Int? {
+        lock.withLock { values.first }
+    }
+    
+    public var allValues: IndexSet {
+        lock.withLock { values }
+    }
+    
+    public func insert(_ index: Int) {
+        lock.withLock {
+            values.insert(integersIn: index..<(index + 1))
+        }
+    }
+    
+    public func insert(integersIn range: Range<Int>) {
+        lock.withLock { values.insert(integersIn: range) }
+    }
+    
+    public func formUnion(_ other: IndexSet) {
+        lock.withLock { values.formUnion(other) }
+    }
+    
+    public func union(_ other: IndexSet) -> IndexSet {
+        lock.withLock { values.union(other) }
+    }
+    
+    public func subtract(_ other: IndexSet) {
+        lock.withLock { values.subtract(other) }
+    }
+    
+    @discardableResult
+    public func update<Result>(_ block: (inout IndexSet) throws -> Result) rethrows -> Result {
+        try lock.withLock { try block(&values) }
+    }
+    
+    @discardableResult
+    public func remove(_ index: Int) -> Bool {
+        lock.withLock {
+            let existed = values.contains(index)
+            if existed {
+                values.remove(integersIn: index..<(index + 1))
+            }
+            return existed
+        }
+    }
+    
+    public func remove(integersIn range: Range<Int>) {
+        lock.withLock { values.remove(integersIn: range) }
+    }
+    
+    @discardableResult
+    public func removeAllValues() -> IndexSet {
+        lock.withLock {
+            let result = values
+            values.removeAll()
+            return result
+        }
+    }
+}

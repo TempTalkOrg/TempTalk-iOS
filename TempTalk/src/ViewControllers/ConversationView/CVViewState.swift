@@ -73,6 +73,9 @@ class CVViewState: NSObject {
     var isViewVisible = false
     var isUserScrolling = false
     var isWaitingForDeceleration = false
+    // 偶现isViewVisible因为顺序问题。不正确的问题
+    var hasPendingInitialLoad = false
+    var pendingInitialLoadCompletion: ((Bool) -> Void)?
     
     var viewHasEverAppeared = false
     var shouldAnimateKeyboardChanges = false
@@ -200,10 +203,15 @@ extension ConversationViewController {
             viewState.isViewVisible
         }
         set {
+            let wasVisible = viewState.isViewVisible
             viewState.isViewVisible = newValue
             // 为解决 modal 半屏 viewController 后，图片不展示问题，不去更改 cellIsVisible
             // updateCellsVisible()
             updateShouldObserveDBModifications()
+            if newValue, !wasVisible {
+                Logger.info("[Conversation] deal pending task isViewVisible is \(newValue) wasVisible is \(wasVisible)")
+                processPendingInitialMessagesIfNeeded()
+            }
         }
     }
     

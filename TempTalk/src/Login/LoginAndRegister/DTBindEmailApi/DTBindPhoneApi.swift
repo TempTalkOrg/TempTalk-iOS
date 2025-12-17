@@ -71,7 +71,7 @@ public class DTBindPhoneApi : DTBaseAPI {
                 if(entity.status != 0){
                     guard let failure = failure else { return }
                     let error = NSError(domain: "/v2/auth/bind/sms/send", code: entity.status ,userInfo: [NSLocalizedDescriptionKey:entity.reason])
-                    failure(error,nil)
+                    failure(error,entity)
                 } else {
                     sucess(entity)
                 }

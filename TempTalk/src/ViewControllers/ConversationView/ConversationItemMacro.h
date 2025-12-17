@@ -14,6 +14,7 @@ typedef NS_ENUM(int, ConversationViewMode) {
     ConversationViewMode_Main = 0,//主Conversation
     ConversationViewMode_NormalPresent,//X关闭按钮，threadName居中显示，例：会议反馈bot
     ConversationViewMode_Confidential,//机密消息模式
+    ConversationViewMode_Thread,//Thread 模式
     ConversationViewMode_UnKnow = 100,
 };
 

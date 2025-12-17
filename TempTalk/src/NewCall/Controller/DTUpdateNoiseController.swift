@@ -60,9 +60,24 @@ class DTUpdateNoiseController: OWSTableViewController {
             name: NSNotification.Name("CallStateDidChange"),
             object: nil
         )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(criticalAlertNotifyDidChange),
+            name: NSNotification.Name("DTGroupCriticalAlertChangedNotification"),
+            object: nil
+        )
     }
     
     @objc private func callStateDidChange() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            // 重新加载表格内容以更新布局
+            self.updateTableContents()
+        }
+    }
+    
+    @objc private func criticalAlertNotifyDidChange() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             // 重新加载表格内容以更新布局
@@ -197,6 +212,11 @@ class DTUpdateNoiseController: OWSTableViewController {
 
             switch call.callType {
             case .private:
+                
+                if DTMeetingManager.shared.openCallCamera {
+                    items.append(switchCameraTextView)
+                }
+                
                 if !DTMeetingManager.shared.inMeeting, call.callState == .outgoing {
                     items.append(criticalTextView)
                 }

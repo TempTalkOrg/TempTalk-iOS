@@ -28,11 +28,11 @@ class ConversationCellRenderItemBuilder: NSObject {
         forceRebuildIds: [String],
         style: ConversationStyle
     ) -> Promise<([ConversationCellRenderItem], [String: ConversationCellRenderItem])> {
-        Logger.info("[CCB] viewItems cancelAllOperations")
+        Logger.info("[Conversation] viewItems cancelAllOperations")
         operationQueue.cancelAllOperations()
         
         guard !viewItems.isEmpty else {
-            Logger.info("[CCB] viewItems is empty")
+            Logger.info("[Conversation] viewItems is empty")
             return .value(([], [:]))
         }
         
@@ -55,7 +55,7 @@ class ConversationCellRenderItemBuilder: NSObject {
         }
         
         if operations.isEmpty {
-            Logger.info("[CCB] operations is empty renderItems = \(renderItems.count)")
+            Logger.info("[Conversation] operations is empty renderItems = \(renderItems.count)")
             return .value((renderItems, renderItemsMap))
         }
         
@@ -73,10 +73,10 @@ class ConversationCellRenderItemBuilder: NSObject {
                     }
                 }
                 future.resolve((renderItems, renderItemsMap))
-                Logger.info("[CCB] promise future renderItems")
+                Logger.info("[Conversation] promise future renderItems")
                 
             } didCancelled: {
-                Logger.info("[CCB] operations is canceled")
+                Logger.info("[Conversation] operations is canceled")
                 future.reject(PromiseError.cancelled)
             }
             finalOperation.qualityOfService = .userInteractive

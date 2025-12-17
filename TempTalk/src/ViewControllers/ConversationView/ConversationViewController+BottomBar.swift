@@ -144,6 +144,7 @@ extension ConversationViewController {
         AssertIsOnMainThread()
         
         guard self.isViewVisible else {
+            Logger.error("[Conversation] current isViewVisible is false")
             return
         }
         
@@ -155,11 +156,22 @@ extension ConversationViewController {
             return
         }
         
-        self.bottomBarBottomConstraint?.constant = -self.inputAccessoryPlaceholder.keyboardOverlap
+        guard let bottomBarBottomConstraint = bottomBarBottomConstraint,
+              let bottomBarSuperview = bottomBar.superview else {
+            Logger.error("[Conversation] bottombar superview is nil")
+            return
+        }
+        let bottomBarPosition = -inputAccessoryPlaceholder.keyboardOverlap
+        let didChange = bottomBarBottomConstraint.constant != bottomBarPosition
+        guard didChange else {
+            Logger.error("[Conversation] bottombar constant has not change")
+            return
+        }
+        bottomBarBottomConstraint.constant = bottomBarPosition
         
         // We always want to apply the new bottom bar position immediately,
         // as this only happens during animations (interactive or otherwise)
-        self.bottomBar.superview?.layoutIfNeeded()
+        bottomBarSuperview.layoutIfNeeded()
     }
     
     func hideInputIfNeeded() {
@@ -177,7 +189,7 @@ extension ConversationViewController {
         }
     }
     
-    func updateContentInsets(animated: Bool) {
+    func updateContentInsets(animated: Bool, forceScrollToDefaultPosition: Bool = false) {
         AssertIsOnMainThread()
         
         // Don't update the bottom bar position if an interactive pop is in progress
@@ -192,17 +204,7 @@ extension ConversationViewController {
         
         let oldInsets = collectionView.contentInset
         var newInsets = oldInsets
-        
-        // Ensure the latest bottomBar height is retrieved to avoid using stale height values
-        self.bottomBar.setNeedsLayout()
-        self.bottomBar.layoutIfNeeded()
-        
-        // Recalculate the bottom padding to ensure precision
-        let keyboardOverlap = inputAccessoryPlaceholder.keyboardOverlap
-        let bottomBarHeight = bottomBar.bounds.height
-        let bottomLayoutGuideLength = self.bottomLayoutGuide.length
-        
-        newInsets.bottom = max(0, keyboardOverlap + bottomBarHeight - bottomLayoutGuideLength)
+        newInsets.bottom = inputAccessoryPlaceholder.keyboardOverlap + bottomBar.height - view.safeAreaInsets.bottom
         
         let wasScrolledToBottom = self.isScrolledToBottom
         
@@ -217,7 +219,7 @@ extension ConversationViewController {
         
         func adjustInsets() {
             // Adjust content offset to prevent the presented keyboard from obscuring content.
-            if !self.viewHasEverAppeared {
+            if !self.viewHasEverAppeared || forceScrollToDefaultPosition {
                 scrollToDefaultPosition(animated: false)
                 
             } else if wasScrolledToBottom {
@@ -233,7 +235,7 @@ extension ConversationViewController {
                 if insetChange != 0 {
                     // The content offset can go negative, up to the size of the top layout guide.
                     // This accounts for the extended layout under the navigation bar.
-                    let minYOffset = -self.topLayoutGuide.length
+                    let minYOffset = -view.safeAreaInsets.top
                     let newYOffset = CGFloatClamp(oldYOffset + insetChange, minYOffset, safeContentHeight)
                     let newOffset = CGPointMake(0, newYOffset)
                     collectionView.setContentOffset(newOffset, animated: false)

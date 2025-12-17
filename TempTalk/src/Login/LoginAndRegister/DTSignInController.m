@@ -417,7 +417,7 @@ NSString *const kSendEmailCodeForChangePhoneSucess = @"kSendEmailCodeForChangePh
         _countryCodeBtn = [DTLayoutButton new];
         _countryCodeBtn.spacing = 4;
         _countryCodeBtn.titleAlignment = DTButtonTitleAlignmentTypeLeft;
-        [_countryCodeBtn setTitle:@"+986" forState:UIControlStateNormal];
+        [_countryCodeBtn setTitle:@"+86" forState:UIControlStateNormal];
         [_countryCodeBtn setImage:[UIImage imageNamed:@"input_arrow"] forState:UIControlStateNormal];
         [_countryCodeBtn setTitleColor:Theme.primaryTextColor forState:UIControlStateNormal];
         _countryCodeBtn.titleLabel.font = [UIFont systemFontOfSize:14];

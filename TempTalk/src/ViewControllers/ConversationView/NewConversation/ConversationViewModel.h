@@ -91,6 +91,8 @@ typedef NS_ENUM(NSUInteger, ConversationUpdateItemType) {
 
 @protocol ConversationViewModelDelegate <NSObject>
 
+- (void)conversationViewModelDidLoadInitialMessagesWithCompletion:(void (^)(BOOL))completion;
+
 - (void)conversationViewModelDidUpdate:(ConversationUpdate *)conversationUpdate
                            transaction:(nullable SDSAnyReadTransaction *)transaction
                             completion:(void (^ __nullable)(BOOL))completion;
@@ -113,6 +115,8 @@ typedef NS_ENUM(NSUInteger, ConversationUpdateItemType) {
 
 @interface ConversationViewModel : NSObject
 
+@property (nonatomic, weak) id<ConversationViewModelDelegate> delegate;
+
 @property (nonatomic, readonly) ConversationViewState *viewState;
 @property (nonatomic, nullable) NSString *focusMessageIdOnOpen;
 @property (nonatomic, readonly) ConversationViewMode conversationMode;
@@ -126,8 +130,6 @@ typedef NS_ENUM(NSUInteger, ConversationUpdateItemType) {
           conversationViewMode:(ConversationViewMode)conversationViewMode
                    botViewItem:(nullable id<ConversationViewItem>)botViewItem NS_DESIGNATED_INITIALIZER;
 
-- (void)configWithDelegate:(id<ConversationViewModelDelegate>)delegate;
-
 - (void)clearUnreadMessagesIndicator;
 
 - (nullable NSIndexPath *)indexPathForViewItem:(id<ConversationViewItem>)viewItem;
@@ -135,6 +137,9 @@ typedef NS_ENUM(NSUInteger, ConversationUpdateItemType) {
 - (void)viewDidResetContentAndLayoutWithTransaction:(SDSAnyReadTransaction *)transaction;
 
 - (void)viewDidLoad;
+
+- (void)loadInitialMessages;
+- (BOOL)isLoadingInitialMessages;
 
 - (BOOL)canLoadOlderItems;
 - (BOOL)canLoadNewerItems;

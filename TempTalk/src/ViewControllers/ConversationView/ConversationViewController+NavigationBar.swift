@@ -195,31 +195,27 @@ extension ConversationViewController {
             return attributedName
         }
         
-        func titleForGroupThread() -> NSAttributedString? {
-            var threadName: String = .empty
+        func titleForGroupThread(_ thread: TSGroupThread) -> NSAttributedString? {
+            var groupThread: TSGroupThread?
             databaseStorage.read { transaction in
+                groupThread = TSGroupThread.anyFetchGroupThread(
+                    uniqueId: thread.uniqueId,
+                    transaction: transaction
+                )
                 self.thread.anyReload(transaction: transaction)
-                threadName = self.thread.name(with: transaction)
+                Logger.info("[Conversation] current groupThread threadId is \(groupThread?.uniqueId) current thread \(self.thread.uniqueId)")
             }
-            
-            guard let groupThread = self.thread as? TSGroupThread else {
+            guard let groupThread else {
+                Logger.error("[Conversation] current groupThread is empty")
                 return nil
             }
-            
-            var membersCount = groupThread.recipientIdentifiers.count
-            let isLocalUserInGroup = groupThread.isLocalUserInGroup()
-            
-            var name: String
-            if membersCount == 0 {
-                name = threadName
-            } else {
-                membersCount = isLocalUserInGroup ? membersCount + 1 : membersCount
-                name = "\(threadName)(\(membersCount))"
-            }
-            
+
             headerView.isExternal = false
             
-            return NSAttributedString(string: name, attributes: [.foregroundColor: Theme.primaryTextColor])
+            return NSAttributedString(
+                string: groupThread.groupThreadNameWithMemberCount(),
+                attributes: [.foregroundColor: Theme.primaryTextColor]
+            )
         }
         
         
@@ -234,14 +230,17 @@ extension ConversationViewController {
             var title: NSAttributedString?
             if let contractThread = self.thread as? TSContactThread {
                 title = titleForContactThread(contractThread)
+                Logger.info("[Conversation] contactThread theadName \(title)")
             }
-            if self.thread is TSGroupThread {
-                title = titleForGroupThread()
+            if let groupThread = self.thread as? TSGroupThread {
+                title = titleForGroupThread(groupThread)
+                Logger.info("[Conversation] groupThread theadName \(title)")
             }
             if let currentTitle = title,
                thread.messageExpiresInSeconds() > 0 {
                 title = DTConversactionSettingUtils.msgDisappearingTipsOnThread(messageExpiry: TimeInterval(thread.messageExpiresInSeconds()), threadName: currentTitle, font: headerView.titlePrimaryFont)
             }
+            Logger.error("[Conversation] failure: unexpected thread: \(self.thread)")
             return title
         }()
         
@@ -252,6 +251,7 @@ extension ConversationViewController {
         }
     }
     
+    // 更新子标题的数据
     func updateNavigationBarSubtitleLabel() {
         let hasCompactHeader = traitCollection.verticalSizeClass == .compact
         if hasCompactHeader {

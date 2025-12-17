@@ -29,7 +29,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)dealloc
 {
     // Surface memory leaks by logging the deallocation of view controllers.
-    OWSLogInfo(@"Dealloc: %@", self.class);
+    OWSLogInfo(@"[viewController] Dealloc: %@", self.class);
 
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
@@ -43,6 +43,7 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     [self observeActivation];
+    OWSLogInfo(@"[viewController] init: %@", self.class);
 
     return self;
 }
@@ -51,6 +52,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    OWSLogInfo(@"[viewController] viewWillAppear: %@", self.class);
     if (self.tabBarController) {
         [DTWatermarkHelper addWatermarkToTheView:self.tabBarController.view];
     }else {
@@ -69,12 +71,14 @@ NS_ASSUME_NONNULL_BEGIN
 }
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    OWSLogInfo(@"[viewController] viewWillDisappear: %@", self.class);
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationUserDidTakeScreenshotNotification object:nil];
 }
 
 - (void)viewDidAppear:(BOOL)animated
 {
     [super viewDidAppear:animated];
+    OWSLogInfo(@"[viewController] viewDidAppear: %@", self.class);
 
     self.shouldAnimateBottomLayout = YES;
 #ifdef DEBUG
@@ -125,6 +129,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)viewDidDisappear:(BOOL)animated
 {
     [super viewDidDisappear:animated];
+    OWSLogInfo(@"[viewController] viewDidDisappear: %@", self.class);
 
     self.shouldAnimateBottomLayout = NO;
     
@@ -138,6 +143,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    OWSLogInfo(@"[viewController] viewDidLoad: %@", self.class);
     self.navigationItem.backButtonTitle = Localized(@"BACK_BUTTON", @"");
 
     if (self.shouldUseTheme) {

@@ -9,6 +9,7 @@
 #import "DTContactsViewController.h"
 #import <JXPagingView/JXPagerListRefreshView.h>
 #import <JXCategoryView/JXCategoryView.h>
+#import <TTMessaging/OWSWindowManager.h>
 #import "NewContactThreadViewController.h"
 #import "DTGroupsViewController.h"
 #import "Yelling-Swift.h"
@@ -61,7 +62,7 @@
     
     if (!_titleView) {
         _titleView = [[JXCategoryTitleView alloc] initWithFrame:CGRectMake(0, 0, kScreenWidth, 36)];
-        _titleView.backgroundColor = Theme.backgroundColor;
+        _titleView.backgroundColor = Theme.bg1Color;
         _titleView.delegate = self;
         _titleView.titleDataSource = self;
         _titleView.titleFont = [UIFont systemFontOfSize:15];
@@ -96,8 +97,8 @@
     
     if (!_pagerView) {
         _pagerView = [[JXPagerListRefreshView alloc] initWithDelegate:self];
-        _pagerView.mainTableView.backgroundColor = Theme.backgroundColor;
-        _pagerView.listContainerView.listCellBackgroundColor = Theme.backgroundColor;
+        _pagerView.mainTableView.backgroundColor = Theme.bgelevateColor;
+        _pagerView.listContainerView.listCellBackgroundColor = Theme.bgelevateColor;
     }
     return _pagerView;;
 }
@@ -146,8 +147,8 @@
 - (void)applyTheme {
     [super applyTheme];
 
-    self.pagerView.listContainerView.listCellBackgroundColor = Theme.backgroundColor;
-    self.titleView.backgroundColor = Theme.backgroundColor;
+    self.pagerView.listContainerView.listCellBackgroundColor = Theme.bgelevateColor;
+    self.titleView.backgroundColor = Theme.bg1Color;
     self.titleView.titleSelectedColor = Theme.alertCancelColor;
     self.indicator.indicatorColor = Theme.alertCancelColor;
     self.separator.backgroundColor = Theme.hairlineColor;

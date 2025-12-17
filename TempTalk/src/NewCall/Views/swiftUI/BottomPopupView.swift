@@ -21,14 +21,15 @@ struct BottomPopupView: View {
         
         let buttons = buildButtons()
         let count = buttons.count
+        let kScreenWidth: CGFloat = min(screenWidth, screenHeight)
         
         // 根据数量自适应 spacing
         let spacing: CGFloat = {
             switch count {
             case 1: return 0
             case 2: return 100
-            case 3: return 50
-            case 4: return 15
+            case 3: return 30
+            case 4: return 0
             default: return 40
             }
         }()
@@ -64,13 +65,13 @@ struct BottomPopupView: View {
                         SwitchView(isOn: $isSwitchOn)
                     }
                     .padding(.horizontal, 20)
-                    .frame(width: 355, height: 55)
+                    .frame(width: kScreenWidth - 20, height: 55)
                     .background(Color(hex: 0x474D57).cornerRadius(8))
                     .padding(.top, -10)
 
                     Spacer()
                 }
-                .frame(width: 375, height: 210)
+                .frame(width: kScreenWidth, height: 210)
                 .background(
                     Color(hex: 0x2B3139)
                         .clipShape(RoundedCorner(radius: 10, corners: [.topLeft, .topRight]))
@@ -97,6 +98,7 @@ struct BottomPopupView: View {
     private func buildButtons() -> [AnyView] {
             var result: [AnyView] = []
             let call = meetingManager.currentCall
+            let buttonWidth: CGFloat = 100
             
             result.append(AnyView(
                 VerticalIconTextButton(
@@ -105,7 +107,7 @@ struct BottomPopupView: View {
                 ) {
                     meetingManager.roomContext?.presentInviteView()
                 }
-                .frame(width: 80, height: 76)
+                .frame(width: buttonWidth, height: 76)
             ))
             
             if call.callType != .private {
@@ -130,7 +132,7 @@ struct BottomPopupView: View {
                             }
                         }
                     }
-                    .frame(width: 80, height: 76)
+                    .frame(width: buttonWidth, height: 76)
                 ))
             }
             
@@ -142,7 +144,7 @@ struct BottomPopupView: View {
                     ) {
                         meetingManager.switchCamera()
                     }
-                    .frame(width: 80, height: 76)
+                    .frame(width: buttonWidth, height: 76)
                 ))
             }
             
@@ -161,7 +163,7 @@ struct BottomPopupView: View {
                             )
                         }
                     }
-                    .frame(width: 80, height: 76)
+                    .frame(width: buttonWidth, height: 76)
                 ))
             }
             

@@ -134,16 +134,13 @@ extern NSNotificationName const ThemeDidChangeNotification;
 
 @property (class, readonly, nonatomic) UIColor *toastForegroundColor;
 @property (class, readonly, nonatomic) UIColor *toastBackgroundColor;
-
 @property (class, readonly, nonatomic) UIColor *scrollButtonBackgroundColor;
-
 @property (class, readonly, nonatomic) UIColor *alertConfirmColor;
 @property (class, readonly, nonatomic) UIColor *alertCancelColor;
-
 @property (class, readonly, nonatomic) UIColor *destructiveRed;
-
 @property (class, readonly, nonatomic) UIColor *tinfoColor;
-
+@property (class, readonly, nonatomic) UIColor *bg1Color;
+@property (class, readonly, nonatomic) UIColor *bgelevateColor;
 @end
 
 NS_ASSUME_NONNULL_END

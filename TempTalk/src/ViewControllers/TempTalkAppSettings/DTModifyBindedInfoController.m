@@ -257,14 +257,12 @@ extern NSString *const kSendEmailCodeForChangePhoneSucess;
                 && errResponse.status == 24) {
                 [self showForceBindAlertWithModifyType:DTModifyTypeChangeEmail
                                           confirmBlock:^{
-                    NSString *newNonce = errResponse.data[@"nonce"];
-                    if (DTParamsUtils.validateString(newNonce)) {
-                        [self bindRequestWithNonce:newNonce];
-                    } else {
-                        [self bindRequestWithNonce:nil];
-                        OWSLogError(@"bindEmailApi nonce is empty");
-                    }
+                    [self requestBindWithNewNonce:errResponse.data[@"nonce"]];
                 }];
+            } else if (DTParamsUtils.validateNumber([error httpStatusCode]) &&
+                       [error httpStatusCode].intValue == 403
+                       && errResponse.status == 10111) {
+                [self requestBindWithNewNonce:errResponse.data[@"nonce"]];
             } else {
                 NSString *errorMessage = [NSError errorDesc:error errResponse:errResponse];
                 [self resetSubviewsLayoutWithState:DTLoginStateTypeLoginFailed errorMesssage:errorMessage];
@@ -284,7 +282,7 @@ extern NSString *const kSendEmailCodeForChangePhoneSucess;
             [DTToastHelper hide];
             if (metaEntity.status == 10109 ||
                 metaEntity.status == 10111) {
-                [self showForceBindAlertWithModifyType:DTModifyTypeChangeEmail
+                [self showForceBindAlertWithModifyType:DTModifyTypeChangePhoneNumber
                                           confirmBlock:^{
                     NSString *newNonce = metaEntity.data[@"nonce"];
                     if (DTParamsUtils.validateString(newNonce)) {
@@ -305,9 +303,27 @@ extern NSString *const kSendEmailCodeForChangePhoneSucess;
             }
         } failure:^(NSError * _Nonnull error, DTAPIMetaEntity * _Nullable errResponse) {
             [DTToastHelper hide];
-            NSString *errorMessage = [NSError errorDesc:error errResponse:errResponse];
-            [self resetSubviewsLayoutWithState:DTLoginStateTypeLoginFailed errorMesssage:errorMessage];
+            if (errResponse.status == 10109) {
+                [self showForceBindAlertWithModifyType:DTModifyTypeChangePhoneNumber
+                                          confirmBlock:^{
+                    [self requestBindWithNewNonce:errResponse.data[@"nonce"]];
+                }];
+            } else if (errResponse.status == 10111) {
+                [self requestBindWithNewNonce:errResponse.data[@"nonce"]];
+            } else {
+                NSString *errorMessage = [NSError errorDesc:error errResponse:errResponse];
+                [self resetSubviewsLayoutWithState:DTLoginStateTypeLoginFailed errorMesssage:errorMessage];
+            }
         }];
+    }
+}
+
+- (void)requestBindWithNewNonce:(NSString *)newNonce {
+    if (DTParamsUtils.validateString(newNonce)) {
+        [self bindRequestWithNonce:newNonce];
+    } else {
+        [self bindRequestWithNonce:nil];
+        OWSLogError(@"bindPhoneApi nonce is empty");
     }
 }
 
@@ -496,7 +512,7 @@ extern NSString *const kSendEmailCodeForChangePhoneSucess;
         _countryCodeBtn = [DTLayoutButton new];
         _countryCodeBtn.spacing = 4;
         _countryCodeBtn.titleAlignment = DTButtonTitleAlignmentTypeLeft;
-        [_countryCodeBtn setTitle:@"+986" forState:UIControlStateNormal];
+        [_countryCodeBtn setTitle:@"+86" forState:UIControlStateNormal];
         [_countryCodeBtn setImage:[UIImage imageNamed:@"input_arrow"] forState:UIControlStateNormal];
         [_countryCodeBtn setTitleColor:Theme.primaryTextColor forState:UIControlStateNormal];
         _countryCodeBtn.titleLabel.font = [UIFont systemFontOfSize:14];

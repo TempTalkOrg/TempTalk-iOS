@@ -50,11 +50,11 @@ NS_ASSUME_NONNULL_BEGIN
 {
     OWSAssertDebug(!self.cellView);
 
-    self.backgroundColor = Theme.tableCellBackgroundColor;
-    self.contentView.backgroundColor = Theme.tableCellBackgroundColor;
+    self.backgroundColor = Theme.bg1Color;
+    self.contentView.backgroundColor = Theme.bg1Color;
     self.selectedBackgroundView = ({
         UIView *selectedBackgroundView = [UIView new];
-        selectedBackgroundView.backgroundColor = Theme.tableCellBackgroundColor;
+        selectedBackgroundView.backgroundColor = Theme.bg1Color;
         selectedBackgroundView;
     });
     
@@ -138,8 +138,8 @@ NS_ASSUME_NONNULL_BEGIN
     [super prepareForReuse];
 
     [self.cellView prepareForReuse];
-    self.backgroundColor = Theme.tableCellBackgroundColor;
-    self.contentView.backgroundColor = Theme.tableCellBackgroundColor;
+    self.backgroundColor = Theme.bg1Color;
+    self.contentView.backgroundColor = Theme.bg1Color;
     self.accessoryType = UITableViewCellAccessoryNone;
     self.selected = NO;
 }

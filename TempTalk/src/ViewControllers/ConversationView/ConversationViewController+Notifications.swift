@@ -142,6 +142,7 @@ private extension ConversationViewController {
         let isCallWindowHidden = userInfo["isCallWindowHidden"] as? Bool ?? false
         // self.isViewVisible = isCallWindowHidden
         // Ethan: fix 1on1 call crash after hangup
+        Logger.info("[Conversation] call window isCallWindowHidden is \(isCallWindowHidden)")
         viewState.isViewVisible = isCallWindowHidden
     }
     

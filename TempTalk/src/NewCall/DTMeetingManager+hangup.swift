@@ -1,5 +1,5 @@
 //
-//  DTMeetingManager+hangup.swift
+//  DTMeetingManager+Hangup.swift
 //  Difft
 //
 //  Created by Henry on 2025/7/2.
@@ -9,6 +9,10 @@
 // MARK: call view related action, life cycle
 
 extension DTMeetingManager {
+    
+    private enum RatingDisplayConfig {
+        static let minimumMeetingDuration: TimeInterval = 60
+    }
     
     // disconnect 已在 RoomContext 中调用
     // caller
@@ -282,6 +286,8 @@ extension DTMeetingManager {
         }
         
         DispatchMainThreadSafe {
+            let latestDuration = self.currentCall.duration ?? TimerDataManager.shared.duration
+            self.lastMeetingDuration = latestDuration
             // 使用统一的清理方法
             self.performCompleteCleanup()
             
@@ -300,6 +306,8 @@ extension DTMeetingManager {
     
     /// 确保屏幕方向切换回竖屏后再展示评分弹窗，避免视图偏移问题
     private func ensurePortraitOrientationBeforeShowingRating() {
+        defer { self.lastMeetingDuration = nil }
+        
         // 防止多次调用导致评分逻辑被重复消费
         guard !hasTriggeredRating else {
             Logger.info("\(logTag) Rating already triggered, skipping")
@@ -308,6 +316,10 @@ extension DTMeetingManager {
         
         guard feedbackUserSid != nil else {
             Logger.info("\(logTag) Call never connected, skipping rating")
+            return
+        }
+        
+        guard meetsRatingDurationRequirement() else {
             return
         }
         
@@ -330,6 +342,20 @@ extension DTMeetingManager {
                 self.showRatingController()
             }
         }
+    }
+    
+    private func meetsRatingDurationRequirement() -> Bool {
+        guard let duration = lastMeetingDuration ?? currentCall.duration ?? TimerDataManager.shared.duration else {
+            Logger.info("\(logTag) Missing duration data, skipping rating")
+            return false
+        }
+        
+        guard duration >= RatingDisplayConfig.minimumMeetingDuration else {
+            Logger.info("\(logTag) Call duration \(duration)s shorter than minimum \(RatingDisplayConfig.minimumMeetingDuration)s, skipping rating")
+            return false
+        }
+        
+        return true
     }
     
     /// 展示评分控制器

@@ -276,13 +276,15 @@ extension DTMeetingManager {
                 }
                 return
             }
-            // 先连接
-            await connectRoomSafely(fromCallKit: fromCallKit, connectOptions: connectOptions)
-            // 后出UI
+            
+            // 先出UI
             await MainActor.run {
                 DTToastHelper.hide()
                 presentCallUI(callType: callType, isCaller: isCaller, fromCallKit: fromCallKit)
             }
+            
+            // 后连接
+            await connectRoomSafely(fromCallKit: fromCallKit, connectOptions: connectOptions)
         } catch {
             Logger.error("\(logTag) request token error: \(error)")
             await hangupCall(needSyncCallKit: false,
@@ -380,7 +382,7 @@ extension DTMeetingManager {
             DTToastHelper.show(withInfo: Localized("ERROR_DESCRIPTION_UNKNOWN_ERROR"))
             return
         }
-        
+                
         let contextView = RoomContextView()
             .environmentObject(appContext)
             .environmentObject(roomContext)

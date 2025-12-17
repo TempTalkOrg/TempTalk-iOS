@@ -14,6 +14,7 @@
 #import "TSGroupThread.h"
 #import "ViewControllerUtils.h"
 #import <TTMessaging/OWSContactsManager.h>
+#import <TTMessaging/OWSWindowManager.h>
 #import <TTMessaging/UIUtil.h>
 
 #import <TTServiceKit/OWSBlockingManager.h>
@@ -92,6 +93,10 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
 
 @property (nonatomic, strong) DTDismissAGroupAPI *dismissAGroupAPI;
 
+@end
+
+@interface OWSWindowManager (HomeViewControllerPresenting)
+- (void)ensureRootWindowShown;
 @end
 
 #pragma mark -
@@ -622,15 +627,59 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
 
     // We do this synchronously if we're already on the main thread.
     DispatchMainThreadSafe(^{
+        
+        DTHomeViewController *homeVC = (DTHomeViewController *)self.navigationController.viewControllers.firstObject;
+        OWSLogInfo(@"============ 点击 cell ============");
+        UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+
+        OWSLogInfo(@"[window] keyWindow = %@", keyWindow);
+        OWSLogInfo(@"[window] self.view.window = %@", self.view.window);
+        OWSLogInfo(@"[window] nav = %@", self.navigationController);
+        OWSLogInfo(@"[window] keyWindow.root = %@", keyWindow.rootViewController);
+        
+        if ([homeVC isKindOfClass:DTHomeViewController.class]) {
+            [homeVC logWindowHierarchyWithTag:@"presentThread tap cell"];
+        }
+        
+        [self prepareForConversationPresentation];
+        
+        OWSLogInfo(@"============ pushTopLevelViewController ============");
+
+        OWSLogInfo(@"[window] keyWindow = %@", keyWindow);
+        OWSLogInfo(@"[window] self.view.window = %@", self.view.window);
+        OWSLogInfo(@"[window] nav = %@", self.navigationController);
+        OWSLogInfo(@"[window] keyWindow.root = %@", keyWindow.rootViewController);
+        
+        if ([homeVC isKindOfClass:DTHomeViewController.class]) {
+            [homeVC logWindowHierarchyWithTag:@"presentThread pushTopLevelViewController"];
+        }
+
         ConversationViewController *viewController = [[ConversationViewController alloc] initWithThread:thread
                                                                                                  action:action
                                                                                          focusMessageId:focusMessageId
                                                                                             botViewItem:nil
                                                                                                viewMode:ConversationViewMode_Main];
         self.lastViewedThread = thread;
-
+        OWSLogInfo(@"[Conversation] tap cell present viewController %@", viewController);
         [self pushTopLevelViewController:viewController animateDismissal:NO animatePresentation:YES];
     });
+}
+
+- (void)prepareForConversationPresentation
+{
+    OWSWindowManager *windowManager = [OWSWindowManager sharedManager];
+    if (windowManager.shouldShowCallView) {
+        OWSLogInfo(@"[window] leaveCallView");
+        [windowManager leaveCallView];
+    }
+
+    if (![windowManager.rootWindow isKeyWindow]) {
+        OWSLogInfo(@"[window] isKeyWindow");
+        [windowManager ensureRootWindowShown];
+    } else if (windowManager.rootWindow.hidden) {
+        OWSLogInfo(@"[window] rootWindow hidden");
+        [windowManager ensureRootWindowShown];
+    }
 }
 
 - (void)pushTopLevelViewController:(UIViewController *)viewController

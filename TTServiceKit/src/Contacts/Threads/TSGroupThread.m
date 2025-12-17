@@ -513,6 +513,17 @@ static NSString *const kDTOldToNewGroupIdPrefix = @"WEEK";
     return false;
 }
 
+- (NSString *)groupThreadNameWithMemberCount {
+    NSString *groupName = self.groupModel.groupName;
+    if (!DTParamsUtils.validateString(groupName)) {
+        groupName = Localized(@"NEW_GROUP_DEFAULT_TITLE", @"");
+    }
+    if (self.groupModel.groupMemberIds.count == 0) {
+        return groupName;
+    }
+    return [NSString stringWithFormat:@"%@(%ld)", groupName, self.groupModel.groupMemberIds.count];
+}
+
 #pragma mark Disappearing Messages
 
 - (uint32_t)messageExpiresInSeconds{

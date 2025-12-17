@@ -186,6 +186,8 @@ import DTProto
     // 评分触发保护，防止多次消费评分逻辑
     var hasTriggeredRating: Bool = false
     var feedbackIsNetworkPoor: Bool? = false
+    /// 最近一次会议时长，用于在清理资源后决定是否展示评分弹窗
+    var lastMeetingDuration: TimeInterval?
     
     // 防止重复执行answerCall的标志
     var isAnswering: Bool = false

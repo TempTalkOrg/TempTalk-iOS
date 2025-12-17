@@ -99,9 +99,9 @@ class AppSettingsViewController : SettingBaseViewController {
     
     override func applyTheme() {
         super.applyTheme()
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
-        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgelevateColor
+        mainTableView.backgroundColor = Theme.bgelevateColor
+        self.mainTableView.tableHeaderView?.backgroundColor = Theme.bgelevateColor
         signatureLabel.textColor = Theme.secondaryTextColor
         nameLabel.textColor = Theme.primaryTextColor
         prepareHeaderView()
@@ -149,8 +149,8 @@ class AppSettingsViewController : SettingBaseViewController {
     }
     
     func prepareTheme() {
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgelevateColor
+        mainTableView.backgroundColor = Theme.bgelevateColor
     }
     
     func prepareUIData() {
@@ -210,12 +210,12 @@ class AppSettingsViewController : SettingBaseViewController {
     
     func prepareHeaderView() {
         let headerView = UIView()
-        headerView.backgroundColor = Theme.defaultBackgroundColor
+        headerView.backgroundColor = Theme.bgelevateColor
 
         let headerContainerView = UIView()
         headerContainerView.clipsToBounds = true
         headerContainerView.layer.cornerRadius = 10
-        headerContainerView.backgroundColor = Theme.defaultTableCellBackgroundColor
+        headerContainerView.backgroundColor = Theme.bg1Color
         headerView.addSubview(headerContainerView)
 
         // MARK: Row Views
@@ -228,7 +228,7 @@ class AppSettingsViewController : SettingBaseViewController {
         shareContactRowView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(shareContactRowAction)))
 
         let seperateLineView = UIView()
-        seperateLineView.backgroundColor = Theme.defaultBackgroundColor
+        seperateLineView.backgroundColor = Theme.bgelevateColor
 
         headerContainerView.addSubview(profileRowView)
         headerContainerView.addSubview(seperateLineView)
@@ -365,7 +365,8 @@ extension AppSettingsViewController : UITableViewDelegate,UITableViewDataSource 
         if(settingMeItem.cellStyle == .blank){
             let cell = tableView.dequeueReusableCell(withIdentifier: reuse_identifier_style_blank, for: indexPath) as? DTBlankCell
             guard let defaultStyleCell = cell else { return UITableViewCell.init()}
-            defaultStyleCell.applyTheme()
+            defaultStyleCell.backgroundColor = Theme.bgelevateColor
+            defaultStyleCell.contentView.backgroundColor = Theme.bgelevateColor
             return defaultStyleCell
         } else if(settingMeItem.cellStyle == .onlyAccessory || settingMeItem.cellStyle == .accessoryAndDescription) {
             let cell = tableView.dequeueReusableCell(withIdentifier: settingDescriptionCell_AppSettings, for: indexPath) as? DTSettingDescriptionCell

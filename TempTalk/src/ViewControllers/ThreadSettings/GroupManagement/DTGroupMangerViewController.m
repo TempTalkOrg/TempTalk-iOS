@@ -61,6 +61,7 @@ extern NSString *const kDTAddToGroupItemIdentifier;
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    OWSLogInfo(@"[groupManager] viewWillAppear");
 }
 
 - (void)configWithThread:(TSGroupThread *)thread {

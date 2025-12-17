@@ -170,8 +170,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ConversationViewModel ()<DatabaseChangeDelegate>
 
-@property (nonatomic, weak) id<ConversationViewModelDelegate> delegate;
-
 @property (nonatomic, readonly) TSThread *thread;
 
 // The mapping must be updated in lockstep with the uiDatabaseConnection.
@@ -200,11 +198,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) NSArray<id<ConversationViewItem>> *persistedViewItems;
 @property (nonatomic) NSArray<TSOutgoingMessage *> *unsavedOutgoingMessages;
 
+@property (nonatomic, assign) NSInteger lastTranslateState;
+
 @property (nonatomic, strong) NSArray<TSMessageReadPosition *> *recipientReadPositions;
 
 @property (nonatomic, assign) BOOL isLoadingMore;
 
-@property (nonatomic, assign) NSInteger lastTranslateState;
+@property (nonatomic, assign) BOOL isLoadingInitialMessages;
 
 @end
 
@@ -237,24 +237,6 @@ NS_ASSUME_NONNULL_BEGIN
     _collapseCutoffDate = [NSDate new];
     
     return self;
-}
-
-// NOTE❗️❗️❗️:
-// [self configure] 原本是在初始化方法中执行的，但是其执行过程中依赖 delegate，
-// 这导致 ConversationViewModel 初始化时必须设置 delegate，
-// 当 ConversationViewModel 作为某个类的非 Optional 存储属性时，这将产生冲突。
-//
-// 以 ConversationViewController.swift 为例，由于 ConversationViewModel 作为非 Optional 存储属性，
-// 需要在 super.init() 之前完成初始化，但是 ConversationViewModel 初始化时需要设置 delegate，而此时 ConversationViewController
-// 还未完成初始化，无法使用 self，进而无法设置 delegate = self，产生冲突。
-// 虽然可以将 ConversationViewModel 改为 Optional 属性来解决上述问题，但势必造成后面使用时大量的可选解包，
-// 从业务上来说，ConversationViewModel 也不该为 Optional。
-//
-// 综上最好的解决办法是，初始化时不需要设置 delegate，依赖 delegate 的方法就要从初始化方法中移除，在设置完 delegate 后执行
-- (void)configWithDelegate:(id<ConversationViewModelDelegate>)delegate {
-    _delegate = delegate;
-    
-    [self configure];
 }
 
 #pragma mark - Dependencies
@@ -308,29 +290,35 @@ NS_ASSUME_NONNULL_BEGIN
     [self updateForTransientItems];
 }
 
-- (void)configure
+- (void)loadInitialMessages
 {
-    OWSLogInfo(@"[CVM:configure] viewModel configure thread %@", self.thread.uniqueId);
-
-    [BenchManager benchWithTitle:@"loading initial interactions" block:^{
-        OWSLogInfo(@"[CVM:configure] begin thread=%@ focus=%@", self.thread.uniqueId, self.focusMessageIdOnOpen);
-        [self.databaseStorage uiReadWithBlock:^(SDSAnyReadTransaction *transaction) {
-            NSError *error;
-            [self.messageMapping
-                loadInitialMessagePageWithFocusMessageId:self.focusMessageIdOnOpen
-                                             transaction:transaction
-                                                   error:&error];
-            if (error != nil) {
-                OWSLogInfo(@"[CVM:configure] loadInitial message error: %@", error);
+    NSString *threadId = self.thread.uniqueId;
+    OWSLogInfo(@"[Conversation] start loading initial messages, threadId:%@", threadId);
+    self.isLoadingInitialMessages = YES;
+    [self.databaseStorage asyncReadWithBlock:^(SDSAnyReadTransaction *transaction) {
+        NSError *error;
+        [self.messageMapping loadInitialMessagePageWithFocusMessageId:self.focusMessageIdOnOpen
+                                                          transaction:transaction
+                                                                error:&error];
+        if (error != nil) {
+            OWSLogError(@"[Conversation] mapping InitialMessages failed, threadId:%@, error: %@", threadId, error);
+        } else {
+            OWSLogInfo(@"[Conversation] mapping InitialMessages success, threadId:%@", threadId);
+        }
+        
+        DispatchMainThreadSafe(^{
+            @weakify(self)
+            if (self.delegate && [self.delegate respondsToSelector:@selector(conversationViewModelDidLoadInitialMessagesWithCompletion:)]) {
+                [self.delegate conversationViewModelDidLoadInitialMessagesWithCompletion:^(BOOL isFinished) {
+                    @strongify(self)
+                    self.isLoadingInitialMessages = NO;
+                    OWSLogInfo(@"[Conversation] did finished loading initial messages, threadId:%@", threadId);
+                }];
             } else {
-                OWSLogInfo(@"[CVM:configure] loadInitial message success");
+                self.isLoadingInitialMessages = NO;
+                OWSLogInfo(@"[Conversation] did finished loading initial messages, threadId:%@", threadId);
             }
-            OWSLogInfo(@"[CVM:configure] initial page loaded. canLoadOlder=%d canLoadNewer=%d", self.messageMapping.canLoadOlder, self.messageMapping.canLoadNewer);
-//            if (![self reloadViewItemsWithTransaction:transaction]) {
-//                OWSLogInfo(@"failed to reload view items in configureForThread.");
-//            }
-        }];
-        OWSLogInfo(@"[CVM:configure] end");
+        });
     }];
 }
 
@@ -356,31 +344,37 @@ NS_ASSUME_NONNULL_BEGIN
     if (![self reloadViewItemsWithTransaction:transaction]) {
         OWSFailDebug(@"failed to reload view items in resetContentAndLayout.");
     }
+
     OWSLogInfo(@"[Conversation] end viewItems=%lu thread=%@", (unsigned long)self.viewState.viewItems.count, self.thread.uniqueId);
 }
 
 - (BOOL)canLoadOlderItems
 {
-    return self.messageMapping.canLoadOlder;
+    return [self.messageMapping.canLoadOlder get];
 }
 
 - (BOOL)canLoadNewerItems
 {
-    return self.messageMapping.canLoadNewer;
+    return [self.messageMapping.canLoadNewer get];
 }
 
 - (BOOL)canFetchOlderItems
 {
-    return self.messageMapping.canFetchOlder;
+    return [self.messageMapping.canFetchOlder get];
 }
 
 - (BOOL)canFetchNewerItems
 {
-    return self.messageMapping.canFetchNewer;
+    return [self.messageMapping.canFetchNewer get];
 }
 
 - (void)appendOlderItemsWithTransaction:(SDSAnyReadTransaction *)transaction
 {
+    if (self.isLoadingInitialMessages) {
+        OWSLogInfo(@"[Conversation] skip appendOlderItems before the initial messages are loaded");
+        return;
+    }
+    
     // 解决在下拉加载更多时，数据还在处理中，继续下拉刷新，导致一次拉取了多页数据
     if (self.isLoadingMore) {
         return;
@@ -410,6 +404,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)appendNewerItemsWithTransaction:(SDSAnyReadTransaction *)transaction
 {
+    if (self.isLoadingInitialMessages) {
+        OWSLogInfo(@"[Conversation] skip appendNewerItems before the initial messages are loaded");
+        return;
+    }
+    
     // 解决在下拉加载更多时，数据还在处理中，继续下拉刷新，导致一次拉取了多页数据
     if (self.isLoadingMore) {
         return;
@@ -458,17 +457,33 @@ NS_ASSUME_NONNULL_BEGIN
 #pragma mark - GRDB Updates
 
 - (void)databaseChangesDidUpdateExternally {
+    if (self.isLoadingInitialMessages) {
+        OWSLogInfo(@"[Conversation] skip databaseChangesDidUpdateExternally before the initial messages are loaded");
+        return;
+    }
+    
     NSSet<NSString *> *updatedInteractionIds = [[NSSet alloc] initWithArray:self.messageMapping.loadedUniqueIds];
     [self anyDBDidUpdateWithUpdatedInteractionIds:updatedInteractionIds];
 }
 
 - (void)databaseChangesDidReset {
+    if (self.isLoadingInitialMessages) {
+        OWSLogInfo(@"[Conversation] skip databaseChangesDidReset before the initial messages are loaded");
+        return;
+    }
+    
     [self resetMappingWithSneakyTransaction];
 }
 
 - (void)databaseChangesDidUpdateWithDatabaseChanges:(id<DatabaseChanges>)databaseChanges
 {
     OWSAssertIsOnMainThread();
+    
+    // 避免数据未初始化完成时，因 db 变更触发的数据加载
+    if (self.isLoadingInitialMessages) {
+        OWSLogInfo(@"[Conversation] skip databaseChangesDidUpdate before the initial messages are loaded");
+        return;
+    }
 
     OWSLogDebug(@"------> collectionView databaseChanges.threadUniqueIds:%@ \n interactionUniqueIds:%@", databaseChanges.threadUniqueIds, databaseChanges.interactionUniqueIds);
     
@@ -886,12 +901,17 @@ NS_ASSUME_NONNULL_BEGIN
 // want to change view scroll state in this case.
 - (void)resetMappingWithSneakyTransaction
 {
+    [self resetMappingWithSneakyTransactionAndCompletion:nil];
+}
+
+- (void)resetMappingWithSneakyTransactionAndCompletion:(void (^ __nullable)(BOOL))completion
+{
     [self.databaseStorage uiReadWithBlock:^(SDSAnyReadTransaction *transaction) {
-        [self resetMappingWithTransaction:transaction];
+        [self resetMappingWithTransaction:transaction completion:completion];
     }];
 }
 
-- (void)resetMappingWithTransaction:(SDSAnyReadTransaction *)transaction
+- (void)resetMappingWithTransaction:(SDSAnyReadTransaction *)transaction completion:(void (^ __nullable)(BOOL))completion
 {
     OWSAssertDebug(self.messageMapping);
 
@@ -902,7 +922,7 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     // PERF TODO: don't call "reload" when appending new items, do a batch insert. Otherwise we re-render every cell.
-    [self.delegate conversationViewModelDidUpdate:ConversationUpdate.reloadUpdate transaction:transaction completion:nil];
+    [self.delegate conversationViewModelDidUpdate:ConversationUpdate.reloadUpdate transaction:transaction completion:completion];
 }
 
 - (void)diffMappingWithTransaction:(SDSAnyReadTransaction *)transaction completion:(void (^ __nullable)(BOOL))completion
@@ -1084,7 +1104,7 @@ NS_ASSUME_NONNULL_BEGIN
             !self.hasClearedUnreadMessagesIndicator
             && self.messageMapping.oldestUnreadInteraction != nil
             && self.messageMapping.oldestUnreadInteraction.timestampForSorting <= interaction.timestampForSorting 
-            && interaction.isNeedUnreadIndicator ) {
+            && interaction.isNeedUnreadIndicator) {
             hasPlacedUnreadIndicator = YES;
             OWSUnreadIndicatorInteraction *unreadIndicator =
                 [[OWSUnreadIndicatorInteraction alloc] initWithThread:self.thread
@@ -1359,10 +1379,10 @@ NS_ASSUME_NONNULL_BEGIN
         return completion(nil, NO, NO);
     }
     
-    if ([freshInteraction isKindOfClass:[TSInfoMessage class]] &&
-        ((TSInfoMessage *)freshInteraction).isRecalMessage) {
-        return completion(nil, NO, NO);
-    }
+//    if ([freshInteraction isKindOfClass:[TSInfoMessage class]] &&
+//        ((TSInfoMessage *)freshInteraction).isRecalMessage) {
+//        return completion(nil, NO, NO);
+//    }
     
     id<ConversationViewItem> _Nullable viewItem = self.viewItemCache[interactionUniqueId];
     if (!viewItem) {
@@ -1501,6 +1521,11 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertIsOnMainThread();
     OWSAssertDebug(interactionId);
 
+    if (self.isLoadingInitialMessages) {
+        OWSLogInfo(@"[Conversation] skip ensureLoadWindowContainsInteractionId before the initial messages are loaded");
+        return;
+    }
+    
     NSError *error;
     [self.messageMapping loadMessagePageAroundInteractionId:interactionId transaction:transaction error:&error];
     if (error != nil) {
@@ -1531,6 +1556,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)ensureLoadWindowContainsNewestItemsWithTransaction:(SDSAnyReadTransaction *)transaction
 {
     OWSAssertIsOnMainThread();
+    
+    if (self.isLoadingInitialMessages) {
+        OWSLogInfo(@"[Conversation] skip ensureLoadWindowContainsNewestItems before the initial messages are loaded");
+        return;
+    }
 
     NSError *error;
     [self.messageMapping loadNewestMessagePageWithTransaction:transaction error:&error];
@@ -1586,7 +1616,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 // 获取扩展表名字
 - (NSString *)getDatabaseViewExtensionName {
-    return [InteractionFinder messageDatabaseViewExtensionName];
+    switch (self.conversationMode) {
+        case ConversationViewMode_Main:
+        case ConversationViewMode_NormalPresent:
+        case ConversationViewMode_UnKnow:
+        case ConversationViewMode_Confidential:
+            return [InteractionFinder messageDatabaseViewExtensionName];
+        case ConversationViewMode_Thread:
+            return [InteractionFinder messageDatabaseViewForAllThreadMessageExtensionName];
+    }
 }
 
 // MARK: - Card

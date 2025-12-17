@@ -645,16 +645,15 @@ extension ConversationViewController {
         isShowLoadNewerHeader = canLoadNewerItems
         isShowFetchNewerHeader = canFetchNewerItems
         
-        Logger.info("------ showLoadOlderHeader:\(isShowLoadOlderHeader) showLoadNewerHeader: \(isShowLoadNewerHeader)")
-        Logger.info("------ [hot data] showFetchOlderHeader:\(isShowFetchOlderHeader) showFetchNewerHeader:\(isShowFetchNewerHeader)")
+        Logger.info("[Conversation] showLoadOlderHeader:\(isShowLoadOlderHeader) showLoadNewerHeader: \(isShowLoadNewerHeader)")
         
         return valueChanged
     }
     
     @objc func resetContentAndLayoutWithSneakyTransaction() {
-        Logger.info("[CVC:resetSneaky] request uiRead")
+        Logger.info("[Conversation] request uiRead")
         databaseStorage.uiRead { transaction in
-            Logger.info("[CVC:resetSneaky] got transaction, calling resetContentAndLayout")
+            Logger.info("[Conversation] got transaction, calling resetContentAndLayout")
             self.resetContentAndLayout(transaction: transaction)
         }
     }
@@ -664,7 +663,7 @@ extension ConversationViewController {
         forceRealodRange: ReloadRange = .all,
         completion: ((Bool) -> Void)? = nil
     ) {
-        Logger.info("[CVC:resetContentAndLayout] begin forceRange=\(forceRealodRange) items(before)=\(viewItems.count) renderItems=\(renderItems.count)")
+        Logger.info("[Conversation] begin forceRange=\(forceRealodRange) items(before)=\(viewItems.count) renderItems=\(renderItems.count)")
         scrollContinuity = .bottom
         
         // Avoid layout corrupt issues and out-of-date message subtitles.
@@ -677,7 +676,7 @@ extension ConversationViewController {
                 // Try to update the lastKnownDistanceFromBottom; the content size may have changed.
                 self.updateLastKnownDistanceFromBottom()
             }
-            Logger.info("[CVC:resetContentAndLayout] end finished=\(isFinished) items(after)=\(self.viewItems.count) renderItems=\(self.renderItems.count) contentSize=\(self.collectionView.contentSize)")
+            Logger.info("[Conversation] end finished=\(isFinished) items(after)=\(self.viewItems.count) renderItems=\(self.renderItems.count) contentSize=\(self.collectionView.contentSize)")
             completion?(isFinished)
         }
     }
