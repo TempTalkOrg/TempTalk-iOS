@@ -27,7 +27,8 @@ typedef NS_ENUM(NSUInteger, DTServerNotifyType) {
     DTServerNotifyTypeCoWorkerApproved                  = 16, // co-worker 同意了邀请
     DTServerNotifyTypeCallEnd                           = 17, // call
     DTServerNotifyTypeUnknown                           = 18,
-    DTServerNotifyTypeResetIdentityKey                  = 19  // 重新生成密钥
+    DTServerNotifyTypeResetIdentityKey                  = 19,  // 重新生成密钥
+    DTServerNotifyTypeCriticalAlert                     = 22   // 触发CriticalAlert
 };
 
 @interface DTServerNotifyEntity : MTLModel<MTLJSONSerializing>
@@ -37,6 +38,20 @@ typedef NS_ENUM(NSUInteger, DTServerNotifyType) {
 @property (nonatomic, assign) BOOL display;
 @property (nonatomic, assign) uint64_t notifyTime;
 @property (nonatomic, strong) NSDictionary *data;
+
+@end
+
+
+@interface DTServerNotifyCriticalAlertEntity : MTLModel<MTLJSONSerializing>
+
+@property (nonatomic, copy) NSString *source;
+@property (nonatomic, assign) NSInteger sourceDevice;
+@property (nonatomic, assign) uint64_t timestamp;
+@property (nonatomic, assign) uint64_t serverTimestamp;
+@property (nonatomic, copy) NSString *alertTitle;
+@property (nonatomic, copy) NSString *alertBody;
+@property (nonatomic, copy) NSString *conversation;
+@property (nonatomic, assign) BOOL showCriticalAlert;
 
 @end
 

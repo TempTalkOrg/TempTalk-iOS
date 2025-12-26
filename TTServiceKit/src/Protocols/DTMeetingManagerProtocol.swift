@@ -12,4 +12,7 @@ import Foundation
 @objc public protocol DTMeetingManagerProtocol: NSObjectProtocol {
     
     @objc func isInMeeting() -> Bool
+    
+    @objc func criticalAlertIncomingLocalMessage(entity: DTServerNotifyCriticalAlertEntity,
+                                                 transation: SDSAnyWriteTransaction)
 }

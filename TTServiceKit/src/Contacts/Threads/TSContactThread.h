@@ -32,6 +32,7 @@ NS_ASSUME_NONNULL_BEGIN
                  lastMessageDate:(nullable NSDate *)lastMessageDate
                       lastestMsg:(nullable TSMessage *)lastestMsg
                  mentionedAllMsg:(nullable DTMentionedMsgInfo *)mentionedAllMsg
+            mentionedCriticalMsg:(nullable DTMentionedMsgInfo *)mentionedCriticalMsg
                   mentionedMeMsg:(nullable DTMentionedMsgInfo *)mentionedMeMsg
                    mentionsDraft:(nullable NSArray<DTMention *> *)mentionsDraft
               messageClearAnchor:(unsigned long long)messageClearAnchor
@@ -52,7 +53,7 @@ NS_ASSUME_NONNULL_BEGIN
             friendContactVersion:(NSInteger)friendContactVersion
               hasDismissedOffers:(BOOL)hasDismissedOffers
                receivedFriendReq:(BOOL)receivedFriendReq
-NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:archivalDate:conversationEntity:creationDate:draftQuoteMessageId:expiresInSeconds:hasEverHadMessage:isArchived:lastMessageDate:lastestMsg:mentionedAllMsg:mentionedMeMsg:mentionsDraft:messageClearAnchor:messageDraft:mutedUntilDate:plainTextEnable:readPositionEntity:removedFromConversation:shouldBeVisible:stickCallingDate:stickDate:threadConfig:translateSettingType:unreadFlag:unreadMessageCount:unreadState:unreadTimeStimeStamp:friendContactVersion:hasDismissedOffers:receivedFriendReq:));
+NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:archivalDate:conversationEntity:creationDate:draftQuoteMessageId:expiresInSeconds:hasEverHadMessage:isArchived:lastMessageDate:lastestMsg:mentionedAllMsg:mentionedCriticalMsg:mentionedMeMsg:mentionsDraft:messageClearAnchor:messageDraft:mutedUntilDate:plainTextEnable:readPositionEntity:removedFromConversation:shouldBeVisible:stickCallingDate:stickDate:threadConfig:translateSettingType:unreadFlag:unreadMessageCount:unreadState:unreadTimeStimeStamp:friendContactVersion:hasDismissedOffers:receivedFriendReq:));
 
 // clang-format on
 

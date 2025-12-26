@@ -88,8 +88,10 @@ class TSAttachmentStreamSerializer: SDSSerializer {
         let albumMessageId: String? = model.albumMessageId
         let appearInMediaGallery: Bool = model.appearInMediaGallery
         let decibelSamples: Data? = optionalArchive(model.decibelSamples)
+        let height: UInt32 = model.height
+        let width: UInt32 = model.width
 
-        return AttachmentRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, attachmentSchemaVersion: attachmentSchemaVersion, attachmentType: attachmentType, byteCount: byteCount, cachedAudioDurationSeconds: cachedAudioDurationSeconds, cachedImageHeight: cachedImageHeight, cachedImageWidth: cachedImageWidth, contentType: contentType, creationTimestamp: creationTimestamp, digest: digest, encryptedDatalength: encryptedDatalength, encryptionKey: encryptionKey, isDownloaded: isDownloaded, isUploaded: isUploaded, lazyRestoreFragmentId: lazyRestoreFragmentId, localRelativeFilePath: localRelativeFilePath, mostRecentFailureLocalizedText: mostRecentFailureLocalizedText, relay: relay, serverAttachmentId: serverAttachmentId, serverId: serverId, sourceFilename: sourceFilename, state: state, albumId: albumId, albumMessageId: albumMessageId, appearInMediaGallery: appearInMediaGallery, decibelSamples: decibelSamples)
+        return AttachmentRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, attachmentSchemaVersion: attachmentSchemaVersion, attachmentType: attachmentType, byteCount: byteCount, cachedAudioDurationSeconds: cachedAudioDurationSeconds, cachedImageHeight: cachedImageHeight, cachedImageWidth: cachedImageWidth, contentType: contentType, creationTimestamp: creationTimestamp, digest: digest, encryptedDatalength: encryptedDatalength, encryptionKey: encryptionKey, isDownloaded: isDownloaded, isUploaded: isUploaded, lazyRestoreFragmentId: lazyRestoreFragmentId, localRelativeFilePath: localRelativeFilePath, mostRecentFailureLocalizedText: mostRecentFailureLocalizedText, relay: relay, serverAttachmentId: serverAttachmentId, serverId: serverId, sourceFilename: sourceFilename, state: state, albumId: albumId, albumMessageId: albumMessageId, appearInMediaGallery: appearInMediaGallery, decibelSamples: decibelSamples, height: height, width: width)
     }
 }
-                                                                                 
+                                                   

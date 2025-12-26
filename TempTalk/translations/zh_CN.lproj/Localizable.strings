@@ -69,7 +69,7 @@
 "APN_MESSAGE_IN_GROUP_DETAILED" = "%@ 在 %@ 群组中：%@";
 
 /* Message for the 'app launch failed' alert. */
-"APP_LAUNCH_FAILURE_ALERT_MESSAGE" = "Chative 无法正常启动。请将您的调试日志发送给我们的开发团队，以让我们帮助您解决这个问题。";
+"APP_LAUNCH_FAILURE_ALERT_MESSAGE" = "App 无法正常启动。请将您的调试日志发送给我们的开发团队，以让我们帮助您解决这个问题。";
 
 /* Title for the 'app launch failed' alert. */
 "APP_LAUNCH_FAILURE_ALERT_TITLE" = "错误";
@@ -3883,3 +3883,6 @@
 "CONVERSATION_CELL_OVERSIZE_TEXT_TAP_FOR_MORE" = "展开全文";
 
 "CONVERSATION_TOOLBAR_BYTE_LIMIT" = "超出10MB大小限制";
+
+"CONVERSATION_MESSAGE_CRITICAL_ALERT" = "🚨发送一条重要提醒";
+"SOMEONE_CRITICAL_ALERT_ALL_TEXT" = "[🚨重要提醒] ";

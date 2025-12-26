@@ -39,6 +39,7 @@
 #import "SVProgressHUD.h"
 #import <TTMessaging/TTMessaging-Swift.h>
 #import "DTInviteRequestHandler.h"
+#import <TTMessaging/OWSPreferences.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -344,6 +345,10 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
                                              selector:@selector(externalInvite:)
                                                  name:AppLinkNotificationHandler.externalInviteNotification
                                                object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(criticalAlertHighlightDidChange:)
+                                                 name:DTCriticalAlertHighlightDidChangeNotification
+                                               object:nil];
     
 }
 
@@ -479,8 +484,8 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
         [self handleScheduleMeetingPopupsNotify:apnsInfo];
         return;
     }
-    
-    [self handleRemoteCallNotifyWithApnsInfo:apnsInfo];
+
+    [[DTMeetingManager shared] handleRemoteCallNotifyWithApnsInfo:apnsInfo];
     
     NSString *conversationId = apnsInfo.conversationId;
     
@@ -488,7 +493,7 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
         OWSLogInfo(@"conversationId is nil, no need to open conversation");
         return;
     }
-        
+
     [self sendCriticalReadSyncMessageWithApnsInfo:apnsInfo];
     
     __block TSThread *thread = nil;
@@ -1041,6 +1046,12 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     NSString *inviteCode = userInfo[AppLinkNotificationHandler.inviteCodeKey];
     DTInviteRequestHandler *inviteRequestHandler = [[DTInviteRequestHandler alloc] initWithSourceVc:self];
     [inviteRequestHandler queryUserAccountByInviteCode:inviteCode];
+}
+
+- (void)criticalAlertHighlightDidChange:(NSNotification *)notification {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.tableView reloadData];
+    });
 }
 
 #pragma mark - Lazy Load

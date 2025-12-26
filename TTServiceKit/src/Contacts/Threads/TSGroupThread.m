@@ -42,6 +42,7 @@ static NSString *const kDTOldToNewGroupIdPrefix = @"WEEK";
                  lastMessageDate:(nullable NSDate *)lastMessageDate
                       lastestMsg:(nullable TSMessage *)lastestMsg
                  mentionedAllMsg:(nullable DTMentionedMsgInfo *)mentionedAllMsg
+            mentionedCriticalMsg:(nullable DTMentionedMsgInfo *)mentionedCriticalMsg
                   mentionedMeMsg:(nullable DTMentionedMsgInfo *)mentionedMeMsg
                    mentionsDraft:(nullable NSArray<DTMention *> *)mentionsDraft
               messageClearAnchor:(unsigned long long)messageClearAnchor
@@ -73,6 +74,7 @@ static NSString *const kDTOldToNewGroupIdPrefix = @"WEEK";
                    lastMessageDate:lastMessageDate
                         lastestMsg:lastestMsg
                    mentionedAllMsg:mentionedAllMsg
+              mentionedCriticalMsg:mentionedCriticalMsg
                     mentionedMeMsg:mentionedMeMsg
                      mentionsDraft:mentionsDraft
                 messageClearAnchor:messageClearAnchor

@@ -117,6 +117,8 @@ public class GRDBSchemaMigrator: NSObject {
         case addExpiresInSecondsAndMessageClearAnchor
         case addRemarkNameToSignalAccountSecondary
         case addGroupManagerCriticalAlert
+        case addWidthHeightOnAttachment
+        case addMentionCriticalMsgColum
         
         //MARK GRDB need to focus on
 
@@ -150,7 +152,7 @@ public class GRDBSchemaMigrator: NSObject {
     
     /// Attention: matters
     ///model_TSMessageSecondary_virtual 虚表，集成自定义 FTS5 分词器 simple
-    public static let grdbSchemaVersionLatest: UInt = 2
+    public static let grdbSchemaVersionLatest: UInt = 4
 
     // An optimization for new users, we have the first migration import the latest schema
     // and mark any other migrations as "already run".
@@ -331,6 +333,28 @@ public class GRDBSchemaMigrator: NSObject {
                 owsFail("Error: \(error)")
             }
         }
+        
+        migrator.registerMigration(.addWidthHeightOnAttachment) { db in
+            do {
+                try db.alter(table: "model_TSAttachment") { (table: TableAlteration) -> Void in
+                    table.add(column: "height", .integer).notNull().defaults(to: 0)
+                    table.add(column: "width", .integer).notNull().defaults(to: 0)
+                }
+            } catch {
+                owsFail("Error: \(error)")
+            }
+        }
+        
+        migrator.registerMigration(.addMentionCriticalMsgColum) { db in
+            do {
+                try db.alter(table: "model_TSThread") { (table: TableAlteration) -> Void in
+                    table.add(column: "mentionedCriticalMsg", .blob)
+                }
+            } catch {
+                owsFail("Error: \(error)")
+            }
+        }
+        
     }
     
     

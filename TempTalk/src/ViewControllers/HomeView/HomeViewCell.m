@@ -590,14 +590,8 @@ NS_ASSUME_NONNULL_BEGIN
         self.dateTimeLabel.text = @"";
     }
     
-    UIColor *textColor = Theme.ternaryTextColor;
-    if (hasUnreadMessages && overrideSnippet == nil) {
-        textColor = Theme.primaryTextColor;
-        self.dateTimeLabel.font = [UIFont boldSystemFontOfSize:12.0];
-    } else {
-        self.dateTimeLabel.font = [UIFont systemFontOfSize:12.0];
-    }
-    self.dateTimeLabel.textColor = textColor;
+    self.dateTimeLabel.font = [UIFont systemFontOfSize:12.0];
+    self.dateTimeLabel.textColor = Theme.ternaryTextColor;
 
     NSUInteger unreadCount = thread.unreadCount;
     //下面这个unreadCount的值 和 isUnread的结合判断主要用于处理当前会话的未读数的展示调整
@@ -773,12 +767,36 @@ NS_ASSUME_NONNULL_BEGIN
     if (displayableText) {
         __block NSString *draftString = nil;
         __block NSString *atPersonStrings = nil;
+        __block BOOL hasCriticalAlertHighlight = NO;
         [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
             draftString = [thread.threadRecord currentDraftWithTransaction:readTransaction];
             atPersonStrings = [thread.threadRecord atPersonsWithTransaction:readTransaction];
+            hasCriticalAlertHighlight = [thread.threadRecord hasCriticalAlertHighlightWithTransaction:readTransaction];
         }];
         //TODO: 待优化
         if (!thread.isGroupThread && draftString.length) {//私聊 草稿展示优先
+            
+            if (hasUnreadMessages && hasCriticalAlertHighlight) {
+                [snippetText appendAttributedString:[[NSAttributedString alloc]
+                                                     initWithString:Localized(@"SOMEONE_CRITICAL_ALERT_ALL_TEXT", @"")
+                                                     attributes:@{
+                    NSFontAttributeName : self.snippetFont.ows_semibold,
+                    NSForegroundColorAttributeName : Theme.redBgroundColor,
+                }]];
+                
+                [snippetText appendAttributedString:[[NSAttributedString alloc]
+                                                     initWithString:displayableText
+                                                     attributes:@{
+                    NSFontAttributeName :
+                        (hasUnreadMessages ? self.snippetFont
+                        : self.snippetFont),
+                    NSForegroundColorAttributeName :
+                        (hasUnreadMessages ? Theme.ternaryTextColor
+                        : Theme.ternaryTextColor),
+                }]];
+                return snippetText;
+            }
+            
             snippetText = [[NSMutableAttributedString alloc]
                            initWithAttributedString:
                                [[NSAttributedString alloc]initWithString:Localized(@"HOMEVIEWCELL_DRAFT",
@@ -797,17 +815,58 @@ NS_ASSUME_NONNULL_BEGIN
              }]];
             
         } else if (!thread.isGroupThread && !draftString.length) {
+            if (hasUnreadMessages && hasCriticalAlertHighlight) {
+                [snippetText appendAttributedString:[[NSAttributedString alloc]
+                                                     initWithString:Localized(@"SOMEONE_CRITICAL_ALERT_ALL_TEXT", @"")
+                                                     attributes:@{
+                    NSFontAttributeName : self.snippetFont.ows_semibold,
+                    NSForegroundColorAttributeName : Theme.redBgroundColor,
+                }]];
+                
+                [snippetText appendAttributedString:[[NSAttributedString alloc]
+                                                     initWithString:displayableText
+                                                     attributes:@{
+                    NSFontAttributeName :
+                        (hasUnreadMessages ? self.snippetFont
+                        : self.snippetFont),
+                    NSForegroundColorAttributeName :
+                        (hasUnreadMessages ? Theme.ternaryTextColor
+                        : Theme.ternaryTextColor),
+                }]];
+                return snippetText;
+            }
+            
             [snippetText appendAttributedString:[[NSAttributedString alloc]
                                                  initWithString:displayableText
                                                  attributes:@{
                 NSFontAttributeName :
-                    (hasUnreadMessages ? self.snippetFont.ows_semibold
+                    (hasUnreadMessages ? self.snippetFont
                     : self.snippetFont),
                 NSForegroundColorAttributeName :
-                    (hasUnreadMessages ? Theme.primaryTextColor
+                    (hasUnreadMessages ? Theme.ternaryTextColor
                     : Theme.ternaryTextColor),
             }]];
-        } else if(thread.isGroupThread) {//群组中有草稿展示 优先级：@您 > @All > 草稿
+        } else if(thread.isGroupThread) {//群组中有草稿展示 优先级：Critical alert > @您 > @All > 草稿
+            if (hasUnreadMessages && hasCriticalAlertHighlight) {
+                [snippetText appendAttributedString:[[NSAttributedString alloc]
+                                                     initWithString:Localized(@"SOMEONE_CRITICAL_ALERT_ALL_TEXT", @"")
+                                                     attributes:@{
+                    NSFontAttributeName : self.snippetFont.ows_semibold,
+                    NSForegroundColorAttributeName : Theme.redBgroundColor,
+                }]];
+                
+                [snippetText appendAttributedString:[[NSAttributedString alloc]
+                                                     initWithString:displayableText
+                                                     attributes:@{
+                    NSFontAttributeName :
+                        (hasUnreadMessages ? self.snippetFont
+                        : self.snippetFont),
+                    NSForegroundColorAttributeName :
+                        (hasUnreadMessages ? Theme.ternaryTextColor
+                        : Theme.ternaryTextColor),
+                }]];
+                return snippetText;
+            }
             if (hasUnreadMessages && atPersonStrings && ([TSAccountManager localNumber] && [atPersonStrings containsString:[TSAccountManager localNumber]])) {
                 //@自己
                 [snippetText appendAttributedString:[[NSAttributedString alloc]
@@ -821,10 +880,10 @@ NS_ASSUME_NONNULL_BEGIN
                                                      initWithString:displayableText
                                                      attributes:@{
                     NSFontAttributeName :
-                        (hasUnreadMessages ? self.snippetFont.ows_semibold
+                        (hasUnreadMessages ? self.snippetFont
                         : self.snippetFont),
                     NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.primaryTextColor
+                        (hasUnreadMessages ? Theme.ternaryTextColor
                         : Theme.ternaryTextColor),
                 }]];
                 return snippetText;
@@ -843,10 +902,10 @@ NS_ASSUME_NONNULL_BEGIN
                                                      initWithString:displayableText
                                                      attributes:@{
                     NSFontAttributeName :
-                        (hasUnreadMessages ? self.snippetFont.ows_semibold
+                        (hasUnreadMessages ? self.snippetFont
                         : self.snippetFont),
                     NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.primaryTextColor
+                        (hasUnreadMessages ? Theme.ternaryTextColor
                         : Theme.ternaryTextColor),
                 }]];
                 return snippetText;
@@ -872,8 +931,8 @@ NS_ASSUME_NONNULL_BEGIN
                  }]];
                 
             } else {
-                UIFont * snippetFont = hasUnreadMessages ? self.snippetFont.ows_semibold : self.snippetFont;
-                UIColor *foregroundColor = hasUnreadMessages ? Theme.primaryTextColor : Theme.ternaryTextColor;
+                UIFont * snippetFont = hasUnreadMessages ? self.snippetFont : self.snippetFont;
+                UIColor *foregroundColor = hasUnreadMessages ? Theme.ternaryTextColor : Theme.ternaryTextColor;
                 [self snippetWithOriginString:snippetText AppendText:displayableText font:snippetFont textColor:foregroundColor];
             }
             return snippetText;
@@ -889,6 +948,16 @@ NS_ASSUME_NONNULL_BEGIN
         NSFontAttributeName : font,
         NSForegroundColorAttributeName :color,
     }]];
+}
+
+- (NSString *)criticalAlertIdentifierForThread:(ThreadViewModel *)thread {
+    NSString *serverId = thread.threadRecord.serverThreadId;
+    if (thread.isGroupThread) {
+        return serverId;
+    } else {
+        return thread.contactIdentifier;
+    }
+    return serverId;
 }
 
 - (void)configInCommonGroupWithThread:(TSGroupThread *)groupThread

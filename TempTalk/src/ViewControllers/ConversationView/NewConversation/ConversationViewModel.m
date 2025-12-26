@@ -1379,10 +1379,10 @@ NS_ASSUME_NONNULL_BEGIN
         return completion(nil, NO, NO);
     }
     
-//    if ([freshInteraction isKindOfClass:[TSInfoMessage class]] &&
-//        ((TSInfoMessage *)freshInteraction).isRecalMessage) {
-//        return completion(nil, NO, NO);
-//    }
+    if ([freshInteraction isKindOfClass:[TSInfoMessage class]] &&
+        ((TSInfoMessage *)freshInteraction).isRecalMessage) {
+        return completion(nil, NO, NO);
+    }
     
     id<ConversationViewItem> _Nullable viewItem = self.viewItemCache[interactionUniqueId];
     if (!viewItem) {

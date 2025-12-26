@@ -385,6 +385,8 @@ extension AppSettingsViewController : UITableViewDelegate,UITableViewDataSource 
             }
             defaultStyleCell.selectionStyle = .none
             defaultStyleCell.reloadCell(model: settingMeItem)
+            defaultStyleCell.backgroundColor = Theme.bgelevateColor
+            defaultStyleCell.contentView.backgroundColor = Theme.bg1Color
             return defaultStyleCell
         } else {
             return UITableViewCell.init()

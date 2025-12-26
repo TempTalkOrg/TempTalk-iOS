@@ -44,9 +44,11 @@ NS_ASSUME_NONNULL_BEGIN
                        byteCount:(unsigned int)byteCount
                      contentType:(NSString *)contentType
                    encryptionKey:(NSData *)encryptionKey
+                          height:(unsigned int)height
                     isDownloaded:(BOOL)isDownloaded
                         serverId:(unsigned long long)serverId
                   sourceFilename:(nullable NSString *)sourceFilename
+                           width:(unsigned int)width
                           digest:(nullable NSData *)digest
   mostRecentFailureLocalizedText:(nullable NSString *)mostRecentFailureLocalizedText
                            relay:(NSString *)relay
@@ -62,9 +64,11 @@ NS_ASSUME_NONNULL_BEGIN
                          byteCount:byteCount
                        contentType:contentType
                      encryptionKey:encryptionKey
+                            height:height
                       isDownloaded:isDownloaded
                           serverId:serverId
-                    sourceFilename:sourceFilename];
+                    sourceFilename:sourceFilename
+                             width:width];
 
     if (!self) {
         return self;

@@ -428,6 +428,25 @@ class NotificationService: UNNotificationServiceExtension {
         }
     }
     
+    func conversationId(from attemptContent: UNNotificationContent, completion: @escaping (_ conversationId: String?) -> Void) {
+        let userInfo = attemptContent.userInfo
+        
+        guard
+            let aps = userInfo["aps"] as? [String: Any],
+            let passthroughString = aps["passthrough"] as? String,
+            let passthroughData = passthroughString.data(using: .utf8),
+            let passthroughDict = try? JSONSerialization.jsonObject(with: passthroughData) as? [String: Any],
+            let conversationId = passthroughDict["conversationId"] as? String
+        else {
+            completion(nil)
+            return
+        }
+        
+        DispatchQueue.main.async {
+            completion(conversationId)
+        }
+    }
+    
     func scheduleUpdateNotification(attemptContent :UNNotificationContent) -> (Bool, Int?) {
         
         let userInfo = attemptContent.userInfo

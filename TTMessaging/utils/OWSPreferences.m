@@ -36,6 +36,9 @@ NSString *const OWSPreferencesKeySystemCallLogEnabled = @"OWSPreferencesKeySyste
 NSString *const OWSPreferencesKeySystemEndCallKey = @"kNotificationEndCall";
 NSString *const OWSPreferencesKeyCriticalAlertEnabled = @"OWSPreferencesKeyCriticalAlertEnabled";
 NSString *const OWSPreferencesKeyHasShownCriticalAlertPopup = @"OWSPreferencesKeyHasShownCriticalAlertPopup";
+NSString *const OWSPreferencesKeyCriticalAlertHighlights = @"OWSPreferencesKeyCriticalAlertHighlights";
+
+NSString *const DTCriticalAlertHighlightDidChangeNotification = @"DTCriticalAlertHighlightDidChangeNotification";
 
 @implementation OWSPreferences
 
@@ -500,7 +503,6 @@ NSString *const OWSPreferencesKeyHasShownCriticalAlertPopup = @"OWSPreferencesKe
 {
     [self setValueForKey:OWSPreferencesKeyHasShownCriticalAlertPopup toValue:@(shown)];
 }
-
 @end
 
 NS_ASSUME_NONNULL_END

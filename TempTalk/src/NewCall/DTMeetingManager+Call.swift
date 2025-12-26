@@ -221,6 +221,22 @@ extension DTMeetingManager {
         
         Logger.info("\(logTag) accept call with direct LiveKit connection")
         
+        // 清理高亮消息
+        if let conversationId = currentCall.conversationId, !conversationId.isEmpty {
+            self.databaseStorage.write { writeTransaction in
+                if currentCall.callType == .private {
+                    if let contactThread = TSContactThread.getThread(contactId: conversationId, transaction: writeTransaction) {
+                        contactThread.removeCriticalAlertMsg(with: writeTransaction)
+                    }
+                } else {
+                    if let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId),
+                       let groupThread = TSGroupThread.getWithGroupId(localGroupId, transaction: writeTransaction) {
+                        groupThread.removeCriticalAlertMsg(with: writeTransaction)
+                    }
+                }
+            }
+        }
+        
         Task {
             fromSource = "acceptCall"
             

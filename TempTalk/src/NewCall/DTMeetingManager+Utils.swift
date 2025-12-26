@@ -844,6 +844,12 @@ extension DTMeetingManager {
             Logger.info("[newcall] update otherCriticalAlert \(self.otherCriticalAlert)")
         }
     }
+    
+    func isGid(_ gid: String) -> Bool {
+        return gid.count == 32 &&
+               gid.range(of: "^[a-zA-Z0-9]{32}$",
+                         options: .regularExpression) != nil
+    }
 }
 
 // DTMeetingManagerProtocol

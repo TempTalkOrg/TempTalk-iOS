@@ -18,6 +18,7 @@ extern NSString *const OWSPreferencesSignalDatabaseCollection;
 extern NSString *const OWSPreferencesKeyEnableDebugLog;
 extern NSString *const OWSPreferencesCallLoggingDidChangeNotification;
 extern NSString *const OWSPreferencesKeySystemEndCallKey;
+extern NSString *const DTCriticalAlertHighlightDidChangeNotification;
 
 @class SDSAnyWriteTransaction;
 @class SDSKeyValueStore;

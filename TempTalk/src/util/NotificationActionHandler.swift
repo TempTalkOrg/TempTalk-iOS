@@ -28,6 +28,22 @@ public class NotificationActionHandler: Dependencies {
 
         let userInfo = response.notification.request.content.userInfo
         
+        // // critical 不跳转
+        let apnsInfo = self.apnsInfo(userInfo: userInfo)
+        if let aps = apnsInfo, aps.interruptionLevel == "critical" {
+            Logger.info("[notification] critical interruption, skip navigation")
+            Task {
+                DTMeetingManager.shared.syncServerCalls()
+                for call in DTMeetingManager.shared.allMeetings {
+                    if call.conversationId == aps.conversationId {
+                        Logger.info("[notification] cccept call from critical alert notification")
+                        DTMeetingManager.shared.acceptCall(call: call)
+                    }
+                }
+            }
+            return Promise.value(())
+        }
+        
         let categoryIdentifier = response.notification.request.content.categoryIdentifier
         let action: AppNotificationAction
 

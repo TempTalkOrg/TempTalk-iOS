@@ -22,8 +22,22 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
         case .stillImage, .animatedImage, .video:
             return true
         default:
+            return isDownloadingAttachmentWithThumbnail
+        }
+    }
+    
+    var isDownloadingAttachmentWithThumbnail: Bool {
+        guard let attachmentPointer = viewItem.attachmentPointer() else {
             return false
         }
+        let contentType = attachmentPointer.contentType
+        guard MIMETypeUtil.isImage(contentType) || MIMETypeUtil.isVideo(contentType) || MIMETypeUtil.isAnimated(contentType) else {
+            return false
+        }
+        guard attachmentPointer.width > 0, attachmentPointer.height > 0 else {
+            return false
+        }
+        return true
     }
     
     var hasFullWidthMediaView: Bool {
@@ -52,13 +66,21 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
         var result: CGSize = .zero
         switch viewItem.messageCellType() {
         case .stillImage, .animatedImage, .video:
-            result = measureSizeForThumbnailMedia(maxMessageWidth: maxMessageWidth, minMessageWidth: minMessageWidth)
+            result = measureSizeForThumbnailMedia(
+                mediaSize: viewItem.mediaSize(),
+                maxMessageWidth: maxMessageWidth,
+                minMessageWidth: minMessageWidth
+            )
         case .audio:
             result = measureSizeForAudio(maxMessageWidth: maxMessageWidth)
         case .genericAttachment:
             result = measureSizeForGenericAttachment(minMessageWidth: minMessageWidth)
         case .downloadingAttachment:
-            result = measureSizeForDownloadingAttachment(minMessageWidth: minMessageWidth)
+            if isDownloadingAttachmentWithThumbnail {
+                result = measureSizeForDownloadingAttachmentWithThumbnail(maxMessageWidth: maxMessageWidth, minMessageWidth: minMessageWidth)
+            } else {
+                result = measureSizeForDownloadingGenericAttachment(minMessageWidth: minMessageWidth)
+            }
         case .contactShare:
             result = measureSizeForContactShare()
         default:
@@ -70,8 +92,11 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
         return CGSizeCeil(result)
     }
     
-    private func measureSizeForThumbnailMedia(maxMessageWidth: CGFloat, minMessageWidth: CGFloat) -> CGSize {
-        let mediaSize = viewItem.mediaSize()
+    private func measureSizeForThumbnailMedia(
+        mediaSize: CGSize,
+        maxMessageWidth: CGFloat,
+        minMessageWidth: CGFloat
+    ) -> CGSize {
         var ratio = mediaSize.height > 0 ? mediaSize.width / mediaSize.height : 0
         // Clamp the aspect ratio so that very thin/wide content is presented
         // in a reasonable way.
@@ -190,12 +215,26 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
         return CGSizeCeil(size)
     }
     
-    private func measureSizeForDownloadingAttachment(minMessageWidth: CGFloat) -> CGSize {
+    private func measureSizeForDownloadingAttachmentWithThumbnail(maxMessageWidth: CGFloat, minMessageWidth: CGFloat) -> CGSize {
+        guard let attachmentPointer = viewItem.attachmentPointer() else {
+            return .zero
+        }
+        return measureSizeForThumbnailMedia(
+            mediaSize: CGSizeMake(CGFloat(attachmentPointer.width), CGFloat(attachmentPointer.height)),
+            maxMessageWidth: maxMessageWidth,
+            minMessageWidth: minMessageWidth
+        )
+    }
+    
+    private func measureSizeForDownloadingGenericAttachment(minMessageWidth: CGFloat) -> CGSize {
         guard let attachmentPointer = viewItem.attachmentPointer() else {
             return .zero
         }
         
         let fileName = {
+            if attachmentPointer.attachmentType == .voiceMessage {
+                return Localized("ATTACHMENT_TYPE_VOICE_MESSAGE")
+            }
             if let name = attachmentPointer.sourceFilename, !name.isEmpty {
                 return name
             }

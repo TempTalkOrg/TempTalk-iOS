@@ -768,34 +768,114 @@ extension DTMeetingManager: DTCallMessageDelegate {
     }
     
     func sendCriticalAlertWithBarrage(_ message: String) async {
-        var params: [String: Any] = [:]
-        if DTMeetingManager.shared.currentCall.callType == .private {
-            if let otherParticipantId = currentCall.conversationId {
-                params = ["destination": otherParticipantId]
-            }
-        } else {
-            if let gid = currentCall.conversationId {
-                params = ["gid": gid]
-            }
+        guard let conversationId = currentCall.conversationId else {
+            Logger.error("[newCall] Missing conversationId")
+            criticalAlertFailedBarrage()
+            return
         }
-        
-        if DTParamsUtils.validateDictionary(params).boolValue {
-            CallCriticalAlertApi().criticalAlertServers(params) { [weak self] entity in
-                guard let self = self else { return }
-                if let result = entity?.data["result"] as? Bool, result {
-                    Logger.info("[newCall] CallCriticalAlert success")
-                    if let roomCtx = self.roomContext {
-                        let pid = roomCtx.room.localParticipant.identity?.stringValue
-                            .components(separatedBy: ".").first ?? ""
-                        RoomDataManager.shared.sendRTMBarrageMessage(pid: pid, message: message)
-                    }
-                } else {
-                    self.criticalAlertFailedBarrage()
-                    Logger.error("[newCall] CallCriticalAlert result is false or missing")
+
+        // 构建基础参数
+        let timestamp = Date().ows_millisecondsSince1970
+        var params: [String: Any] = [
+            "timestamp": timestamp
+        ]
+
+        // 目标参数（group / private）
+        switch DTMeetingManager.shared.currentCall.callType {
+        case .private:
+            params["destination"] = conversationId
+        case .group:
+            params["gid"] = conversationId
+        default:
+            break
+        }
+
+        guard DTParamsUtils.validateDictionary(params).boolValue else {
+            Logger.error("[newCall] Invalid params")
+            criticalAlertFailedBarrage()
+            return
+        }
+
+        // 调用 API
+        CallCriticalAlertApi().criticalAlertServers(params) { [weak self] entity in
+            guard let self = self else { return }
+            guard
+                let data = entity?.data,
+                let isSuccess = data["result"] as? Bool, isSuccess
+            else {
+                self.handleCriticalAlertFailure()
+                Logger.error("[newCall] CallCriticalAlert result false or missing")
+                return
+            }
+
+            Logger.info("[newCall] CallCriticalAlert success")
+
+            // 发送实时弹幕
+            self.sendRTMBarrage(message: message)
+
+            // 发送可回溯本地消息
+            if let serverTimestamp = entity?.serverTimestamp as? UInt64 {
+                databaseStorage.write { transaction in
+                    self.sendLocalTraceableMessage(conversationId: conversationId,
+                                                   localTimestamp: timestamp,
+                                                   serverTimestamp: serverTimestamp,
+                                                   writeTransation: transaction)
                 }
-            } failure: { error, _ in
-                self.criticalAlertFailedBarrage()
-                Logger.error("[newCall] CallCriticalAlert failure \(error.localizedDescription)")
+            }
+
+        } failure: { [weak self] error, _ in
+            self?.handleCriticalAlertFailure()
+            Logger.error("[newCall] CallCriticalAlert failure \(error.localizedDescription)")
+        }
+    }
+
+
+    /// 发送错误提示
+    private func handleCriticalAlertFailure() {
+        criticalAlertFailedBarrage()
+    }
+
+    /// 弹幕发送
+    private func sendRTMBarrage(message: String) {
+        guard let roomCtx = roomContext else { return }
+        let pid = roomCtx.room.localParticipant.identity?
+            .stringValue.components(separatedBy: ".").first ?? ""
+        
+        RoomDataManager.shared.sendRTMBarrageMessage(pid: pid, message: message)
+    }
+
+
+    /// 统一处理 group / private 的本地可回溯消息
+    private func sendLocalTraceableMessage(conversationId: String,
+                                           localTimestamp: UInt64,
+                                           serverTimestamp: UInt64,
+                                           writeTransation: SDSAnyWriteTransaction)
+    {
+        DispatchMainThreadSafe {
+            let callType = self.currentCall.callType
+            switch callType {
+            case .group:
+                guard
+                    let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId)
+                else { return }
+                let thread = TSGroupThread.getOrCreateThread(withGroupId: localGroupId, transaction: writeTransation)
+                self.createCriticalAlertLocalOutgoingMessage(
+                    thread: thread,
+                    timestamp: localTimestamp,
+                    serverTimestamp: serverTimestamp,
+                    transation: writeTransation
+                )
+
+            case .private:
+                let thread = TSContactThread.getOrCreateThread(withContactId: conversationId, transaction: writeTransation)
+                self.createCriticalAlertLocalOutgoingMessage(
+                    thread: thread,
+                    timestamp: localTimestamp,
+                    serverTimestamp: serverTimestamp,
+                    transation: writeTransation
+                )
+            default:
+                break
             }
         }
     }

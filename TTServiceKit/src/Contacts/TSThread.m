@@ -75,6 +75,7 @@ BOOL IsNoteToSelfEnabled(void)
                  lastMessageDate:(nullable NSDate *)lastMessageDate
                       lastestMsg:(nullable TSMessage *)lastestMsg
                  mentionedAllMsg:(nullable DTMentionedMsgInfo *)mentionedAllMsg
+            mentionedCriticalMsg:(nullable DTMentionedMsgInfo *)mentionedCriticalMsg
                   mentionedMeMsg:(nullable DTMentionedMsgInfo *)mentionedMeMsg
                    mentionsDraft:(nullable NSArray<DTMention *> *)mentionsDraft
               messageClearAnchor:(unsigned long long)messageClearAnchor
@@ -110,6 +111,7 @@ BOOL IsNoteToSelfEnabled(void)
     _lastMessageDate = lastMessageDate;
     _lastestMsg = lastestMsg;
     _mentionedAllMsg = mentionedAllMsg;
+    _mentionedCriticalMsg = mentionedCriticalMsg;
     _mentionedMeMsg = mentionedMeMsg;
     _mentionsDraft = mentionsDraft;
     _messageClearAnchor = messageClearAnchor;
@@ -674,11 +676,15 @@ BOOL IsNoteToSelfEnabled(void)
  */
 
 - (void)refreshLatestMentionedMsg{
-    if(_mentionedMeMsg.timestampForSorting <= self.readPositionEntity.maxServerTime){
+    if(_mentionedMeMsg && _mentionedMeMsg.timestampForSorting <= self.readPositionEntity.maxServerTime){
         _mentionedMeMsg = nil;
     }
-    if(_mentionedAllMsg.timestampForSorting <= self.readPositionEntity.maxServerTime){
+    if(_mentionedAllMsg && _mentionedAllMsg.timestampForSorting <= self.readPositionEntity.maxServerTime){
         _mentionedAllMsg = nil;
+    }
+    // 同时清除 mentionedCriticalMsg
+    if(_mentionedCriticalMsg && _mentionedCriticalMsg.timestampForSorting <= self.readPositionEntity.maxServerTime){
+        _mentionedCriticalMsg = nil;
     }
 }
 
@@ -1280,6 +1286,45 @@ BOOL IsNoteToSelfEnabled(void)
 + (TSFTSIndexMode)FTSIndexMode
 {
     return TSFTSIndexModeAlways;
+}
+
+#pragma mark - Critical Alert Highlight
+- (void)updateCriticalAlertMsgWithMessageId:(NSString *)messageId
+                          timestampForSorting:(uint64_t)timestampForSorting
+                                  transaction:(SDSAnyWriteTransaction *)transaction
+{
+    if (!messageId.length) return;
+    
+    if (!self.mentionedCriticalMsg || self.mentionedCriticalMsg.timestampForSorting < timestampForSorting) {
+        DTMentionedMsgInfo *newMentionedCriticalMsg = [[DTMentionedMsgInfo alloc] initWithUniqueMessageId:messageId
+                                                                                      timestampForSorting:timestampForSorting];
+        [self anyUpdateWithTransaction:transaction
+                                 block:^(TSThread *thread) {
+            thread.mentionedCriticalMsg = newMentionedCriticalMsg;
+            OWSLogInfo(@"[Thread] update critical highlight success");
+        }];
+    }
+}
+
+- (void)removeCriticalAlertMsgWithTransaction:(SDSAnyWriteTransaction *)transaction
+{
+    if (self.mentionedCriticalMsg) {
+        [self anyUpdateWithTransaction:transaction
+                                 block:^(TSThread *thread) {
+            thread.mentionedCriticalMsg = nil;
+            OWSLogInfo(@"[Thread] remove critical highlight");
+        }];
+    }
+}
+
+- (BOOL)hasCriticalAlertHighlightWithTransaction:(nullable SDSAnyReadTransaction *)transaction
+{
+    if (!transaction) return NO;
+    if (self.mentionedCriticalMsg && self.mentionedCriticalMsg.timestampForSorting > self.readPositionEntity.maxServerTime) {
+        OWSLogInfo(@"[Thread] should show critical highlight");
+        return YES;
+    }
+    return NO;
 }
 
 @end

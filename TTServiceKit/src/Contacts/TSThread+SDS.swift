@@ -61,6 +61,7 @@ public struct ThreadRecord: SDSRecord {
     public let receivedFriendReq: Bool?
     public let expiresInSeconds: UInt64
     public let messageClearAnchor: UInt64
+    public let mentionedCriticalMsg: Data?
 
     public enum CodingKeys: String, CodingKey, ColumnExpression, CaseIterable {
         case id
@@ -97,6 +98,7 @@ public struct ThreadRecord: SDSRecord {
         case receivedFriendReq
         case expiresInSeconds
         case messageClearAnchor
+        case mentionedCriticalMsg
     }
 
     public static func columnName(_ column: ThreadRecord.CodingKeys, fullyQualified: Bool = false) -> String {
@@ -154,6 +156,7 @@ public extension ThreadRecord {
         translateSettingType = row[31]
         expiresInSeconds = row[32]
         messageClearAnchor = row[33]
+        mentionedCriticalMsg = row[34]
     }
 }
 
@@ -201,6 +204,8 @@ extension TSThread {
             let lastestMsg: TSMessage? = try SDSDeserialization.optionalUnarchive(lastestMsgSerialized, name: "lastestMsg")
             let mentionedAllMsgSerialized: Data? = record.mentionedAllMsg
             let mentionedAllMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedAllMsgSerialized, name: "mentionedAllMsg")
+            let mentionedCriticalMsgSerialized: Data? = record.mentionedCriticalMsg
+            let mentionedCriticalMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedCriticalMsgSerialized, name: "mentionedCriticalMsg")
             let mentionedMeMsgSerialized: Data? = record.mentionedMeMsg
             let mentionedMeMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedMeMsgSerialized, name: "mentionedMeMsg")
             let mentionsDraftSerialized: Data? = record.mentionsDraft
@@ -238,6 +243,7 @@ extension TSThread {
                                    lastMessageDate: lastMessageDate,
                                    lastestMsg: lastestMsg,
                                    mentionedAllMsg: mentionedAllMsg,
+                                   mentionedCriticalMsg: mentionedCriticalMsg,
                                    mentionedMeMsg: mentionedMeMsg,
                                    mentionsDraft: mentionsDraft,
                                    messageClearAnchor: messageClearAnchor,
@@ -275,6 +281,8 @@ extension TSThread {
             let lastestMsg: TSMessage? = try SDSDeserialization.optionalUnarchive(lastestMsgSerialized, name: "lastestMsg")
             let mentionedAllMsgSerialized: Data? = record.mentionedAllMsg
             let mentionedAllMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedAllMsgSerialized, name: "mentionedAllMsg")
+            let mentionedCriticalMsgSerialized: Data? = record.mentionedCriticalMsg
+            let mentionedCriticalMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedCriticalMsgSerialized, name: "mentionedCriticalMsg")
             let mentionedMeMsgSerialized: Data? = record.mentionedMeMsg
             let mentionedMeMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedMeMsgSerialized, name: "mentionedMeMsg")
             let mentionsDraftSerialized: Data? = record.mentionsDraft
@@ -315,6 +323,7 @@ extension TSThread {
                                    lastMessageDate: lastMessageDate,
                                    lastestMsg: lastestMsg,
                                    mentionedAllMsg: mentionedAllMsg,
+                                   mentionedCriticalMsg: mentionedCriticalMsg,
                                    mentionedMeMsg: mentionedMeMsg,
                                    mentionsDraft: mentionsDraft,
                                    messageClearAnchor: messageClearAnchor,
@@ -355,6 +364,8 @@ extension TSThread {
             let lastestMsg: TSMessage? = try SDSDeserialization.optionalUnarchive(lastestMsgSerialized, name: "lastestMsg")
             let mentionedAllMsgSerialized: Data? = record.mentionedAllMsg
             let mentionedAllMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedAllMsgSerialized, name: "mentionedAllMsg")
+            let mentionedCriticalMsgSerialized: Data? = record.mentionedCriticalMsg
+            let mentionedCriticalMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedCriticalMsgSerialized, name: "mentionedCriticalMsg")
             let mentionedMeMsgSerialized: Data? = record.mentionedMeMsg
             let mentionedMeMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedMeMsgSerialized, name: "mentionedMeMsg")
             let mentionsDraftSerialized: Data? = record.mentionsDraft
@@ -394,6 +405,7 @@ extension TSThread {
                                  lastMessageDate: lastMessageDate,
                                  lastestMsg: lastestMsg,
                                  mentionedAllMsg: mentionedAllMsg,
+                                 mentionedCriticalMsg: mentionedCriticalMsg,
                                  mentionedMeMsg: mentionedMeMsg,
                                  mentionsDraft: mentionsDraft,
                                  messageClearAnchor: messageClearAnchor,
@@ -432,6 +444,8 @@ extension TSThread {
             let lastestMsg: TSMessage? = try SDSDeserialization.optionalUnarchive(lastestMsgSerialized, name: "lastestMsg")
             let mentionedAllMsgSerialized: Data? = record.mentionedAllMsg
             let mentionedAllMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedAllMsgSerialized, name: "mentionedAllMsg")
+            let mentionedCriticalMsgSerialized: Data? = record.mentionedCriticalMsg
+            let mentionedCriticalMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedCriticalMsgSerialized, name: "mentionedCriticalMsg")
             let mentionedMeMsgSerialized: Data? = record.mentionedMeMsg
             let mentionedMeMsg: DTMentionedMsgInfo? = try SDSDeserialization.optionalUnarchive(mentionedMeMsgSerialized, name: "mentionedMeMsg")
             let mentionsDraftSerialized: Data? = record.mentionsDraft
@@ -469,6 +483,7 @@ extension TSThread {
                             lastMessageDate: lastMessageDate,
                             lastestMsg: lastestMsg,
                             mentionedAllMsg: mentionedAllMsg,
+                            mentionedCriticalMsg: mentionedCriticalMsg,
                             mentionedMeMsg: mentionedMeMsg,
                             mentionsDraft: mentionsDraft,
                             messageClearAnchor: messageClearAnchor,
@@ -597,6 +612,12 @@ extension TSThread: DeepCopyable {
             //
             // * Implement DeepCopyable for this type (e.g. a model).
             // * Modify DeepCopies.deepCopy() to support this type (e.g. a collection).
+            let mentionedCriticalMsg: DTMentionedMsgInfo?
+            if let mentionedCriticalMsgForCopy = modelToCopy.mentionedCriticalMsg {
+               mentionedCriticalMsg = try DeepCopies.deepCopy(mentionedCriticalMsgForCopy)
+            } else {
+               mentionedCriticalMsg = nil
+            }
             let mentionedMeMsg: DTMentionedMsgInfo?
             if let mentionedMeMsgForCopy = modelToCopy.mentionedMeMsg {
                mentionedMeMsg = try DeepCopies.deepCopy(mentionedMeMsgForCopy)
@@ -671,6 +692,7 @@ extension TSThread: DeepCopyable {
                                  lastMessageDate: lastMessageDate,
                                  lastestMsg: lastestMsg,
                                  mentionedAllMsg: mentionedAllMsg,
+                                 mentionedCriticalMsg: mentionedCriticalMsg,
                                  mentionedMeMsg: mentionedMeMsg,
                                  mentionsDraft: mentionsDraft,
                                  messageClearAnchor: messageClearAnchor,
@@ -747,6 +769,12 @@ extension TSThread: DeepCopyable {
             //
             // * Implement DeepCopyable for this type (e.g. a model).
             // * Modify DeepCopies.deepCopy() to support this type (e.g. a collection).
+            let mentionedCriticalMsg: DTMentionedMsgInfo?
+            if let mentionedCriticalMsgForCopy = modelToCopy.mentionedCriticalMsg {
+               mentionedCriticalMsg = try DeepCopies.deepCopy(mentionedCriticalMsgForCopy)
+            } else {
+               mentionedCriticalMsg = nil
+            }
             let mentionedMeMsg: DTMentionedMsgInfo?
             if let mentionedMeMsgForCopy = modelToCopy.mentionedMeMsg {
                mentionedMeMsg = try DeepCopies.deepCopy(mentionedMeMsgForCopy)
@@ -821,6 +849,7 @@ extension TSThread: DeepCopyable {
                                    lastMessageDate: lastMessageDate,
                                    lastestMsg: lastestMsg,
                                    mentionedAllMsg: mentionedAllMsg,
+                                   mentionedCriticalMsg: mentionedCriticalMsg,
                                    mentionedMeMsg: mentionedMeMsg,
                                    mentionsDraft: mentionsDraft,
                                    messageClearAnchor: messageClearAnchor,
@@ -899,6 +928,12 @@ extension TSThread: DeepCopyable {
             //
             // * Implement DeepCopyable for this type (e.g. a model).
             // * Modify DeepCopies.deepCopy() to support this type (e.g. a collection).
+            let mentionedCriticalMsg: DTMentionedMsgInfo?
+            if let mentionedCriticalMsgForCopy = modelToCopy.mentionedCriticalMsg {
+               mentionedCriticalMsg = try DeepCopies.deepCopy(mentionedCriticalMsgForCopy)
+            } else {
+               mentionedCriticalMsg = nil
+            }
             let mentionedMeMsg: DTMentionedMsgInfo?
             if let mentionedMeMsgForCopy = modelToCopy.mentionedMeMsg {
                mentionedMeMsg = try DeepCopies.deepCopy(mentionedMeMsgForCopy)
@@ -970,6 +1005,7 @@ extension TSThread: DeepCopyable {
                                    lastMessageDate: lastMessageDate,
                                    lastestMsg: lastestMsg,
                                    mentionedAllMsg: mentionedAllMsg,
+                                   mentionedCriticalMsg: mentionedCriticalMsg,
                                    mentionedMeMsg: mentionedMeMsg,
                                    mentionsDraft: mentionsDraft,
                                    messageClearAnchor: messageClearAnchor,
@@ -1046,6 +1082,12 @@ extension TSThread: DeepCopyable {
             //
             // * Implement DeepCopyable for this type (e.g. a model).
             // * Modify DeepCopies.deepCopy() to support this type (e.g. a collection).
+            let mentionedCriticalMsg: DTMentionedMsgInfo?
+            if let mentionedCriticalMsgForCopy = modelToCopy.mentionedCriticalMsg {
+               mentionedCriticalMsg = try DeepCopies.deepCopy(mentionedCriticalMsgForCopy)
+            } else {
+               mentionedCriticalMsg = nil
+            }
             let mentionedMeMsg: DTMentionedMsgInfo?
             if let mentionedMeMsgForCopy = modelToCopy.mentionedMeMsg {
                mentionedMeMsg = try DeepCopies.deepCopy(mentionedMeMsgForCopy)
@@ -1117,6 +1159,7 @@ extension TSThread: DeepCopyable {
                             lastMessageDate: lastMessageDate,
                             lastestMsg: lastestMsg,
                             mentionedAllMsg: mentionedAllMsg,
+                            mentionedCriticalMsg: mentionedCriticalMsg,
                             mentionedMeMsg: mentionedMeMsg,
                             mentionsDraft: mentionsDraft,
                             messageClearAnchor: messageClearAnchor,
@@ -1180,6 +1223,7 @@ extension TSThreadSerializer {
     static var receivedFriendReqColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "receivedFriendReq", columnType: .int, isOptional: true) }
     static var expiresInSecondsColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "expiresInSeconds", columnType: .int64) }
     static var messageClearAnchorColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "messageClearAnchor", columnType: .int64) }
+    static var mentionedCriticalMsgColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "mentionedCriticalMsg", columnType: .blob, isOptional: true) }
 
     // TODO: We should decide on a naming convention for
     //       tables that store models.
@@ -1220,7 +1264,8 @@ extension TSThreadSerializer {
         friendContactVersionColumn,
         receivedFriendReqColumn,
         expiresInSecondsColumn,
-        messageClearAnchorColumn
+        messageClearAnchorColumn,
+        mentionedCriticalMsgColumn
         ])
     }
 }
@@ -1666,8 +1711,9 @@ class TSThreadSerializer: SDSSerializer {
         let receivedFriendReq: Bool? = nil
         let expiresInSeconds: UInt64 = model.expiresInSeconds
         let messageClearAnchor: UInt64 = model.messageClearAnchor
+        let mentionedCriticalMsg: Data? = optionalArchive(model.mentionedCriticalMsg)
 
-        return ThreadRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, archivalDate: archivalDate, conversationEntity: conversationEntity, creationDate: creationDate, draftQuoteMessageId: draftQuoteMessageId, groupModel: groupModel, hasDismissedOffers: hasDismissedOffers, hasEverHadMessage: hasEverHadMessage, lastMessageDate: lastMessageDate, lastestMsg: lastestMsg, messageDraft: messageDraft, mutedUntilDate: mutedUntilDate, plainTextEnable: plainTextEnable, readPositionEntity: readPositionEntity, removedFromConversation: removedFromConversation, stickCallingDate: stickCallingDate, stickDate: stickDate, translateSettingType: translateSettingType, unreadFlag: unreadFlag, unreadState: unreadState, unreadTimeStimeStamp: unreadTimeStimeStamp, isArchived: isArchived, unreadMessageCount: unreadMessageCount, mentionedAllMsg: mentionedAllMsg, mentionedMeMsg: mentionedMeMsg, shouldBeVisible: shouldBeVisible, threadConfig: threadConfig, mentionsDraft: mentionsDraft, friendContactVersion: friendContactVersion, receivedFriendReq: receivedFriendReq, expiresInSeconds: expiresInSeconds, messageClearAnchor: messageClearAnchor)
+        return ThreadRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, archivalDate: archivalDate, conversationEntity: conversationEntity, creationDate: creationDate, draftQuoteMessageId: draftQuoteMessageId, groupModel: groupModel, hasDismissedOffers: hasDismissedOffers, hasEverHadMessage: hasEverHadMessage, lastMessageDate: lastMessageDate, lastestMsg: lastestMsg, messageDraft: messageDraft, mutedUntilDate: mutedUntilDate, plainTextEnable: plainTextEnable, readPositionEntity: readPositionEntity, removedFromConversation: removedFromConversation, stickCallingDate: stickCallingDate, stickDate: stickDate, translateSettingType: translateSettingType, unreadFlag: unreadFlag, unreadState: unreadState, unreadTimeStimeStamp: unreadTimeStimeStamp, isArchived: isArchived, unreadMessageCount: unreadMessageCount, mentionedAllMsg: mentionedAllMsg, mentionedMeMsg: mentionedMeMsg, shouldBeVisible: shouldBeVisible, threadConfig: threadConfig, mentionsDraft: mentionsDraft, friendContactVersion: friendContactVersion, receivedFriendReq: receivedFriendReq, expiresInSeconds: expiresInSeconds, messageClearAnchor: messageClearAnchor, mentionedCriticalMsg: mentionedCriticalMsg)
     }
 }
 

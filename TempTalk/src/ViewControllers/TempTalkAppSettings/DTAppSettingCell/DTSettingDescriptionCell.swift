@@ -38,8 +38,8 @@ class DTSettingDescriptionCell : DTDefaultBaseStyleCell {
     
     override func applyTheme()  {
         super.applyTheme()
-        backgroundColor = Theme.bgelevateColor
-        contentView.backgroundColor = Theme.bg1Color
+        backgroundColor = Theme.defaultBackgroundColor
+        contentView.backgroundColor = Theme.defaultTableCellBackgroundColor
         titleLable.textColor = Theme.primaryTextColor
         descriptionLabel.textColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x848E9C) : UIColor.color(rgbHex: 0x848E9C)
     }

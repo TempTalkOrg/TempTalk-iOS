@@ -628,17 +628,22 @@ public class PendingEnvelopes {
         unfairLock.withLock {
             let oldCount = pendingEnvelopes.count
             
-            for pendingEnvelope in pendingEnvelopes {
-                if pendingEnvelope.isDuplicateOf(encryptedEnvelope) {
-                    return .duplicate
+            let msgType = encryptedEnvelope.encryptedEnvelope.msgType
+            let shouldDeduplicate = msgType != .msgNotify
+            
+            // 通知不需要去重
+            if shouldDeduplicate {
+                for pendingEnvelope in pendingEnvelopes {
+                    if pendingEnvelope.isDuplicateOf(encryptedEnvelope) {
+                        return .duplicate
+                    }
                 }
             }
             pendingEnvelopes.append(encryptedEnvelope)
             
             let newCount = pendingEnvelopes.count
-//            if DebugFlags.internalLogging {
-                Logger.info("\(oldCount) -> \(newCount)")
-//            }
+            Logger.info("\(oldCount) -> \(newCount)")
+            
             return .enqueued
         }
     }

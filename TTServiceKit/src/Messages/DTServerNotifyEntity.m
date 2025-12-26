@@ -13,6 +13,13 @@
     return [NSDictionary mtl_identityPropertyMapWithModel:[self class]];;
 }
 
+@end
 
+
+@implementation DTServerNotifyCriticalAlertEntity
+
++ (NSDictionary *)JSONKeyPathsByPropertyKey{
+    return [NSDictionary mtl_identityPropertyMapWithModel:[self class]];;
+}
 
 @end

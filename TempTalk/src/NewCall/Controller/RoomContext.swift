@@ -136,6 +136,9 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
                     self.pendingShowUI = false
                     self.presentShareViewVC()
                 }
+                
+                // 检查是否存在屏幕共享但未展示，尝试弹出
+                self.checkAndPresentScreenShareIfNeeded()
             }
         }
     }
@@ -357,6 +360,38 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         self.shareVC = shareVC
         shareVC.modalPresentationStyle = .fullScreen
         presentOnTop(shareVC, animated: false, completion: completion)
+    }
+    
+    /// 检查是否存在屏幕共享但未展示，如果存在则尝试弹出
+    @MainActor
+    private func checkAndPresentScreenShareIfNeeded() {
+        // 检查是否存在屏幕共享
+        guard let publication = screenSharePublication,
+              let participant = screenShareParticipant,
+              publication.source == .screenShareVideo else {
+            Logger.info("\(logTag) No active screen share found")
+            return
+        }
+        
+        // 检查参与者是否仍然启用屏幕共享
+        guard participant.isScreenShareEnabled() else {
+            Logger.info("\(logTag) Participant screen share is not enabled")
+            return
+        }
+        
+        // 如果已经展示，不需要重复弹出
+        if shareVC != nil {
+            Logger.info("\(logTag) Screen share view already presented")
+            return
+        }
+        
+        // 如果存在屏幕共享但未展示（可能是之前在后台时尝试失败），尝试弹出
+        Logger.info("\(logTag) App became active, found screen share but view not presented - attempting to present")
+        // 确保状态正确
+        if !callManager.currentCall.isPresentedShare {
+            callManager.currentCall.isPresentedShare = true
+        }
+        tryPresentShareView(maxRetryCount: 3)
     }
 
     func presentInviteView() {

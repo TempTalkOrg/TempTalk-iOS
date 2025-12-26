@@ -34,9 +34,11 @@ NS_ASSUME_NONNULL_BEGIN
                        byteCount:(unsigned int)byteCount
                      contentType:(NSString *)contentType
                    encryptionKey:(NSData *)encryptionKey
+                          height:(unsigned int)height
                     isDownloaded:(BOOL)isDownloaded
                         serverId:(unsigned long long)serverId
                   sourceFilename:(nullable NSString *)sourceFilename
+                           width:(unsigned int)width
       cachedAudioDurationSeconds:(nullable NSNumber *)cachedAudioDurationSeconds
                cachedImageHeight:(nullable NSNumber *)cachedImageHeight
                 cachedImageWidth:(nullable NSNumber *)cachedImageWidth
@@ -48,7 +50,7 @@ NS_ASSUME_NONNULL_BEGIN
            lazyRestoreFragmentId:(nullable NSString *)lazyRestoreFragmentId
            localRelativeFilePath:(nullable NSString *)localRelativeFilePath
               serverAttachmentId:(NSString *)serverAttachmentId
-NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessageId:appearInMediaGallery:attachmentSchemaVersion:attachmentType:byteCount:contentType:encryptionKey:isDownloaded:serverId:sourceFilename:cachedAudioDurationSeconds:cachedImageHeight:cachedImageWidth:creationTimestamp:decibelSamples:digest:encryptedDatalength:isUploaded:lazyRestoreFragmentId:localRelativeFilePath:serverAttachmentId:));
+NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessageId:appearInMediaGallery:attachmentSchemaVersion:attachmentType:byteCount:contentType:encryptionKey:height:isDownloaded:serverId:sourceFilename:width:cachedAudioDurationSeconds:cachedImageHeight:cachedImageWidth:creationTimestamp:decibelSamples:digest:encryptedDatalength:isUploaded:lazyRestoreFragmentId:localRelativeFilePath:serverAttachmentId:));
 
 // clang-format on
 

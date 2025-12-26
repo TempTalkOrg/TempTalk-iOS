@@ -51,12 +51,10 @@ class CVMessageBubbleRenderItem: ConversationRenderItem {
     }
     
     var hasBodyMediaWithThumbnail: Bool {
-        switch viewItem.messageCellType() {
-        case .stillImage, .animatedImage, .video:
-            return true
-        default:
+        guard let bodyMediaRenderItem else {
             return false
         }
+        return bodyMediaRenderItem.hasBodyMediaWithThumbnail
     }
     
     var shouldShowMediaFooter: Bool {

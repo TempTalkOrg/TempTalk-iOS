@@ -488,6 +488,10 @@ NS_ASSUME_NONNULL_BEGIN
     return NO;
 }
 
+- (BOOL)prefersStatusBarHidden {
+   return NO;
+}
+
 - (UIStatusBarStyle)preferredStatusBarStyle {
     if (!CurrentAppContext().isMainApp) {
         return super.preferredStatusBarStyle;

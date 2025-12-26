@@ -88,6 +88,8 @@ typedef void (^DTAPIFailureBlock)(NSError *error);
 
 @property (nonatomic, strong) NSDictionary *data;
 
+@property (nonatomic, strong) NSNumber *serverTimestamp;
+
 @end
 
 @interface DTBaseAPI : NSObject

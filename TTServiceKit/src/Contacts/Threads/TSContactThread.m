@@ -37,6 +37,7 @@ NS_ASSUME_NONNULL_BEGIN
                  lastMessageDate:(nullable NSDate *)lastMessageDate
                       lastestMsg:(nullable TSMessage *)lastestMsg
                  mentionedAllMsg:(nullable DTMentionedMsgInfo *)mentionedAllMsg
+            mentionedCriticalMsg:(nullable DTMentionedMsgInfo *)mentionedCriticalMsg
                   mentionedMeMsg:(nullable DTMentionedMsgInfo *)mentionedMeMsg
                    mentionsDraft:(nullable NSArray<DTMention *> *)mentionsDraft
               messageClearAnchor:(unsigned long long)messageClearAnchor
@@ -70,6 +71,7 @@ NS_ASSUME_NONNULL_BEGIN
                    lastMessageDate:lastMessageDate
                         lastestMsg:lastestMsg
                    mentionedAllMsg:mentionedAllMsg
+              mentionedCriticalMsg:mentionedCriticalMsg
                     mentionedMeMsg:mentionedMeMsg
                      mentionsDraft:mentionsDraft
                 messageClearAnchor:messageClearAnchor

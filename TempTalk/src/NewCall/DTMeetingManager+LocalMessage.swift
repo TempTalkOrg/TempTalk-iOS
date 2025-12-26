@@ -74,6 +74,69 @@ extension DTMeetingManager {
             }
         }
     }
+    
+    // MARK: - CriticalAlert
+    func createCriticalAlertLocalMessage(thread: TSThread? = nil,
+                                         contactId: String? = nil,
+                                         sourceDeviceId: UInt32? = nil,
+                                         timestamp: UInt64? = nil,
+                                         serverTimestamp: UInt64? = nil,
+                                         transation: SDSAnyWriteTransaction?) {
+        if let local = TSAccountManager.localNumber(), local == contactId {
+            if sourceDeviceId != OWSDevice.currentDeviceId() {
+                self.createCriticalAlertLocalOutgoingMessage (
+                    thread: thread,
+                    contactId: contactId,
+                    timestamp: timestamp,
+                    serverTimestamp: serverTimestamp,
+                    transation: transation
+                )
+            }
+        } else {
+            self.createCriticalAlertLocalIncomingMessage(
+                thread: thread,
+                contactId: contactId,
+                sourceDeviceId: sourceDeviceId,
+                timestamp: timestamp,
+                serverTimestamp: serverTimestamp,
+                transation: transation
+            )
+        }
+    }
+    
+    func createCriticalAlertLocalOutgoingMessage(thread: TSThread? = nil,
+                                                 contactId: String? = nil,
+                                                 timestamp: UInt64? = nil,
+                                                 serverTimestamp: UInt64? = nil,
+                                                 transation: SDSAnyWriteTransaction?) {
+        if let thread = thread, let writeTransation = transation {
+            let contactIdefier = contactId ?? currentCall.caller ?? ""
+            createOutgoingMessage(thread: thread,
+                                  body: "🚨 Sent a Critical Alert.",
+                                  contactId: contactIdefier,
+                                  timestamp:timestamp,
+                                  serverTimestamp: serverTimestamp,
+                                  sourceDeviceId: OWSDevice.currentDeviceId(),
+                                  transaction: writeTransation)
+        }
+    }
+    
+    func createCriticalAlertLocalIncomingMessage(thread: TSThread? = nil,
+                                                 contactId: String? = nil,
+                                                 sourceDeviceId: UInt32? = nil,
+                                                 timestamp: UInt64? = nil,
+                                                 serverTimestamp: UInt64? = nil,
+                                                 transation: SDSAnyWriteTransaction?) {
+        if let thread = thread, let contactId = contactId, let writeTransation = transation {
+            let message = createIncomingMessage(thread: thread,
+                                                timestamp: timestamp,
+                                                serverTimestamp: serverTimestamp,
+                                                authorId: contactId,
+                                                sourceDeviceId: sourceDeviceId,
+                                                body: "🚨 Sent a Critical Alert.")
+            OWSMessageManager.shared().finalizeIncomingMessage(message, thread: thread, transaction: writeTransation)
+        }
+    }
 
     // MARK: - 收到calling消息处理
     func dealCallingLocalMessage(createCallMsg: Bool?,
@@ -136,10 +199,12 @@ extension DTMeetingManager {
         body: String,
         contactId: String? = nil,
         timestamp: UInt64? = nil,
+        serverTimestamp: UInt64? = nil,
+        sourceDeviceId: UInt32? = nil,
         transaction: SDSAnyWriteTransaction
     ) {
         let finalTimestamp = timestamp ?? currentCall.timestamp ?? Date.ows_millisecondTimestamp()
-        let finalServerTimestamp = currentCall.serverTimestamp ?? Date.ows_millisecondTimestamp()
+        let finalServerTimestamp = serverTimestamp ?? currentCall.serverTimestamp ?? Date.ows_millisecondTimestamp()
         let message = TSOutgoingMessage.init(outgoingMessageWithTimestamp: finalTimestamp,
                                              in: thread,
                                              messageBody: body,
@@ -153,7 +218,7 @@ extension DTMeetingManager {
                                              quotedMessage: nil,
                                              forwardingMessage: nil,
                                              contactShare: nil)
-        message.sourceDeviceId = currentCall.envelopeSourceDevice ?? OWSDevice.currentDeviceId()
+        message.sourceDeviceId = sourceDeviceId ?? currentCall.envelopeSourceDevice ?? OWSDevice.currentDeviceId()
         message.serverTimestamp = finalServerTimestamp
         message.messageModeType = .normal
         message.recipientStateMap?.values.forEach { $0.state = .sent }
@@ -162,20 +227,24 @@ extension DTMeetingManager {
 
     private func createIncomingMessage(
         thread: TSThread,
-        timestamp: UInt64?,
-        authorId: String,
+        timestamp: UInt64? = nil,
+        serverTimestamp: UInt64? = nil,
+        authorId: String? = nil,
+        sourceDeviceId: UInt32? = nil,
         body: String
     ) -> TSIncomingMessage {
         let finalTimestamp = timestamp ?? currentCall.timestamp ?? Date.ows_millisecondTimestamp()
-        let finalServerTimestamp = currentCall.serverTimestamp ?? Date.ows_millisecondTimestamp()
+        let finalServerTimestamp = serverTimestamp ?? currentCall.serverTimestamp ?? Date.ows_millisecondTimestamp()
+        let sourceDeviceId = sourceDeviceId ?? currentCall.envelopeSourceDevice ?? OWSDevice.currentDeviceId()
+        let author = authorId ?? currentCall.envelopeSource ?? ""
         let message = TSIncomingMessage(
             incomingMessageWithTimestamp: finalTimestamp,
             serverTimestamp: finalServerTimestamp,
             sequenceId: 1,
             notifySequenceId: 0,
             in: thread,
-            authorId: currentCall.envelopeSource ?? "",
-            sourceDeviceId: currentCall.envelopeSourceDevice ?? 1,
+            authorId: author,
+            sourceDeviceId: sourceDeviceId,
             messageBody: body,
             atPersons: nil,
             mentions: nil,

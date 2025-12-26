@@ -19,6 +19,7 @@ typedef NS_ENUM(SInt32, OWSDetailMessageType) {
     OWSDetailMessageTypeCard        = 7,
     OWSDetailMessageTypeConfidential= 8,
     OWSDetailMessageTypeScreenshot  = 9,
+    OWSDetailMessageTypeCriticalAlertText = 10,
     OWSDetailMessageTypeCardRefresh = 1000,
     OWSDetailMessageTypeMsgReject   = 1001,
     OWSDetailMessageTypeAllHangup   = 1002

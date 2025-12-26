@@ -39,9 +39,11 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
                        byteCount:(unsigned int)byteCount
                      contentType:(NSString *)contentType
                    encryptionKey:(NSData *)encryptionKey
+                          height:(unsigned int)height
                     isDownloaded:(BOOL)isDownloaded
                         serverId:(unsigned long long)serverId
                   sourceFilename:(nullable NSString *)sourceFilename
+                           width:(unsigned int)width
 {
     self = [super initWithGrdbId:grdbId
                         uniqueId:uniqueId];
@@ -58,9 +60,11 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
     _byteCount = byteCount;
     _contentType = contentType;
     _encryptionKey = encryptionKey;
+    _height = height;
     _isDownloaded = isDownloaded;
     _serverId = serverId;
     _sourceFilename = sourceFilename;
+    _width = width;
 
     return self;
 }

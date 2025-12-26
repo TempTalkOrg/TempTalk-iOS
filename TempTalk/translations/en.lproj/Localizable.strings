@@ -69,7 +69,7 @@
 "APN_MESSAGE_IN_GROUP_DETAILED" = "%@ in group %@: %@";
 
 /* Message for the 'app launch failed' alert. */
-"APP_LAUNCH_FAILURE_ALERT_MESSAGE" = "Chative can't launch. Please send your debug logs to our team so that we can try to resolve this issue.";
+"APP_LAUNCH_FAILURE_ALERT_MESSAGE" = "App can't launch. Please send your debug logs to our team so that we can try to resolve this issue.";
 
 /* Title for the 'app launch failed' alert. */
 "APP_LAUNCH_FAILURE_ALERT_TITLE" = "Error";
@@ -3892,3 +3892,6 @@
 "CONVERSATION_CELL_OVERSIZE_TEXT_TAP_FOR_MORE" = "Read more";
 
 "CONVERSATION_TOOLBAR_BYTE_LIMIT" = "Exceeding 10MB size limit";
+
+"CONVERSATION_MESSAGE_CRITICAL_ALERT" = "🚨 Sent a Critical Alert.";
+"SOMEONE_CRITICAL_ALERT_ALL_TEXT" = "[🚨 Critical Alert] ";

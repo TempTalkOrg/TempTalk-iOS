@@ -98,7 +98,7 @@ public struct BottomToolbarView: View {
         return toolbarCircleButton(
             image: Image(isMicEnabled ? "ic_call_microphone_enable" : "ic_call_microphone_disable")
         ) {
-            Logger.info("\(logTag) mic pressed")
+            Logger.info("\(logTag) mic pressed isMicEnabled \(isMicEnabled)")
             barClickHandler()
             didTapMicrophone(isMicrophoneEnabled: isMicEnabled)
         }

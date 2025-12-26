@@ -64,6 +64,7 @@ CREATE
             ,"translateSettingType" DOUBLE
             ,"expiresInSeconds" DOUBLE
             ,"messageClearAnchor" DOUBLE
+            ,"mentionedCriticalMsg" BLOB
         )
 ;
 
@@ -400,6 +401,8 @@ CREATE
             ,"albumMessageId" TEXT
             ,"appearInMediaGallery" BOOLEAN
             ,"decibelSamples" BLOB
+            ,"height" INTEGER
+            ,"width" INTEGER
         )
 ;
 

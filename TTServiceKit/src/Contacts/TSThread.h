@@ -47,6 +47,8 @@ BOOL IsNoteToSelfEnabled(void);
 
 @property (nonatomic, strong, nullable) DTMentionedMsgInfo *mentionedMeMsg;
 @property (nonatomic, strong, nullable) DTMentionedMsgInfo *mentionedAllMsg;
+/// CriticalAlert 高亮信息，类似 mentionedMeMsg/mentionedAllMsg
+@property (nonatomic, strong, nullable) DTMentionedMsgInfo *mentionedCriticalMsg;
 
 @property (nonatomic, strong, nullable) DTThreadConfigEntity *threadConfig;
 
@@ -68,6 +70,7 @@ BOOL IsNoteToSelfEnabled(void);
                  lastMessageDate:(nullable NSDate *)lastMessageDate
                       lastestMsg:(nullable TSMessage *)lastestMsg
                  mentionedAllMsg:(nullable DTMentionedMsgInfo *)mentionedAllMsg
+            mentionedCriticalMsg:(nullable DTMentionedMsgInfo *)mentionedCriticalMsg
                   mentionedMeMsg:(nullable DTMentionedMsgInfo *)mentionedMeMsg
                    mentionsDraft:(nullable NSArray<DTMention *> *)mentionsDraft
               messageClearAnchor:(unsigned long long)messageClearAnchor
@@ -85,7 +88,7 @@ BOOL IsNoteToSelfEnabled(void);
               unreadMessageCount:(NSUInteger)unreadMessageCount
                      unreadState:(NSUInteger)unreadState
             unreadTimeStimeStamp:(unsigned long long)unreadTimeStimeStamp
-NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:archivalDate:conversationEntity:creationDate:draftQuoteMessageId:expiresInSeconds:hasEverHadMessage:isArchived:lastMessageDate:lastestMsg:mentionedAllMsg:mentionedMeMsg:mentionsDraft:messageClearAnchor:messageDraft:mutedUntilDate:plainTextEnable:readPositionEntity:removedFromConversation:shouldBeVisible:stickCallingDate:stickDate:threadConfig:translateSettingType:unreadFlag:unreadMessageCount:unreadState:unreadTimeStimeStamp:));
+NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:archivalDate:conversationEntity:creationDate:draftQuoteMessageId:expiresInSeconds:hasEverHadMessage:isArchived:lastMessageDate:lastestMsg:mentionedAllMsg:mentionedCriticalMsg:mentionedMeMsg:mentionsDraft:messageClearAnchor:messageDraft:mutedUntilDate:plainTextEnable:readPositionEntity:removedFromConversation:shouldBeVisible:stickCallingDate:stickDate:threadConfig:translateSettingType:unreadFlag:unreadMessageCount:unreadState:unreadTimeStimeStamp:));
 
 // clang-format on
 
@@ -190,6 +193,16 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:archivalDate:conver
 
 - (nullable NSString *)atPersonsWithTransaction:(nullable SDSAnyReadTransaction *)transaction
     NS_SWIFT_NAME(atPersons(transaction:));
+
+/// 检查是否有 criticalAlert 高亮
+- (BOOL)hasCriticalAlertHighlightWithTransaction:(nullable SDSAnyReadTransaction *)transaction
+    NS_SWIFT_NAME(hasCriticalAlertHighlight(transaction:));
+
+- (void)updateCriticalAlertMsgWithMessageId:(NSString *)messageId
+                          timestampForSorting:(uint64_t)timestampForSorting
+                                transaction:(SDSAnyWriteTransaction *)transaction;
+
+- (void)removeCriticalAlertMsgWithTransaction:(SDSAnyWriteTransaction *)transaction;
 
 //- (nullable TSInteraction *)lastInteractionForInboxWithTransaction:(SDSAnyReadTransaction *)transaction
 //    NS_SWIFT_NAME(lastInteractionForInbox(transaction:));

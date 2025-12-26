@@ -90,6 +90,8 @@ NSString * const NotifyCallEndRoomIdKey = @"roomId";
         return;
     }
     
+    OWSLogInfo(@"[Server Notify] receive notifyType%@", @(serverNotifyEntity.notifyType));
+    
     switch (serverNotifyEntity.notifyType) {
         case DTServerNotifyTypeGroupUpdate:
         {
@@ -333,8 +335,17 @@ NSString * const NotifyCallEndRoomIdKey = @"roomId";
             NSNumber *timestampNum = data[@"resetIdentityKeyTime"];
             long long resetIdentityKeyTime = [timestampNum longLongValue];
             [[TextSecureKitEnv sharedEnv].settingsManager deleteResetIdentityKeyThreadsWithOperatorId:operator resetIdentityKeyTime:resetIdentityKeyTime];
-            break;
         }
+            break;
+        case DTServerNotifyTypeCriticalAlert: {
+            NSDictionary *data = serverNotifyEntity.data;
+            if (!DTParamsUtils.validateDictionary(data)) { return; }
+            NSError *error;
+            OWSLogInfo(@"[Server Notify] receive DTServerNotifyTypeCriticalAlert");
+            DTServerNotifyCriticalAlertEntity *criticalEntity = [MTLJSONAdapter modelOfClass:DTServerNotifyCriticalAlertEntity.class fromJSONDictionary:data error:&error];
+            [[TextSecureKitEnv sharedEnv].meetingManager criticalAlertIncomingLocalMessageWithEntity:criticalEntity transation:transaction];
+        }
+            break;
         default:
             OWSLogError(@"Notify type that does not exist \n%lu", serverNotifyEntity.notifyType);
             break;

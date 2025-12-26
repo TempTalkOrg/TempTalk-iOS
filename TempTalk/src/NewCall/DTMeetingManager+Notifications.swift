@@ -73,4 +73,80 @@ extension DTMeetingManager {
         Thread.sleep(forTimeInterval: 3)
     }
     
+    
+    @objc public func handleRemoteCallNotify(apnsInfo: DTApnsInfo) {
+        guard let callInfo = apnsInfo.passthroughInfo["callInfo"] as? [String: Any] else {
+            return
+        }
+
+        let isSchedule = (callInfo["type"] as? String) == "meeting-popups"
+        let mode = callInfo["mode"] as? String
+        let caller = callInfo["caller"] as? String
+        let meetingName = callInfo["meetingName"] as? String
+        let groupId = callInfo["groupId"] as? String
+        let callType = callInfo["callType"] as? NSNumber
+        let emk = callInfo["emk"] as? String
+        let meetingVersion = callInfo["meetingVersion"] as? NSNumber
+        let meetingId = callInfo["meetingId"] as? String
+        let numberIsLiveStream = callInfo["isLiveStream"] as? NSNumber
+        let eid = callInfo["eid"] as? String
+        let isLiveStream = (numberIsLiveStream as? NSNumber)?.boolValue ?? false
+        
+        let callModel = DTLiveKitCallModel()
+        callModel.callState = .alerting
+        callModel.caller = caller
+        callModel.roomId = meetingId
+        callModel.roomName = meetingName ?? ""
+        callModel.callType = .instant
+        if DTParamsUtils.validateString(groupId).boolValue {
+            callModel.conversationId = groupId
+            if callType == 1 {
+                callModel.callType = .private
+            } else if callType == 2 {
+                callModel.callType = .group
+            }
+        }
+        if let localNumber = TSAccountManager.localNumber(), callType == 1 {
+            callModel.callees = [localNumber]
+        }
+        DTMeetingManager.shared.acceptCall(call: callModel)
+    }
+    
+    public func criticalAlertIncomingLocalMessage(entity: DTServerNotifyCriticalAlertEntity,
+                                                  transation: SDSAnyWriteTransaction) {
+        // 转换参数
+        let conversationId = entity.conversation
+        let deviceId = UInt32(entity.sourceDevice)
+        let ts = entity.timestamp
+        let serverTs = entity.serverTimestamp
+        let source = entity.source
+        let showCriticalAlert = entity.showCriticalAlert
+
+        func process(thread: TSThread) {
+            Logger.info("[newCall] should show critical highlight showCriticalAlert \(showCriticalAlert)")
+            if showCriticalAlert {
+                // 添加高亮文本
+                let timestampForSorting = serverTs > 0 ? serverTs : ts
+                let messageId = "criticalAlert_\(conversationId)_\(timestampForSorting)"
+                thread.updateCriticalAlertMsg(withMessageId: messageId, timestampForSorting: timestampForSorting, transaction: transation)
+            }
+            
+            createCriticalAlertLocalMessage(thread: thread,
+                                            contactId: source,
+                                            sourceDeviceId: deviceId,
+                                            timestamp: ts,
+                                            serverTimestamp: serverTs,
+                                            transation: transation)
+        }
+        
+        if isGid(conversationId) {
+            if let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId) {
+                let groupThread = TSGroupThread.getOrCreateThread(withGroupId: localGroupId, transaction: transation)
+                process(thread: groupThread)
+            }
+        } else {
+            let contactThread = TSContactThread.getOrCreateThread(withContactId: conversationId, transaction: transation)
+            process(thread: contactThread)
+        }
+    }
 }

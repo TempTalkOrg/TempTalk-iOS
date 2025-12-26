@@ -487,9 +487,11 @@ extension RoomContext: RoomDelegate {
                 
                 if let inviteVC {
                     inviteVC.dismiss(animated: false)
+                    self.inviteVC = nil
                 }
                 if let shareVC {
                     shareVC.dismiss(animated: false)
+                    self.shareVC = nil
                 }
             }
         }
@@ -625,7 +627,7 @@ extension RoomContext {
         }
     }
     
-    private func tryPresentShareView(delay: TimeInterval = 0.5, maxRetryCount: Int = 1) {
+    func tryPresentShareView(delay: TimeInterval = 0.5, maxRetryCount: Int = 1) {
         guard !isPresentingShareView else {
             Logger.info("[Livekit] Share view is already being presented, skipping duplicate call")
             return

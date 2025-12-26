@@ -27,7 +27,7 @@ extension ConversationMessageBubbleView {
         
         let viewItem = renderItem.viewItem
         let style = renderItem.conversationStyle
-        guard let bodyMediaView = createBodyMediaView(viewItem: viewItem, style: style) else {
+        guard let bodyMediaView = createBodyMediaView(viewItem: viewItem, mediaItem: bodyMediaItem, style: style) else {
             return
         }
         bodyMediaView.clipsToBounds = true
@@ -93,7 +93,7 @@ extension ConversationMessageBubbleView {
 // MARK: - Private
 
 extension ConversationMessageBubbleView {
-    private func createBodyMediaView(viewItem: ConversationViewItem, style: ConversationStyle) -> UIView? {
+    private func createBodyMediaView(viewItem: ConversationViewItem, mediaItem: CVBodyMediaRenderItem, style: ConversationStyle) -> UIView? {
         var bodyMediaView: UIView? = nil
         switch viewItem.messageCellType() {
         case .stillImage:
@@ -107,7 +107,7 @@ extension ConversationMessageBubbleView {
         case .genericAttachment:
             bodyMediaView = createGenericAttachmentView(viewItem: viewItem, style: style)
         case .downloadingAttachment:
-            bodyMediaView = createDownloadingAttachmentView(viewItem: viewItem, style: style)
+            bodyMediaView = createDownloadingAttachmentView(viewItem: viewItem, mediaItem: mediaItem, style: style)
         case .contactShare:
             bodyMediaView = createContactShareView(viewItem: viewItem, style: style)
         default:
@@ -289,22 +289,32 @@ extension ConversationMessageBubbleView {
         return attachmentView
     }
     
-    private func createDownloadingAttachmentView(viewItem: ConversationViewItem, style: ConversationStyle) -> UIView? {
+    private func createDownloadingAttachmentView(
+        viewItem: ConversationViewItem,
+        mediaItem: CVBodyMediaRenderItem,
+        style: ConversationStyle
+    ) -> UIView? {
         guard let attachmentPointer = viewItem.attachmentPointer() else {
             return nil
         }
-        let isIncoming = viewItem.interaction.interactionType() == .incomingMessage
-        let downloadView = AttachmentPointerView(
-            attachmentPointer: attachmentPointer,
-            isIncoming: isIncoming,
-            conversationStyle: style
-        )
-        self.downloadView = downloadView
         
-        let wrapper = UIView()
-        wrapper.addSubview(downloadView)
-        downloadView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+        var downloadingView: UIView?
+        if mediaItem.isDownloadingAttachmentWithThumbnail {
+            downloadingView = DTImageDownloadingView(attachmentPointer: attachmentPointer)
+        } else {
+            let isIncoming = viewItem.interaction.interactionType() == .incomingMessage
+            let downloadView = AttachmentPointerView(
+                attachmentPointer: attachmentPointer,
+                isIncoming: isIncoming,
+                conversationStyle: style
+            )
+            
+            let wrapper = UIView()
+            wrapper.addSubview(downloadView)
+            downloadView.snp.makeConstraints { make in
+                make.edges.equalToSuperview()
+            }
+            downloadingView = wrapper
         }
         
         self.loadCellContentBlock = { [weak self] in
@@ -312,7 +322,9 @@ extension ConversationMessageBubbleView {
             guard !viewItem.hadAutoDownloaded else { return }
             
             let contentType = attachmentPointer.contentType
-            guard MIMETypeUtil.isImage(contentType) || MIMETypeUtil.isAnimated(contentType) else {
+            guard MIMETypeUtil.isImage(contentType) ||
+                  MIMETypeUtil.isAnimated(contentType) ||
+                  attachmentPointer.attachmentType == .voiceMessage else {
                 return
             }
             guard attachmentPointer.state == .failed || attachmentPointer.state == .enqueued || attachmentPointer.state == .expired else {
@@ -334,7 +346,7 @@ extension ConversationMessageBubbleView {
             // Do nothing.
         }
         
-        return wrapper
+        return downloadingView
     }
     
     private func createContactShareView(viewItem: ConversationViewItem, style: ConversationStyle) -> UIView? {

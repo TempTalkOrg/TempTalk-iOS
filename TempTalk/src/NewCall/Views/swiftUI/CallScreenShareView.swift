@@ -123,19 +123,20 @@ struct CallScreenShareView: View {
                     }
                 }
                 .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation {
-                        viewModel.showControls.toggle()
-                        if viewModel.showControls {
-                            viewModel.hiddenTopBottomBar()
-                        }
-                    }
-                }
             }
             
             if showPlaceholder {
                 waitingForScreenPlaceholder
                         .transition(.opacity)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation {
+                viewModel.showControls.toggle()
+                if viewModel.showControls {
+                    viewModel.hiddenTopBottomBar()
+                }
             }
         }
     }
