@@ -92,7 +92,7 @@
 }
 
 - (void)pushToConversationVCWithTransaction:(SDSAnyWriteTransaction *) transaction{
-    TSContactThread* thread = [TSContactThread createThreadWithContactId:@"+10000" transaction:transaction];
+    TSContactThread* thread = [TSContactThread createThreadWithContactId:TSConstants.officialBotId transaction:transaction];
     if(thread){
         [SignalApp.sharedApp presentTargetConversationForThread:thread action:ConversationViewActionNone focusMessageId:nil];
     }

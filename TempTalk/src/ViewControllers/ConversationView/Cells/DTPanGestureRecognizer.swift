@@ -30,7 +30,9 @@ public class DTPanGestureRecognizer: UIPanGestureRecognizer {
         if self.state == .failed {
             return;
         }
-        let touch = touches.first!
+        guard let touch = touches.first else {
+            return
+        }
         let nowPoint = touch.location(in: self.view)
         let prevPoint = touch.previousLocation(in: self.view)
         moveX += prevPoint.x - nowPoint.x

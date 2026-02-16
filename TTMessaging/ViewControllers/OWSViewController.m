@@ -3,10 +3,9 @@
 //
 
 #import "OWSViewController.h"
-#import "Theme.h"
+#import <TTMessaging/TTMessaging-Swift.h>
 #import "UIView+SignalUI.h"
 #import <TTMessaging/TTMessaging-Swift.h>
-#import <TTServiceKit/DTWatermarkHelper.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -53,11 +52,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     OWSLogInfo(@"[viewController] viewWillAppear: %@", self.class);
-    if (self.tabBarController) {
-        [DTWatermarkHelper addWatermarkToTheView:self.tabBarController.view];
-    }else {
-        [DTWatermarkHelper addWatermarkToTheView:self.view];
-    }
 
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(userTakeScreenshotEvent:)
@@ -132,12 +126,6 @@ NS_ASSUME_NONNULL_BEGIN
     OWSLogInfo(@"[viewController] viewDidDisappear: %@", self.class);
 
     self.shouldAnimateBottomLayout = NO;
-    
-    if (self.tabBarController) {
-        
-    } else {
-        [DTWatermarkHelper removeWatermarkFromView:self.view];
-    }
 }
 
 - (void)viewDidLoad
@@ -147,12 +135,12 @@ NS_ASSUME_NONNULL_BEGIN
     self.navigationItem.backButtonTitle = Localized(@"BACK_BUTTON", @"");
 
     if (self.shouldUseTheme) {
-        self.view.backgroundColor = Theme.backgroundColor;
+        self.view.backgroundColor = Theme.bg1Color;
     }
 
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(themeDidChange:)
-                                                 name:ThemeDidChangeNotification
+                                                 name:NSNotification.ThemeDidChange
                                                object:nil];
 }
 
@@ -251,10 +239,10 @@ NS_ASSUME_NONNULL_BEGIN
 {
     OWSAssertIsOnMainThread();
 
-    self.view.backgroundColor = Theme.backgroundColor;
+    self.view.backgroundColor = Theme.bg1Color;
     
     if (self.leftTitle) {
-        self.lbLeftTitle.textColor = Theme.primaryTextColor;
+        self.lbLeftTitle.textColor = Theme.tprimaryColor;
     }
     // Do nothing; this is a convenience hook for subclasses.
 }
@@ -421,7 +409,7 @@ NS_ASSUME_NONNULL_BEGIN
         if ([self isKindOfClass:NSClassFromString(@"DTMultiCallViewController")]) {
             [cancelAction setValue:UIColor.ows_alertCancelDarkColor forKey:@"_titleTextColor"];
         } else {
-            [cancelAction setValue:Theme.alertCancelColor forKey:@"_titleTextColor"];
+            [cancelAction setValue:Theme.tprimaryColor forKey:@"_titleTextColor"];
         }
         
         [alert addAction:cancelAction];
@@ -433,7 +421,7 @@ NS_ASSUME_NONNULL_BEGIN
     if ([self isKindOfClass:NSClassFromString(@"DTMultiCallViewController")]) {
         [confirmAction setValue:UIColor.ows_alertConfirmDarkBlueColor forKey:@"_titleTextColor"];
     } else {
-        [confirmAction setValue:Theme.alertConfirmColor forKey:@"_titleTextColor"];
+        [confirmAction setValue:Theme.tinfoColor forKey:@"_titleTextColor"];
     }
     
     [alert addAction:confirmAction];
@@ -468,7 +456,7 @@ NS_ASSUME_NONNULL_BEGIN
     if (!_lbLeftTitle) {
         _lbLeftTitle = [UILabel new];
         _lbLeftTitle.font = [UIFont systemFontOfSize:20 weight:UIFontWeightMedium];
-        _lbLeftTitle.textColor = Theme.primaryTextColor;
+        _lbLeftTitle.textColor = Theme.tprimaryColor;
     }
     return _lbLeftTitle;
 }

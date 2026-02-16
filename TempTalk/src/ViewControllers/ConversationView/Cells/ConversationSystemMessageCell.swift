@@ -111,11 +111,11 @@ class ConversationSystemMessageCell: ConversationCell {
     }
     
     override func refreshTheme() {
-        lineView.backgroundColor = Theme.secondaryTextAndIconColor
+        lineView.backgroundColor = Theme.tsecondaryColor
         iconView.tintColor = .ows_light60
         leftIconView.tintColor = .ows_light60
         actionButton.setTitleColor(.ows_darkSkyBlue, for: .normal)
-        actionButton.backgroundColor = Theme.secondaryBackgroundColor
+        actionButton.backgroundColor = Theme.bg2Color
     }
     
     // MARK: - Action

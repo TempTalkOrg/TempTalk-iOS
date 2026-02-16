@@ -28,8 +28,8 @@ extension ConversationViewController {
             imagePicker.mediaTypes = [kUTTypeImage as String, kUTTypeMovie as String]
             imagePicker.allowsEditing = false
             imagePicker.delegate = self
-            
-            self.dismissKeyBoard()
+
+            self.dismissKeyBoard(byUserAction: true)  // 用户打开相机，标记为用户操作
             self.present(imagePicker, animated: true)
         })
     }
@@ -78,7 +78,7 @@ extension ConversationViewController: UIImagePickerControllerDelegate, UINavigat
                 self.sendQualityAdjustedAttachment(pickedInfo: info, fileName: fileName)
                 // 如果开启自动保存到相册的逻辑
                 if let videoURL = info[.mediaURL] as? URL {
-                    MediaSavePolicyManager.shared.saveVideoIfNeeded(videoURL)
+                    MediaSavePolicyManager.shared.saveVideoIfNeeded(videoURL, threadId: self.viewState.thread.uniqueId)
                 }
             }
             return
@@ -100,7 +100,7 @@ extension ConversationViewController: UIImagePickerControllerDelegate, UINavigat
                 )
                 // 如果开启自动保存到相册的逻辑
                 if let originImage = info[.originalImage] as? UIImage {
-                    MediaSavePolicyManager.shared.saveImageIfNeeded(originImage)
+                    MediaSavePolicyManager.shared.saveImageIfNeeded(originImage, threadId: self.viewState.thread.uniqueId)
                 }
                 if attachment.hasError {
                     owsFailDebug("Invalid attachment: \(attachment.errorName ?? "Unknown error").")

@@ -13,8 +13,6 @@ extern NSString *const kTabBarItemDoubleClickNotification;
 
 @interface DFTabbarController : UITabBarController
 
-- (void)reloadTodayScheduleEventCount:(NSUInteger)eventCount;
-
 @end
 
 NS_ASSUME_NONNULL_END

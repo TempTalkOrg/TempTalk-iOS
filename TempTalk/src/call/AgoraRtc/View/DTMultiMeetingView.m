@@ -57,7 +57,7 @@ static NSInteger maxExpandCount = 5;
     UICollectionViewCell *cell = [self.collectionView cellForItemAtIndexPath:indexPath];
     if (cell) {
         DTMultiChatItemModel *itemModel = self.broadcasters[(NSUInteger)indexPath.item];
-        OWSLogDebug(@"%@ - %ld - %@ - %@", self.logTag, indexPath.item, itemModel.displayName, itemModel.account);
+        OWSLogDebug(@"%@ - item selected at index: %ld", self.logTag, indexPath.item);
         if (self.meetingViewDelegate && [self.meetingViewDelegate respondsToSelector:@selector(meetingView:didSelectUserViewAtItemModel:)]) {
             [self.meetingViewDelegate meetingView:self didSelectUserViewAtItemModel:itemModel];
         }

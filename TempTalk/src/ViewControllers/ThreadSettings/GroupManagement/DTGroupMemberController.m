@@ -138,7 +138,7 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
         self.tableView.editing = YES;
         self.tableView.allowsMultipleSelectionDuringEditing = YES;
     }
-    self.tableView.backgroundColor = Theme.backgroundColor;
+    self.tableView.backgroundColor = Theme.bg1Color;
     //处理底部的用户选择框
     [self creatBottomContainView];
     [self configBottomContainViewLayoput];
@@ -248,37 +248,24 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
     @weakify(self)
     for (NSString *recipientId in self.sortedMemberRecipientIdsArr) {
         [section addItem:[OWSTableItem itemWithCustomCellBlock:^UITableViewCell * _Nonnull{
-                                 ContactTableViewCell *cell = [ContactTableViewCell new];
-                                 SignalAccount *signalAccount = [helper signalAccountForRecipientId:recipientId];
-                                 OWSVerificationState verificationState =
-                                     [[OWSIdentityManager sharedManager] verificationStateForRecipientId:recipientId];
-//                                 BOOL isVerified = verificationState == OWSVerificationStateVerified;
-//                                 BOOL isNoLongerVerified = verificationState == OWSVerificationStateNoLongerVerified;
-//                                 BOOL isBlocked = [helper isRecipientIdBlocked:recipientId];
-//                                 if (isNoLongerVerified) {
-//                                     cell.accessoryMessage = Localized(@"CONTACT_CELL_IS_NO_LONGER_VERIFIED",
-//                                         @"An indicator that a contact is no longer verified.");
-//                                 } else if (isBlocked) {
-//                                     cell.accessoryMessage = Localized(
-//                                         @"CONTACT_CELL_IS_BLOCKED", @"An indicator that a contact has been blocked.");
-//                                 }
+            ContactTableViewCell *cell = [ContactTableViewCell new];
+            SignalAccount *signalAccount = [helper signalAccountForRecipientId:recipientId];
+            OWSVerificationState verificationState =
+                [[OWSIdentityManager sharedManager] verificationStateForRecipientId:recipientId];
 
-                                 if (signalAccount) {
-                                     [cell setAccessoryMessage:@""];
-                                     [cell configureWithThread:self.thread signalAccount:signalAccount
-                                                      contactsManager:helper.contactsManager];
-                                 } else {
-                                     [cell setAccessoryMessage:@""];
-                                     [cell configureWithThread:self.thread recipientId:recipientId contactsManager:helper.contactsManager];
-                                 }
-                                  cell.cellView.type = UserOfSelfIconTypeRealAvater;
-//                                 if (isVerified) {
-//                                     [cell setAttributedSubtitle:cell.verifiedSubtitle];
-//                                 } else {
-//                                     [cell setAttributedSubtitle:nil];
-//                                 }
-                                    cell.tintColor = [UIColor ows_materialBlueColor];
-                                 return cell;
+            if (signalAccount) {
+                [cell setAccessoryMessage:@""];
+                [cell configureWithThread:self.thread signalAccount:signalAccount
+                                 contactsManager:helper.contactsManager];
+            } else {
+                [cell setAccessoryMessage:@""];
+                [cell configureWithThread:self.thread recipientId:recipientId contactsManager:helper.contactsManager];
+            }
+            cell.cellView.type = UserOfSelfIconTypeRealAvater;
+            cell.selectionStatus = ContactCellSelectionStatusNone;
+            cell.tintColor = [UIColor ows_materialBlueColor];
+
+            return cell;
         } customRowHeight:70 actionWithIndexPathBlock:^(NSIndexPath * _Nonnull indexPath) {
             @strongify(self)
             if (!indexPath) {
@@ -478,7 +465,7 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
         }
         if (conversationSettingsVC) {
             [self.navigationController popToViewController:conversationSettingsVC animated:true];
-        }else {
+        } else if (self.navigationController && self.navigationController.viewControllers.count > 0) {
             [self.navigationController popToRootViewControllerAnimated:true];
         }
         
@@ -730,7 +717,7 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
     [actionSheetController addAction:[UIAlertAction actionWithTitle:contactInfoTitle
                                                               style:UIAlertActionStyleDefault
                                                             handler:^(UIAlertAction *_Nonnull action) {
-                                                                [self showProfileCardInfoWith:recipientId isFromSameThread:false isPresent:true];
+                                                                [self showProfileCardInfoWith:recipientId isFromSameThread:false isPresent:false isFromContacts:true];
                                                             }]];
 
     BOOL isBlocked;

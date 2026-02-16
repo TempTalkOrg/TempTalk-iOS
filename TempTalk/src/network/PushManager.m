@@ -163,15 +163,6 @@ NSString *const kDTDidReceiveScheduleLocalNotification = @"kDTDidReceiveSchedule
             completionHandler(UIBackgroundFetchResultNoData);
             return;
         }
-        if ([type isEqualToString:@"CALENDAR_FULL_UPDATE"]) {
-            NSInteger serverVersion = [data[@"version"] intValue];
-            AppReadinessRunNowOrWhenAppDidBecomeReadyAsync(^{
-                [[DTCalendarManager shared] updateLocalNotificationWithServerVersion:serverVersion completion:^{
-                    OWSLogInfo(@"%@ processed %@", self.logTag, type);
-                    completionHandler(UIBackgroundFetchResultNewData);
-                }];
-            });
-        }
     } else {
         if ([UIApplication sharedApplication].applicationState == UIApplicationStateInactive) {
             self.apnsInfo = [self apnsInfoWithUserInfo:userInfo];

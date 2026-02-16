@@ -13,33 +13,33 @@ import PureLayout
 
 @objc
 public class DTConversationSettingHeader: UIView {
-    
+
     let kHeaderAvatarWidth = 48.0
-    var collectionView: UICollectionView!
-    
-    private let isGroupThread: Bool!
-    private let currentMemberIds: [String]!
-    private let addMemberBlock: ( () -> Void )!
-    private var removeMemberBlock: ( () -> Void )?
-    private var viewMemberBlock: ( (Int) -> Void )!
-    private var viewAllBlock: ( () -> Void )?
+    var collectionView: UICollectionView?
+
+    private let isGroupThread: Bool
+    private let currentMemberIds: [String]
+    private let addMemberBlock: (() -> Void)
+    private var removeMemberBlock: (() -> Void)?
+    private var viewMemberBlock: ((Int) -> Void)
+    private var viewAllBlock: (() -> Void)?
 
     @objc required init(memberIds: [String], isGroup:Bool = true, addMember: @escaping () -> Void, removeMember: (() -> Void)? = nil, viewMember: @escaping (Int) -> Void, viewAll: (() -> Void)? = nil) {
         Logger.debug("init")
-        
+
         isGroupThread = isGroup
         currentMemberIds = memberIds
         addMemberBlock = addMember
+        viewMemberBlock = viewMember
         super.init(frame: .zero)
-    
+
         createSubviews()
         removeMemberBlock = removeMember
-        viewMemberBlock = viewMember
         viewAllBlock = viewAll
     }
-    
+
     func createSubviews() {
-        
+
         let margin = floor((UIScreen.main.bounds.width - kHeaderAvatarWidth * 5) / 6 - CGFloat.leastNonzeroMagnitude)
         let layout = UICollectionViewFlowLayout()
         layout.itemSize = CGSize(width: kHeaderAvatarWidth, height: 66)
@@ -47,19 +47,20 @@ public class DTConversationSettingHeader: UIView {
         layout.minimumInteritemSpacing = margin
         layout.sectionInset = .init(hMargin: margin, vMargin: 24)
 //            .init(top: 24, leading: margin, bottom: 24, trailing: margin)
-        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.delegate = self
-        collectionView.dataSource = self
-        collectionView.isScrollEnabled = false
-        collectionView.backgroundColor = Theme.tableSettingCellBackgroundColor
-        addSubview(collectionView)
-        
-        collectionView.register(DTConversationSettingMemberCell.self, forCellWithReuseIdentifier: DTConversationSettingMemberCell.reuseIdentifier())
-        collectionView.register(DTConversationSettingHandleCell.self, forCellWithReuseIdentifier: DTConversationSettingHandleCell.reuseIdentifier())
-        
-        collectionView.autoPinEdge(toSuperviewEdge: .top)
-        collectionView.autoPinEdge(toSuperviewEdge: .leading)
-        collectionView.autoPinEdge(toSuperviewEdge: .trailing)
+        let collection = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        collectionView = collection
+        collection.delegate = self
+        collection.dataSource = self
+        collection.isScrollEnabled = false
+        collection.backgroundColor = Theme.bg1Color
+        addSubview(collection)
+
+        collection.register(DTConversationSettingMemberCell.self, forCellWithReuseIdentifier: DTConversationSettingMemberCell.reuseIdentifier())
+        collection.register(DTConversationSettingHandleCell.self, forCellWithReuseIdentifier: DTConversationSettingHandleCell.reuseIdentifier())
+
+        collectionView?.autoPinEdge(toSuperviewEdge: .top)
+        collectionView?.autoPinEdge(toSuperviewEdge: .leading)
+        collectionView?.autoPinEdge(toSuperviewEdge: .trailing)
 
         if (isGroupThread) {
             let btnMembers = DTLayoutButton()
@@ -67,8 +68,8 @@ public class DTConversationSettingHeader: UIView {
             btnMembers.spacing = 3
             btnMembers.setTitle(Localized("GROUP_MEMBERS_SECTION_TITLE_MEMBERS"), for: .normal)
             btnMembers.setTitle(Localized("GROUP_MEMBERS_SECTION_TITLE_MEMBERS"), for: .highlighted)
-            btnMembers.setTitleColor(Theme.primaryTextColor, for: .normal)
-            btnMembers.setTitleColor(Theme.primaryTextColor, for: .highlighted)
+            btnMembers.setTitleColor(Theme.tprimaryColor, for: .normal)
+            btnMembers.setTitleColor(Theme.tprimaryColor, for: .highlighted)
             let btnImage = UIImage(named: "ic_accessory_arrow")?.withRenderingMode(.alwaysTemplate)
             btnMembers.setImage(btnImage, for: .normal)
             btnMembers.setImage(btnImage, for: .highlighted)
@@ -76,13 +77,15 @@ public class DTConversationSettingHeader: UIView {
             btnMembers.addTarget(self, action: #selector(viewAllAction), for: .touchUpInside)
             btnMembers.imageView?.tintColor = Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0xB7BDC6) : UIColor(rgbHex: 0x474D57)
             addSubview(btnMembers)
-            
-            btnMembers.autoPinEdge(.top, to: .bottom, of: collectionView)
+
+            if let collectionView = collectionView {
+                btnMembers.autoPinEdge(.top, to: .bottom, of: collectionView)
+            }
             btnMembers.autoSetDimensions(to: CGSize(width: 80, height: 30))
             btnMembers.autoPinEdge(toSuperviewEdge: .bottom, withInset: 10)
             btnMembers.autoHCenterInSuperview()
         } else {
-            collectionView.autoPinEdge(toSuperviewEdge: .bottom)
+            collectionView?.autoPinEdge(toSuperviewEdge: .bottom)
         }
         
     }
@@ -95,7 +98,7 @@ public class DTConversationSettingHeader: UIView {
     }
     
     func reloadData() {
-        collectionView.reloadData()
+        collectionView?.reloadData()
     }
     
     required init?(coder: NSCoder) {
@@ -139,18 +142,28 @@ extension DTConversationSettingHeader: UICollectionViewDelegate, UICollectionVie
         }
         
         let groupMemberCount = currentMemberIds.count
-        if (currentMemberIds.isEmpty || groupMemberCount == 1) {
+        if (groupMemberCount == 1) {
             if (indexPath.item == 0) {
+                guard indexPath.item < currentMemberIds.count else {
+                    owsFailDebug("Index out of bounds: indexPath.item=\(indexPath.item), count=\(currentMemberIds.count)")
+                    return UICollectionViewCell()
+                }
                 return newMemberCell(currentMemberIds[indexPath.item])
             } else {
                 return newHandleCell(.add)
             }
+        } else if (currentMemberIds.isEmpty) {
+            return newHandleCell(.add)
         } else if (groupMemberCount < 8) {
             if (indexPath.item == groupMemberCount) {
                 return newHandleCell(.add)
             } else if (indexPath.item == groupMemberCount + 1) {
                 return newHandleCell(.remove)
             } else {
+                guard indexPath.item < currentMemberIds.count else {
+                    owsFailDebug("Index out of bounds: indexPath.item=\(indexPath.item), count=\(currentMemberIds.count)")
+                    return UICollectionViewCell()
+                }
                 return newMemberCell(currentMemberIds[indexPath.item])
             }
         } else {
@@ -159,6 +172,10 @@ extension DTConversationSettingHeader: UICollectionViewDelegate, UICollectionVie
             } else if (indexPath.item == 9) {
                 return newHandleCell(.remove)
             } else {
+                guard indexPath.item < currentMemberIds.count else {
+                    owsFailDebug("Index out of bounds: indexPath.item=\(indexPath.item), count=\(currentMemberIds.count)")
+                    return UICollectionViewCell()
+                }
                 return newMemberCell(currentMemberIds[indexPath.item])
             }
         }
@@ -174,45 +191,48 @@ extension DTConversationSettingHeader: UICollectionViewDelegate, UICollectionVie
         
         switch cell.handleType {
         case .add:
-            guard let addMemberBlock = addMemberBlock else { return }
             addMemberBlock()
         case .remove:
-            guard let removeMemberBlock = removeMemberBlock else { return }
-            removeMemberBlock()
+            removeMemberBlock?()
         }
     }
 }
 
 class DTConversationSettingMemberCell: UICollectionViewCell {
-    
-    let contactManager = Environment.shared.contactsManager!
-    
-    var avatarView: AvatarImageView!
-    var lbName: UILabel!
-    
+
+    var contactManager: OWSContactsManager? {
+        return Environment.shared.contactsManager
+    }
+
+    var avatarView: AvatarImageView?
+    var lbName: UILabel?
+
     override init(frame: CGRect) {
         super.init(frame: frame)
 
-        avatarView = AvatarImageView()
-        contentView.addSubview(avatarView)
+        let avatar = AvatarImageView()
+        avatarView = avatar
+        contentView.addSubview(avatar)
 
-        lbName = UILabel()
-        lbName.font = .systemFont(ofSize: 12)
-        lbName.lineBreakMode = .byTruncatingTail
-        lbName.textAlignment = .center
-        lbName.adjustsFontForContentSizeCategory = true
-        lbName.textColor = Theme.primaryIconColor
-        contentView.addSubview(lbName)
-        
-        avatarView.autoPinEdge(toSuperviewEdge: .top)
-        avatarView.autoPinEdge(toSuperviewEdge: .leading)
-        avatarView.autoPinEdge(toSuperviewEdge: .trailing)
-        
-        lbName.autoPinEdge(toSuperviewEdge: .leading)
-        lbName.autoPinEdge(toSuperviewEdge: .trailing)
-        lbName.autoPinEdge(toSuperviewEdge: .bottom)
-        lbName.autoSetDimension(.height, toSize: 16)
-        lbName.autoPinEdge(.top, to: .bottom, of: avatarView, withOffset: 2)
+        let nameLabel = UILabel()
+        lbName = nameLabel
+        nameLabel.font = .systemFont(ofSize: 12)
+        nameLabel.lineBreakMode = .byTruncatingTail
+        nameLabel.textAlignment = .center
+        nameLabel.textColor = Theme.iconColor
+        contentView.addSubview(nameLabel)
+
+        avatar.autoPinEdge(toSuperviewEdge: .top)
+        avatar.autoPinEdge(toSuperviewEdge: .leading)
+        avatar.autoPinEdge(toSuperviewEdge: .trailing)
+
+        nameLabel.autoPinEdge(toSuperviewEdge: .leading)
+        nameLabel.autoPinEdge(toSuperviewEdge: .trailing)
+        nameLabel.autoPinEdge(toSuperviewEdge: .bottom)
+        nameLabel.autoSetDimension(.height, toSize: 16)
+        if let avatarView = avatarView {
+            lbName?.autoPinEdge(.top, to: .bottom, of: avatarView, withOffset: 2)
+        }
     }
     
     required init?(coder: NSCoder) {
@@ -220,10 +240,17 @@ class DTConversationSettingMemberCell: UICollectionViewCell {
     }
     
     func configCell(_ recipientId: String) {
-        
+        guard let contactManager = contactManager else {
+            self.avatarView?.setImageWithRecipientId(recipientId, displayName: recipientId)
+            self.lbName?.text = recipientId.count > 5 ? "\(recipientId.prefix(5))..." : recipientId
+            return
+        }
+
         let displayName = contactManager.displayName(forPhoneIdentifier: recipientId)
-        self.avatarView.setImageWithRecipientId(recipientId, displayName: displayName)
-        self.lbName.text = displayName.count > 5 ? "\(displayName.prefix(5))..." : displayName
+        // For avatar generation, use nickname only (not remark name)
+        let nicknameForAvatar = contactManager.rawDisplayName(forPhoneIdentifier: recipientId) ?? recipientId
+        self.avatarView?.setImageWithRecipientId(recipientId, displayName: nicknameForAvatar)
+        self.lbName?.text = displayName.count > 5 ? "\(displayName.prefix(5))..." : displayName
     }
     
     class func reuseIdentifier() -> String {
@@ -237,31 +264,33 @@ enum HandleType: Int {
 }
 
 class DTConversationSettingHandleCell: UICollectionViewCell {
-    
-    private var iconView: UIImageView!
-    
-    private var _handleType: HandleType!
+
+    private var iconView: UIImageView?
+
+    private var _handleType: HandleType = .add
     var handleType: HandleType {
         set {
             _handleType = newValue
             if (Theme.isDarkThemeEnabled)  {
-                self.iconView.image = UIImage(named: newValue == .add ? "ic_conversation_setting_add_dark" : "ic_conversation_setting_remove_dark")
+                self.iconView?.image = UIImage(named: newValue == .add ? "ic_conversation_setting_add_dark" : "ic_conversation_setting_remove_dark")
                 return
             }
-            self.iconView.image = UIImage(named: newValue == .add ? "ic_conversation_setting_add" : "ic_conversation_setting_remove")
+            self.iconView?.image = UIImage(named: newValue == .add ? "ic_conversation_setting_add" : "ic_conversation_setting_remove")
         }
         get {
             _handleType
         }
     }
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-            
+
         iconView = UIImageView()
-        iconView.contentMode = .scaleAspectFit
-        contentView.addSubview(self.iconView)
-        iconView.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets(top: 0, left: 0, bottom: 18, right: 0))
+        iconView?.contentMode = .scaleAspectFit
+        if let iconView = self.iconView {
+            contentView.addSubview(iconView)
+            iconView.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets(top: 0, left: 0, bottom: 18, right: 0))
+        }
     }
     
     required init?(coder: NSCoder) {

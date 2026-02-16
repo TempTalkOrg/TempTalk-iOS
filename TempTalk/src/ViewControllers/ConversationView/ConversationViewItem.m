@@ -75,6 +75,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
 @property (nonatomic) CGFloat audioProgressSeconds;
 @property (nonatomic) CGFloat audioDurationSeconds;
 @property (nonatomic) NSMutableArray<DTWeakRefrence *> *audioMessageViews;
+@property (nonatomic, weak) ConversationCell *audioCell;
 
 #pragma mark - View State
 
@@ -437,6 +438,11 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
     [self.audioMessageViews addObject:refrence];
 }
 
+- (void)associateAudioCell:(ConversationCell *)cell
+{
+    self.audioCell = cell;
+}
+
 - (void)setAudioPlaybackState:(AudioPlaybackState)audioPlaybackState
 {
     _audioPlaybackState = audioPlaybackState;
@@ -450,7 +456,12 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
             }
         }
     }
-    
+
+    // 通知 cell 更新音频控制按钮
+    if (self.audioCell != nil && [self.audioCell respondsToSelector:@selector(refreshAudioControlButton)]) {
+        [self.audioCell performSelector:@selector(refreshAudioControlButton)];
+    }
+
     if (audioPlaybackState == AudioPlaybackState_Stopped ||
         audioPlaybackState == AudioPlaybackState_Paused) {
         OWSLogDebug(@"voice paused or stopped to rm.");
@@ -986,7 +997,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
                 }
             }
             if (copyItems.count > 0) {
-                [UIPasteboard.generalPasteboard setStrings:copyItems];
+                [DTSecurePasteboard setStrings:copyItems];
             }
             break;
         }
@@ -997,7 +1008,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
             } else {
                 copyText = self.displayableBodyText.fullText;
             }
-            [UIPasteboard.generalPasteboard setString:copyText];
+            [DTSecurePasteboard setString:copyText];
             break;
         }
         case OWSMessageCellType_DownloadingAttachment: {
@@ -1257,7 +1268,11 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
 }
 
 - (BOOL)allowEmojiReaction {
-    
+    // Confidential messages do not support emoji reactions
+    if (self.isConfidentialMessage) {
+        return NO;
+    }
+
     switch (self.messageCellType) {
         case OWSMessageCellType_Unknown:
         case OWSMessageCellType_ContactShare:
@@ -1336,16 +1351,6 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
     TSMessage *message = (TSMessage *)self.interaction;
     
     return message.isPinned;
-}
-
-- (BOOL)isPinMessage {
-    
-    if (![self.interaction isKindOfClass:TSMessage.class]) {
-        return NO;
-    }
-    TSMessage *message = (TSMessage *)self.interaction;
-    
-    return message.isPinnedMessage;
 }
 
 - (BOOL)isConfidentialMessage {

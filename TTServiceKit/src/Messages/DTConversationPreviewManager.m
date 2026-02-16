@@ -94,9 +94,13 @@
     
     if(readPosition){
         OWSLogInfo(@"conversation preview sendReadRecipet:%@", readPosition);
-        [OWSReadReceiptManager.sharedManager updateSelfReadPositionEntity:readPosition
-                                                                   thread:thread
-                                                              transaction:writeTransaction];
+        if(readPosition.maxServerTime > thread.readPositionEntity.maxServerTime) {
+            [OWSReadReceiptManager.sharedManager updateSelfReadPositionEntity:readPosition
+                                                                       thread:thread
+                                                                  transaction:writeTransaction];
+        } else {
+            OWSLogInfo(@"ignore conversation preview sendReadRecipet:%@", readPosition);
+        }
     }
     
     

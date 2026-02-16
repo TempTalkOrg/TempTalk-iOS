@@ -10,7 +10,6 @@
 #import "DTGroupMemberEntity.h"
 #import "DTGroupBaseInfoEntity.h"
 #import "DTGroupAnnouncementEntity.h"
-#import "DTPinnedMessageEntity.h"
 
 NS_ASSUME_NONNULL_BEGIN
 /*
@@ -177,12 +176,6 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:anyoneRemove:avatar
 
 @end
 
-@interface DTPinnedMessageNotifyEntity : DTPinnedMessageEntity
-
-@property (nonatomic, assign) DTGroupNotifyAction action;
-
-@end
-
 @interface DTGroupMemberNotifyEntity : DTGroupMemberEntity
 
 @property (nonatomic, assign) DTGroupNotifyAction action;
@@ -209,7 +202,6 @@ typedef NS_ENUM(NSInteger, DTMeetingReminderType) {
 @property (nonatomic, strong, nullable) DTGroupBaseInfoNotifyEntity *group;
 @property (nonatomic, strong) NSArray<DTGroupMemberNotifyEntity *> *members;
 @property (nonatomic, strong) NSArray<DTGroupAnnouncementNotifyEntity *> *groupAnnouncements;
-@property (nonatomic, strong) NSArray<DTPinnedMessageNotifyEntity *> *groupPins;
 // "join" "leave"
 @property (nonatomic, copy) NSString *event;
 // uid of the member who join/left the meeting

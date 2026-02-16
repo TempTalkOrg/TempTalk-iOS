@@ -47,6 +47,8 @@ extension ConversationMessageBubbleView {
         case .confidential:
             bodyTextView.maskEnable = true
             bodyTextView.linkTextAttributes = [:]
+            bodyTextView.isSelectable = false
+            bodyTextView.isUserInteractionEnabled = false
             if let attributedText = bodyTextView.attributedText {
                 let mutableAttributedText = NSMutableAttributedString(attributedString: attributedText)
                 mutableAttributedText.removeAttribute(.link, range: NSRange(location: 0, length: mutableAttributedText.length))
@@ -98,7 +100,7 @@ extension ConversationMessageBubbleView {
     private func createChatHistoryLabel(textColor: UIColor, lineColor: UIColor) -> UIView {
         let chatHistoryLabel = UILabel()
         chatHistoryLabel.text = Localized("FORWARD_MESSAGE_CHAT_HISTORY")
-        chatHistoryLabel.font = .ows_dynamicTypeCaption1
+        chatHistoryLabel.font = .ows_dynamicTypeCaption1(scaled: false)
         chatHistoryLabel.textColor = textColor
         
         let line = UIView()

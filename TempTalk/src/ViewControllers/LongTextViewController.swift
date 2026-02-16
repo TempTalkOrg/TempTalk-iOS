@@ -16,8 +16,10 @@ public class LongTextViewController: OWSViewController {
     let messageBody: String
 
     var messageTextView: UITextView?
-    
+
     var footer: UIToolbar?
+
+    static let kVisitingCardScheme = "personinfocard"
 
     // MARK: Initializers
 
@@ -80,14 +82,23 @@ public class LongTextViewController: OWSViewController {
         messageTextView.showsVerticalScrollIndicator = true
         messageTextView.isUserInteractionEnabled = true
         messageTextView.textColor = UIColor.black
-        messageTextView.text = messageBody
+        messageTextView.delegate = self
+
+        // Build attributed text with mentions support
+        if let viewItem = self.viewItem {
+            let attributedText = buildAttributedText(viewItem: viewItem)
+            messageTextView.attributedText = attributedText
+            messageTextView.linkTextAttributes = [.foregroundColor: Theme.tinfoColor]
+        } else {
+            messageTextView.text = messageBody
+        }
 
         view.addSubview(messageTextView)
         messageTextView.autoPinEdge(toSuperviewEdge: .leading)
         messageTextView.autoPinEdge(toSuperviewEdge: .trailing)
 //        messageTextView.textContainerInset = UIEdgeInsets(top: 0, left: view.layoutMargins.left, bottom: 0, right: view.layoutMargins.right)
         messageTextView.autoPinEdge(toSuperviewSafeArea: .top)
-        
+
         DispatchQueue.main.async {
             messageTextView.contentOffset = .zero
         }
@@ -104,16 +115,90 @@ public class LongTextViewController: OWSViewController {
             UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(shareButtonPressed)),
             UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
         ]
-        
+
         applyTheme()
+    }
+
+    private func buildAttributedText(viewItem: ConversationViewItem) -> NSAttributedString {
+        guard let displayableBodyText = viewItem.displayableBodyText() else {
+            return NSAttributedString(string: messageBody)
+        }
+
+        let text = displayableBodyText.fullText
+        guard !text.isEmpty else {
+            return NSAttributedString(string: messageBody)
+        }
+
+        let font = UIFont.ows_dynamicTypeBody
+        let textColor = Theme.tprimaryColor
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 1
+
+        let attributedString = NSMutableAttributedString(
+            string: text,
+            attributes: [
+                .font: font,
+                .foregroundColor: textColor,
+                .paragraphStyle: paragraphStyle
+            ]
+        )
+
+        // Handle forward message source links
+        DTPatternHelper.getForwardMessageSourceText(with: text, withCallBackCheckingResult: { resultArray in
+            resultArray.forEach { result in
+                let range = result.range(at: 0)
+                if range.length > 0 {
+                    let substring = text.substring(withRange: range)
+                    let uid = DTPatternHelper.getForwardUidString(substring)
+                    attributedString.addAttribute(
+                        .link,
+                        value: "\(Self.kVisitingCardScheme)://\(uid)",
+                        range: range
+                    )
+                    attributedString.addAttribute(
+                        .underlineStyle,
+                        value: NSUnderlineStyle.single.rawValue,
+                        range: range
+                    )
+                    attributedString.addAttribute(
+                        .foregroundColor,
+                        value: Theme.tprimaryColor,
+                        range: range
+                    )
+                }
+            }
+        })
+
+        // Handle mentions
+        if let mentions = viewItem.mentions {
+            mentions.forEach { mention in
+                let range = NSMakeRange(Int(mention.start), Int(mention.length))
+                if range.location + range.length > text.count {
+                    Logger.error("[mention] range:\(range) out of bounds")
+                    return
+                }
+                attributedString.addAttribute(
+                    .foregroundColor,
+                    value: Theme.tinfoColor,
+                    range: range
+                )
+                attributedString.addAttribute(
+                    .link,
+                    value: "\(Self.kVisitingCardScheme)://\(mention.uid)",
+                    range: range
+                )
+            }
+        }
+
+        return attributedString
     }
     
     public override func applyTheme() {
         super.applyTheme()
         
-        messageTextView?.backgroundColor = Theme.backgroundColor
-        messageTextView?.textColor = Theme.primaryTextColor
-        footer?.barTintColor = Theme.navbarBackgroundColor
+        messageTextView?.backgroundColor = Theme.bg1Color
+        messageTextView?.textColor = Theme.tprimaryColor
+        footer?.barTintColor = Theme.bg1Color
     }
     
     public override var canBecomeFirstResponder: Bool {
@@ -132,5 +217,20 @@ public class LongTextViewController: OWSViewController {
 
     @objc func shareButtonPressed() {
         AttachmentSharing.showShareUI(forText: messageBody)
+    }
+}
+
+// MARK: - UITextViewDelegate
+
+extension LongTextViewController: UITextViewDelegate {
+    public func textView(
+        _ textView: UITextView,
+        shouldInteractWith URL: URL,
+        in characterRange: NSRange,
+        interaction: UITextItemInteraction
+    ) -> Bool {
+        // Handle all URLs with AppLinkManager (including personinfocard://, http://, etc.)
+        _ = AppLinkManager.handle(url: URL, fromExternal: false, sourceVC: self)
+        return false
     }
 }

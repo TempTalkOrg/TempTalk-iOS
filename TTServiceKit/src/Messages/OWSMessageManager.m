@@ -77,6 +77,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong) DTServerNotifyMessageHandler *notifyMessageHandler;
 @property (nonatomic, strong) DTMarkUnreadProcessor *unreadProcessor;
 @property (nonatomic, strong, nullable) InteractionFinder *interactionFinder;
+
+// Serial queue for confidential placeholder creation to prevent race conditions
+@property (nonatomic, strong) dispatch_queue_t confidentialPlaceholderQueue;
+
 @end
 
 #pragma mark -
@@ -149,25 +153,26 @@ NS_ASSUME_NONNULL_BEGIN
                              messageSender:(OWSMessageSender *)messageSender
 {
     self = [super init];
-    
+
     if (!self) {
         return self;
     }
-    
+
     _callMessageHandler = callMessageHandler;
     _contactsManager = contactsManager;
     _identityManager = identityManager;
     _messageSender = messageSender;
-    
+    _confidentialPlaceholderQueue = dispatch_queue_create("com.temptalk.confidentialPlaceholder", DISPATCH_QUEUE_SERIAL);
+
     OWSSingletonAssert();
-    
-    
+
+
     //    if (CurrentAppContext().isMainApp) {
     //        [AppReadiness runNowOrWhenAppIsReady:^{
     //            [self startObserving];
     //        }];
     //    }
-    
+
     return self;
 }
 
@@ -629,10 +634,16 @@ NS_ASSUME_NONNULL_BEGIN
 //            }
             
             NSNumber *maxTimestamp = [messageTimestamps valueForKeyPath:@"@max.self"];
-            NSError *error;
+            NSError *error = nil;
             NSArray<TSOutgoingMessage *> *outgoingmessages = (NSArray<TSOutgoingMessage *> *)[InteractionFinder interactionsWithTimestamp:maxTimestamp.unsignedLongValue filter:^BOOL(TSInteraction * interaction) {
                 return ([interaction isKindOfClass:[TSOutgoingMessage class]]);
             } transaction:transaction error:&error];
+
+            if (error != nil) {
+                OWSLogError(@"Failed to query outgoing messages: %@", error);
+                return;
+            }
+
             TSOutgoingMessage *outgoingmessage = outgoingmessages.firstObject;
             
             if (receiptMessage.readPosition) {
@@ -702,32 +713,43 @@ NS_ASSUME_NONNULL_BEGIN
                 }
                 
             }
-            
-            if (outgoingmessage.isConfidentialMessage && receiptMessage.messageMode == 1) {
+
+            // Handle confidential message deletion
+            if (outgoingmessage && outgoingmessage.isConfidentialMessage && receiptMessage.messageMode == DSKProtoDataMessageMessageModeConfidential) {
+                // Use serial queue to prevent race conditions
+                NSString *messageId = outgoingmessage.uniqueId;
+                uint64_t messageTimestamp = outgoingmessage.timestamp;
                 NSString *threadId = outgoingmessage.uniqueThreadId;
-                TSThread *thread = [TSThread anyFetchWithUniqueId:threadId transaction:transaction];
-                if (thread.isGroupThread) {
-                    AnyMessageReadPositonFinder *readPositionFinder = [AnyMessageReadPositonFinder new];
-                    NSError *error;
-                    __block NSInteger readCount = 0;
-                    [readPositionFinder enumerateRecipientReadPositionsWithUniqueThreadId:thread.uniqueId
-                                                                              transaction:transaction
-                                                                                    error:&error
-                                                                                    block:^(TSMessageReadPosition * readPosition) {
-                        TSOutgoingMessageRecipientState *oldRecipientState = outgoingmessage.recipientStateMap[readPosition.recipientId];
-                        if(oldRecipientState &&
-                           oldRecipientState.state == OWSOutgoingMessageRecipientStateSent &&
-                           readPosition.maxServerTime >= outgoingmessage.timestampForSorting &&
-                           oldRecipientState.readTimestamp == nil){
-                            readCount ++;
+
+                dispatch_async(self.confidentialPlaceholderQueue, ^{
+                    DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+                        // Re-fetch the outgoing message to ensure it still exists
+                        TSOutgoingMessage *currentMessage = [TSOutgoingMessage anyFetchWithUniqueId:messageId
+                                                                                         transaction:transaction];
+
+                        if (!currentMessage || !currentMessage.isConfidentialMessage) {
+                            return;
                         }
-                    }];
-                    if (outgoingmessage.recipientIds.count == readCount) {
-                        [outgoingmessage anyRemoveWithTransaction:transaction];
-                    }
-                } else {
-                    [outgoingmessage anyRemoveWithTransaction:transaction];
-                }
+
+                        TSThread *thread = [TSThread anyFetchWithUniqueId:threadId transaction:transaction];
+                        if (!thread) {
+                            return;
+                        }
+
+                        // Use timestamp + 1 to avoid uniqueId conflict with outgoingMessage
+                        TSInfoMessage *placeholder = [[TSInfoMessage alloc]
+                            initWithTimestamp:messageTimestamp + 1
+                            inThread:thread
+                            messageType:TSInfoMessageConfidentialViewed
+                            expiresInSeconds:0
+                            customMessage:nil];
+
+                        placeholder.shouldAffectThreadSorting = YES;
+
+                        [placeholder anyInsertWithTransaction:transaction];
+                        [currentMessage anyRemoveWithTransaction:transaction];
+                    });
+                });
             }
         }
             
@@ -964,7 +986,7 @@ NS_ASSUME_NONNULL_BEGIN
         // 如果同步消息是发送到 note 的，serverTimestamp 取 envelope 上的 systemShowTimestamp，
         // 同步 note 的 syncMessage.sent 中的 serverTimestamp 是端上随便设置的
         BOOL isSendToNote = [localNumber isEqualToString:syncMessage.sent.destination];
-        uint64_t syncMessageServerTimestamp = isSendToNote ? envelope.systemShowTimestamp : syncMessage.sent.serverTimestamp;
+        uint64_t syncMessageServerTimestamp = isSendToNote ? envelope.systemShowTimestamp : (syncMessage.sent.serverTimestamp ?: envelope.systemShowTimestamp);
         
         OWSIncomingSentMessageTranscript *transcript =
             [[OWSIncomingSentMessageTranscript alloc] initWithProto:syncMessage.sent
@@ -1022,73 +1044,19 @@ NS_ASSUME_NONNULL_BEGIN
     } else if (syncMessage.request) {
         
         if (syncMessage.request.unwrappedType == DSKProtoSyncMessageRequestTypeContacts) {
-            // We respond asynchronously because populating the sync message will
-            // create transactions and it's not practical (due to locking in the OWSIdentityManager)
-            // to plumb our transaction through.
-            //
-            // In rare cases this means we won't respond to the sync request, but that's
-            // acceptable.
-            /*
-            __block id <DataSource> dataSource = nil;
-            OWSSyncContactsMessage *syncContactsMessage =
-            [[OWSSyncContactsMessage alloc] initWithSignalAccounts:self.contactsManager.signalAccounts
-                                                   identityManager:self.identityManager
-                                                    profileManager:self.profileManager];
-            [self.databaseStorage asyncWriteWithBlock:^(SDSAnyWriteTransaction * _Nonnull transaction) {
-                NSError *dError;
-                dataSource = [DataSourcePath dataSourceWritingSyncMessageData:[syncContactsMessage buildPlainTextAttachmentDataWithTransaction:transaction] error:&dError];
-                if (dError) {
-                    OWSLogDebug(@"contacts sync message data source error: %@", dError);
-                }
-            } completionQueue:dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0) completion:^{
-                if (dataSource.dataLength < 1) {
-                    // Don't bother sending empty sync messages if we have no contacts to sync.
-                    OWSLogInfo(@"skipping empty contact sync message.");
-                    return;
-                }
-                
-                [self.messageSender enqueueTemporaryAttachment:dataSource
-                                                   contentType:OWSMimeTypeApplicationOctetStream
-                                                     inMessage:syncContactsMessage
-                                                       success:^{
-                    OWSLogInfo(@"Successfully sent Contacts response syncMessage.");
-                }
-                                                       failure:^(NSError *error) {
-                    OWSLogError(@"Failed to send Contacts response syncMessage with error: %@", error);
-                }];
-            }];
-            */
+
         } else if (syncMessage.request.unwrappedType == DSKProtoSyncMessageRequestTypeGroups) {
             
             OWSLogInfo(@"ignore sync request groups message.");
         } else if (syncMessage.request.unwrappedType == DSKProtoSyncMessageRequestTypeBlocked) {
             OWSLogInfo(@"%@ Received request for block list", self.logTag);
-//            [self.blockingManager syncBlockedPhoneNumbers];
         } else if (syncMessage.request.unwrappedType == DSKProtoSyncMessageRequestTypeConfiguration) {
-            /*
-            BOOL areReadReceiptsEnabled =
-                [[OWSReadReceiptManager sharedManager] areReadReceiptsEnabledWithTransaction:transaction];
-            OWSSyncConfigurationMessage *syncConfigurationMessage =
-                [[OWSSyncConfigurationMessage alloc] initWithReadReceiptsEnabled:areReadReceiptsEnabled];
-            [self.messageSender enqueueMessage:syncConfigurationMessage
-                success:^{
-                    OWSLogInfo(@"%@ Successfully sent Configuration response syncMessage.", self.logTag);
-                }
-                failure:^(NSError *error) {
-                    OWSLogError(
-                        @"%@ Failed to send Configuration response syncMessage with error: %@", self.logTag, error);
-                }];
-             */
+
         } else {
             OWSLogWarn(@"%@ ignoring unsupported sync request message", self.logTag);
         }
     } else if (syncMessage.blocked) {
-        /*
-        NSArray<NSString *> *blockedPhoneNumbers = [syncMessage.blocked.numbers copy];
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            [self.blockingManager setBlockedPhoneNumbers:blockedPhoneNumbers sendSyncMessage:NO];
-        });
-         */
+        
     } else if (syncMessage.read.count > 0) { // 热数据不会记
         OWSLogInfo(@"%@ Received %ld read receipt(s)", self.logTag, (u_long)syncMessage.read.count);
         [OWSReadReceiptManager.sharedManager processReadReceiptsFromLinkedDevice:syncMessage.read
@@ -1298,7 +1266,8 @@ NS_ASSUME_NONNULL_BEGIN
                    transaction:(SDSAnyWriteTransaction *)transaction {
     OWSLogInfo(@"Screen Shot message");
     DTRealSourceEntity *realSource = [DTRealSourceEntity realSourceEntityWithProto:dataMessage.screenShot.source];
-    NSString *nameString = [self.contactsManager displayNameForPhoneIdentifier:envelope.source];
+    // Use transaction-based method to ensure database lookup for nickname
+    NSString *nameString = [self.contactsManager displayNameForPhoneIdentifier:envelope.source transaction:transaction];
     TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
                                                                  inThread:thread
                                                               messageType:TSInfoMessageScreenshotMessage
@@ -1364,7 +1333,7 @@ NS_ASSUME_NONNULL_BEGIN
     
     DTRecallMessage *recall = [DTRecallMessage recallWithDataMessage:dataMessage];
     
-    BOOL duplicateRecallMessage = [RecallFinder duplicateRecallMessageWithTimestamp:recall.source.timestamp
+    BOOL duplicateRecallMessage = [RecallFinder duplicateRecallMessageWithTimestamp:timestamp
                                                                            sourceId:source
                                                                      sourceDeviceId:sourceDevice
                                                                         transaction:transaction];
@@ -1401,50 +1370,16 @@ NS_ASSUME_NONNULL_BEGIN
                                                                relay:relay];
         }
         
-        OWSLogInfo(@"===== originalMessage timestamp: %llu, serverTimestamp: %llu =====", originMessage.timestamp, originMessage.serverTimestamp);
-        
         OWSLogInfo(@"===== recall source timestamp:%llu, servertimestamp: %llu =====", recall.source.timestamp, recall.source.serverTimestamp);
-        
-        NSString *nameString = [self.contactsManager displayNameForPhoneIdentifier:source transaction:transaction];
-        nameString = [NSString stringWithFormat:@"\"%@\"", nameString];
-        NSAttributedString *customString = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:Localized(@"RECALL_INFO_MESSAGE",nil), nameString]];
-        
-        TSInfoMessage *recallInfoMessage = [[TSInfoMessage alloc] initWithTimestamp:recall.source.timestamp
-                                                                    serverTimestamp:envelope.systemShowTimestamp
-                                                                           inThread:thread
-                                                                           authorId:source
-                                                                           deviceId:sourceDevice
-                                                                   expiresInSeconds:dataMessage.expireTimer
-                                                                      customMessage:customString];
-        recallInfoMessage.serverTimestamp = originMessage.serverTimestamp?originMessage.serverTimestamp:recall.source.serverTimestamp;
-        recallInfoMessage.recallPreview = customString.string;
-        recallInfoMessage.recall = recall;
-        if(originMessage){
-            recallInfoMessage.uniqueId = originMessage.uniqueId;
-            if(!recallInfoMessage.grdbId && originMessage.grdbId){
-                [recallInfoMessage updateRowId:originMessage.grdbId.longLongValue];
-            }
+        if (originMessage) {
+            OWSLogInfo(@"===== originalMessage timestamp: %llu, serverTimestamp: %llu =====", originMessage.timestamp, originMessage.serverTimestamp);
+            [originMessage anyRemoveWithTransaction:transaction];
         }
-        
-        // TODO: check whisperMessageType
-        recallInfoMessage.whisperMessageType = envelope.unwrappedType;
-        
-        if(job.envelopeProto.lastestMsgFlag){ // 拉取离线会话需要更新会话 lastestMsg
-            if(!recallInfoMessage.grdbId){
-                [recallInfoMessage updateRowId:100];
-            }
-            OWSLogInfo(@"%@ handling lastestMsgFlag  envelope: %@", self.logTag, [self descriptionForEnvelope:envelope]);
-            [thread updateWithLastMessage:recallInfoMessage isInserted:YES transaction:transaction];
-        }else{
-
-            // 覆盖原始消息
-            [recallInfoMessage anyUpsertWithTransaction:transaction];
-            // 收到撤回消息时，删除原始消息索引
-            if (originMessage) {
-                [[FullTextSearchFinder new] modelWasRemovedObjcWithModel:originMessage transaction:transaction];
-            }
-        }
-        OWSLogInfo(@"===== recall messaage timestamp:%llu, servertimestamp: %llu =====", recallInfoMessage.timestamp, recallInfoMessage.serverTimestamp);
+        [recall insertRecordWithSource:source
+                          sourceDevice:sourceDevice
+                             timestamp:timestamp
+                           transaction:transaction];
+        OWSLogInfo(@"===== recall messaage timestamp:%llu, servertimestamp: %llu =====", recall.source.timestamp, envelope.systemShowTimestamp);
         
         if(self.handleUnsupportedMessage){
             TSIncomingMessage *oldMessage = [TSIncomingMessage findMessageWithAuthorId:source
@@ -1456,10 +1391,6 @@ NS_ASSUME_NONNULL_BEGIN
                 OWSLogInfo(@"handleUnsupportedMessage delete message timestamp for sorting: %llu", oldMessage.timestampForSorting);
             }
         }
-        // If the message arrives later than the archived notification, archive it directly
-        // Messages are no longer stored in "model_TSInteraction" table
-        // TODO: 目前message 没有合适的方式直接入归档消息的table，后面数据库优化后调整
-        [[OWSArchivedMessageJob sharedJob] checkAndArchiveWithMessage:recallInfoMessage withThread:thread transaction:transaction];
         return nil;
     }
 
@@ -1976,11 +1907,6 @@ NS_ASSUME_NONNULL_BEGIN
                                                                     contactsManager:self.contactsManager
                                                                         transaction:transaction];
     
-    // If the message arrives later than the archived notification, archive it directly
-    // Messages are no longer stored in "model_TSInteraction" table, but this situation needs to be completed in the subsequent database optimization process
-    // TODO: 目前message 没有合适的方式直接入归档消息的table，后面数据库优化后调整
-    [[OWSArchivedMessageJob sharedJob] checkAndArchiveWithMessage:incomingMessage withThread:thread transaction:transaction];
-    
 }
 
 - (void)finalizeIncomingMessage:(TSIncomingMessage *)incomingMessage
@@ -2005,18 +1931,6 @@ NS_ASSUME_NONNULL_BEGIN
     [OWSReadReceiptManager.sharedManager applyEarlyReadReceiptsForIncomingMessage:incomingMessage
                                                                       transaction:transaction];
 }
-
-//- (BOOL)checkAndArchiveMessage:(TSMessage *)message withThread:(TSThread *)thread transaction:(SDSAnyWriteTransaction *)transaction {
-//
-//    OWSArchivedMessageJob *archivedMessageJob = [OWSArchivedMessageJob sharedJob];
-//
-//    if ([archivedMessageJob needArchiveMessageWithMessage:message withThread:thread transaction:transaction]) {
-//        [[OWSArchivedMessageJob sharedJob] directInsertToArchivedMessageTableWithMessage:message transaction:transaction];
-//        return true;
-//    }
-//
-//    return false;
-//}
 
 #pragma mark - constructor message data
 

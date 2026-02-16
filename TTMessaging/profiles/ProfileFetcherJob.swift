@@ -73,9 +73,9 @@ public class ProfileFetcherJob: NSObject {
         }.catch { error in
             switch error {
             case ProfileFetcherJobError.throttled(let lastTimeInterval):
-                Logger.info("\(self.TAG) skipping updateProfile: \(recipientId), lastTimeInterval: \(lastTimeInterval)")
+                Logger.info("\(self.TAG) skipping updateProfile - throttled, lastTimeInterval: \(lastTimeInterval)")
             case let error as SignalServiceProfile.ValidationError:
-                Logger.warn("\(self.TAG) skipping updateProfile retry. Invalid profile for: \(recipientId) error: \(error)")
+                Logger.warn("\(self.TAG) skipping updateProfile retry - invalid profile, error: \(error)")
             default:
                 if remainingRetries > 0 {
                     self.updateProfile(recipientId: recipientId, remainingRetries: remainingRetries - 1)
@@ -103,7 +103,7 @@ public class ProfileFetcherJob: NSObject {
         }
         ProfileFetcherJob.fetchDateMap[recipientId] = Date()
 
-        Logger.info("\(self.TAG) getProfile: \(recipientId)")
+        Logger.info("\(self.TAG) getProfile called")
         
         let requestMaker = RequestMaker(label: "Profile fetch") { () -> TSRequest? in
             return OWSRequestFactory.getProfileRequest(withRecipientId: recipientId)

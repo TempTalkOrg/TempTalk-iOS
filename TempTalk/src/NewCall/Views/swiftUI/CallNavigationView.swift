@@ -13,7 +13,7 @@ import LiveKit
 struct CallNavigationView: View {
 
     @ObservedObject var currentCall: DTLiveKitCallModel
-    @StateObject private var timerManager = TimerDataManager.shared
+    @ObservedObject private var timerManager = TimerDataManager.shared
     @Binding var cameraRotateItemHidden: Bool
     @EnvironmentObject var room: Room
     @EnvironmentObject var roomCtx: RoomContext
@@ -67,8 +67,6 @@ struct CallNavigationView: View {
                 switch connectState {
                 case .reconnecting:
                     statusText(Localized("MEETING_NAVAGATION_CONNECTING"))
-                case .disconnected:
-                    statusText("disconnected")
                 default:
                     if let duration = timerManager.duration, duration > 0 {
                         let stringDuration = DTLiveKitCallModel.stringDuration(duration)

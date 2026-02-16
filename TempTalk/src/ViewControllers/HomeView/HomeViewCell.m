@@ -50,6 +50,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic,strong) NSArray <Contact *>*searchedEamilcontacts;
 @property (nonatomic,strong) NSArray <Contact *>*searchedFullNameContacts;
+@property (nonatomic,strong) NSArray <Contact *>*searchedRemarkNameContacts;
 @property (nonatomic,strong) NSArray *searchedReceptIds;
 @property (nonatomic, assign) HomeViewCellStyle cellStyle;
 @end
@@ -109,7 +110,7 @@ NS_ASSUME_NONNULL_BEGIN
     self.lbGroupSize = [UILabel new];
     self.lbGroupSize.textAlignment = NSTextAlignmentCenter;
     self.lbGroupSize.lineBreakMode = NSLineBreakByTruncatingTail;
-    self.lbGroupSize.font = [UIFont systemFontOfSize:9 weight:UIFontWeightMedium];
+    self.lbGroupSize.font = [UIFont ows_dynamicTypeCaption2WithScaled:NO];  // 不缩放，保持默认大小 (11pt)
     [self.groupSizeContainer addSubview:self.lbGroupSize];
     [self.lbGroupSize autoCenterInSuperview];
     [self.groupSizeContainer autoMatchDimension:ALDimensionWidth toDimension:ALDimensionWidth ofView:self.lbGroupSize withOffset:9];
@@ -182,8 +183,8 @@ NS_ASSUME_NONNULL_BEGIN
     
     self.callOnlineLabel = [UILabel new];
     self.callOnlineLabel.numberOfLines = 1;
-    self.callOnlineLabel.font = [UIFont systemFontOfSize:15];
-    self.callOnlineLabel.textColor = Theme.secondaryTextAndIconColor;
+    self.callOnlineLabel.font = [UIFont ows_dynamicTypeSubheadlineFont];  // 15pt 映射到 subheadline
+    self.callOnlineLabel.textColor = Theme.tsecondaryColor;
     [self.callOnlineLabel setContentHuggingHorizontalHigh];
     [self.callOnlineLabel setCompressionResistanceHorizontalHigh];
     
@@ -192,7 +193,7 @@ NS_ASSUME_NONNULL_BEGIN
     self.callDurationLabel.textColor = [UIColor ows_whiteColor];
     self.callDurationLabel.lineBreakMode = NSLineBreakByTruncatingTail;
     self.callDurationLabel.textAlignment = NSTextAlignmentCenter;
-    self.callDurationLabel.font = [UIFont systemFontOfSize:12];
+    self.callDurationLabel.font = [UIFont ows_dynamicTypeCaption1Font];  // 12pt 映射到 caption1
     [self.callDurationLabel setContentHuggingHorizontalHigh];
     [self.callDurationLabel setCompressionResistanceHorizontalHigh];
     
@@ -246,7 +247,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resetUIForSearch:(NSString *)searchText thread:(TSThread *)thread cellStyle:(HomeViewCellStyle)cellStyle {
     self.cellStyle = cellStyle;
     self.snippetLabel.font = [UIFont systemFontOfSize:11];
-    self.snippetLabel.textColor = Theme.ternaryTextColor;
+    self.snippetLabel.textColor = Theme.tthirdColor;
     self.snippetLabel.hidden = YES;
     self.rightCallView.hidden = true;
     self.groupSizeContainer.hidden = YES;
@@ -272,7 +273,7 @@ NS_ASSUME_NONNULL_BEGIN
         NSUInteger count = self.searchedFullNameContacts.count;
         if(self.searchedFullNameContacts && count >0 && count < 2){
             self.snippetLabel.hidden = false;
-            self.snippetLabel.textColor = Theme.ternaryTextColor;
+            self.snippetLabel.textColor = Theme.tthirdColor;
             Contact *contact = self.searchedFullNameContacts.firstObject;
             NSString *string = [NSString stringWithFormat:@"%@%@",Localized(@"SEARCH_SOMETHING_CONTAIN",
                                                                                       @"A label for conversations with blocked users."),contact.fullName];
@@ -284,7 +285,7 @@ NS_ASSUME_NONNULL_BEGIN
         
         if (self.searchedFullNameContacts && count >= 2){
             self.snippetLabel.hidden = false;
-            self.snippetLabel.textColor = Theme.ternaryTextColor;
+            self.snippetLabel.textColor = Theme.tthirdColor;
             
             NSMutableString *stringM = [NSMutableString stringWithString:Localized(@"SEARCH_SOMETHING_CONTAIN",
                                                                                            @"A label for conversations with blocked users.")];
@@ -310,7 +311,7 @@ NS_ASSUME_NONNULL_BEGIN
         NSUInteger recepectidsCount = self.searchedReceptIds.count;
         if(self.searchedReceptIds && recepectidsCount >0 && recepectidsCount < 2){
             self.snippetLabel.hidden = false;
-            self.snippetLabel.textColor = Theme.ternaryTextColor;
+            self.snippetLabel.textColor = Theme.tthirdColor;
             __block NSString *string = @"";
             [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull transation) {
                 SignalAccount *account = [self.contactsManager signalAccountForRecipientId:self.searchedReceptIds.firstObject transaction:transation];
@@ -330,7 +331,7 @@ NS_ASSUME_NONNULL_BEGIN
         
         if(self.searchedReceptIds && recepectidsCount >= 2){
             self.snippetLabel.hidden = false;
-            self.snippetLabel.textColor = Theme.ternaryTextColor;
+            self.snippetLabel.textColor = Theme.tthirdColor;
             NSMutableString *stringM = [NSMutableString stringWithString:Localized(@"SEARCH_SOMETHING_CONTAIN",
                                                                                            @"A label for conversations with blocked users.")];
             [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull transation) {
@@ -358,11 +359,45 @@ NS_ASSUME_NONNULL_BEGIN
             self.snippetLabel.text = stringM.copy;
             return;
         }
-        
+
+        NSUInteger remarkNameCount = self.searchedRemarkNameContacts.count;
+        if(self.searchedRemarkNameContacts && remarkNameCount >0 && remarkNameCount < 2){
+            self.snippetLabel.hidden = false;
+            self.snippetLabel.textColor = Theme.tthirdColor;
+            Contact *contact = self.searchedRemarkNameContacts.firstObject;
+            NSString *string = [NSString stringWithFormat:@"%@%@",Localized(@"SEARCH_SOMETHING_CONTAIN",
+                                                                                      @"A label for conversations with blocked users."),contact.fullName];
+            self.snippetLabel.text = string;
+            return;
+        }
+
+        if (self.searchedRemarkNameContacts && remarkNameCount >= 2){
+            self.snippetLabel.hidden = false;
+            self.snippetLabel.textColor = Theme.tthirdColor;
+
+            NSMutableString *stringM = [NSMutableString stringWithString:Localized(@"SEARCH_SOMETHING_CONTAIN",
+                                                                                           @"A label for conversations with blocked users.")];
+            [self.searchedRemarkNameContacts enumerateObjectsUsingBlock:^(Contact *obj, NSUInteger idx, BOOL * _Nonnull stop) {
+                if (idx <= 6) {
+                    if (idx == remarkNameCount-1) {
+                        [stringM appendString:obj.fullName];
+                    } else {
+                        [stringM appendString:[NSString stringWithFormat:@"%@, ", obj.fullName]];
+                    }
+                } else {
+                    [stringM appendString:obj.fullName];
+                    *stop = YES;
+                }
+            }];
+            self.snippetLabel.text = stringM.copy;
+
+            return;
+        }
+
         NSUInteger searchedEamilContactCount = self.searchedEamilcontacts.count;
         if(self.searchedEamilcontacts && searchedEamilContactCount >0 && searchedEamilContactCount < 2){
             self.snippetLabel.hidden = false;
-            self.snippetLabel.textColor = Theme.ternaryTextColor;
+            self.snippetLabel.textColor = Theme.tthirdColor;
             NSString *string = [NSString stringWithFormat:@"%@%@",Localized(@"SEARCH_SOMETHING_CONTAIN",
                                                                                       @"A label for conversations with blocked users."),self.searchedEamilcontacts.firstObject.email];
             
@@ -400,12 +435,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSMutableAttributedString *)dealSearchTextHighlightedWithOrifinString:(NSString *)string searchText:(NSString *) searchText{
     __block NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc] initWithString:string];
-    [attributedString addAttribute:NSForegroundColorAttributeName value:Theme.ternaryTextColor range: NSMakeRange(0, attributedString.length)];
+    [attributedString addAttribute:NSForegroundColorAttributeName value:Theme.tthirdColor range: NSMakeRange(0, attributedString.length)];
     [self getRangesWithOriginString:string patternString:searchText withCallBack:^(NSArray<NSTextCheckingResult *> * _Nonnull results) {
         if (results.count) {
             for (NSTextCheckingResult * checkingResult in results) {
                 NSRange strResultRange = [checkingResult rangeAtIndex:0];
-                [attributedString addAttribute:NSForegroundColorAttributeName value:Theme.primaryTextColor range: strResultRange];
+                [attributedString addAttribute:NSForegroundColorAttributeName value:Theme.tprimaryColor range: strResultRange];
             }
         }
     }];
@@ -428,11 +463,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)updateUnreadContentStyle{
     //通知所有人 不做处理 已经Muted
     if (!self.thread.threadRecord.isMuted) {
-        self.unreadBadge.backgroundColor = Theme.redBgroundColor;
+        self.unreadBadge.backgroundColor = Theme.errorColor;
         self.unreadLabel.textColor = [UIColor ows_whiteColor];
     }
 //    else if (self.thread.threadRecord.isMuted && [self isManualUnread]) {
-//        self.unreadBadge.backgroundColor = Theme.redBgroundColor;
+//        self.unreadBadge.backgroundColor = Theme.errorColor;
 //        self.unreadLabel.textColor = [UIColor ows_whiteColor];
 //    }
     else {
@@ -445,7 +480,7 @@ NS_ASSUME_NONNULL_BEGIN
 //    if (self.searchedEamilcontacts.count || self.searchedFullNameContacts.count || self.searchedReceptIds.count) return;
     __block NSMutableArray <Contact *> *contacts = [NSMutableArray array];
     __block NSMutableArray <Contact *> *searchEamilcontacts = [NSMutableArray array];
-    __block NSMutableArray <NSString *> *recepectids = [NSMutableArray array];
+    __block NSMutableArray <Contact *> *searchRemarkNameContacts = [NSMutableArray array];
     [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull trasation) {
         for (NSString *recepectid in groupThread.groupModel.groupMemberIds) {
             SignalAccount *account = [self.contactsManager signalAccountForRecipientId:recepectid transaction:trasation];
@@ -456,14 +491,15 @@ NS_ASSUME_NONNULL_BEGIN
             if ([contact.email.lowercaseString containsString:searchText.lowercaseString]) {
                 [searchEamilcontacts addObject:contact];
             }
-            if ([contact.number containsString:searchText]) {
-                [recepectids addObject:recepectid];
+            if (account.remarkName && [account.remarkName.lowercaseString containsString:searchText.lowercaseString]) {
+                [searchRemarkNameContacts addObject:contact];
             }
         }
     }];
     self.searchedEamilcontacts = searchEamilcontacts;
     self.searchedFullNameContacts = contacts;
-    self.searchedReceptIds = recepectids;
+    self.searchedRemarkNameContacts = searchRemarkNameContacts;
+    self.searchedReceptIds = @[];
 }
 
 - (NSArray <Contact *>*)searchEmailWithSearchText:(NSString *)searchText thread:(TSGroupThread *)groupThread {
@@ -561,12 +597,12 @@ NS_ASSUME_NONNULL_BEGIN
     [self updateAvatarView];
     
     if (self.isShowSticked) {
-        self.contentView.backgroundColor = thread.isSticked || thread.isCallingSticked ? Theme.stickBackgroundColor : Theme.tableCellBackgroundColor;
+        self.contentView.backgroundColor = thread.isSticked || thread.isCallingSticked ? Theme.bg5Color : Theme.bgpagePrimaryColor;
     } else {
-        self.contentView.backgroundColor = Theme.tableCellBackgroundColor;
+        self.contentView.backgroundColor = Theme.bgpagePrimaryColor;
     }
     
-    self.selectedBackgroundView.backgroundColor = Theme.tableCellSelectedBackgroundColor;
+    self.selectedBackgroundView.backgroundColor = Theme.bg5Color;
     
     if (!thread.isGroupThread) {
         self.avatarView.stateBackgroundColor = self.contentView.backgroundColor;
@@ -589,9 +625,9 @@ NS_ASSUME_NONNULL_BEGIN
     } else {
         self.dateTimeLabel.text = @"";
     }
-    
-    self.dateTimeLabel.font = [UIFont systemFontOfSize:12.0];
-    self.dateTimeLabel.textColor = Theme.ternaryTextColor;
+
+    self.dateTimeLabel.font = [UIFont ows_dynamicTypeCaption1Font];  // 使用缩放字体 (12pt)
+    self.dateTimeLabel.textColor = Theme.tthirdColor;
 
     NSUInteger unreadCount = thread.unreadCount;
     //下面这个unreadCount的值 和 isUnread的结合判断主要用于处理当前会话的未读数的展示调整
@@ -733,17 +769,21 @@ NS_ASSUME_NONNULL_BEGIN
         self.avatarView.avatarImageView.contentMode = UIViewContentModeScaleAspectFill;
         if (self.messageAuthorId) {
             SignalAccount *account = [self.contactsManager signalAccountForRecipientId:self.messageAuthorId];
-            [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:self.messageAuthorId displayName:self.thread.name completion:nil];
+            // Use nickname for avatar, not remark name
+            NSString *nicknameForAvatar = [self.contactsManager rawDisplayNameForPhoneIdentifier:self.messageAuthorId];
+            [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:self.messageAuthorId displayName:nicknameForAvatar completion:nil];
             return;
         }
-        
+
         if (thread.isGroupThread) {
-            
+
             [self.avatarView setImageWithThread:(TSGroupThread *)thread.threadRecord contactsManager:contactsManager];
         } else {
-            
+
             SignalAccount *account = [self.contactsManager signalAccountForRecipientId:thread.contactIdentifier];
-            [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:thread.contactIdentifier displayName:self.thread.name completion:nil];
+            // Use nickname for avatar, not remark name
+            NSString *nicknameForAvatar = [self.contactsManager rawDisplayNameForPhoneIdentifier:thread.contactIdentifier];
+            [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:thread.contactIdentifier displayName:nicknameForAvatar completion:nil];
         }
     }
     
@@ -781,7 +821,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                      initWithString:Localized(@"SOMEONE_CRITICAL_ALERT_ALL_TEXT", @"")
                                                      attributes:@{
                     NSFontAttributeName : self.snippetFont.ows_semibold,
-                    NSForegroundColorAttributeName : Theme.redBgroundColor,
+                    NSForegroundColorAttributeName : Theme.errorColor,
                 }]];
                 
                 [snippetText appendAttributedString:[[NSAttributedString alloc]
@@ -791,8 +831,8 @@ NS_ASSUME_NONNULL_BEGIN
                         (hasUnreadMessages ? self.snippetFont
                         : self.snippetFont),
                     NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.ternaryTextColor
-                        : Theme.ternaryTextColor),
+                        (hasUnreadMessages ? Theme.tthirdColor
+                        : Theme.tthirdColor),
                 }]];
                 return snippetText;
             }
@@ -803,7 +843,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                                                            @"A label for conversations with draft.")
                                                               attributes:@{
                                 NSFontAttributeName :self.snippetFont.ows_semibold,
-                                NSForegroundColorAttributeName :Theme.redBgroundColor,
+                                NSForegroundColorAttributeName :Theme.errorColor,
                                }]];
             [snippetText appendAttributedString:
              [[NSAttributedString alloc]
@@ -811,7 +851,7 @@ NS_ASSUME_NONNULL_BEGIN
               attributes:@{
                 NSFontAttributeName : self.snippetFont,
                 NSForegroundColorAttributeName :
-                    Theme.ternaryTextColor,
+                    Theme.tthirdColor,
              }]];
             
         } else if (!thread.isGroupThread && !draftString.length) {
@@ -820,7 +860,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                      initWithString:Localized(@"SOMEONE_CRITICAL_ALERT_ALL_TEXT", @"")
                                                      attributes:@{
                     NSFontAttributeName : self.snippetFont.ows_semibold,
-                    NSForegroundColorAttributeName : Theme.redBgroundColor,
+                    NSForegroundColorAttributeName : Theme.errorColor,
                 }]];
                 
                 [snippetText appendAttributedString:[[NSAttributedString alloc]
@@ -830,8 +870,8 @@ NS_ASSUME_NONNULL_BEGIN
                         (hasUnreadMessages ? self.snippetFont
                         : self.snippetFont),
                     NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.ternaryTextColor
-                        : Theme.ternaryTextColor),
+                        (hasUnreadMessages ? Theme.tthirdColor
+                        : Theme.tthirdColor),
                 }]];
                 return snippetText;
             }
@@ -843,8 +883,8 @@ NS_ASSUME_NONNULL_BEGIN
                     (hasUnreadMessages ? self.snippetFont
                     : self.snippetFont),
                 NSForegroundColorAttributeName :
-                    (hasUnreadMessages ? Theme.ternaryTextColor
-                    : Theme.ternaryTextColor),
+                    (hasUnreadMessages ? Theme.tthirdColor
+                    : Theme.tthirdColor),
             }]];
         } else if(thread.isGroupThread) {//群组中有草稿展示 优先级：Critical alert > @您 > @All > 草稿
             if (hasUnreadMessages && hasCriticalAlertHighlight) {
@@ -852,7 +892,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                      initWithString:Localized(@"SOMEONE_CRITICAL_ALERT_ALL_TEXT", @"")
                                                      attributes:@{
                     NSFontAttributeName : self.snippetFont.ows_semibold,
-                    NSForegroundColorAttributeName : Theme.redBgroundColor,
+                    NSForegroundColorAttributeName : Theme.errorColor,
                 }]];
                 
                 [snippetText appendAttributedString:[[NSAttributedString alloc]
@@ -862,8 +902,8 @@ NS_ASSUME_NONNULL_BEGIN
                         (hasUnreadMessages ? self.snippetFont
                         : self.snippetFont),
                     NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.ternaryTextColor
-                        : Theme.ternaryTextColor),
+                        (hasUnreadMessages ? Theme.tthirdColor
+                        : Theme.tthirdColor),
                 }]];
                 return snippetText;
             }
@@ -873,7 +913,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                      initWithString:Localized(@"SOMEONE_MENTION_YOU_TEXT", @"")
                                                      attributes:@{
                     NSFontAttributeName : self.snippetFont.ows_semibold,
-                    NSForegroundColorAttributeName : Theme.redBgroundColor,
+                    NSForegroundColorAttributeName : Theme.errorColor,
                 }]];
                 
                 [snippetText appendAttributedString:[[NSAttributedString alloc]
@@ -883,8 +923,8 @@ NS_ASSUME_NONNULL_BEGIN
                         (hasUnreadMessages ? self.snippetFont
                         : self.snippetFont),
                     NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.ternaryTextColor
-                        : Theme.ternaryTextColor),
+                        (hasUnreadMessages ? Theme.tthirdColor
+                        : Theme.tthirdColor),
                 }]];
                 return snippetText;
                 
@@ -895,7 +935,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                      initWithString:Localized(@"SOMEONE_MENTION_ALL_TEXT", @"")
                                                      attributes:@{
                     NSFontAttributeName : self.snippetFont.ows_semibold,
-                    NSForegroundColorAttributeName : Theme.redBgroundColor,
+                    NSForegroundColorAttributeName : Theme.errorColor,
                 }]];
                 
                 [snippetText appendAttributedString:[[NSAttributedString alloc]
@@ -905,8 +945,8 @@ NS_ASSUME_NONNULL_BEGIN
                         (hasUnreadMessages ? self.snippetFont
                         : self.snippetFont),
                     NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.ternaryTextColor
-                        : Theme.ternaryTextColor),
+                        (hasUnreadMessages ? Theme.tthirdColor
+                        : Theme.tthirdColor),
                 }]];
                 return snippetText;
             }
@@ -919,7 +959,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                                                                @"A label for conversations with draft.")
                                                                   attributes:@{
                                     NSFontAttributeName :self.snippetFont.ows_semibold,
-                                    NSForegroundColorAttributeName :Theme.redBgroundColor,
+                                    NSForegroundColorAttributeName :Theme.errorColor,
                                    }]];
                 [snippetText appendAttributedString:
                  [[NSAttributedString alloc]
@@ -927,12 +967,12 @@ NS_ASSUME_NONNULL_BEGIN
                   attributes:@{
                     NSFontAttributeName : self.snippetFont,
                     NSForegroundColorAttributeName :
-                        Theme.ternaryTextColor,
+                        Theme.tthirdColor,
                  }]];
                 
             } else {
                 UIFont * snippetFont = hasUnreadMessages ? self.snippetFont : self.snippetFont;
-                UIColor *foregroundColor = hasUnreadMessages ? Theme.ternaryTextColor : Theme.ternaryTextColor;
+                UIColor *foregroundColor = hasUnreadMessages ? Theme.tthirdColor : Theme.tthirdColor;
                 [self snippetWithOriginString:snippetText AppendText:displayableText font:snippetFont textColor:foregroundColor];
             }
             return snippetText;
@@ -971,14 +1011,14 @@ NS_ASSUME_NONNULL_BEGIN
 //#pragma clang diagnostic ignored "-Wnonnull"
     self.thread = [[ThreadViewModel alloc] initWithThread:groupThread transaction:nil];
 //#pragma clang diagnostic pop
-    self.contentView.backgroundColor = Theme.tableCellBackgroundColor;
-    self.selectedBackgroundView.backgroundColor = Theme.tableCellSelectedBackgroundColor;
+    self.contentView.backgroundColor = Theme.bgpagePrimaryColor;
+    self.selectedBackgroundView.backgroundColor = Theme.bg5Color;
     self.cellStyle = HomeViewCellStyleTypeGroupInCommon;
     self.contactsManager = contactsManager;
     [self updateAvatarView];
     [self updateNameLabel];
 
-    self.snippetLabel.textColor = Theme.ternaryTextColor;
+    self.snippetLabel.textColor = Theme.tthirdColor;
     self.snippetLabel.text = memberNames;
 }
 
@@ -1006,9 +1046,26 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - Constants
 
+/// 通用字体缩放方法：根据自定义倍数缩放字体
+/// @param baseFont 基础字体（不缩放的字体）
+/// @param customScale 自定义缩放倍数（例如 1.2 表示放大 20%）
+/// @return 缩放后的字体
+- (UIFont *)scaledFont:(UIFont *)baseFont withCustomScale:(CGFloat)customScale
+{
+    CGFloat scaleFactor = [TextSizeManager currentScaleFactor];
+    if (scaleFactor > 1.0) {
+        // 如果当前是大字体模式，应用自定义缩放倍数
+        return [baseFont fontWithSize:baseFont.pointSize * customScale];
+    }
+    return baseFont;
+}
+
 - (UIFont *)unreadFont
 {
-    return [UIFont ows_dynamicTypeCaption1Font].ows_semibold;
+    // 获取基础字体（不缩放）
+    UIFont *baseFont = [UIFont ows_dynamicTypeCaption1WithScaled:NO].ows_semibold;
+    // 使用自定义的 1.2 倍缩放（而不是默认的 1.4 倍）
+    return [self scaledFont:baseFont withCustomScale:1.2];
 }
 
 - (UIFont *)dateTimeFont
@@ -1018,7 +1075,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (UIFont *)snippetFont
 {
-    return [UIFont systemFontOfSize:16];
+    return [UIFont ows_dynamicTypeBody2Font];  // 16pt 映射到 body2 (等同于 subheadline),支持动态字体
 }
 
 - (UIFont *)nameFont
@@ -1049,6 +1106,9 @@ NS_ASSUME_NONNULL_BEGIN
 {
     [super prepareForReuse];
 
+    // 移除通知监听，避免重复监听和内存泄漏
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+
     [NSLayoutConstraint deactivateConstraints:self.viewConstraints];
     [self.viewConstraints removeAllObjects];
 
@@ -1058,7 +1118,7 @@ NS_ASSUME_NONNULL_BEGIN
     self.groupSizeContainer.hidden = YES;
     self.rightCallView.hidden = YES;
     self.dateTimeLabel.hidden = NO;
-    self.callOnlineLabel.textColor = Theme.secondaryTextAndIconColor;
+    self.callOnlineLabel.textColor = Theme.tsecondaryColor;
 
     [self.nameView prepareForReuse];
 }
@@ -1091,7 +1151,7 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertIsOnMainThread();
 
     self.nameView.nameFont = self.nameFont;
-    self.nameView.nameColor = Theme.primaryTextColor;
+    self.nameView.nameColor = Theme.tprimaryColor;
     
     ThreadViewModel *thread = self.thread;
     if (thread == nil) {
@@ -1113,7 +1173,7 @@ NS_ASSUME_NONNULL_BEGIN
             name = [[NSAttributedString alloc] initWithString:[MessageStrings newGroupDefaultTitle]];
         } else {
             if (self.messageAuthorId) {
-                
+
                 // TODO: grdb opt
                 __block NSAttributedString *fetchedName = nil;
                 [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
@@ -1122,7 +1182,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                                                secondaryFont:self.nameSecondaryFont
                                                                                  transaction:transaction];
                 }];
-                
+
                 name = fetchedName;
             } else {
                 name = [[NSAttributedString alloc] initWithString:thread.name];
@@ -1180,7 +1240,7 @@ NS_ASSUME_NONNULL_BEGIN
     self.groupSizeContainer.hidden = NO;
     self.groupSizeContainer.layer.borderColor = UIColor.ows_whiteColor.CGColor;//self.contentView.backgroundColor.CGColor;
     self.groupSizeContainer.backgroundColor = isDarkTheme ? [UIColor colorWithRGBHex:0x012C70] : [UIColor colorWithRGBHex:0xEBF7FF];
-    self.lbGroupSize.textColor = Theme.themeBlueColor;
+    self.lbGroupSize.textColor = Theme.tinfoColor;
     
     self.lbGroupSize.text = [NSString stringWithFormat:@"%ld", memberCount];
 }
@@ -1194,9 +1254,9 @@ NS_ASSUME_NONNULL_BEGIN
         self.contentView.backgroundColor = nil;
     } else {
         if (self.isShowSticked) {
-            self.contentView.backgroundColor = self.thread.isSticked || self.thread.isCallingSticked ? Theme.stickBackgroundColor : Theme.tableCellBackgroundColor;
+            self.contentView.backgroundColor = self.thread.isSticked || self.thread.isCallingSticked ? Theme.bg5Color : Theme.bgpagePrimaryColor;
         } else {
-            self.contentView.backgroundColor = Theme.tableCellBackgroundColor;
+            self.contentView.backgroundColor = Theme.bgpagePrimaryColor;
         }
     }
     [super setHighlighted:highlighted animated:animated];
@@ -1207,9 +1267,9 @@ NS_ASSUME_NONNULL_BEGIN
         self.contentView.backgroundColor = nil;
     } else {
         if (self.isShowSticked) {
-            self.contentView.backgroundColor = self.thread.isSticked || self.thread.isCallingSticked ? Theme.stickBackgroundColor : Theme.tableCellBackgroundColor;
+            self.contentView.backgroundColor = self.thread.isSticked || self.thread.isCallingSticked ? Theme.bg5Color : Theme.bgpagePrimaryColor;
         } else {
-            self.contentView.backgroundColor = Theme.tableCellBackgroundColor;
+            self.contentView.backgroundColor = Theme.bgpagePrimaryColor;
         }
     }
     [super setSelected:selected animated:animated];

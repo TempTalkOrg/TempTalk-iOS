@@ -158,7 +158,7 @@ import TTMessaging
             TSAccountManager.shared.storeServerAuthToken(password);
             self.navigationController?.popViewController(animated: true)
         } failure: { error, entity in
-            //TODO:  需要和产品确认如何提示用户 （需要考虑用户杀进程之后这个password 没有重置成功如何处理）
+            Logger.error("Failed to reset auth password: \(error)")
         }
     }
     

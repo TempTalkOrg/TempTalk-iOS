@@ -228,7 +228,7 @@
         if (self.sectionTextView.text.length == self.maxLength) {
             [attributedString addAttribute:NSForegroundColorAttributeName value:[UIColor colorWithRGBHex:0xF84135] range:range];
         } else {
-            [attributedString addAttribute:NSForegroundColorAttributeName value:Theme.primaryTextColor range:range];
+            [attributedString addAttribute:NSForegroundColorAttributeName value:Theme.tprimaryColor range:range];
         }
         self.tipLabel.attributedText = attributedString;
     } else {
@@ -366,7 +366,7 @@
 - (UIView *)contentView {
     if (!_contentView) {
         _contentView = [UIView new];
-        _contentView.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x181A20] : [UIColor colorWithRGBHex:0xFFFFFF];
+        _contentView.backgroundColor = Theme.bg1Color;
         _contentView.layer.cornerRadius = 8;
         _contentView.clipsToBounds = true;
         if (@available(iOS 11.0, *)) {
@@ -381,7 +381,7 @@
 - (UIView *)showContentView {
     if (!_showContentView) {
         _showContentView = [UIView new];
-//        _showContentView.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x181A20] : [UIColor colorWithRGBHex:0xFFFFFF];
+//        _showContentView.backgroundColor = Theme.bg1Color;
         _showContentView.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x2B3139] : [UIColor colorWithRGBHex:0xFFFFFF];
         _showContentView.layer.cornerRadius = 8;
         _showContentView.clipsToBounds = true;
@@ -397,7 +397,7 @@
 
 - (void)setAttributedContentString:(NSAttributedString *)attributedContentString {
     self.contentTextView.attributedText = attributedContentString;
-    self.contentTextView.textColor = Theme.primaryTextColor;
+    self.contentTextView.textColor = Theme.tprimaryColor;
 }
 
 - (void)setContentString:(NSString *)contentString {
@@ -405,7 +405,7 @@
     if (self.alertType == DTCardAlertViewTypeDefault) {
         NSMutableAttributedString *attributedString = [self.class commonContentAttributesString:contentString withFont:14];
         self.contentTextView.attributedText = attributedString;
-        self.contentTextView.textColor = Theme.primaryTextColor;
+        self.contentTextView.textColor = Theme.tprimaryColor;
     } else {
         self.sectionTextView.text = contentString;
     }
@@ -423,7 +423,7 @@
     if (!_titleLabel) {
         _titleLabel = [UILabel new];
         _titleLabel.font = [UIFont fontWithName:@"PingFangSC-Medium" size:16];
-        _titleLabel.textColor = Theme.primaryTextColor;
+        _titleLabel.textColor = Theme.tprimaryColor;
         _titleLabel.textAlignment = NSTextAlignmentCenter;
         
     }
@@ -436,8 +436,8 @@
         _contentTextView.font = [UIFont systemFontOfSize:14];
         _contentTextView.textAlignment = NSTextAlignmentLeft;
         _contentTextView.userInteractionEnabled = false;
-        _contentTextView.textColor = Theme.primaryTextColor;
-        _contentTextView.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x181A20] : [UIColor colorWithRGBHex:0xFFFFFF] ;
+        _contentTextView.textColor = Theme.tprimaryColor;
+        _contentTextView.backgroundColor = Theme.bg1Color;
     }
     return _contentTextView;
 }

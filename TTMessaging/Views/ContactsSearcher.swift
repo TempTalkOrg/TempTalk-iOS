@@ -40,14 +40,14 @@ public class ContactsSearcher: NSObject {
         }
         
         return signalAccounts.sorted { account1, account2 in
-            return DTSearchResultSortHelpter.sortGroupMember(account1: account1, account2: account2, searchText: searchWord)
+            return DTSearchResultSortHelpter.sortGroupMember(account1: account1, account2: account2, searchText: searchWord, transaction: transaction)
         }
     }
     
     @objc
-    public func getGroupAccountsByDefaultSortMethod(sortParms:[SignalAccount]) -> [SignalAccount] {
+    public func getGroupAccountsByDefaultSortMethod(sortParms:[SignalAccount], transaction: SDSAnyReadTransaction) -> [SignalAccount] {
         return sortParms.sorted { account1, account2 in
-            return DTSearchResultSortHelpter.searchGroupAccountsByDefaultSortMethod(account1: account1, account2: account2)
+            return DTSearchResultSortHelpter.searchGroupAccountsByDefaultSortMethod(account1: account1, account2: account2, transaction: transaction)
         }
     }
     

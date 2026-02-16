@@ -64,7 +64,6 @@ class GroupNotifyDonotTrackVersionHandler : GroupNotifyDonotTrackHandler {
             
             if groupNotifyEntity.groupNotifyDetailedType == .groupInactive {
                 
-                DTPinnedDataSource.shared().removeAllPinnedMessage(groupNotifyEntity.gid)
                 DTGroupUtils.removeGroupBaseInfo(withGid: groupNotifyEntity.gid, transaction: transaction)
                 
                 if newGroupThread.isSticked {

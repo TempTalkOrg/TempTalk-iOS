@@ -19,6 +19,7 @@
 #import "DTInputBarMoreCell.h"
 #import <SignalServiceKit/DTReplyModel.h>
 #import <SignalMessaging/DTTopicReplyModel.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -26,10 +27,24 @@ typedef NS_CLOSED_ENUM(NSUInteger, KeyboardType) { KeyboardType_System, Keyboard
 
 static void *kConversationInputTextViewObservingContext = &kConversationInputTextViewObservingContext;
 
-const CGFloat kMinTextViewHeight = 38;
-const CGFloat kMaxTextViewHeight = 98;
-const CGFloat kMaxIPadTextViewHeight = 142;
+// 基础高度常量（在默认字体大小下）
+const CGFloat kBaseMinTextViewHeight = 38;
+const CGFloat kBaseMaxTextViewHeight = 98;
+const CGFloat kBaseMaxIPadTextViewHeight = 142;
 const CGFloat kSendButtonHeight = 30;
+
+// 动态计算的高度（根据字体缩放）
+static inline CGFloat kMinTextViewHeight(void) {
+    return kBaseMinTextViewHeight * TextSizeManager.currentScaleFactor;
+}
+
+static inline CGFloat kMaxTextViewHeight(void) {
+    return kBaseMaxTextViewHeight * TextSizeManager.currentScaleFactor;
+}
+
+static inline CGFloat kMaxIPadTextViewHeight(void) {
+    return kBaseMaxIPadTextViewHeight * TextSizeManager.currentScaleFactor;
+}
 
 static NSString *DTInputBarMoreCellID = @"DTInputBarMoreCellID";
 #pragma mark -
@@ -118,7 +133,11 @@ static NSString *DTInputBarMoreCellID = @"DTInputBarMoreCellID";
                                              selector:@selector(keyboardFrameDidChange:)
                                                  name:UIKeyboardDidChangeFrameNotification
                                                object:nil];
-    
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(textSizeDidChange)
+                                                 name:NSNotification.TextSizeDidChange
+                                               object:nil];
+
     return self;
 }
 
@@ -201,20 +220,21 @@ static NSString *DTInputBarMoreCellID = @"DTInputBarMoreCellID";
     inputTextView.textViewToolbarDelegate = self;
     inputTextView.font = [UIFont ows_dynamicTypeBodyFont];
     inputTextView.returnKeyType = UIReturnKeyDefault;
-    
+
     inputTextView.textContainerInset = UIEdgeInsetsMake(8, 2, 8, 2);
     [inputTextView autoPinEdgesToSuperviewEdges];
-    _textViewHeightConstraint = [_inputTextView autoSetDimension:ALDimensionHeight toSize:kMinTextViewHeight];
-    
+    CGFloat initialHeight = kMinTextViewHeight();
+    _textViewHeightConstraint = [_inputTextView autoSetDimension:ALDimensionHeight toSize:initialHeight];
+
     [inputTextContentRowView setContentHuggingHorizontalLow];
-    _inputTextContentHeightConstraint = [inputTextContentRowView autoSetDimension:ALDimensionHeight toSize:kMinTextViewHeight];
-    
+    _inputTextContentHeightConstraint = [inputTextContentRowView autoSetDimension:ALDimensionHeight toSize:kMinTextViewHeight()];
+
     UIImage *voiceMemoIcon = [UIImage imageNamed:@"ic_inputbar_mic"];
     OWSAssertDebug(voiceMemoIcon);
     _voiceMemoButton = [UIButton buttonWithType:UIButtonTypeCustom];
     [self.voiceMemoButton setImage:[voiceMemoIcon imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]
                           forState:UIControlStateNormal];
-    [self.voiceMemoButton autoSetDimensionsToSize:CGSizeMake(40, kMinTextViewHeight)];
+    [self.voiceMemoButton autoSetDimensionsToSize:CGSizeMake(40, kMinTextViewHeight())];
 
     // We want to be permissive about the voice message gesture, so we hang
     // the long press GR on the button's wrapper, not the button itself.
@@ -228,14 +248,14 @@ static NSString *DTInputBarMoreCellID = @"DTInputBarMoreCellID";
     self.sendButton.hidden = YES;
     [self.sendButton setImage:[UIImage imageNamed:@"ic_inputbar_send"] forState:UIControlStateNormal];
     [self.sendButton setImage:[UIImage imageNamed:@"ic_inputbar_send"] forState:UIControlStateHighlighted];
-    [self.sendButton autoSetDimensionsToSize:CGSizeMake(40, kMinTextViewHeight)];
+    [self.sendButton autoSetDimensionsToSize:CGSizeMake(40, kMinTextViewHeight())];
     [self.sendButton addTarget:self action:@selector(sendButtonClick:) forControlEvents:UIControlEventTouchUpInside];
-    
+
     _botMenuButton = [UIButton buttonWithType:UIButtonTypeCustom];
     self.botMenuButton.hidden = YES;
     [self.botMenuButton setImage:[UIImage imageNamed:@"ic_inputbar_bot_menu"] forState: UIControlStateNormal];
     [self.botMenuButton setImage:[UIImage imageNamed:@"ic_inputbar_bot_menu"] forState: UIControlStateHighlighted];
-    [self.botMenuButton autoSetDimensionsToSize:CGSizeMake(40, kMinTextViewHeight)];
+    [self.botMenuButton autoSetDimensionsToSize:CGSizeMake(40, kMinTextViewHeight())];
     [self.botMenuButton addTarget:self action:@selector(botMenuButtonClick:) forControlEvents:UIControlEventTouchUpInside];
 
     self.userInteractionEnabled = YES;
@@ -455,6 +475,11 @@ static NSString *DTInputBarMoreCellID = @"DTInputBarMoreCellID";
     self.inputTextView.font = [UIFont ows_dynamicTypeBodyFont];
 }
 
+- (void)textSizeDidChange {
+    [self updateFontSizes];
+    [self updateHeightWithTextView:self.inputTextView];
+}
+
 //- (void)layoutSubviews {
 //    [super layoutSubviews];
 //    [self ensureTextViewHeight];
@@ -670,7 +695,8 @@ static NSString *DTInputBarMoreCellID = @"DTInputBarMoreCellID";
 
 - (BOOL)needShowSendBtn {
     // 1.如果输入框有值，展示发送按钮
-    return self.inputTextView.trimmedText.length > 0 || self.textInputOnly;
+    // 注意: 即使 textInputOnly 为 true，也必须有内容才能显示发送按钮
+    return self.inputTextView.trimmedText.length > 0;
 }
 
 - (void)ensureShouldShowSendButton {
@@ -1344,17 +1370,17 @@ static NSString *DTInputBarMoreCellID = @"DTInputBarMoreCellID";
 {
     // compute new height assuming width is unchanged
     CGSize currentSize = textView.frame.size;
-    
+
     CGFloat fixedWidth = currentSize.width;
     CGSize contentSize = [textView sizeThatFits:CGSizeMake(fixedWidth, CGFLOAT_MAX)];
-    
+
     // `textView.contentSize` isn't accurate when restoring a multiline draft, so we compute it here.
     textView.contentSize = contentSize;
-    
-    CGFloat newHeight = CGFloatClamp(contentSize.height,
-                                     kMinTextViewHeight,
-                                     UIDevice.currentDevice.isIPad ? kMaxIPadTextViewHeight : kMaxTextViewHeight);
-    
+
+    CGFloat minHeight = kMinTextViewHeight();
+    CGFloat maxHeight = UIDevice.currentDevice.isIPad ? kMaxIPadTextViewHeight() : kMaxTextViewHeight();
+    CGFloat newHeight = CGFloatClamp(contentSize.height, minHeight, maxHeight);
+
     if (newHeight != self.textViewHeight) {
         self.textViewHeight = newHeight;
         OWSAssertDebug(self.textViewHeightConstraint);

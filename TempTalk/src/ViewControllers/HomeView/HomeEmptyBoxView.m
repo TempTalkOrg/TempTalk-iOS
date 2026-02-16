@@ -9,7 +9,7 @@
 #import "UIView+SignalUI.h"
 #import "UIFont+OWS.h"
 #import "UIColor+OWS.h"
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 
 @interface HomeEmptyBoxView ()
@@ -62,14 +62,14 @@
         _lbEmptyBox.textAlignment = NSTextAlignmentCenter;
         _lbEmptyBox.lineBreakMode = NSLineBreakByWordWrapping;
         _lbEmptyBox.font = [UIFont ows_semiboldFontWithSize:15.f];
-        _lbEmptyBox.textColor = Theme.primaryTextColor;
+        _lbEmptyBox.textColor = Theme.tprimaryColor;
     }
     return _lbEmptyBox;
 }
 
 - (void)applyTheme {
     
-    self.lbEmptyBox.textColor = Theme.primaryTextColor;
+    self.lbEmptyBox.textColor = Theme.tprimaryColor;
 }
 
 @end

@@ -62,7 +62,7 @@ class CustomNumberInputView: UIView {
             textField.layer.borderColor = (Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0x474D57) : UIColor(rgbHex: 0xEAECEF)).cgColor
             textField.layer.cornerRadius = 4
             textField.tintColor = UIColor.color(rgbHex: 0x056FFA)
-            textField.textColor = Theme.primaryTextColor
+            textField.textColor = Theme.tprimaryColor
             textField.textAlignment = .center
             textField.font = numberFont
             textField.keyboardType = .numberPad

@@ -108,7 +108,6 @@ public class GRDBSchemaMigrator: NSObject {
     private enum MigrationId: String, CaseIterable {
         case createInitialSchema
         case yapdatabaseData
-        case dataMigration_readPosition
         case addTranslateMessageColum  // model_TSInteraction
         case addTranslateSettingTypeColum  //model_TSThread
         case addTranslateArchivedMessageColum  //model_TSInteraction_archived
@@ -119,7 +118,10 @@ public class GRDBSchemaMigrator: NSObject {
         case addGroupManagerCriticalAlert
         case addWidthHeightOnAttachment
         case addMentionCriticalMsgColum
-        
+        case addArchiveMessageIndex  // Add index for archive message query optimization
+        case fixArchiveMessageIndex  // Fix the archive message index (remove WHERE clause with wrong type)
+        case addMigrationOutgoingIndex  // Add index for TSMessageReadPositionMigrator query optimization
+
         //MARK GRDB need to focus on
 
         // NOTE: Every time we add a migration id, consider
@@ -144,15 +146,17 @@ public class GRDBSchemaMigrator: NSObject {
         //
         // Note that account state is loaded *before* running data migrations, because many model objects expect
         // to be able to access that without a transaction.
-        
+
+        case dataMigration_readPosition
         case dataMigration_remark
+        case dataMigration_cleanupRecallInfo
     }
 
     public static let grdbSchemaVersionDefault: UInt = 0
-    
+
     /// Attention: matters
     ///model_TSMessageSecondary_virtual 虚表，集成自定义 FTS5 分词器 simple
-    public static let grdbSchemaVersionLatest: UInt = 4
+    public static let grdbSchemaVersionLatest: UInt = 7
 
     // An optimization for new users, we have the first migration import the latest schema
     // and mark any other migrations as "already run".
@@ -354,7 +358,53 @@ public class GRDBSchemaMigrator: NSObject {
                 owsFail("Error: \(error)")
             }
         }
-        
+
+        migrator.registerMigration(.addArchiveMessageIndex) { db in
+            do {
+                // Create index for efficient archive message query (without WHERE clause - will be fixed in next migration)
+                try db.create(index: "idx_interaction_archive_message",
+                              on: "model_TSInteraction",
+                              columns: ["uniqueThreadId", "recordType", "messageType"],
+                              options: .ifNotExists,
+                              condition: Column("recordType") == 27)
+                Logger.info("Created index for archive message query optimization")
+            } catch {
+                owsFail("Error creating archive message index: \(error)")
+            }
+        }
+
+        migrator.registerMigration(.fixArchiveMessageIndex) { db in
+            do {
+                Logger.info("Fixing archive message index - dropping old index if exists")
+                try db.execute(sql: """
+                    DROP INDEX IF EXISTS idx_interaction_archive_message
+                """)
+
+                Logger.info("Fixing archive message index - creating corrected index with WHERE clause")
+                try db.create(index: "index_interaction_archive_message",
+                              on: "model_TSInteraction",
+                              columns: ["uniqueThreadId", "recordType", "messageType"],
+                              options: .ifNotExists,
+                              condition: Column("recordType") == 27)
+                Logger.info("Successfully fixed archive message index")
+            } catch {
+                owsFail("Error fixing archive message index: \(error)")
+            }
+        }
+
+        migrator.registerMigration(.addMigrationOutgoingIndex) { db in
+            do {
+                Logger.info("Creating index for TSMessageReadPositionMigrator query optimization")
+                try db.create(index: "index_interaction_migration_outgoing",
+                              on: "model_TSInteraction",
+                              columns: ["recordType", "timestamp", "uniqueThreadId"],
+                              options: .ifNotExists,
+                              condition: Column("recordType") == 14)
+                Logger.info("Successfully created migration outgoing index")
+            } catch {
+                owsFail("Error creating migration outgoing index: \(error)")
+            }
+        }
     }
     
     
@@ -424,6 +474,14 @@ public class GRDBSchemaMigrator: NSObject {
             }
             
             Logger.info("dataMigration_remark completed successfully")
+        }
+
+        migrator.registerMigration(.dataMigration_cleanupRecallInfo) { database in
+            let wTransaction = GRDBWriteTransaction(database: database)
+            defer { wTransaction.finalizeTransaction() }
+
+            let deletedCount = GRDBInteractionFinderAdapter.deleteAllRecallInfoMessages(transaction: wTransaction)
+            Logger.info("dataMigration_cleanupRecallInfo completed successfully, deleted \(deletedCount) recall info messages")
         }
     }
     

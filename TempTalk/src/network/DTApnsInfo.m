@@ -52,6 +52,11 @@
         if([conversationId isKindOfClass:[NSString class]]){
             self.conversationId = conversationId;
         }
+        
+        NSString *roomId = self.passthroughInfo[@"roomId"];
+        if([roomId isKindOfClass:[NSString class]]){
+            self.roomId = roomId;
+        }
     }
 
     return self;

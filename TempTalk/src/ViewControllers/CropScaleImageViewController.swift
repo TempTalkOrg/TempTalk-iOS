@@ -35,14 +35,12 @@ import TTMessaging
 
     let successCompletion: ((UIImage) -> Void)
 
-    var imageView: UIView!
+    var imageView: UIView?
 
     // We use a CALayer to render the image for performance reasons.
-    var imageLayer: CALayer!
+    var imageLayer: CALayer?
 
     // In width/height.
-    //
-    // TODO: We could make this a parameter.
     var dstSizePixels: CGSize {
         return CGSize(width: 210, height: 210)
     }
@@ -312,7 +310,7 @@ import TTMessaging
         CATransaction.begin()
         CATransaction.setDisableActions(true)
 
-        imageLayer.frame = imageLayerFrame
+        imageLayer?.frame = imageLayerFrame
 
         CATransaction.commit()
     }
@@ -372,20 +370,22 @@ import TTMessaging
                 srcTranslation.y += (srcCropSizeBeforeScalePoints.height - srcCropSizeAfterScalePoints.height) * 0.5
 
                 // Update translation.
-                let viewSizePoints = imageView.frame.size
-                let srcCropSizePoints = CGSize(width: srcDefaultCropSizePoints.width / imageScale,
-                                               height: srcDefaultCropSizePoints.height / imageScale)
+                if let imageView = imageView {
+                    let viewSizePoints = imageView.frame.size
+                    let srcCropSizePoints = CGSize(width: srcDefaultCropSizePoints.width / imageScale,
+                                                   height: srcDefaultCropSizePoints.height / imageScale)
 
-                let viewToSrcRatio = srcCropSizePoints.width / viewSizePoints.width
+                    let viewToSrcRatio = srcCropSizePoints.width / viewSizePoints.width
 
-                let gestureTranslation = CGPoint(x: location.x - lastPinchLocation.x,
-                                                 y: location.y - lastPinchLocation.y)
+                    let gestureTranslation = CGPoint(x: location.x - lastPinchLocation.x,
+                                                     y: location.y - lastPinchLocation.y)
 
-                srcTranslation = CGPoint(x: srcTranslation.x + gestureTranslation.x * -viewToSrcRatio,
-                                         y: srcTranslation.y + gestureTranslation.y * -viewToSrcRatio)
+                    srcTranslation = CGPoint(x: srcTranslation.x + gestureTranslation.x * -viewToSrcRatio,
+                                             y: srcTranslation.y + gestureTranslation.y * -viewToSrcRatio)
 
-                lastPinchLocation = location
-                lastPinchScale = sender.scale
+                    lastPinchLocation = location
+                    lastPinchScale = sender.scale
+                }
             }
             break
         case .cancelled, .failed:
@@ -407,18 +407,20 @@ import TTMessaging
             srcTranslationAtPanStart = srcTranslation
             break
         case .changed, .ended:
-            let viewSizePoints = imageView.frame.size
-            let srcCropSizePoints = CGSize(width: srcDefaultCropSizePoints.width / imageScale,
-                                           height: srcDefaultCropSizePoints.height / imageScale)
+            if let imageView = imageView {
+                let viewSizePoints = imageView.frame.size
+                let srcCropSizePoints = CGSize(width: srcDefaultCropSizePoints.width / imageScale,
+                                               height: srcDefaultCropSizePoints.height / imageScale)
 
-            let viewToSrcRatio = srcCropSizePoints.width / viewSizePoints.width
+                let viewToSrcRatio = srcCropSizePoints.width / viewSizePoints.width
 
-            let gestureTranslation =
-                sender.translation(in: sender.view)
+                let gestureTranslation =
+                    sender.translation(in: sender.view)
 
-            // Update translation.
-            srcTranslation = CGPoint(x: srcTranslationAtPanStart.x + gestureTranslation.x * -viewToSrcRatio,
-                                     y: srcTranslationAtPanStart.y + gestureTranslation.y * -viewToSrcRatio)
+                // Update translation.
+                srcTranslation = CGPoint(x: srcTranslationAtPanStart.x + gestureTranslation.x * -viewToSrcRatio,
+                                         y: srcTranslationAtPanStart.y + gestureTranslation.y * -viewToSrcRatio)
+            }
             break
         case .cancelled, .failed:
             srcTranslation
@@ -463,7 +465,7 @@ import TTMessaging
         let button = UIButton()
         button.setTitle(title, for: .normal)
         button.setTitleColor(UIColor.white, for: .normal)
-        button.titleLabel!.font = buttonFont
+        button.titleLabel?.font = buttonFont
         button.addTarget(self, action: action, for: .touchUpInside)
         button.autoSetDimension(.width, toSize: buttonWidth)
         button.autoSetDimension(.height, toSize: buttonHeight)
@@ -493,8 +495,11 @@ import TTMessaging
         let dstScale: CGFloat = 1.0 // The size is specified in pixels, not in points.
         UIGraphicsBeginImageContextWithOptions(dstSizePixels, !hasAlpha, dstScale)
 
-        let context = UIGraphicsGetCurrentContext()
-        context!.interpolationQuality = .high
+        guard let context = UIGraphicsGetCurrentContext() else {
+            owsFailDebug("\(TAG) could not get graphics context.")
+            return nil
+        }
+        context.interpolationQuality = .high
 
         let imageViewFrame = imageRenderRect(forDstSize: dstSizePixels)
         srcImage.draw(in: imageViewFrame)

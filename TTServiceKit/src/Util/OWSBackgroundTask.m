@@ -203,8 +203,8 @@ typedef NSNumber *OWSTaskId;
             // Need to end background task.
             OWSLogInfo(@"Ending background task.");
             UIBackgroundTaskIdentifier backgroundTaskId = self.backgroundTaskId;
-            [CurrentAppContext() endBackgroundTask:backgroundTaskId];
             self.backgroundTaskId = UIBackgroundTaskInvalid;
+            [CurrentAppContext() endBackgroundTask:backgroundTaskId];
             return YES;
         }
     }

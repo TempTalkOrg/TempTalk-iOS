@@ -14,7 +14,7 @@ extension SignalAccount {
         
         let number = self.recipientId
         
-        if number == "+10000" ||
+        if number == TSConstants.officialBotId ||
             number == TSAccountManager.localNumber() {
             return true
         }

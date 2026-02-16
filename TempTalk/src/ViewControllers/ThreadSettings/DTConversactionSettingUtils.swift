@@ -38,7 +38,7 @@ public class DTConversactionSettingUtils: NSObject {
         var msgDisappearingTips = msgDisappearingTips(messageExpiry: messageExpiry)
         if !msgDisappearingTips.isEmpty {
             msgDisappearingTips = " [\(msgDisappearingTips)]"
-            return threadName.stringByAppendingString(msgDisappearingTips, attributes: [.foregroundColor: Theme.ternaryTextColor,
+            return threadName.stringByAppendingString(msgDisappearingTips, attributes: [.foregroundColor: Theme.tthirdColor,
                                                                          .font: font])
         }
         return nil

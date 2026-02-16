@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 {
     [super viewDidLoad];
 
-    self.view.backgroundColor = Theme.backgroundColor;
+    self.view.backgroundColor = Theme.bg1Color;
 
     self.title = Localized(@"ENABLE_2FA_VIEW_TITLE", @"Title for the 'enable two factor auth PIN' views.");
 
@@ -100,7 +100,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (UILabel *)createLabelWithText:(NSString *)text
 {
     UILabel *label = [UILabel new];
-    label.textColor = Theme.primaryTextColor;
+    label.textColor = Theme.tprimaryColor;
     label.text = text;
     label.font = [UIFont ows_regularFontWithSize:ScaleFromIPhone5To7Plus(14.f, 16.f)];
     label.numberOfLines = 0;
@@ -113,7 +113,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)createPinTextfield
 {
     self.pinTextfield = [UITextField new];
-    self.pinTextfield.textColor = Theme.primaryTextColor;
+    self.pinTextfield.textColor = Theme.tprimaryColor;
     self.pinTextfield.font = [UIFont ows_semiboldFontWithSize:ScaleFromIPhone5To7Plus(30.f, 36.f)];
     self.pinTextfield.textAlignment = NSTextAlignmentCenter;
     self.pinTextfield.keyboardType = UIKeyboardTypeNumberPad;

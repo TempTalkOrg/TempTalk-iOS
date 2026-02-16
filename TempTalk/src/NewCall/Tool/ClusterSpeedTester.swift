@@ -6,215 +6,184 @@
 //  Copyright © 2025 Difft. All rights reserved.
 //
 
+import Foundation
+import TTServiceKit
+
 struct ClusterMetric {
     let url: URL
-    var lastResponseTime: TimeInterval = .greatestFiniteMagnitude
-    var lastTestTime: TimeInterval = 0
+    /// 最大响应时间上限 (ms)，超时或错误时使用此值
+    static let maxResponseTime: TimeInterval = 99999
+    /// 惩罚时间 (ms)
+    static let penaltyTime: TimeInterval = 2000
+    /// 错误恢复时间 (秒)
+    static let recoveryInterval: TimeInterval = 300
+
+    var lastResponseTime: TimeInterval = ClusterMetric.maxResponseTime
     var errorCount: Int = 0
     var errorTime: TimeInterval = 0
 
-    var isAvailable: Bool {
-        errorCount < 3
+    mutating func applyPenalty() {
+        // 确保不超过最大值
+        lastResponseTime = min(lastResponseTime + Self.penaltyTime, Self.maxResponseTime)
     }
 
     mutating func resetIfRecovered(currentTime: TimeInterval) {
-        if errorCount != 0 && (currentTime - errorTime) > 300 {
+        if errorCount > 0 && (currentTime - errorTime) > Self.recoveryInterval {
             errorCount = 0
         }
     }
-}
 
-protocol ClusterSource {
-    func fetchClusters(completion: @escaping (_ metrics: [ClusterMetric], _ servers: [String]) -> Void)
-}
-
-class MeetingClusterSource: ClusterSource {
-    func fetchClusters(completion: @escaping (_ metrics: [ClusterMetric], _ servers: [String]) -> Void) {
-        var result: [ClusterMetric] = []
-        LiveKitServersApi().liveKitServers { entity in
-            if let servers = entity?.data["serviceUrls"] as? [String],
-               DTParamsUtils.validateArray(servers).boolValue {
-                for server in servers {
-                    // 确保server字符串有效且不为空
-                    let trimmedServer = server.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmedServer.isEmpty, let url = URL(string: trimmedServer) {
-                        result.append(ClusterMetric(url: url))
-                    }
-                }
-                completion(result, servers)
-            } else {
-                Logger.error("[SpeedTest] entity data nil")
-            }
-        } failure: { error, _ in
-            // 安全地获取错误描述
-            let errorDescription = error.localizedDescription
-            Logger.error("[SpeedTest] livekit request error: \(errorDescription)")
+    /// 格式化响应时间用于显示
+    var formattedResponseTime: String {
+        if lastResponseTime >= Self.maxResponseTime {
+            return "timeout"
         }
+        return String(format: "%.2f", lastResponseTime)
     }
 }
 
 class ClusterSpeedTester {
-    // 使用字典存储提供 O(1) 查找性能
-    private var _metricsDict: [URL: ClusterMetric] = [:]
-    private let metricsQueue = DispatchQueue(label: "com.difft.clusterspeedtester.metrics", attributes: .concurrent)
-    private let interval: TimeInterval = 300
+    private var metrics: [ClusterMetric] = []
+    private let lock = NSLock()
     private let session: URLSession
-    private let queue = DispatchQueue(label: "com.difft.clusterspeedtester")
-    
-    private var _sortedUrls: [String] = []
-    // sortedUrlsQueue 为串行队列，无需 barrier 标志
-    private let sortedUrlsQueue = DispatchQueue(label: "com.difft.clusterspeedtester.sortedUrls")
-    
     private var timerTask: Task<Void, Never>?
-    
-    private var metricsDict: [URL: ClusterMetric] {
-        get {
-            metricsQueue.sync { _metricsDict }
-        }
-        set {
-            metricsQueue.sync(flags: .barrier) {
-                _metricsDict = newValue
-            }
-        }
-    }
+    private let interval: TimeInterval = 1800
 
     init() {
-        self.session = URLSession(configuration: .ephemeral)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 15.0
+        configuration.timeoutIntervalForResource = 15.0
+        self.session = URLSession(configuration: configuration)
     }
-    
+
     deinit {
         stop()
         session.invalidateAndCancel()
     }
 
+    /// 获取按响应时间排序的服务器URL列表
     var sortedUrls: [String] {
-        sortedUrlsQueue.sync { _sortedUrls }
+        lock.withLock {
+            metrics.sorted { $0.lastResponseTime < $1.lastResponseTime }
+                .compactMap { $0.url.absoluteString }
+        }
     }
 
-    private func setSortedUrls(_ urls: [String]) {
-        sortedUrlsQueue.sync { _sortedUrls = urls }
+    /// 获取排序后的可用集群
+    func sortedAvailableClusters() -> [ClusterMetric] {
+        lock.withLock {
+            metrics.sorted { $0.lastResponseTime < $1.lastResponseTime }
+        }
     }
 
     /// 开始测速循环
     func start() {
-        stop() // 停掉已有任务
+        stop()
         timerTask = Task.detached { [weak self] in
+            guard let self else { return }
+            await self.performSpeedTest()
+
             while !Task.isCancelled {
-                guard let self else { return }
-                // performSpeedTest 不涉及 UI，无需在 MainActor 执行
-                self.performSpeedTest()
                 try? await Task.sleep(nanoseconds: UInt64(self.interval * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                await self.performSpeedTest()
             }
         }
-        // 立即执行一次
-        performSpeedTest()
     }
 
     func stop() {
         timerTask?.cancel()
         timerTask = nil
     }
-    
-    /// 线程安全地更新指定URL的metric (O(1) 字典操作)
-    private func updateMetric(for url: URL, with metric: ClusterMetric, completion: (() -> Void)? = nil) {
-        metricsQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { 
-                completion?()
-                return 
-            }
-            self._metricsDict[url] = metric
-            completion?()
-        }
-    }
 
-    private func performSpeedTest() {
-        let source = MeetingClusterSource()
-        source.fetchClusters { [weak self] clusters, servers in
-            guard let self = self else { return }
-            self.queue.async {
-                // 将数组转换为字典，处理重复 URL（保留第一个）
-                self.setSortedUrls(servers)
-                let dict = Dictionary(clusters.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
-                self.metricsDict = dict
-                self.testClusters()
-            }
-        }
-    }
-
-    private func testClusters() {
-        let innerGroup = DispatchGroup()
-        let currentTime = Date().timeIntervalSince1970
-
-        // 获取当前metrics的副本，避免在测试过程中被修改
-        let currentMetrics = metricsDict.values
-        
-        // 确保metrics不为空
-        guard !currentMetrics.isEmpty else {
-            Logger.warn("[SpeedTest] No metrics to test")
+    private func performSpeedTest() async {
+        let clusters = await fetchClusters()
+        guard !clusters.isEmpty else {
+            Logger.error("[SpeedTest] No clusters returned from server")
             return
         }
 
-        for metric in currentMetrics {
-            innerGroup.enter()
-            var mutableMetric = metric
-            mutableMetric.resetIfRecovered(currentTime: currentTime)
+        let results = await testAllClusters(clusters)
 
-            var request = URLRequest(url: mutableMetric.url)
-            request.httpMethod = "HEAD"
-            let start = Date()
-
-            let task = session.dataTask(with: request) { [weak self] _, response, error in
-                guard let self = self else {
-                    // 如果 self 已释放，直接调用 leave 避免死锁
-                    innerGroup.leave()
-                    return
-                }
-                
-                let elapsed = Date().timeIntervalSince(start)
-
-                if let http = response as? HTTPURLResponse {
-                    mutableMetric.lastResponseTime = elapsed * 1000
-                    mutableMetric.lastTestTime = Date().timeIntervalSince1970
-                } else {
-                    mutableMetric.errorCount += 1
-                    mutableMetric.errorTime = Date().timeIntervalSince1970
-                }
-
-                // 使用URL而非索引更新，避免竞态条件
-                // 在更新完成后才调用 leave，确保所有更新都完成后才触发 notify
-                self.updateMetric(for: mutableMetric.url, with: mutableMetric) {
-                    innerGroup.leave()
-                }
-            }
-            task.resume()
+        lock.withLock {
+            metrics = results
         }
 
-        innerGroup.notify(queue: .main) {
-            let available = self.sortedAvailableClusters()
-            for metric in available {
-                // 安全地获取URL字符串，避免崩溃
-                let urlString = metric.url.absoluteString
-                let ms = String(format: "%.2f", metric.lastResponseTime)
-                
-                // 使用更安全的日志记录方式
-                if !urlString.isEmpty {
-                    Logger.info("[SpeedTest] url=\(urlString), time=\(ms) ms")
-                } else {
-                    Logger.info("[SpeedTest] url=invalid, time=\(ms) ms")
-                }
-            }
-            
-            // 安全地映射URL字符串
-            let urlStrings = available.compactMap { metric -> String? in
-                let urlString = metric.url.absoluteString
-                return urlString.isEmpty ? nil : urlString
-            }
-            self.setSortedUrls(urlStrings)
+        // 打印测速结果
+        for metric in results.sorted(by: { $0.lastResponseTime < $1.lastResponseTime }) {
+            Logger.info("[SpeedTest] url=\(metric.url.absoluteString), time=\(metric.formattedResponseTime) ms")
         }
     }
 
-    func sortedAvailableClusters() -> [ClusterMetric] {
-        let currentMetrics = metricsDict.values
-        return currentMetrics.filter(\.isAvailable).sorted { $0.lastResponseTime < $1.lastResponseTime }
+    private func fetchClusters() async -> [ClusterMetric] {
+        await withCheckedContinuation { continuation in
+            // ✅ Fix: Keep strong reference to prevent premature deallocation
+            let api = LiveKitServersApi()
+            api.liveKitServers { entity in
+                if let servers = entity?.data["serviceUrls"] as? [String],
+                   DTParamsUtils.validateArray(servers).boolValue {
+                    let metrics = servers.compactMap { server -> ClusterMetric? in
+                        let trimmed = server.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty, let url = URL(string: trimmed) else { return nil }
+                        return ClusterMetric(url: url)
+                    }
+                    continuation.resume(returning: metrics)
+                } else {
+                    Logger.error("[SpeedTest] entity data nil")
+                    continuation.resume(returning: [])
+                }
+            } failure: { error, _ in
+                Logger.error("[SpeedTest] livekit request error: \(error.localizedDescription)")
+                continuation.resume(returning: [])
+            }
+        }
+    }
+
+    private func testAllClusters(_ clusters: [ClusterMetric]) async -> [ClusterMetric] {
+        await withTaskGroup(of: ClusterMetric.self) { group in
+            for cluster in clusters {
+                group.addTask {
+                    await self.testSingleCluster(cluster)
+                }
+            }
+
+            var results: [ClusterMetric] = []
+            for await result in group {
+                results.append(result)
+            }
+            return results
+        }
+    }
+
+    private func testSingleCluster(_ metric: ClusterMetric) async -> ClusterMetric {
+        var mutableMetric = metric
+        let currentTime = Date().timeIntervalSince1970
+        mutableMetric.resetIfRecovered(currentTime: currentTime)
+
+        var request = URLRequest(url: metric.url)
+        request.httpMethod = "GET"
+        request.setValue("bytes=0-0", forHTTPHeaderField: "Range")
+        request.setValue(TSConstants.appUserAgent, forHTTPHeaderField: "User-Agent")
+
+        let start = Date()
+
+        do {
+            let (_, response) = try await session.data(for: request)
+            let elapsed = Date().timeIntervalSince(start)
+
+            if response is HTTPURLResponse {
+                mutableMetric.lastResponseTime = elapsed * 1000
+            } else {
+                mutableMetric.applyPenalty()
+                mutableMetric.errorCount += 1
+                mutableMetric.errorTime = currentTime
+            }
+        } catch {
+            mutableMetric.applyPenalty()
+            mutableMetric.errorCount += 1
+            mutableMetric.errorTime = currentTime
+        }
+
+        return mutableMetric
     }
 }

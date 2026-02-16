@@ -70,15 +70,15 @@ class DTSecurityAndPrivacyViewController : SettingBaseViewController {
     
     override func applyTheme() {
         super.applyTheme()
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
-        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
+        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultColor
         self.mainTableView.reloadData()
     }
     
     func prepareTheme() {
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
     func prepareView() {
@@ -151,7 +151,7 @@ extension DTSecurityAndPrivacyViewController : UITableViewDelegate, UITableViewD
             if(settingItem.tag == SecurityAndPrivacyItemType.deleteAccount.rawValue){
                 defaultStyleCell.titleTextColor = UIColor.color(rgbHex: 0xF84135)
             } else {
-                defaultStyleCell.titleTextColor = Theme.primaryTextColor
+                defaultStyleCell.titleTextColor = Theme.tprimaryColor
             }
             return defaultStyleCell
             

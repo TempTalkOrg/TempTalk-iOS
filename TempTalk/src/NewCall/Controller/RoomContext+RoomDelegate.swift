@@ -57,7 +57,9 @@ extension RoomContext: RoomDelegate {
                 if case .private = currentCall.callType {
                     try await room.localParticipant.setMicrophone(enabled: default1on1MicphoneState)
                 } else {
-                    try await room.localParticipant.setMicrophone(enabled: true, publishMuted: !defaultGroupMicphoneState)
+                    if let ops = currentCall.ttcalResponseOptions, ops.autoPublishSilenceAudio {
+                        await self.setLocalMicrophone(enable: true, publishMuted: true)
+                    }
                 }
             } catch {
                 Logger.error("\(logTag) failed to set audio track: \(error)")
@@ -94,6 +96,7 @@ extension RoomContext: RoomDelegate {
             // 正在会议中
             callManager.inMeeting = true
             // 非会议中的人，展示 instant
+            Logger.info("\(logTag) check localParticipant \(room.localParticipant.identity?.stringValue)")
             checkPartiantInRoom(room.localParticipant.identity?.stringValue ?? "")
         } else {
             // private call
@@ -132,12 +135,13 @@ extension RoomContext: RoomDelegate {
             /// 连接成功
             @MainActor func handleSuccess(with response: Livekit_TTCallResponse) {
                 guard response.hasBody else {
-                    Logger.warn("\(logTag) response.body is empty, waiting for timeout")
+                    Logger.error("\(logTag) response.body is empty, waiting for timeout")
                     return
                 }
                 connectTimeoutTask?.cancel()
                 connectTimeoutTask = nil
                 currentCall.ttcalResponseBody = response.body
+                currentCall.ttcalResponseOptions = response.callOptions
                 callManager.dealConnetedSuccess(with: response.body)
             }
 
@@ -178,14 +182,6 @@ extension RoomContext: RoomDelegate {
             if let error {
                 updateStale(with: error)
                 Logger.error("\(logTag) didFailToConnectWithError receive error: \(error)")
-                if callManager.inMeeting {
-                    Logger.error("\(logTag) didFailToConnectWithError inMeeting hangup error: \(error)")
-                    await self.callManager.hangupCall(needSyncCallKit: true,
-                                                 isByLocal: true,
-                                                      roomId: self.currentCall.roomId,
-                                                 removeMeetingBar: false,
-                                                 showErrorToast: true)
-                }
             } else {
                 Logger.error("\(logTag) didFailToConnectWithError error: nil")
             }
@@ -193,12 +189,34 @@ extension RoomContext: RoomDelegate {
     }
     
     /// 断开异常
+    /// 注意：此回调只处理「已连接后」的断开错误，连接阶段的错误由 didFailToConnectWithError 处理
     nonisolated public func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+
+            // 当前用户离会（无论是否有错误都执行）
+            RoomDataManager.shared.disconnectParticipant(participant: room.localParticipant)
+            UIDevice.current.isProximityMonitoringEnabled = false
+
             if let error {
+                // 检查是否是主动断开导致的（cancelled 类型不需要处理）
+                if error.type == .cancelled {
+                    Logger.info("\(logTag) didDisconnect cancelled - user initiated disconnect")
+                    return
+                }
+
+                // 检查错误处理状态，避免重复处理
+                if errorHandlingState == .handled {
+                    Logger.info("\(logTag) didDisconnect ignored - already handled")
+                    return
+                }
+
                 updateStale(with: error)
                 Logger.info("\(logTag) didDisconnect error: \(error) errortype:\(error.type)")
+
+                // 标记为已处理
+                errorHandlingState = .handled
+
                 await callManager.hangupCall(needSyncCallKit: true,
                                              isByLocal: true,
                                              roomId: currentCall.roomId,
@@ -207,10 +225,6 @@ extension RoomContext: RoomDelegate {
             } else {
                 Logger.info("\(logTag): normal disconnect")
             }
-            
-            // 当前用户离会
-            RoomDataManager.shared.disconnectParticipant(participant: room.localParticipant)
-            UIDevice.current.isProximityMonitoringEnabled = false
         }
     }
     
@@ -284,6 +298,12 @@ extension RoomContext: RoomDelegate {
                 //非会议中的人，展示instant
                 checkPartiantInRoom(room.localParticipant.identity?.stringValue ?? "")
             }
+
+            // 清理已入会用户的邀请记录
+            if let participantId = participant.identity?.stringValue.components(separatedBy: ".").first {
+                callManager.removeUserFromInvitedList(participantId)
+            }
+
             // 自动离会处理
             callManager.currentCallTalkingPop()
             // 远端入会人数发生变化
@@ -292,18 +312,20 @@ extension RoomContext: RoomDelegate {
     }
     
     // remote offline
-    nonisolated public func room(_: Room, participantDidDisconnect participant: RemoteParticipant) {
+    nonisolated public func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            Logger.debug("\(logTag) remote disconnected")
-            
+            let participantId = participant.identity?.stringValue ?? "unknown"
+            Logger.debug("\(logTag) remote disconnected, participantId: \(participantId), remaining participants: \(room.allParticipants.count)")
+
             // delegate 已在 main actor，直接执行
             if let focusParticipant = self.focusParticipant, focusParticipant.identity == participant.identity {
                 self.focusParticipant = nil
             }
-            
-            if currentCall.callType == .private {
-                Logger.info("\(logTag) private start disconnect Timer")
+
+            // 1v1 通话中，如果对方断开后只剩下本地用户，启动断开计时器
+            if currentCall.callType == .private, room.allParticipants.count == 1 {
+                Logger.info("\(logTag) private call - only local participant remains, start disconnect timer")
                 callManager.startParticipantDisTimer { [weak self] in
                     guard let self else { return }
                     Logger.info("\(self.logTag) remote participant disconnected - initiating hangup")
@@ -460,7 +482,7 @@ extension RoomContext: RoomDelegate {
                 screenSharePublication = publication
                 screenShareParticipant = participant
                 callManager.currentCall.isPresentedShare = true
-                tryPresentShareView(maxRetryCount: 8)
+                tryPresentShareView(maxRetryCount: 3)
             }
         }
     }
@@ -470,7 +492,23 @@ extension RoomContext: RoomDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             if publication.kind == .video && publication.source == .screenShareVideo {
+                Logger.info("Screen share track unpublished by participant")
                 RoomDataManager.shared.closeScreenSharedParticipant(participant: participant)
+
+                if screenShareParticipant == participant {
+                    screenSharePublication = nil
+                    screenShareParticipant = nil
+                    callManager.currentCall.isPresentedShare = false
+
+                    if let inviteVC {
+                        inviteVC.dismiss(animated: false)
+                        self.inviteVC = nil
+                    }
+                    if let shareVC {
+                        shareVC.dismiss(animated: false)
+                        self.shareVC = nil
+                    }
+                }
             }
         }
     }
@@ -478,20 +516,16 @@ extension RoomContext: RoomDelegate {
     nonisolated public func room(_ room: Room, participant: RemoteParticipant, didUnsubscribeTrack publication: RemoteTrackPublication) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            if !participant.isScreenShareEnabled()
-                && publication.source == .screenShareVideo
-                && screenShareParticipant == participant {
-                Logger.info("结束了屏幕共享")
-                screenSharePublication = nil
-                callManager.currentCall.isPresentedShare = false
-                
-                if let inviteVC {
-                    inviteVC.dismiss(animated: false)
-                    self.inviteVC = nil
-                }
-                if let shareVC {
-                    shareVC.dismiss(animated: false)
-                    self.shareVC = nil
+
+            if publication.source == .screenShareVideo && screenShareParticipant == participant {
+                Logger.info("Screen share track unsubscribed")
+                // 确保状态一致
+                if screenSharePublication == nil && callManager.currentCall.isPresentedShare {
+                    callManager.currentCall.isPresentedShare = false
+                    if let shareVC {
+                        shareVC.dismiss(animated: false)
+                        self.shareVC = nil
+                    }
                 }
             }
         }
@@ -627,7 +661,7 @@ extension RoomContext {
         }
     }
     
-    func tryPresentShareView(delay: TimeInterval = 0.5, maxRetryCount: Int = 1) {
+    func tryPresentShareView(delay: TimeInterval = 1.0, maxRetryCount: Int) {
         guard !isPresentingShareView else {
             Logger.info("[Livekit] Share view is already being presented, skipping duplicate call")
             return

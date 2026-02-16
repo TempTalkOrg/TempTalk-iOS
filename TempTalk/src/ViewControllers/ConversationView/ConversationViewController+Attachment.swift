@@ -33,7 +33,7 @@ import TTServiceKit
               FileManager.default.fileExists(atPath: filePath) else {
             return
         }
-        
+
         let url = NSURL(fileURLWithPath: filePath)
         guard QLPreviewController.canPreview(url) else {
             DTToastHelper.show(withInfo: "Unsupported file type")
@@ -42,7 +42,18 @@ import TTServiceKit
         genericAttachmenViewItem = viewItem
         currentPreviewFileURL = url
         previewController.reloadData()
-        present(previewController, animated: true)
+
+        // 机密文档阅后即焚：预览展示完成后立即删除消息
+        present(previewController, animated: true) {
+            if viewItem.isConfidentialMessage, let incomingMessage = viewItem.interaction as? TSIncomingMessage {
+                OWSReadReceiptManager.shared().confidentialMessageWasReadLocally(incomingMessage)
+                self.databaseStorage.asyncWrite { wTransaction in
+                    incomingMessage.anyRemove(transaction: wTransaction)
+                } completion: {
+                    self.genericAttachmenViewItem = nil
+                }
+            }
+        }
     }
     
     /// 点击 incoming message 中下载失败的附件
@@ -129,17 +140,7 @@ extension ConversationViewController: QLPreviewControllerDataSource, QLPreviewCo
     }
     
     public func previewControllerDidDismiss(_ controller: QLPreviewController) {
-        guard let viewItem = genericAttachmenViewItem, viewItem.isConfidentialMessage, let incomingMessage = genericAttachmenViewItem?.interaction as? TSIncomingMessage else {
-            return
-        }
-        //mark as read confidentialMessage
-        OWSReadReceiptManager.shared().confidentialMessageWasReadLocally(incomingMessage)
-        //rm confidentialMessage
-        databaseStorage.asyncWrite { wTransaction in
-            incomingMessage.anyRemove(transaction: wTransaction)
-        } completion: {
-            self.genericAttachmenViewItem = nil
-        }
+        // 机密文档的删除已在预览时触发，此处无需再次处理
     }
     
     public func previewController(_ controller: QLPreviewController, editingModeFor previewItem: QLPreviewItem) -> QLPreviewItemEditingMode {
@@ -202,8 +203,8 @@ private extension ConversationViewController {
             self.redownloadAttachment(attachmentPointer, forceDownload: true, for: message)
         }
         actionSheet.addAction(retryAction)
-        
-        dismissKeyBoard()
+
+        dismissKeyBoard(byUserAction: true)  // 用户点击重试下载，标记为用户操作
         presentActionSheet(actionSheet)
     }
 }

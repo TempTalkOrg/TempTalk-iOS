@@ -22,6 +22,7 @@ NSString *const DTServerToCall = @"call";
 NSString *const DTServerToFileSharing = @"fileSharing";
 NSString *const DTServerToSpeech2text = @"speech2text";
 NSString *const DTServerToAvatar = @"avatar";
+NSString *const DTServerToRoot = @"root";
 
 @implementation DTServersEntity
 

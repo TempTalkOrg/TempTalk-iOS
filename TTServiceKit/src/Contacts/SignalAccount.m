@@ -90,7 +90,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL)isEqualToSignalAccount:(SignalAccount *)signalAccount {
     return [self.recipientId isEqualToString:signalAccount.recipientId]
-    && [self.contact isEqualToContact:signalAccount.contact];
+    && [self.contact isEqual:signalAccount.contact];
 //    && (self.hasMultipleAccountContact == signalAccount.hasMultipleAccountContact)
 //    && [self.multipleAccountLabelText isEqualToString:signalAccount.multipleAccountLabelText]
 //    && (self.isManualEdited == signalAccount.isManualEdited)
@@ -163,7 +163,10 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 - (BOOL)isBot {
-    return self.contact.extId.integerValue == 3 || self.recipientId.length == 6;
+    if (!DTParamsUtils.validateString(self.recipientId)) {
+        return NO;
+    }
+    return [self.recipientId isEqualToString:TSConstants.officialBotId];
 }
 
 + (TSFTSIndexMode)FTSIndexMode

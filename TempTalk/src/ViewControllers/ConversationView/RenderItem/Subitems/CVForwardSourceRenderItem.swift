@@ -13,7 +13,7 @@ import TTServiceKit
 class CVForwardSourceRenderItem: ConversationRenderItem {
     
     static let mediaQuotedReplyVSpacing: CGFloat = 6
-    static let forwardSourceFont: UIFont = .ows_dynamicTypeFootnote
+    static let forwardSourceFont: UIFont = .ows_dynamicTypeFootnote(scaled: false)
     
     var singleForwardTitle: NSAttributedString?
     var fixForwardSourceLabelHeight: CGFloat = .zero
@@ -74,7 +74,7 @@ class CVForwardSourceRenderItem: ConversationRenderItem {
         }
         let titleColor: UIColor = {
             if viewItem.messageCellType() == .card {
-                return Theme.isDarkThemeEnabled ? .ows_darkSkyBlue : Theme.primaryTextColor.withAlphaComponent(0.8)
+                return Theme.isDarkThemeEnabled ? .ows_darkSkyBlue : Theme.tprimaryColor.withAlphaComponent(0.8)
             }
             let bodyTextColor = conversationStyle.bubbleTextColor(message: message).withAlphaComponent(0.8)
             let outgoingColor: UIColor = Theme.isDarkThemeEnabled ? .ows_darkSkyBlue : bodyTextColor

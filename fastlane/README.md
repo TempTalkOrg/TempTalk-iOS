@@ -1,112 +1,64 @@
-# Fastlane Setup Guide
+fastlane documentation
+----
 
-This directory contains template fastlane configuration files. You need to set up your own fastlane configuration based on your project requirements.
+# Installation
 
-## Quick Start
+Make sure you have the latest version of the Xcode command line tools installed:
 
-1. **Install fastlane** (if not already installed):
-   ```bash
-   # Using Homebrew
-   brew install fastlane
-   
-   # Or using RubyGems
-   sudo gem install fastlane -NV
-   
-   # Make sure you have Xcode command line tools
-   xcode-select --install
-   ```
+```sh
+xcode-select --install
+```
 
-2. **Set up environment variables**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your actual values
-   ```
+For _fastlane_ installation instructions, see [Installing _fastlane_](https://docs.fastlane.tools/#installing-fastlane)
 
-3. **Configure your lanes**:
-   - Edit `Fastfile` to implement your build, test, and deployment workflows
-   - Edit `Matchfile` if you're using fastlane match for code signing
-   - Update `Appfile` with your app and team information
+# Available Actions
 
-## Template Files
-
-- **`Fastfile`**: Main fastlane configuration with template lanes
-- **`Matchfile`**: Code signing configuration template  
-- **`Appfile`**: Already configured to use environment variables
-- **`.env.example`**: Template for environment variables
-- **`Scanfile`**: Test configuration (already set up)
-
-## Available Template Actions
+## iOS
 
 ### ios build
+
 ```sh
 [bundle exec] fastlane ios build
 ```
-Build the app (requires implementation)
 
-### ios test
-```sh
-[bundle exec] fastlane ios test
-```
-Run tests (requires implementation)
+Only Build
 
 ### ios archive
+
 ```sh
 [bundle exec] fastlane ios archive
 ```
-Create archive for distribution (requires implementation)
+
+archive
 
 ### ios upload_dsym
+
 ```sh
 [bundle exec] fastlane ios upload_dsym
 ```
-Upload debug symbols to crash reporting service (requires implementation)
 
-## Security Notes
+upload dsym to crashlytics
 
-- ✅ **DO** use environment variables for sensitive data
-- ✅ **DO** add `.env` files to `.gitignore`
-- ❌ **DON'T** commit real certificates, API keys, or credentials
-- ❌ **DON'T** hardcode sensitive information in fastlane files
+### ios register_iOS_devices
 
-## Environment Variables Setup
-
-Create a `.env` file based on `.env.example` with your actual values:
-
-```bash
-# Required
-SCHEME=YourAppScheme
-APP_IDENTIFIER=com.yourcompany.yourapp
-TEAM_ID=YOUR_TEAM_ID
-APPLE_USERNAME=your.email@example.com
-
-# Optional (depending on your setup)
-MATCH_GIT_URL=https://github.com/yourorg/ios-certificates.git
-CRASHLYTICS_API_TOKEN=your_token_here
+```sh
+[bundle exec] fastlane ios register_iOS_devices
 ```
 
-## Code Signing with Match
+register new devices
 
-If you're using fastlane match for code signing:
+### ios generate_match_digital
 
-1. Create a private git repository for storing certificates
-2. Update `MATCH_GIT_URL` in your `.env` file
-3. Run `fastlane match development` to set up development certificates
-4. Run `fastlane match appstore` to set up distribution certificates
+```sh
+[bundle exec] fastlane ios generate_match_digital
+```
 
-## Documentation
+match digital cer and profiles
 
-- [Fastlane Documentation](https://docs.fastlane.tools/)
-- [Available Actions](https://docs.fastlane.tools/actions/)
-- [Match Documentation](https://docs.fastlane.tools/actions/match/)
-- [Gym Documentation](https://docs.fastlane.tools/actions/gym/)
-- [Scan Documentation](https://docs.fastlane.tools/actions/scan/)
+----
 
-## Implementation Required
+This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
 
-⚠️ **This is a template setup.** You'll need to:
-1. Implement the actual build logic in `Fastfile`
-2. Configure code signing for your certificates
-3. Set up your deployment targets (TestFlight, App Store, etc.)
-4. Add any additional tools or services you use
+More information about _fastlane_ can be found on [fastlane.tools](https://fastlane.tools).
 
-For specific implementation examples, check the fastlane documentation or community examples.
+The documentation of _fastlane_ can be found on [docs.fastlane.tools](https://docs.fastlane.tools).

@@ -566,6 +566,13 @@
 "CONVERSATION_SETTINGS_ARCHIVE_DAY" = "d";
 "CONVERSATION_SETTINGS_ARCHIVE_DEFAULT" = "Default";
 
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM" = "Save to Photos";
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_DEFAULT_OFF" = "Default (Off)";
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_DEFAULT_ON" = "Default (On)";
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_ALWAYS" = "Always";
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_NEVER" = "Never";
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_TIP" = "Automatically save received photos and videos to Photos; items won’t be saved in Confidential Mode.";
+
 "CONVERSATION_SETTINGS_SEARCH_HISTORY" = "Search Chat History";
 
 "CONVERSATION_SETTINGS_GROUP_IN_COMMON" = "Group in Common";
@@ -1349,6 +1356,9 @@
 /* Action sheet button title */
 "MESSAGE_ACTION_FORWARD_TO_NOTE" = "Save";
 
+/* Action sheet button title for saving image to self */
+"MESSAGE_ACTION_FORWARD_TO_NOTE_IMAGE" = "Add to Saved";
+
 /* Action sheet button title */
 "MESSAGE_ACTION_MULTI_SELECT" = "Select Multiple";
 
@@ -1356,6 +1366,9 @@
 
 /* Action sheet button title */
 "MESSAGE_ACTION_SAVE_MEDIA" = "Download";
+
+/* Action sheet button title for saving image */
+"MESSAGE_ACTION_SAVE_MEDIA_IMAGE" = "Save to Photos";
 
 /* Action sheet button title */
 "MESSAGE_ACTION_CREATE_TASK" = "Add task";
@@ -2103,7 +2116,7 @@
 "INVITE_REGENERATE" = "Regenerate";
 "INVITE_SCAN" = "Scan";
 "INVITE_SHARE" = "Share";
-"INVITE_ENTER_CODE" = "Enter Code";
+"INVITE_ENTER_CODE" = "Add Contact";
 "INVITE_DESC" = "Chat with me on Yelling";
 "INVITE_CANCEL" = "Cancel";
 "INVITE_REGENERATE_ACTION" = "Regenerate";
@@ -2113,10 +2126,25 @@
 "Regenerate Invite Code" = "Regenerate Invite Code";
 "The old invite code will expire. Are you sure to continue?" = "The old invite code will expire. Are you sure to continue?";
 
-"ENTER_CODE_TITLE" = "Add a new friend";
+"ENTER_CODE_TITLE" = "Add Contact";
 "ENTER_CODE_TIPS" = "Enter a code to add a new friend";
+"ENTER_CODE_PLACEHOLDER" = "Enter a 4-digit code or contact ID";
+"ENTER_CODE_ADD_BUTTON" = "Add";
 "ENTER_CODE_ERRORTIPS" = "The code is not correct, please try again";
+"ENTER_CODE_CONTACT_NAME_ERROR" = "The contact ID is not correct, please try again";
 "ENTER_CODE_MYCODE" = "My Code";
+
+/* Edit Contact Name */
+"EDIT_CONTACT_NAME_TITLE" = "Edit your contact ID";
+"EDIT_CONTACT_NAME_PLACEHOLDER" = "Enter your contact ID";
+"EDIT_CONTACT_NAME_RULES" = "6–20 characters.\nStarts with a letter or _.\nLetters, numbers, _ or - only.\nChangeable every 3 months.";
+"EDIT_CONTACT_NAME_ERROR" = "The contact ID is not correct, please try again";
+"EDIT_CONTACT_NAME_ERROR_START" = "Must start with a letter or \"_\". Please try another one.";
+"EDIT_CONTACT_NAME_ERROR_CONTENT" = "Use only letters, numbers, \"_\" or \"-\". Please try another one.";
+"EDIT_CONTACT_NAME_ERROR_LENGTH" = "Must be 6–20 characters long. Please try another one.";
+"EDIT_CONTACT_NAME_TAKEN" = "This ID is taken. Try another or use ";
+"EDIT_CONTACT_NAME_CHANGE_LIMIT" = "This ID can only be changed once every 3 months.";
+"EDIT_CONTACT_NAME_SAVE_BUTTON" = "Save";
 
 //分享二维码或链接邀请好友
 
@@ -2148,7 +2176,7 @@
 "SCREEN_LOCK_UNLOCK_FAILED" = "Authentication Failed";
 
 /* Label for button on lock screen that lets users unlock Signal. */
-"SCREEN_LOCK_UNLOCK_SIGNAL" = "Unlock Chative";
+"SCREEN_LOCK_UNLOCK_SIGNAL" = "Unlock Yelling";
 
 /* No comment provided by engineer. */
 "SEARCH_BYNAMEORNUMBER_PLACEHOLDER_TEXT" = "Search by name or number";
@@ -2254,6 +2282,13 @@
 /* No comment provided by engineer. */
 "SETTINGS_ADVANCED_THEME" = "Theme";
 
+/* Text Size Settings */
+"SETTINGS_TEXT_SIZE_TITLE" = "Text Size";
+"TEXT_SIZE_DEFAULT" = "Default";
+"TEXT_SIZE_LARGER" = "Large";
+/* Text Size Settings */
+"SETTINGS_TEXT_SIZE_TITLE" = "Text Size";
+
 /* No comment provided by engineer. */
 "SETTINGS_ADVANCED_TITLE" = "Advanced";
 
@@ -2350,7 +2385,8 @@
 "SETTINGS_ITEM_GROUP_REMINDER" = "Reminder";
 
 "SETTINGS_ITEM_ACCOUNT" = "Account";
-"SETTINGS_ITEM_ACCOUNT_ID" = "ID";
+"SETTINGS_ITEM_ACCOUNT_ID" = "Contact ID";
+"SETTINGS_ITEM_ALLOW_SEARCH" = "Allow search";
 "SETTINGS_ITEM_ACCOUNT_EMAIL" = "Email";
 "SETTINGS_ITEM_ACCOUNT_PHONE" = "Phone number";
 "SETTINGS_ITEM_LOGOUT" = "Logout";
@@ -2946,10 +2982,7 @@
 
 "LOCAL_ACCOUNT_DISPLAYNAME" = "Saved";
 
-"RECALL_INFO_MESSAGE" = "%@ recalled a message";
-"RECALL_INFO_MESSAGE_WITH_EDIT" = "%@ recalled a message. ";
 "RECALL_MESSAGE_PREVIEW" = "recalled a message";
-"RE-EDIT_MESSAGE" = "Re-edit";
 "RECALL_CONFIRM_TITLE" = "Are you sure you want to recall message?";
 "RECALL_PASSED_TIME" = "Unable to recall the message after %@";
 "RECALL_CONTAINS_BOT" = "Bot is in the session, recall is not supported temporarily.";
@@ -3047,7 +3080,7 @@
 "FLOATVIEW_ACTION_CHAT_FOLDER" = "Chat Folders";
 "FLOATVIEW_ACTION_INSTANT_MEETING" = "Instant Meeting";
 "FLOATVIEW_ACTION_SCAN" = "Scan";
-"FLOATVIEW_ACTION_ADD_CONTACTS" = "Invite Friends";
+"FLOATVIEW_ACTION_ADD_CONTACTS" = "Add Contact";
 
 "SCREENPROTECTION_TITLE" = "Screenshot Warning";
 "SCREENPROTECTION_DESC" = "For user’s security and privacy, Chative prevents Screenshots.";
@@ -3588,6 +3621,9 @@
 "UNBLOCK" = "Unblock";
 "IGNORE" = "Ignore";
 "ACCEPT" = "Accept";
+"REQUEST_BAR_WARNING" = "⚠️ DO NOT trust unknown users.";
+"REQUEST_BAR_WARNING_BOLD" = "DO NOT";
+"CONVERSATION_WARNING_HEADER" = "🔒 Privacy first. Fully anonymous and end-to-end encrypted. DO NOT trust unknown users.";
 "BLOCK&REPORT" = "Block & Report";
 "BLOCK_REPORT_TITLE" = "Are you sure you want to do this?";
 
@@ -3690,11 +3726,18 @@
 /* accessibility label for the button which open confidential mode */
 "INPUT_TOOLBAR_CONFIDE_BUTTON_ACCESSIBILITY_LABEL" = "Confidential Message";
 
+/* Alert title for confidential message (first time enable or view) */
+"CONFIDENTIAL_MESSAGE_VIEW_ALERT_TITLE" = "Confidential Messages";
+
+/* Alert message for confidential message (first time enable or view) */
+"CONFIDENTIAL_MESSAGE_VIEW_ALERT_MESSAGE" = "Read once, then gone.";
 
 "IMAGE_PREVIEW_ADD_MESSAGE" = "Add Message";
 "CONFIRM_DISBAND_GROUP_DESCRIPTION" = "The data of this group will be deleted and all of the members in this group will be removed at the same time.";
 "MESSAGE_ACTION_COMBINE_FORWARD" = "Combine & Forward";
 "MESSAGE_ACTION_SAVE" = "Save";
+"MESSAGE_ACTION_BATCH_RECALL" = "Recall";
+"BATCH_RECALL_CONFIRM_TITLE" = "Recall %d selected messages?";
 
 "DEVICE_INACTIVE_POPVIEW_TITLE" = "Device Active";
 "DEVICE_INACTIVE_POPVIEW_CONTENT" = "Due to prolonged inactivity, your device has been temporarily disabled for security reasons, and any unreceived messages have been cleared. Please activate your device to resume use.";
@@ -3742,7 +3785,10 @@
 "SETTINGS_CHAT" = "Chat";
 
 "SETTINGS_CHAT_SAVE_PHOTOS" = "Save to Photos";
-"SETTINGS_CHAT_SAVE_PHOTOS_DESCRIPTION" = "Automatically save received photos and videos to Photos; items won’t be saved in Confidential Mode.";
+"SETTINGS_CHAT_SAVE_PHOTOS_DESCRIPTION" = "Automatically save received photos and videos to Photos; items won't be saved in Confidential Mode.";
+
+"SETTINGS_CHAT_VOICE_PLAYBACK_SPEED" = "Voice Playback Speed";
+"SETTINGS_CHAT_VOICE_PLAYBACK_SPEED_DESCRIPTION" = "Set the default playback speed for voice messages.";
 
 "MEETING_NAVAGATION_RECONNECTING_FAILURE" = "Reconnection failed";
 "MEETING_NAVAGATION_CONNECTING" = "connecting...";
@@ -3869,17 +3915,19 @@
 
 "CALL_MORE_CRITICAL_ALERT" = "Critical Alert";
 "MEETING_NAVAGATION_CALLING" = "Calling...";
-"MEETING_CRITICAL_ALERT_DANMU" = "sent a critical alert";
-"MEETING_CRITICAL_ALERT_TIPS" = "No answer? Send a critical alert.";
-"MEETING_CRITICAL_ALERT_ERROR_TIPS" = "failed to send a critical alert. Please try again.";
+"MEETING_CRITICAL_ALERT_DANMU" = "sent a Critical Alert";
+"MEETING_CRITICAL_ALERT_TIPS" = "No answer? Send a Critical Alert.";
+"MEETING_CRITICAL_ALERT_NO_ANSWER" = "No answer? ";
+"MEETING_CRITICAL_ALERT_SEND" = "Send a Critical Alert.";
+"MEETING_CRITICAL_ALERT_ERROR_TIPS" = "failed to send a Critical Alert. Please try again.";
 
 "NOTIFICATIONS_CRITICAL_ALERT" = "Critical Alerts";
 "NOTIFICATIONS_CRITICAL_SWITCH_ON" = "On";
 "NOTIFICATIONS_CRITICAL_SWITCH_OFF" = "Off";
-"NOTIFICATIONS_CRITICAL_DESCRIPTION" = "Go to Settings - Notification - Yelling - Critical Alerts, and turn it on.";
+"NOTIFICATIONS_CRITICAL_DESCRIPTION" = "Go to Settings > Notifications > Yelling > Critical Alerts, and turn it on. When enabled, Critical Alerts break through Silent Mode and Do Not Disturb.";
 "NOTIFICATIONS_CRITICAL_ALERT_TITLE_ON" = "Turn on Critical Alerts";
 "NOTIFICATIONS_CRITICAL_ALERT_TITLE_OFF" = "Turn off Critical Alerts";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "Go to Settings - Notification - Yelling - Critical Alerts, and it on.";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "Go to Settings - Notification - Yelling - Critical Alerts, and turn it on.";
 "NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "Go to Settings - Notification - Yelling - Critical Alerts, and turn it off.";
 "NOTIFICATIONS_CRITICAL_ALERT_CANCEL" = "Cancel";
 "NOTIFICATIONS_CRITICAL_ALERT_SETTING" = "Go to Setting";
@@ -3893,5 +3941,29 @@
 
 "CONVERSATION_TOOLBAR_BYTE_LIMIT" = "Exceeding 10MB size limit";
 
-"CONVERSATION_MESSAGE_CRITICAL_ALERT" = "🚨 Sent a Critical Alert.";
+"CONVERSATION_MESSAGE_CRITICAL_ALERT" = "🚨 Critical Alert.";
 "SOMEONE_CRITICAL_ALERT_ALL_TEXT" = "[🚨 Critical Alert] ";
+
+"ROOM_CONNECT_FAILED" = "Connection Failed";
+
+"CALL_NO_CONNECT_ENDED" = "The call has ended";
+
+"CONVERSATION_PANMODEL_TRANSLATE_TO_CHINESE" = "Translate to Chinese";
+"CONVERSATION_PANMODEL_TRANSLATE_TO_ENGLISH" = "Translate to English";
+
+"CRITICAL_ALERT_CONFIRM_TITLE" = "Critical Alert";
+"CRITICAL_ALERT_CANCEL" = "Cancel";
+"CRITICAL_ALERT_SEND" = "Send";
+"CRITICAL_ALERT_CONFIRM_TIPS_MESSAGE" = "Breaks through Silent Mode and Do Not Disturb. Use only for urgent situations.";
+
+/* Instant 通话描述 */
+"CRITICAL_ALERT_CONFIRM_DESC_INSTANT_EMPTY" = "Send to invited users";
+"CRITICAL_ALERT_CONFIRM_DESC_INSTANT" = "Send to %@";
+"CRITICAL_ALERT_CONFIRM_DESC_INSTANT_WITH_MORE" = "Send to %@ and %d more";
+
+/* Group 通话描述 */
+"CRITICAL_ALERT_CONFIRM_DESC_GROUP" = "Send to group members who have not joined";
+"CRITICAL_ALERT_CONFIRM_DESC_GROUP_WITH_INVITED" = "Send to group members who have not joined and invited users (%@)";
+"CRITICAL_ALERT_CONFIRM_DESC_GROUP_WITH_INVITED_MORE" = "Send to group members who have not joined and invited users (%@, and %d more)";
+
+"CONVERSATION_CONFIDENTIAL_INFO_MESSAGE" = "Confidential message has been viewed";

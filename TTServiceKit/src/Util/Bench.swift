@@ -28,7 +28,7 @@ public func BenchAsync(title: String, logInProduction: Bool = false, block: (@es
         let logMessage = "[Bench] title: \(title), duration: \(formattedTime)"
 //        if !DebugFlags.reduceLogChatter {
 //            if logInProduction {
-                Logger.info(logMessage)
+//                Logger.info(logMessage)
 //            } else {
 //                Logger.debug(logMessage)
 //            }
@@ -62,7 +62,7 @@ public func Bench<T>(title: String, logIfLongerThan intervalLimit: TimeInterval 
         let logMessage = "[Bench] title: \(title), duration: \(formattedTime)"
 //        if !DebugFlags.reduceLogChatter {
 //            if logInProduction {
-                Logger.info(logMessage)
+//                Logger.info(logMessage)
 //            } else {
 //                Logger.debug(logMessage)
 //            }

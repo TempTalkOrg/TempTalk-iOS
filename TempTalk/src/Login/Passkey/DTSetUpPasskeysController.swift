@@ -139,12 +139,12 @@ public class DTSetUpPasskeysController: OWSViewController {
     }
     
     private func refreshTheme() {
-        view.backgroundColor = Theme.backgroundColor
-        titleLabel.textColor = Theme.primaryTextColor
-        safeTipLabel.textColor = Theme.primaryTextColor
-        safeDecLabel.textColor = Theme.secondaryTextColor
-        passwordLessLabel.textColor = Theme.primaryTextColor
-        passwordLessDecLabel.textColor = Theme.secondaryTextColor
+        view.backgroundColor = Theme.bg1Color
+        titleLabel.textColor = Theme.tprimaryColor
+        safeTipLabel.textColor = Theme.tprimaryColor
+        safeDecLabel.textColor = Theme.tsecondaryColor
+        passwordLessLabel.textColor = Theme.tprimaryColor
+        passwordLessDecLabel.textColor = Theme.tsecondaryColor
     }
     public override func applyTheme() {
         super.applyTheme()

@@ -8,7 +8,7 @@
 
 #import "DTConversationNameView.h"
 #import <TTMessaging/UIView+SignalUI.h>
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <TTMessaging/UIColor+OWS.h>
 #import <TTServiceKit/TSGroupThread.h>
 #import <TTServiceKit/DTGroupUtils.h>
@@ -98,7 +98,15 @@
 - (void)setAttributeName:(NSAttributedString *)attributeName {
     _attributeName = attributeName;
     _name = nil;
-    self.lbName.attributedText = attributeName;
+
+    // 移除字体属性,让 Label 的 font 和 adjustsFontForContentSizeCategory 来处理
+    if (attributeName) {
+        NSMutableAttributedString *mutableAttrString = [attributeName mutableCopy];
+        [mutableAttrString removeAttribute:NSFontAttributeName range:NSMakeRange(0, mutableAttrString.length)];
+        self.lbName.attributedText = mutableAttrString;
+    } else {
+        self.lbName.attributedText = nil;
+    }
 }
 
 - (void)setNameFont:(UIFont *)nameFont {
@@ -191,8 +199,7 @@
 - (UILabel *)lbName {
     if (!_lbName) {
         _lbName = [UILabel new];
-        _lbName.adjustsFontForContentSizeCategory = YES;
-        _lbName.textColor = Theme.primaryTextColor;
+        _lbName.textColor = Theme.tprimaryColor;
         _lbName.lineBreakMode = NSLineBreakByTruncatingTail;
         [_lbName setContentHuggingPriority:UILayoutPriorityDefaultHigh forAxis:UILayoutConstraintAxisHorizontal];
         [_lbName setContentCompressionResistancePriority:UILayoutPriorityDefaultHigh forAxis:UILayoutConstraintAxisHorizontal];

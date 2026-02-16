@@ -245,7 +245,7 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:archivalDate:conver
  */
 - (void)archiveThreadWithTransaction:(SDSAnyWriteTransaction *)transaction;
 
-- (void)archiveOversizeThreadWithTransaction:(SDSAnyWriteTransaction *)transaction;
+- (void)updateArchiveStateWithTransaction:(SDSAnyWriteTransaction *)transaction;
 
 /**
  *  Unarchives a thread that was archived previously.

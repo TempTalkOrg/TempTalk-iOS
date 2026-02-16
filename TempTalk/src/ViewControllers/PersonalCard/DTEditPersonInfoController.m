@@ -34,18 +34,18 @@ NSUInteger const kDTUserSignatureLength  = 80;
 
 - (void)loadView {
     [super loadView];
-    self.view.backgroundColor = Theme.backgroundColor;
+    self.view.backgroundColor = Theme.bg1Color;
         self.textView = [[DTTextView alloc] init];
-        self.textView.backgroundColor = Theme.searchFieldBackgroundColor;
+        self.textView.backgroundColor = Theme.bg2Color;
         self.textView.layoutManager.allowsNonContiguousLayout = false;
-        self.textView.textColor = Theme.primaryTextColor;
+        self.textView.textColor = Theme.tprimaryColor;
         self.textView.delegate = self;
         self.textView.layer.cornerRadius = 5;
         self.textView.layer.masksToBounds = true;
         self.textView.keyboardAppearance = Theme.keyboardAppearance;
         self.textView.font = [UIFont systemFontOfSize:17];
         self.lineView = [UIView new];
-        self.lineView.backgroundColor = Theme.hairlineColor;
+        self.lineView.backgroundColor = Theme.lineColor;
     
     if (self.edittype == DTEditPersonInfoTypeName) {
         self.title = Localized(@"CONTACT_EDIT_NAME", @"Title for editName view.");

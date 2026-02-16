@@ -114,6 +114,9 @@ NSString *envelopeAddress(DSKProtoEnvelope *envelope)
     } else if (callMessage.reject != nil) {
         messageType = @"Reject";
         roomId = callMessage.reject.roomID;
+    } else if (callMessage.hangup != nil) {
+        messageType = @"Hangup";
+        roomId = callMessage.hangup.roomID;
     } else {
         OWSFailDebug(@"%@ failure: unexpected call message type: %@", self.logTag, callMessage);
         messageType = @"Unknown";

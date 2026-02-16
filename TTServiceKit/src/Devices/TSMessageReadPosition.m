@@ -130,31 +130,10 @@
     }else{
         
         if([self.recipientId isEqualToString:localNumber]){
-            AnyMessageReadPositonFinder *finder = [[AnyMessageReadPositonFinder alloc] init];
-            TSMessageReadPosition *readPosition = [finder latestRecipientReadPositionWithUniqueThreadId:self.uniqueThreadId
-                                                                                            transaction:transaction];
-            if(readPosition && readPosition.updateCount <= 5){
-                NSTimeInterval minTimeDiff = 1000 * kMinuteInterval;
-                NSTimeInterval currentTime = (NSTimeInterval)self.maxServerTime;
-                NSTimeInterval latestTime = (NSTimeInterval)readPosition.maxServerTime;
-                if(currentTime - latestTime >= minTimeDiff ||
-                   latestTime - currentTime >= minTimeDiff){
-                    [self anyInsertWithTransaction:transaction];
-                }else if(currentTime - latestTime <= minTimeDiff &&
-                         currentTime - latestTime > 0){
-                    [readPosition anyUpdateWithTransaction:transaction
-                                                     block:^(TSMessageReadPosition * instance) {
-                        instance.readAt = self.readAt;
-                        instance.maxServerTime = self.maxServerTime;
-                        instance.maxNotifySequenceId = self.maxNotifySequenceId;
-                        instance.creationTimestamp = self.creationTimestamp;
-                        instance.updateCount = (readPosition.updateCount + 1);
-                    }];
-                }
-            }else {
-                [self anyInsertWithTransaction:transaction];
-            }
-            
+            uint64_t timeThreshold = 10 * 60 * 1000; // 10 分钟
+            [[TSMessageReadPositionCache shared] processReadPositionWithNewPosition:self
+                                                                 timeThresholdMillis:timeThreshold
+                                                                        transaction:transaction];
         }else{
             [self anyInsertWithTransaction:transaction];
         }

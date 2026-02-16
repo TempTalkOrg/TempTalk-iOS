@@ -7,7 +7,7 @@
 //
 
 #import "DTGroupMeetingDetailsModel.h"
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <TTMessaging/Environment.h>
 #import <TTMessaging/OWSContactsManager.h>
 #import <TTServiceKit/SignalAccount.h>
@@ -53,8 +53,8 @@
     NSString *logs = [logsTimestamp stringByAppendingString:eventString];
     CGFloat fontSize = [UIFont ows_dynamicTypeBodyFont].pointSize;
     NSMutableAttributedString *attributeLogs = [[NSMutableAttributedString alloc] initWithString:logs];
-    [attributeLogs addAttributes:@{NSFontAttributeName : [UIFont systemFontOfSize:fontSize - 4], NSForegroundColorAttributeName : Theme.placeholderColor} range:NSMakeRange(0, logsTimestamp.length)];
-    [attributeLogs addAttributes:@{NSFontAttributeName : [UIFont systemFontOfSize:fontSize - 2], NSForegroundColorAttributeName : Theme.primaryTextColor} range:NSMakeRange(logsTimestamp.length, logs.length - logsTimestamp.length)];
+    [attributeLogs addAttributes:@{NSFontAttributeName : [UIFont systemFontOfSize:fontSize - 4], NSForegroundColorAttributeName : Theme.tthirdColor} range:NSMakeRange(0, logsTimestamp.length)];
+    [attributeLogs addAttributes:@{NSFontAttributeName : [UIFont systemFontOfSize:fontSize - 2], NSForegroundColorAttributeName : Theme.tprimaryColor} range:NSMakeRange(logsTimestamp.length, logs.length - logsTimestamp.length)];
 
     return [attributeLogs copy];
 }

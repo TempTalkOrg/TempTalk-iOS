@@ -17,7 +17,7 @@ class DTInputReplyPreview: UIView {
     private let replyModel: DTReplyModel
     private let conversationStyle: ConversationStyle
     private var quotedMessageView: DTInputMessagePreView?
-    private var heightConstraint: NSLayoutConstraint!
+    private var heightConstraint: NSLayoutConstraint?
 
     @objc
     required init?(coder aDecoder: NSCoder) {
@@ -98,7 +98,7 @@ class DTInputReplyPreview: UIView {
             return
         }
         let size = quotedMessageView.size(forMaxWidth: CGFloat.infinity)
-        self.heightConstraint.constant = size.height
+        self.heightConstraint?.constant = size.height
     }
 
     @objc func contentSizeCategoryDidChange(_ notification: Notification) {

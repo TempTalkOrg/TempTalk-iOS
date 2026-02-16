@@ -24,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
                                     serializedData:(NSData *)serializedData
                               legacySerializedData:(NSData * __nullable)legacySerializedData
                              recipientPeerContexts:(NSArray<DTMsgPeerContextParams *> *)recipientPeerContexts
+                                       syncContent:(NSData * __nullable)syncContent
                                              error:(NSError **)error;
 
 - (BOOL)checkShouldUseGroupRequestWithThread:(TSThread *)thread

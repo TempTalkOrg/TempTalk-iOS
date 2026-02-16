@@ -28,14 +28,8 @@ final class LiveKitContext: ObservableObject {
 
     #if os(iOS) || os(visionOS) || os(tvOS)
     // audio session current router output type
-    @Published var portType: AVAudioSession.Port = DTRTCAudioSession.shared.currentOutputType() {
-        didSet {
-            AudioManager.shared.isSpeakerOutputPreferred = (portType == .builtInSpeaker)
-        }
-    }
+    @Published var portType: AVAudioSession.Port = DTRTCAudioSession.shared.currentOutputType()
     
-    // 保存用户选择的扬声器偏好，用于在音频路由被系统重置时恢复
-    private var userPreferredSpeakerState: Bool? = nil
     #endif
     // is external audio device connected
     @Published var isExternalConnected: Bool = DTRTCAudioSession.shared.isExternalConnected()
@@ -49,26 +43,8 @@ final class LiveKitContext: ObservableObject {
         }
         
         self.isExternalConnected = isExternalConnected
-        
-        if let preferredSpeaker = userPreferredSpeakerState,
-           preferredSpeaker,
-           !isExternalConnected,
-           portType != .builtInSpeaker {
-            Logger.info("\(logTag) Restoring user preferred speaker state after route change (portType: \(portType))")
-            self.portType = .builtInSpeaker
-            DTRTCAudioSession.shared.switchToSpeaker(true)
-        } else {
-            self.portType = portType
-        }
+        self.portType = portType
     }
-    
-    #if os(iOS) || os(visionOS) || os(tvOS)
-    /// 记录用户选择的扬声器状态
-    func setUserPreferredSpeakerState(_ speaker: Bool) {
-        userPreferredSpeakerState = speaker
-        Logger.debug("\(logTag) User preferred speaker state set to: \(speaker)")
-    }
-    #endif
 
     public init() {
         Logger.debug("\(logTag) LiveKitContext init")

@@ -134,9 +134,9 @@ class DTGestureLockViewController: DTScreenLockBaseViewController {
     @objc override public func doneButtonClick() {
        // 手势没有确认
     }
-    
+
     deinit {
-        print("deinit")
+        Logger.debug("DTGestureLockViewController deinit")
     }
 
     // MARK: - layout

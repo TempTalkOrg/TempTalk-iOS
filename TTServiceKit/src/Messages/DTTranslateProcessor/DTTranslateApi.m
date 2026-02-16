@@ -165,6 +165,58 @@
     }
 }
 
+// 简化版翻译方法，用于临时文本翻译（不需要 thread，不存储结果）
+- (void)translateText:(NSString *)text
+           targetLang:(DTTranslateMessageType)targetLang
+              success:(DTTranslateSuccessBlock)success
+              failure:(DTTranslateFailureBlock)failure {
+    // 直接调用翻译工具，不需要 thread 参数
+    Class translateTool = NSClassFromString(@"DTTransLateTool");
+    if (translateTool) {
+        // 创建实例
+        id translateInstance = [[translateTool alloc] init];
+        // 获取方法选择器
+        SEL selector = NSSelectorFromString(@"translateWithContent:type:callback:");
+        if ([translateInstance respondsToSelector:selector]) {
+            // 创建回调闭包
+            void (^callback)(NSString *, DTTranslateMessageType) = ^(NSString *response, DTTranslateMessageType type) {
+                DTTranslateSingleEntity *singleEntity = [[DTTranslateSingleEntity alloc] init];
+                singleEntity.translatedText = response;
+                singleEntity.sourceLanguage = @"auto"; // 自动检测
+                DTTranslateEntity *translateEntity = [[DTTranslateEntity alloc] init];
+                translateEntity.data = singleEntity;
+                if (success) {
+                    success(translateEntity);
+                }
+            };
+            // 使用 NSInvocation 调用方法
+            NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:[translateInstance methodSignatureForSelector:selector]];
+            [invocation setSelector:selector];
+            [invocation setTarget:translateInstance];
+            [invocation setArgument:&text atIndex:2];
+            [invocation setArgument:&targetLang atIndex:3];
+            [invocation setArgument:&callback atIndex:4];
+            [invocation invoke];
+        } else {
+            OWSLogError(@"translateInstance does not respond to the selector");
+            if (failure) {
+                NSError *error = [NSError errorWithDomain:@"DTTranslateApi"
+                                                     code:-1
+                                                 userInfo:@{NSLocalizedDescriptionKey: @"Translation method not available"}];
+                failure(error);
+            }
+        }
+    } else {
+        OWSLogError(@"DTTransLateTool class not found");
+        if (failure) {
+            NSError *error = [NSError errorWithDomain:@"DTTranslateApi"
+                                                 code:-1
+                                             userInfo:@{NSLocalizedDescriptionKey: @"Translation tool not found"}];
+            failure(error);
+        }
+    }
+}
+
 - (NSString *)transferTargetLangStringWithTranslateSettingType:(DTTranslateMessageType)type {
     switch (type) {
         case DTTranslateMessageTypeChinese:return @"zh-cn";

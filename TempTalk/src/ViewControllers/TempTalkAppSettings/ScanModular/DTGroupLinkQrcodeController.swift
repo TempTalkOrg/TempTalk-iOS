@@ -62,8 +62,8 @@ class DTGroupLinkQrcodeController : OWSViewController , DTInviteCodeContentDeleg
         super.viewDidLoad()
         setupUILayout()
         self.navigationController?.navigationBar.isHidden = true
-        view.backgroundColor = Theme.secondaryBackgroundColor
-        contentView.backgroundColor = Theme.secondaryBackgroundColor
+        view.backgroundColor = Theme.bg2Color
+        contentView.backgroundColor = Theme.bg2Color
         
     }
     @objc
@@ -90,8 +90,8 @@ class DTGroupLinkQrcodeController : OWSViewController , DTInviteCodeContentDeleg
     override func applyTheme() {
         super.applyTheme()
         self.inviteCodeContentView?.backgroundColor = UIColor(rgbHex: 0xffffff, alpha:0.93)
-        view.backgroundColor = Theme.secondaryBackgroundColor
-        contentView.backgroundColor = Theme.secondaryBackgroundColor
+        view.backgroundColor = Theme.bg2Color
+        contentView.backgroundColor = Theme.bg2Color
     }
     
     func inviteCodeContentView(_ inviteView: DTInviteCodeContent, actionType:DTInviteCodeContentActionType, sender: UIButton) {
@@ -116,8 +116,7 @@ class DTGroupLinkQrcodeController : OWSViewController , DTInviteCodeContentDeleg
             }
         case .copyLink:
             if(self.inviteCode.count > 0) {
-                let pasteboard: UIPasteboard = UIPasteboard.general
-                pasteboard.string = self.inviteDisplayText()
+                DTSecurePasteboard.setString(self.inviteDisplayText())
                 self.dismiss(animated: true) {
                     DTToastHelper.toast(withText: Localized("COPYID", comment: ""))
                 }

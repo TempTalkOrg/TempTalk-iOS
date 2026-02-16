@@ -70,13 +70,7 @@ protocol ConversationMessageBubbleViewDelegate: AnyObject {
         _ bubbleView: ConversationMessageBubbleView,
         didTapConfidentialTextMessageWith viewItem: ConversationViewItem
     )
-    
-    @objc optional
-    func messageBubbleView(
-        _ bubbleView: ConversationMessageBubbleView,
-        didTapConfidentialSingleForward viewItem: ConversationViewItem
-    )
-        
+
     @objc optional
     func messageBubbleView(
         _ bubbleView: ConversationMessageBubbleView,
@@ -215,11 +209,15 @@ class ConversationMessageBubbleView: UIView {
     
     func prepareForReuse() {
         delegate = nil
-        
+
         bodyTextView.removeFromSuperview()
         bodyTextView.attributedText = nil
         bodyTextView.text = nil
         bodyTextView.isHidden = true
+        // 重置 linkTextAttributes，避免机密消息的空配置影响普通消息
+        bodyTextView.linkTextAttributes = [.foregroundColor: Theme.tinfoColor]
+        bodyTextView.isSelectable = true
+        bodyTextView.isUserInteractionEnabled = true
         
         lineViews.forEach { $0.isHidden = true }
         
@@ -300,8 +298,7 @@ class ConversationMessageBubbleView: UIView {
         textView.dataDetectorTypes = .link
         textView.delegate = self
         textView.isHidden = true
-        textView.adjustsFontForContentSizeCategory = true
-        
+
         // Note: 虽然 cell 在 MessageBubbleView 上已经添加了 LongPress，但在某些 iOS 版本中（例如 iOS 17.5），
         // 当 textView 内容是链接或 @ 时外层的 LongPress 无法触发，通过在 TextView 上添加 LongPress 来解决这个问题
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(bodyTextViewDidLongPress(_:)))
@@ -366,7 +363,6 @@ extension ConversationMessageBubbleView {
             make.edges.equalToSuperview()
         }
         
-        configurePinMark(renderItem: renderItem)
         configureForwardSourceView(renderItem: renderItem)
         configureQuotedMessageView(renderItem: renderItem)
         
@@ -400,35 +396,53 @@ extension ConversationMessageBubbleView {
     private func configureConfidential(renderItem: CVMessageBubbleRenderItem) {
         let viewItem = renderItem.viewItem
         guard viewItem.isConfidentialMessage && renderItem.confidentialEnable,
-              let message = viewItem.interaction as? TSMessage, !message.isTextMessage() else {
+              let message = viewItem.interaction as? TSMessage else {
             confidentialView.isHidden = true
             return
         }
-        
+
+        // For single forward messages, add confidentialView only on media content (not entire bubble)
+        // so that forward source remains visible
+        if message.isSingleForward() {
+            // For single forward non-text messages, add mask on bodyMediaView only
+            // Use messageCellType instead of isTextMessage() because isTextMessage() returns false for forwarded messages
+            if viewItem.messageCellType() != .textMessage, let bodyMediaView = self.bodyMediaView {
+                confidentialView.isHidden = false
+                if confidentialView.superview != bodyMediaView {
+                    confidentialView.removeFromSuperview()
+                    bodyMediaView.addSubview(confidentialView)
+                    confidentialView.autoPinEdgesToSuperviewEdges()
+                    confidentialView.contentView.addSubview(tapToViewLabel)
+                    tapToViewLabel.sizeToFit()
+                    tapToViewLabel.autoCenterInSuperview()
+                    tapToViewLabel.textColor = UIColor.white
+                    tapToViewLabel.backgroundColor = UIColor.color(rgbHex: 0x000000, alpha: 0.3)
+                    tapToViewLabel.text = Localized("CONVERSATION_VIEW_CONFIDETIAL_TAP_TO_VIEW")
+                }
+            } else {
+                confidentialView.isHidden = true
+            }
+            return
+        }
+
+        // For text messages (not single forward), don't show confidentialView mask
+        if message.isTextMessage() {
+            confidentialView.isHidden = true
+            return
+        }
+
+        // For non-text messages (not single forward), show confidentialView mask on entire bubble
         confidentialView.isHidden = false
-        if confidentialView.superview != nil {
-            return
-        }
-        
-        addSubview(confidentialView)
-        confidentialView.autoPinEdgesToSuperviewEdges()
-        confidentialView.contentView.addSubview(tapToViewLabel)
-        tapToViewLabel.sizeToFit()
-        tapToViewLabel.autoCenterInSuperview()
-        tapToViewLabel.textColor = UIColor.white
-        tapToViewLabel.backgroundColor = UIColor.color(rgbHex: 0x000000, alpha: 0.3)
-        tapToViewLabel.text = Localized("CONVERSATION_VIEW_CONFIDETIAL_TAP_TO_VIEW")
-    }
-    
-    private func configurePinMark(renderItem: CVMessageBubbleRenderItem) {
-        guard renderItem.isShowPinMark else {
-            return
-        }
-        
-        bubbleView.addSubview(pinMark)
-        pinMark.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(1)
-            make.trailing.equalToSuperview().offset(-1)
+        if confidentialView.superview != self {
+            confidentialView.removeFromSuperview()
+            addSubview(confidentialView)
+            confidentialView.autoPinEdgesToSuperviewEdges()
+            confidentialView.contentView.addSubview(tapToViewLabel)
+            tapToViewLabel.sizeToFit()
+            tapToViewLabel.autoCenterInSuperview()
+            tapToViewLabel.textColor = UIColor.white
+            tapToViewLabel.backgroundColor = UIColor.color(rgbHex: 0x000000, alpha: 0.3)
+            tapToViewLabel.text = Localized("CONVERSATION_VIEW_CONFIDETIAL_TAP_TO_VIEW")
         }
     }
     
@@ -436,6 +450,7 @@ extension ConversationMessageBubbleView {
         guard let forwardSourceItem = renderItem.forwardSourceRenderItem else {
             return
         }
+
         // 文字控件顶部自带间隔，图片/视频顶部与source间隔太小，需要修正
         forwardSourceLabel.snp.updateConstraints { make in
             make.bottom.equalToSuperview().offset(-forwardSourceItem.fixForwardSourceLabelHeight)
@@ -516,7 +531,7 @@ extension ConversationMessageBubbleView {
             let viewItem = renderItem.viewItem
             switch viewItem.messageCellType() {
             case .card:
-                bubbleView.bubbleColor = Theme.backgroundColor
+                bubbleView.bubbleColor = Theme.bg1Color
                 bubbleView.strokeColor = .ows_light35
             case .contactShare:
                 bubbleView.bubbleColor = nil
@@ -561,10 +576,15 @@ extension ConversationMessageBubbleView: UITextViewDelegate {
         interaction: UITextItemInteraction
     ) -> Bool {
         guard let viewItem = renderItem?.viewItem, let delegate else { return true }
-        
+
+        // 机密消息不支持链接跳转
+        if viewItem.isConfidentialMessage {
+            return false
+        }
+
         let mentionsAll = "\(CVBodyTextRenderItem.kVisitingCardScheme)://\(MENTIONS_ALL)"
         guard !URL.absoluteString.contains(mentionsAll) else { return false }
-        
+
         delegate.messageBubbleView?(self, didTapLinkWith: viewItem, url: URL)
         return false
     }

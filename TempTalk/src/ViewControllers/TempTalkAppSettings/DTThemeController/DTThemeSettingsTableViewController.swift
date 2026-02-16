@@ -72,9 +72,9 @@ class DTThemeSettingsTableViewController : SettingBaseViewController {
     
     override func applyTheme() {
         super.applyTheme()
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
-        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
+        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultColor
         self.mainTableView.reloadData()
     }
     
@@ -86,8 +86,8 @@ class DTThemeSettingsTableViewController : SettingBaseViewController {
     }
     
     func prepareTheme() {
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
     func prepareUIData() {
@@ -116,7 +116,7 @@ class DTThemeSettingsTableViewController : SettingBaseViewController {
     }
     
     func changeTheme(_ mode: ThemeMode) {
-        Theme.setCurrent(mode)
+        Theme.setCurrentMode(mode)
         self.mainTableView.reloadData()
     }
     

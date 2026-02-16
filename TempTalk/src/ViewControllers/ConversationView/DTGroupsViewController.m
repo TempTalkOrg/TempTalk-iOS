@@ -32,7 +32,7 @@
 - (UITableView *)tableView {
     if (!_tableView) {
         _tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
-        _tableView.backgroundColor = Theme.backgroundColor;
+        _tableView.backgroundColor = Theme.bgpagePrimaryColor;
         _tableView.delegate = self;
         _tableView.dataSource = self;
         _tableView.estimatedRowHeight = 0;
@@ -107,7 +107,7 @@
 
 - (void)applyTheme {
     [super applyTheme];
-    self.tableView.backgroundColor = Theme.backgroundColor;
+    self.tableView.backgroundColor = Theme.bg1Color;
     [self.tableView reloadData];
 }
 
@@ -242,7 +242,8 @@
                                                                                              action:ConversationViewActionNone
                                                                                      focusMessageId:nil
                                                                                         botViewItem:nil
-                                                                                           viewMode:ConversationViewMode_Main];
+                                                                                           viewMode:ConversationViewMode_Main
+                                                                                 isFromPersonalCard:false];
     [self.navigationController pushViewController:conversationVC animated:YES];
 }
 

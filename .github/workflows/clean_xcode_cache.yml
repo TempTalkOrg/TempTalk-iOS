@@ -1,0 +1,74 @@
+name: Clean Xcode Cache
+
+# 定义工作流的触发条件，可以根据需要调整
+on:
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  clean-cache:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # - name: Set up Xcode
+      #   uses: maxim-lobanov/setup-xcode@v1
+      #   with:
+      #     xcode-version: '15.4'  # 指定需要的 Xcode 版本
+
+      - name: Clean Derived Data
+        run: |
+          echo "清理 DerivedData 目录..."
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+
+      - name: Clean Build Folder
+        run: |
+          echo "清理项目的 build 文件夹..."
+          xcodebuild clean -workspace Difft.xcworkspace -scheme Wea -configuration Debug
+
+      - name: Clean CocoaPods Cache
+        run: |
+          echo "清理 CocoaPods 缓存..."
+          pod cache clean --all
+
+      - name: Clean Carthage Cache
+        run: |
+          echo "清理 Carthage 缓存..."
+          rm -rf ~/Library/Caches/org.carthage.CarthageKit
+
+      # - name: Remove Xcode Archives
+      #   run: |
+      #     echo "删除 Xcode 存档..."
+      #     rm -rf ~/Library/Developer/Xcode/Archives
+
+      # - name: Remove Simulator Devices Data
+      #   run: |
+      #     echo "删除模拟器设备数据..."
+      #     rm -rf ~/Library/Developer/CoreSimulator/Devices
+
+      - name: Remove Xcode Cache
+        run: |
+          echo "删除 Xcode 缓存..."
+          rm -rf ~/Library/Caches/com.apple.dt.Xcode
+
+      - name: Remove Xcode Logs
+        run: |
+          echo "删除 Xcode 日志..."
+          rm -rf ~/Library/Logs/Xcode
+
+      - name: Remove Module Cache
+        run: |
+          echo "删除模块缓存..."
+          rm -rf ~/Library/Developer/Xcode/DerivedData/ModuleCache
+
+      # - name: Clean GitHub Actions Cache (if used)
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: |
+      #       ~/Library/Developer/Xcode/DerivedData
+      #       ~/Library/Caches/org.carthage.CarthageKit
+      #       ~/Library/Caches/CocoaPods
+      #     key: ${{ runner.os }}-xcode-${{ github.sha }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-xcode-

@@ -56,8 +56,8 @@ NS_ASSUME_NONNULL_BEGIN
                         diameter:(NSUInteger)diameter
                  contactsManager:(OWSContactsManager *)contactsManager
 {
-    // Name for avatar initials.
-    __block NSString *_Nullable name = [contactsManager nameFromSystemContactsForRecipientId:signalId];
+    // Name for avatar initials - use nickname only, not remark name
+    __block NSString *_Nullable name = [contactsManager nicknameForAvatarWithRecipientId:signalId];
     /*
     if (name.length == 0) {
         [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {

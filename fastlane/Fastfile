@@ -1,99 +1,405 @@
-# Fastlane Configuration Template
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
 #
-# This is a template file for fastlane automation.
-# You need to implement your own fastlane configuration based on your requirements.
+# For a list of all available actions, check out
 #
-# Common lanes you might want to implement:
-# - build: Build the app
-# - test: Run tests  
-# - archive: Create archive for distribution
-# - upload_dsym: Upload debug symbols
-# - deploy: Deploy to App Store or TestFlight
+#     https://docs.fastlane.tools/actions
 #
-# For detailed documentation, visit:
-# https://docs.fastlane.tools/
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
 
 default_platform(:ios)
 
 platform :ios do
-  
-  desc "Build the app"
+  desc "Only Build"
   lane :build do |options|
-    # TODO: Implement your build logic here
-    # Example:
-    # gym(
-    #   scheme: options[:scheme] || ENV["SCHEME"],
-    #   configuration: options[:configuration] || ENV["CONFIGURATION"],
-    #   skip_codesigning: true,
-    #   skip_archive: true
-    # )
-    
-    UI.message("🔨 Build lane - Please implement your build configuration")
+    scheme = options[:scheme] || ENV["SCHEME"]
+    configuration = options[:configuration] || ENV["CONFIGURATION"]
+    ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
+
+    gym(
+      scheme: scheme,
+      configuration: configuration,
+      skip_codesigning: true,
+      skip_archive: true,
+      skip_package_ipa: true,
+    )
   end
 
-  desc "Run tests"
-  lane :test do
-    # TODO: Implement your test logic here  
-    # Example:
-    # scan(
-    #   scheme: ENV["SCHEME"],
-    #   device: "iPhone 15"
-    # )
-    
-    UI.message("🧪 Test lane - Please implement your test configuration")
+  def prepare_build(options)
+    build_number = `date "+%Y%m%d.%H%M%S"`.strip
+    commit = last_git_commit
+    target = options[:scheme] || ENV["SCHEME"]
+
+    targets = ['Yelling', 'ShareExtension', 'NSE']
+    method_type = options[:method_type] || ENV["METHOD_TYPE"]
+    configuration = options[:configuration] || ENV["CONFIGURATION"]
+    build_type = options[:build_type] || ENV["BUILD_TYPE"] || "beta"
+    official_version_flag = options[:official_version_flag] || ENV["OFFICIAL_VERSION_FLAG"]
+
+    # 同步 build number 到 GITHUB_ENV
+    sh("echo BUILD_NUMBER=#{build_number} >> $GITHUB_ENV")
+
+    configs = Array.new
+    app_identifier = ENV['MATCH_APP_IDENTIFIER']
+    app_profile = ENV['MATCH_APP_PRFILE']
+    share_identifier = ENV['MATCH_SIGNALSHAREEXTENSION_IDENTIFIER']
+    share_profile = ENV['MATCH_SIGNALSHAREEXTENSION_PRFILE']
+    nse_identifier = ENV['MATCH_NSE_IDENTIFIER']
+    nse_profile = ENV['MATCH_NSE_PRFILE']
+
+    for target in targets
+      
+      version_number = get_version_number_from_xcodeproj(
+                        xcodeproj: ENV['XCODEPROJ'],
+                        target: target,
+                        build_configuration_name: 'Release')
+
+      if (target.index('NSE') == nil) && (target.index('ShareExtension') == nil)
+        # 同步 version number 到 GITHUB_ENV
+        sh("echo VERSION_NUMBER=#{version_number} >> $GITHUB_ENV")
+      end
+
+      increment_build_number_in_xcodeproj(
+        build_number: build_number,
+        target: target,
+        xcodeproj: ENV['XCODEPROJ'],
+      )
+
+      if target == 'Yelling'
+
+        config_app = generate_config(target, app_identifier, app_profile)
+        configs << config_app
+      elsif target.index('ShareExtension') != nil
+
+        config_share = generate_config(target, share_identifier, share_profile)
+        configs << config_share
+      elsif target.index('NSE') != nil
+
+        config_NSE = generate_config(target, nse_identifier, nse_profile)
+        configs << config_NSE
+      else
+
+        puts("error target: #{target}")
+      end
+    end
+
+    # SingalMessaging can not export, so empty value MUST clear.
+    `sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";//g' ${XCODEPROJ}/project.pbxproj`
+
+    configs.each do |item|
+      
+      match(
+        type: method_type,
+        readonly: true,
+        force_for_new_devices: true,
+        app_identifier: item[:identifier]
+      )
+
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        targets: [item[:target]],
+        team_id: ENV['TEAM_ID'],
+        code_sign_identity: 'Apple Distribution',
+        bundle_identifier: item[:identifier],
+        profile_name: item[:profile],
+        build_configurations: [configuration]
+      )
+    end
+  
+    # 设置BUILD_TYPE到Info.plist中
+    set_build_type_in_plist(targets, build_type, official_version_flag)
   end
 
-  desc "Create archive and upload to TestFlight/App Store"
+  def set_build_type_in_plist(targets, build_type, official_version_flag)
+    puts "🔧 开始设置 BUILD_TYPE: #{build_type} 到 targets: #{targets}"
+    
+    targets.each do |target|
+      puts "📝 处理 target: #{target}"
+      
+      # 跳过扩展target，只设置主应用
+      if target.include?('ShareExtension') || target.include?('NSE')
+        puts "⏭️  跳过扩展 target: #{target}"
+        next
+      end
+      
+      plist_path = get_info_plist_path(target)
+      puts "📁 获取到 plist 路径: #{plist_path}"
+      puts "🔍 当前工作目录: #{Dir.pwd}"
+      puts "🔍 检查绝对路径: #{File.expand_path(plist_path)}"
+      
+      unless plist_path && File.exist?(plist_path)
+        puts "❌ Plist 文件不存在或路径为空: #{plist_path}"
+        # 尝试从项目根目录查找
+        root_path = File.join(Dir.pwd, plist_path)
+        if File.exist?(root_path)
+          puts "✅ 在项目根目录找到文件: #{root_path}"
+          plist_path = root_path
+        else
+          next
+        end
+      end
+      
+      puts "✅ Plist 文件存在，开始设置 BUILD_TYPE"
+      
+      begin
+        # 使用set_info_plist_value更新 AppConfig.plist 中的 BUILD_TYPE 和 OFFICIAL_VERSION_FLAG
+        set_info_plist_value(
+          path: plist_path,
+          key: 'BUILD_TYPE',
+          value: build_type
+        )
+        puts "✅ 成功设置 #{target} 的 BUILD_TYPE 为: #{build_type}"
+        set_info_plist_value(
+          path: plist_path,
+          key: 'OFFICIAL_VERSION_FLAG',
+          value: official_version_flag
+        )
+        puts "✅ 成功设置 #{target} 的 OFFICIAL_VERSION_FLAG 为: #{official_version_flag}"
+        puts "📋 验证设置结果..."
+        
+        # 验证设置是否成功
+        result = `plutil -extract BUILD_TYPE raw "#{plist_path}" 2>/dev/null`.strip
+        flag_result = `plutil -extract OFFICIAL_VERSION_FLAG raw "#{plist_path}" 2>/dev/null`.strip
+        if result == build_type && flag_result == official_version_flag
+          puts "✅ 验证成功: BUILD_TYPE = #{result}"
+          puts "✅ 验证成功: OFFICIAL_VERSION_FLAG = #{flag_result}"
+        else
+          puts "⚠️  验证失败: 期望 BUILD_TYPE = #{build_type}, 实际 #{result}"
+          puts "⚠️  验证失败: 期望 OFFICIAL_VERSION_FLAG = #{official_version_flag}, 实际 #{flag_result}"
+        end
+      rescue => e
+        puts "⚠️  无法设置 #{target} 的 BUILD_TYPE: #{e.message}, OFFICIAL_VERSION_FLAG: #{e.message}"
+        puts "🔍 错误详情: #{e.class} - #{e.backtrace&.first}"
+      end
+    end
+    
+    puts "🏁 BUILD_TYPE 设置完成"
+  end
+
+  def get_info_plist_path(target)
+    # 从环境配置中读取 INFO_PLIST_PATH
+    env_plist_path = ENV['APPCONFIG_PLIST_PATH']
+    if env_plist_path && !env_plist_path.empty?
+      puts "📝 使用环境配置的 APPCONFIG_PLIST_PATH: #{env_plist_path}"
+      
+      # 确保返回绝对路径
+      if env_plist_path.start_with?('/')
+        return env_plist_path
+      else
+        # 从 BUILD_OUTPUT_DIR 推导项目根目录（如果可用）
+        # BUILD_OUTPUT_DIR 格式: /path/to/project/build
+        # 需要去掉 /build 获得项目根目录
+        project_root = if ENV['BUILD_OUTPUT_DIR'] && !ENV['BUILD_OUTPUT_DIR'].empty?
+          # 从 BUILD_OUTPUT_DIR 获取项目根目录
+          build_dir = ENV['BUILD_OUTPUT_DIR']
+          if build_dir.end_with?('/build')
+            build_dir.sub(/\/build$/, '')
+          else
+            # 如果格式不符合预期，使用 dirname
+            File.dirname(build_dir)
+          end
+        else
+          # 本地开发环境，动态计算
+          File.expand_path('..', __dir__)
+        end
+        
+        absolute_path = File.join(project_root, env_plist_path)
+        puts "📝 项目根目录: #{project_root}"
+        puts "📝 转换为绝对路径: #{absolute_path}"
+        return absolute_path
+      end
+    end
+    
+    # 如果环境变量没有设置，返回nil并输出警告
+    puts "⚠️  环境变量 APPCONFIG_PLIST_PATH 未设置，target: #{target}"
+    return nil
+  end
+
+  def generate_config (temp_target, temp_identifier, temp_profile)
+
+    config = {
+      target: temp_target,
+      identifier: temp_identifier,
+      profile: temp_profile
+    }
+
+    return config
+  end
+
+  desc "archive"
   lane :archive do |options|
-    # TODO: Implement your archiving and distribution logic
-    # You might want to include:
-    # 1. Code signing with match
-    # 2. Building archive with gym
-    # 3. Uploading to TestFlight with pilot
-    # 4. Uploading debug symbols
+    scheme = options[:scheme] || ENV["SCHEME"]
+    configuration = options[:configuration] || ENV["CONFIGURATION"]
+    manageAppVersionAndBuildNumber = options[:manageAppVersionAndBuildNumber] || ENV["MANAGE_APP_VERSION_AND_BUILD_NUMBER"] || 'false'
+    manageAppVersionAndBuildNumber = manageAppVersionAndBuildNumber == 'true' ? true : false
+    output_directory = options[:output_directory]
+    output_name = "#{options[:output_name]}.ipa"
+    ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     
-    UI.message("📦 Archive lane - Please implement your archive and distribution workflow")
+    prepare_build(options)
+    gym(
+      scheme: scheme,
+      configuration: configuration,
+      xcargs: '-allowProvisioningUpdates',
+      output_directory: output_directory,
+      output_name: output_name,
+      export_options: {
+        manageAppVersionAndBuildNumber: manageAppVersionAndBuildNumber
+      }
+    )
   end
 
-  desc "Upload debug symbols"
-  lane :upload_dsym do
-    # TODO: Implement debug symbol upload
-    # This might include uploading to:
-    # - Crashlytics/Firebase
-    # - Bugsnag
-    # - Other crash reporting services
-    
-    UI.message("🐛 Upload dSYM lane - Please implement your crash reporting service integration")
+  desc "upload dsym to crashlytics"
+  lane :upload_dsym do |options|
+    output_directory = options[:output_directory]
+    output_name = options[:output_name]
+
+    google_info_plist_path = options[:google_info_plist_path] || ENV["GOOGLE_INFO_PLIST_PATH"]
+    upload_symbols_to_crashlytics(dsym_path: "#{output_directory}/#{output_name}.app.dSYM.zip", gsp_path: google_info_plist_path)
   end
 
-  # Helper methods
-  private_lane :setup_certificates do
-    # TODO: Implement certificate management
-    # Example using match:
-    # match(
-    #   type: "development", # or "appstore", "adhoc", "enterprise"
-    #   app_identifier: ENV["APP_IDENTIFIER"]
+  desc "upload dsym to AWS S3"
+  lane :upload_dsym_to_s3 do |options|
+    # Required parameters
+    output_directory = options[:output_directory] || ENV["BUILD_OUTPUT_DIR"]
+    output_name = options[:output_name] || ENV["BUILD_IPA_NAME"]
+    version_number = options[:version_number] || ENV["VERSION_NUMBER"]
+    build_number = options[:build_number] || ENV["BUILD_NUMBER"]
+    
+    # S3 configuration
+    dsym_s3_path = options[:dsym_s3_path] || ENV["DSYM_S3_PATH"]
+    dsym_s3_download_path = options[:dsym_s3_download_path] || ENV["DSYM_S3_DOWNLOAD_PATH"]
+    s3_profile = options[:s3_profile] || ENV["S3_PROFILE"]
+    
+    # Construct the dSYM filename: build_ipa_name-VERSION_NUMBER-BUILD_NUMBER
+    dsym_filename = "#{output_name}-#{version_number}-#{build_number}.app.dSYM.zip"
+    dsym_local_path = "#{output_directory}/#{output_name}.app.dSYM.zip"
+    
+    UI.message("📁 Using DSYM_S3_PATH: #{dsym_s3_path}")
+    
+    # Verify the local dSYM file exists
+    upload_successful = false
+    download_url = nil
+    error_message = nil
+    
+    unless File.exist?(dsym_local_path)
+      UI.error("❌ dSYM file not found: #{dsym_local_path}")
+      error_message = "dSYM file not found at #{dsym_local_path}"
+    else
+      # Upload to S3
+      UI.message("📤 Uploading dSYM to S3: #{dsym_filename}")
+      UI.message("📁 S3 Upload Path: #{dsym_s3_path}")
+      
+      # Build AWS command
+      aws_cmd_parts = ["aws", "s3", "cp", "\"#{dsym_local_path}\"", "\"#{dsym_s3_path}/#{dsym_filename}\""]
+      
+      # Add profile if specified
+      if s3_profile && !s3_profile.empty?
+        aws_cmd_parts << "--profile"
+        aws_cmd_parts << "\"#{s3_profile}\""
+      end
+      
+      aws_cmd = aws_cmd_parts.join(" ")
+      
+      # Execute upload
+      begin
+        sh(aws_cmd)
+        upload_successful = true
+        UI.success("✅ dSYM uploaded successfully")
+        
+        # Generate download URL
+        download_url = "#{dsym_s3_download_path}/#{dsym_filename}"
+        UI.message("📥 Download URL: #{download_url}")
+        
+      rescue => e
+        UI.error("❌ Failed to upload dSYM to S3: #{e.message}")
+        error_message = "S3 upload failed - #{e.message}"
+      end
+    end
+    
+    # Export environment variables for GitHub Actions
+    if ENV["GITHUB_ENV"]
+      begin
+        File.open(ENV["GITHUB_ENV"], 'a') do |f|
+          if upload_successful
+            f.puts "dsym_upload_status=success"
+            f.puts "dsym_download_url=#{download_url}"
+            f.puts "dsym_filename=#{dsym_filename}"
+          else
+            f.puts "dsym_upload_status=failed"
+            f.puts "dsym_filename=#{dsym_filename}"
+            f.puts "dsym_error_message=#{error_message || 'S3 upload failed - dSYM not available for download'}"
+          end
+        end
+      rescue => e
+        UI.error("⚠️  Failed to write to GITHUB_ENV: #{e.message}")
+      end
+    end
+    
+    # Return result
+    if upload_successful
+      {
+        success: true,
+        filename: dsym_filename,
+        download_url: download_url
+      }
+    else
+      {
+        success: false,
+        filename: dsym_filename,
+        error_message: error_message || "S3 upload failed - dSYM not available for download"
+      }
+    end
+  end
+
+  private_lane :match_configuration_digital do |options|
+    # api_key = app_store_connect_api_key(
+    #   key_id: "xxx",
+    #   issuer_id: "xxx",
+    #   key_filepath: "xxx",
+    #   duration: 1200, # optional (maximum 1200)
+    #   in_house: false # optional but may be required if using match/sigh
     # )
+
+    sync_code_signing(
+      type: options[:type],
+      app_identifier: ["org.difft.chative", "org.difft.chative.share", "org.difft.chative.NSE", 
+                      "org.difft.chativetest", "org.difft.chativetest.share", "org.difft.chativetest.NSE"],
+      # api_key: api_key,
+      readonly: options[:readonly],
+      force: options[:force],
+      verbose: true
+    )
   end
 
-  # Error handling
-  error do |lane, exception, options|
-    # TODO: Implement error handling
-    # You might want to:
-    # - Send notifications to Teams
-    # - Clean up temporary files
-    # - Post to issue tracking systems
-    
-    UI.error("❌ Lane #{lane} failed: #{exception.message}")
+  desc "register new devices"
+  lane :register_iOS_devices do
+    register_devices(
+      devices_file: "./multiple-device-upload.txt.txt"
+    )
+
+    # match(type: "development", force_for_new_devices: true)
+  end
+
+  desc "match digital cer and profiles"
+  lane :generate_match_digital do
+    match_configuration_digital(
+      type: "development",
+      readonly: true,
+      force: false
+    )
+
+    # match_configuration_digital(
+    #   type: "appstore",
+    #   readonly: true,
+    #   force: false
+    # )
   end
 
 end
-
-# Example environment variables you might want to use:
-# ENV["SCHEME"] - Xcode scheme to build
-# ENV["CONFIGURATION"] - Build configuration (Debug/Release)
-# ENV["APP_IDENTIFIER"] - App bundle identifier
-# ENV["TEAM_ID"] - Apple Developer Team ID
-# ENV["APPLE_USERNAME"] - Apple Developer account username
-# ENV["MATCH_GIT_URL"] - Git repository for certificates (if using match)
-# ENV["CRASHLYTICS_API_TOKEN"] - For uploading dSYMs to Crashlytics

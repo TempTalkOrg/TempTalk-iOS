@@ -57,32 +57,20 @@
 
 // --- CODE GENERATION MARKER
 
-+ (NSDictionary *)JSONKeyPathsByPropertyKey{
++ (NSDictionary *)JSONKeyPathsByPropertyKey {
     return [NSDictionary mtl_identityPropertyMapWithModel:[self class]];
 }
 
-- (void)anyUpdateGroupBaseInfoEntity {
-    if(self.gid.length){
-        self.uniqueId = self.gid;
-    }
-    if(!self.uniqueId.length){
-        NSString *errorString = [NSString stringWithFormat:@"DTGroupBaseInfoEntity invalid uniqueId group name: %@",self.name];
-        OWSProdError(errorString);
-    }
-}
+#pragma mark - Property Overrides
 
-- (void)anyWillUpdateWithTransaction:(SDSAnyWriteTransaction *)transaction {
-    
-    [self anyUpdateGroupBaseInfoEntity];
-    
-    [super anyWillUpdateWithTransaction:transaction];
-}
-
-- (void)anyWillInsertWithTransaction:(SDSAnyWriteTransaction *)transaction {
-    
-    [self anyUpdateGroupBaseInfoEntity];
-    
-    [super anyWillInsertWithTransaction:transaction];
+/// Override setGid: to ensure uniqueId is always synchronized with gid.
+/// This is the canonical place to set uniqueId - it works for both JSON deserialization
+/// and any manual gid assignment, ensuring uniqueId is correct before database operations.
+- (void)setGid:(NSString *)gid {
+    _gid = [gid copy];
+    if (gid.length) {
+        self.uniqueId = gid;
+    }
 }
 
 @end

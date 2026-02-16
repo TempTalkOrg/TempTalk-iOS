@@ -7,8 +7,7 @@ import TTMessaging
 import TTServiceKit
 
 public class NotificationActionHandler: Dependencies {
-
-    class func handleNotificationResponse( _ response: UNNotificationResponse, completionHandler: @escaping () -> Void) {
+    class func handleNotificationResponse(_ response: UNNotificationResponse, completionHandler: @escaping () -> Void) {
         AssertIsOnMainThread()
         firstly {
             try handleNotificationResponse(response)
@@ -20,30 +19,61 @@ public class NotificationActionHandler: Dependencies {
         }
     }
 
-    private class func handleNotificationResponse( _ response: UNNotificationResponse) throws -> Promise<Void> {
+    private class func handleNotificationResponse(_ response: UNNotificationResponse) throws -> Promise<Void> {
         AssertIsOnMainThread()
         owsAssertDebug(AppReadiness.isAppReady)
-        
+
         Logger.info("[metris] handle notification response start")
 
         let userInfo = response.notification.request.content.userInfo
-        
+
         // // critical 不跳转
-        let apnsInfo = self.apnsInfo(userInfo: userInfo)
+        let apnsInfo = apnsInfo(userInfo: userInfo)
         if let aps = apnsInfo, aps.interruptionLevel == "critical" {
-            Logger.info("[notification] critical interruption, skip navigation")
+            Logger.info("[notification] critical interruption, skip navigation - conversationId: \(aps.conversationId), roomId: \(aps.roomId ?? "nil")")
             Task {
-                DTMeetingManager.shared.syncServerCalls()
-                for call in DTMeetingManager.shared.allMeetings {
-                    if call.conversationId == aps.conversationId {
-                        Logger.info("[notification] cccept call from critical alert notification")
-                        DTMeetingManager.shared.acceptCall(call: call)
+                let calls = await DTMeetingManager.shared.syncServerCallsAsync()
+                var matchedCall: DTLiveKitCallModel?
+
+                // 优先级1: 通过 roomId 匹配（最准确）
+                if let roomId = aps.roomId, !roomId.isEmpty {
+                    for call in calls {
+                        if call.roomId == roomId {
+                            Logger.info("[notification] matched call by roomId: \(roomId)")
+                            matchedCall = call
+                            break
+                        }
                     }
+                }
+
+                // 优先级2: 通过 conversationId 匹配
+                if matchedCall == nil {
+                    for call in calls {
+                        if call.conversationId == aps.conversationId {
+                            Logger.info("[notification] matched call by conversationId: \(aps.conversationId)")
+                            matchedCall = call
+                            break
+                        }
+                    }
+                }
+
+                // 优先级3: 如果只有一个 active call，则直接加入
+                // 这种情况适用于 instant call 既没有 roomId 也没有 conversationId 的场景
+                if matchedCall == nil && calls.count == 1 {
+                    Logger.info("[notification] no roomId/conversationId match, but only one active call, auto-join it")
+                    matchedCall = calls.first
+                }
+
+                if let call = matchedCall {
+                    Logger.info("[notification] accept call from critical alert notification - roomId: \(call.roomId ?? "nil"), conversationId: \(call.conversationId ?? "nil")")
+                    DTMeetingManager.shared.acceptCall(call: call)
+                } else {
+                    Logger.warn("[notification] no matching call found for critical alert - conversationId: \(aps.conversationId), roomId: \(aps.roomId ?? "nil"), active calls: \(calls.count)")
                 }
             }
             return Promise.value(())
         }
-        
+
         let categoryIdentifier = response.notification.request.content.categoryIdentifier
         let action: AppNotificationAction
 
@@ -51,21 +81,21 @@ public class NotificationActionHandler: Dependencies {
         case UNNotificationDefaultActionIdentifier:
             if categoryIdentifier == AppNotificationCategory.scheduleMeetingWithoutActions.identifier {
                 Logger.debug("default action")
-                
+
                 action = AppNotificationAction.showScheduledMeetingInfo
-                
+
             } else {
                 Logger.debug("default action")
                 let defaultActionString = userInfo[AppNotificationUserInfoKey.defaultAction] as? String
                 let defaultAction = defaultActionString.flatMap { AppNotificationAction(rawValue: $0) }
                 action = defaultAction ?? .showThread
             }
-            
-           
+
         case UNNotificationDismissActionIdentifier:
-            // TODO - mark as read?
+            // TODO: - mark as read?
             Logger.debug("dismissed notification")
             return Promise.value(())
+
         default:
             if let responseAction = UserNotificationConfig.action(identifier: response.actionIdentifier) {
                 action = responseAction
@@ -95,7 +125,7 @@ public class NotificationActionHandler: Dependencies {
     }
 
     private class func markAsRead(userInfo: [AnyHashable: Any]) throws -> Promise<Void> {
-        return firstly {
+        firstly {
             self.notificationMessage(forUserInfo: userInfo)
         }.then(on: DispatchQueue.global()) { (notificationMessage: NotificationMessage) in
             self.markMessageAsRead(notificationMessage: notificationMessage)
@@ -103,22 +133,21 @@ public class NotificationActionHandler: Dependencies {
     }
 
     private class func reply(userInfo: [AnyHashable: Any], replyText: String) throws -> Promise<Void> {
-        return firstly { () -> Promise<NotificationMessage> in
+        firstly { () -> Promise<NotificationMessage> in
             self.notificationMessage(forUserInfo: userInfo)
         }.then(on: DispatchQueue.global()) { (notificationMessage: NotificationMessage) -> Promise<Void> in
             let thread = notificationMessage.thread
             return firstly(on: DispatchQueue.global()) { () -> Promise<Void> in
-               
                 return Promise { seal in
-                      self.databaseStorage.asyncWrite(block: { transaction in
-                          let outgoingMessage = TSOutgoingMessage(in: notificationMessage.thread, messageBody: replyText, atPersons: nil, mentions: nil, attachmentId: nil)
-                          self.messageSender.enqueue(outgoingMessage, success: {
-                              seal.resolve()
-                          }, failure: { error in
-                              seal.reject(error)
-                          })
-                      })
-                  }
+                    self.databaseStorage.asyncWrite(block: { _ in
+                        let outgoingMessage = TSOutgoingMessage(in: notificationMessage.thread, messageBody: replyText, atPersons: nil, mentions: nil, attachmentId: nil)
+                        self.messageSender.enqueue(outgoingMessage, success: {
+                            seal.resolve()
+                        }, failure: { error in
+                            seal.reject(error)
+                        })
+                    })
+                }
             }.recover(on: DispatchQueue.global()) { error -> Promise<Void> in
                 Logger.warn("Failed to send reply message from notification with error: \(error)")
                 self.notificationPresenter.notifyForFailedSend(inThread: thread)
@@ -130,7 +159,7 @@ public class NotificationActionHandler: Dependencies {
     }
 
     private class func showThread(userInfo: [AnyHashable: Any]) throws -> Promise<Void> {
-        return firstly { () -> Promise<NotificationMessage> in
+        firstly { () -> Promise<NotificationMessage> in
             self.notificationMessage(forUserInfo: userInfo)
         }.done(on: DispatchQueue.main) { notificationMessage in
             if notificationMessage.isGroupStoryReply {
@@ -145,13 +174,12 @@ public class NotificationActionHandler: Dependencies {
         // If this happens when the app is not visible we skip the animation so the thread
         // can be visible to the user immediately upon opening the app, rather than having to watch
         // it animate in from the homescreen.
-            let thread = notificationMessage.thread
-            SignalApp.shared().presentTargetConversation(for: thread, action:.none, focusMessageId: nil)
-        
+        let thread = notificationMessage.thread
+        SignalApp.shared().presentTargetConversation(for: thread, action: .none, focusMessageId: nil)
     }
-    
+
     private class func showScheduledMeetingInfo(userInfo: [AnyHashable: Any]) throws -> Promise<Void> {
-        return firstly { () -> Promise<DTListMeeting> in
+        firstly { () -> Promise<DTListMeeting> in
             firstly(on: DispatchQueue.global()) { () throws -> DTListMeeting in
                 return try MTLJSONAdapter.model(of: DTListMeeting.self, fromJSONDictionary: userInfo) as! DTListMeeting
             }
@@ -159,11 +187,9 @@ public class NotificationActionHandler: Dependencies {
             presentEventDetail(event)
         }
     }
-    
+
     class func presentEventDetail(_ event: DTListMeeting) {
-        
-        if let channelName = event.channelName, !channelName.isEmpty, !event.isLiveStream || (event.isLiveStream && event.role != MeetingAttendeeRole.audience.rawValue) {
-            
+        if let channelName = event.channelName, !channelName.isEmpty {
             let now = Date().timeIntervalSince1970
             guard now - event.start < 70 else {
                 Logger.info("click meeting popups late: \(event.topic), \(channelName)")
@@ -172,17 +198,15 @@ public class NotificationActionHandler: Dependencies {
             // 会议预约唤醒方法
             return
         }
-            
+
         let topWindow = OWSWindowManager.shared().getToastSuitableWindow()
         if topWindow.windowLevel == UIWindowLevel_CallView() {
 //            DTMultiCallManager.shared().showToast("Unable to view schedule details when you on a call")
             return
         }
-        
     }
 
-
-    private class func showGroupStoryReplyThread(notificationMessage: NotificationMessage) {
+    private class func showGroupStoryReplyThread(notificationMessage _: NotificationMessage) {
 //        guard notificationMessage.isGroupStoryReply, let storyMessage = notificationMessage.storyMessage else {
 //            return owsFailDebug("Unexpectedly missing story message")
 //        }
@@ -231,47 +255,45 @@ public class NotificationActionHandler: Dependencies {
     }
 
     private class func notificationMessage(forUserInfo userInfo: [AnyHashable: Any]) -> Promise<NotificationMessage> {
-            firstly(on: DispatchQueue.global()) { () throws -> NotificationMessage in
-                let apnsInfo = self.apnsInfo(userInfo: userInfo)
-                guard let threadId = apnsInfo?.conversationId else {
-                    throw OWSAssertionError("threadId was unexpectedly nil")
-                }
-                
-                return try self.databaseStorage.read(block: { transaction in
-                    
-                    var thread : TSThread?
-                    if (threadId.hasPrefix("+")) {
-                        
-                        let uniqueIdentifier = TSContactThread.threadId(fromContactId: threadId)
-                        thread = TSContactThread.anyFetchContactThread(uniqueId: uniqueIdentifier, transaction: transaction)
-                        
-                    } else {
-                        
-                        let groupId = NSData(fromBase64String: threadId)
-                        guard let groupId = groupId else {
-                            throw OWSAssertionError("Failed to get groupId: \(String(describing: groupId))")
-                        }
-                        
-                        thread = TSGroupThread(groupId: groupId as Data, transaction: transaction)
-                    }
-                    
-                    guard  let thread = thread else {
-                        throw OWSAssertionError("Failed to get or create thread with threadId: \(threadId)")
-                    }
-                    
-                    let hasPendingMessageRequest = false
-
-                    return NotificationMessage(
-                        thread: thread,
-                        interaction: nil,
-                        isGroupStoryReply: false,
-                        hasPendingMessageRequest: hasPendingMessageRequest
-                    )
-                })
+        firstly(on: DispatchQueue.global()) { () throws -> NotificationMessage in
+            let apnsInfo = self.apnsInfo(userInfo: userInfo)
+            guard let threadId = apnsInfo?.conversationId else {
+                throw OWSAssertionError("threadId was unexpectedly nil")
             }
+
+            return try self.databaseStorage.read(block: { transaction in
+                var thread: TSThread?
+                if threadId.hasPrefix("+") {
+                    let uniqueIdentifier = TSContactThread.threadId(fromContactId: threadId)
+                    thread = TSContactThread.anyFetchContactThread(uniqueId: uniqueIdentifier, transaction: transaction)
+
+                } else {
+                    let groupId = NSData(fromBase64String: threadId)
+                    guard let groupId else {
+                        throw OWSAssertionError("Failed to get groupId: \(String(describing: groupId))")
+                    }
+
+                    thread = TSGroupThread(groupId: groupId as Data, transaction: transaction)
+                }
+
+                guard let thread else {
+                    throw OWSAssertionError("Failed to get or create thread with threadId: \(threadId)")
+                }
+
+                let hasPendingMessageRequest = false
+
+                return NotificationMessage(
+                    thread: thread,
+                    interaction: nil,
+                    isGroupStoryReply: false,
+                    hasPendingMessageRequest: hasPendingMessageRequest
+                )
+            })
+        }
     }
-    //TODO: Follow up optimization based on requirements to see if this feature is needed
-    private class func markMessageAsRead(notificationMessage: NotificationMessage) -> Promise<Void> {
+
+    // TODO: Follow up optimization based on requirements to see if this feature is needed
+    private class func markMessageAsRead(notificationMessage _: NotificationMessage) -> Promise<Void> {
 //        guard notificationMessage.interaction != nil else {
 //            return Promise(error: OWSAssertionError("missing interaction"))
 //        }
@@ -285,19 +307,19 @@ public class NotificationActionHandler: Dependencies {
 //        }
         return promise
     }
-    
+
     private class func apnsInfo(userInfo: [AnyHashable: Any]?) -> DTApnsInfo? {
-            guard let userInfo = userInfo else {
-                Logger.error("Error: no userInfo")
-                return nil
-            }
-            
-            do {
-                let apnsInfo = try MTLJSONAdapter.model(of: DTApnsInfo.self, fromJSONDictionary: userInfo)
-                return apnsInfo as? DTApnsInfo
-            } catch {
-                Logger.error("Error constructing apnsInfo: \(error)")
-                return nil
-            }
+        guard let userInfo else {
+            Logger.error("Error: no userInfo")
+            return nil
         }
+
+        do {
+            let apnsInfo = try MTLJSONAdapter.model(of: DTApnsInfo.self, fromJSONDictionary: userInfo)
+            return apnsInfo as? DTApnsInfo
+        } catch {
+            Logger.error("Error constructing apnsInfo: \(error)")
+            return nil
+        }
+    }
 }

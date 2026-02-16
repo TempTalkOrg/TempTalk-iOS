@@ -11,9 +11,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+NSNotificationName const ScreenLockDidUnlockNotification = @"ScreenLockDidUnlockNotification";
+
 @interface OWSScreenLockUI () <ScreenLockViewDelegate>
 
 @property (nonatomic) UIWindow *screenBlockingWindow;
+@property (nonatomic, readwrite) BOOL isShowingScreenLockUI;
 @property (nonatomic) ScreenLockViewController *screenBlockingViewController;
 
 // Unlike UIApplication.applicationState, this state reflects the
@@ -29,8 +32,6 @@ NS_ASSUME_NONNULL_BEGIN
 // inactive in order for it to be reflected in the app switcher.
 @property (nonatomic) BOOL appIsInactiveOrBackground;
 @property (nonatomic) BOOL appIsInBackground;
-
-@property (nonatomic) BOOL isShowingScreenLockUI;
 
 @property (nonatomic) BOOL didLastUnlockAttemptFail;
 
@@ -234,6 +235,9 @@ NS_ASSUME_NONNULL_BEGIN
     } else {
         [self tryToActivateScreenLockBasedOnCountdown];
 
+        // Always clear countdown when returning to foreground
+        // The countdown is only relevant while the app is in background
+        // Once we're back, we've already determined lock state in tryToActivateScreenLockBasedOnCountdown
         OWSLogInfo(@"%@ setAppIsInactiveOrBackground clear screenLockCountdownDate.", self.logTag);
         self.screenLockCountdownDate = nil;
     }
@@ -319,36 +323,26 @@ bool bScreenLockDone = false;
     self.isShowingScreenLockUI = YES;
     
     DTScreenLockBaseViewController *unlockScreenVc = [DTScreenLockBaseViewController buildScreenLockViewWithViewType:DTScreenLockViewTypeUnlockScreen doneCallback:^(NSString * _Nullable passcode) {
-        OWSLogInfo(@"%@ unlock screen lock succeeded.", self.logTag);
-    
-        self.isShowingScreenLockUI = NO;
-    
-        self.isScreenLockLocked = NO;
+            OWSLogInfo(@"%@ unlock screen lock succeeded.", self.logTag);
 
-        [self ensureUI];
+            self.isShowingScreenLockUI = NO;
 
-        // added: set screen lock flag to true.
-        bScreenLockDone = true;
+            self.isScreenLockLocked = NO;
 
-        self.screenBlockingWindow.rootViewController = self.screenBlockingViewController;
-        
-        // 使用dispatch_async确保在窗口状态更新后再恢复会议窗口
-        dispatch_async(dispatch_get_main_queue(), ^{
-            BOOL haveMeeting = [DTMeetingManager shared].inMeeting;
-            OWSWindowManager *windowManager = [OWSWindowManager sharedManager];
-            OWSLogInfo(@"%@ restore call view haveMeeting %@, has call %@", self.logTag, @(haveMeeting), @(windowManager.hasCall));
-            if (haveMeeting && windowManager.hasCall) {
-                OWSLogInfo(@"%@ restore call view after unlock.", self.logTag);
-                if (!windowManager.shouldShowCallView) {
-                    OWSLogInfo(@"%@ window show call", self.logTag);
-                    [windowManager showCallView];
-                } else {
-                    OWSLogInfo(@"%@ window setIsScreenBlockActive", self.logTag);
-                    [OWSWindowManager.sharedManager setIsScreenBlockActive:NO];
-                }
-            }
-        });
-                    
+            // Always clear the countdown after successful unlock
+            // The countdown will be restarted automatically by setAppIsInactiveOrBackground
+            // if the app goes to background again
+            self.screenLockCountdownDate = nil;
+
+            [self ensureUI];
+
+            // added: set screen lock flag to true.
+            bScreenLockDone = true;
+
+            self.screenBlockingWindow.rootViewController = self.screenBlockingViewController;
+
+            // Notify that screen unlock completed - allows deferred UI to be shown
+            [[NSNotificationCenter defaultCenter] postNotificationName:ScreenLockDidUnlockNotification object:nil];
     }];
 
     self.screenBlockingWindow.rootViewController = unlockScreenVc;
@@ -499,7 +493,6 @@ bool bScreenLockDone = false;
 }
 
 // Whenever the device date/time is edited by the user,
-// trigger screen lock immediately if enabled.
 - (void)clockDidChange:(NSNotification *)notification
 {
     OWSLogInfo(@"%@ clock did change", self.logTag);
@@ -513,7 +506,12 @@ bool bScreenLockDone = false;
         DDLogVerbose(@"%@ clockDidChange 0", self.logTag);
         return;
     }
-    self.isScreenLockLocked = ScreenLock.sharedManager.isScreenLockOpened;
+    
+    // 只有当有活跃的倒计时且应用不在后台时才检查是否需要锁定
+    // 修复：防止在后台时调用 tryToActivateScreenLockBasedOnCountdown 导致断言失败
+    if (self.screenLockCountdownDate && !self.appIsInBackground) {
+        [self tryToActivateScreenLockBasedOnCountdown];
+    }
 
     // NOTE: this notifications fires _before_ applicationDidBecomeActive,
     // which is desirable.  Don't assume that though; call ensureUI

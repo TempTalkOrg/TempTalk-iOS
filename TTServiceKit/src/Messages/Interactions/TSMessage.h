@@ -167,6 +167,8 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:associatedUniqueThr
 
 - (void)updateCardWithCard:(DTCardMessageEntity *)newCard;
 
+- (void)removeAllAttachmentsIfNeedWithTransaction:(SDSAnyWriteTransaction *)transaction;
+
 @end
 
 NS_ASSUME_NONNULL_END

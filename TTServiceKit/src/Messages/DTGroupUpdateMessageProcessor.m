@@ -20,8 +20,6 @@
 #import "OWSDisappearingMessagesConfiguration.h"
 #import "SignalAccount.h"
 #import "Contact.h"
-#import "DTPinnedMessage.h"
-#import "DTPinnedDataSource.h"
 #import "DTGroupMeetingRecord.h"
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import "OWSDisappearingMessagesConfiguration.h"
@@ -484,7 +482,6 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                 
             }];
             
-            [[DTPinnedDataSource shared] syncPinnedMessageWithServer:groupNotifyEntity.gid];
             DTGroupBaseInfoEntity *baseInfo = [DTGroupBaseInfoEntity new];
             baseInfo.name = [newGroupThread nameWithTransaction:nil];
             baseInfo.gid = newGroupThread.serverThreadId;
@@ -945,33 +942,6 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
         
     } failure:^(NSError * _Nonnull error) {
         OWSProdError(@"personalConfig");
-    }];
-}
-
-- (void)pinMessageUpdateWithGroupNotify:(DTGroupNotifyEntity *)groupNotify
-                            transaction:(SDSAnyWriteTransaction *)transaction {
-    
-    if (!DTParamsUtils.validateArray(groupNotify.groupPins)) {
-        return;
-    }
-    NSArray <DTPinnedMessageNotifyEntity *> *notityPinnedMessages = groupNotify.groupPins;
-    [notityPinnedMessages enumerateObjectsUsingBlock:^(DTPinnedMessageNotifyEntity * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-        
-        if (obj.action == 0) {
-            //MARK: 新增pin
-            DTPinnedMessage *newPinned = [DTPinnedMessage parseBase64StringToPinnedMessage:obj groupId:groupNotify.gid transaction:transaction];
-            newPinned.pinId = obj.pinId;
-            [newPinned anyInsertWithTransaction:transaction];
-        
-            NSData *groupId = [TSGroupThread transformToLocalGroupIdWithServerGroupId:groupNotify.gid];
-            TSGroupThread *groupThread = [TSGroupThread getOrCreateThreadWithGroupId:groupId transaction:transaction];
-            [DTGroupUtils sendPinSystemMessageWithSource:obj.creator serverTimestamp:0 thread:groupThread pinnedMessage:newPinned transaction:transaction];
-            [newPinned downloadAllAttachmentWithTransaction:transaction success:nil failure:nil];
-        } else if (obj.action == 3) {
-            //MARK: 移除pin
-            DTPinnedMessage *localPinned = [DTPinnedMessage anyFetchWithUniqueId:obj.pinId transaction:transaction];
-            [localPinned removePinMessageWithTransaction:transaction];
-        }
     }];
 }
 

@@ -63,7 +63,7 @@ public class DTRatingFeedbackController: OWSViewController, PanModalPresentable 
     private lazy var messageLabel: UILabel = {
         let l = UILabel()
         l.text = Localized("CALL_RATING_STAR_DESCRIPTION", "")
-        l.textColor = Theme.secondaryTextColor
+        l.textColor = Theme.tsecondaryColor
         l.font = UIFont.systemFont(ofSize: 13)
         l.numberOfLines = 0
         l.textAlignment = .center
@@ -232,7 +232,8 @@ public class DTRatingFeedbackController: OWSViewController, PanModalPresentable 
         reasonsButtonsStack.layoutMargins = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
         reasonsButtonsStack.isLayoutMarginsRelativeArrangement = true
         
-        reasonsTableView.onSelectionChanged = { hasSelection in
+        reasonsTableView.onSelectionChanged = { [weak self] hasSelection in
+            guard let self = self else { return }
             if hasSelection {
                 self.reasonsSubmitButton.backgroundColor = UIColor.color(rgbHex: 0x056FFA)
                 self.reasonsSubmitButton.setTitleColor(.white, for: .normal)
@@ -294,20 +295,7 @@ public class DTRatingFeedbackController: OWSViewController, PanModalPresentable 
         DTMeetingManager.shared.feedbackRoomSid = nil
         DTMeetingManager.shared.feedbackRoomId = nil
         DTMeetingManager.shared.feedbackIsNetworkPoor = nil
-        
-        // 修复：确保在dismiss时屏幕方向正确，避免视图偏移
-        let currentOrientation = view.window?.windowScene?.interfaceOrientation ?? .portrait
-        let isLandscape = currentOrientation == .landscapeLeft || currentOrientation == .landscapeRight
-        
-        if isLandscape {
-            // 如果当前是横屏，先切换到竖屏再dismiss
-            UIDevice.current.ows_setOrientation(.portrait)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                self.dismiss(animated: true)
-            }
-        } else {
-            dismiss(animated: true)
-        }
+        dismiss(animated: true)
     }
 
     @objc private func cancelTapped() {

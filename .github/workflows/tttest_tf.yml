@@ -1,0 +1,121 @@
+name: TempTalkTest_tf
+
+on: 
+  issue_comment:
+    types: [created, edited]
+
+jobs:
+  parse-build-type:
+    uses: ./.github/workflows/parse-build-type.yml
+    with:
+      comment_body: ${{ github.event.comment.body }}
+      command_prefix: '/tttest_tf'
+
+  testflight:
+    # This job only runs for pull request comments
+    name: TempTalkTest_tf
+    needs: parse-build-type
+    if: ${{ github.event.issue.pull_request && contains(github.event.comment.body, '/tttest_tf') }}
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env:
+      BUILD_TYPE: ${{ needs.parse-build-type.outputs.build_type }}    
+    steps:
+      - name: Get Comment Branch
+        uses: xt0rted/pull-request-comment-branch@v3
+        id: comment-branch
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.comment-branch.outputs.head_sha }}
+
+      - name: Prepare
+        run: |
+          bundle install
+          bundle exec pod install
+
+      - name: Archive
+        id: archive      
+        env:
+          FASTLANE_SKIP_UPDATE_CHECK: 1
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD_DIGITAL }}
+          MATCH_KEYCHAIN_PASSWORD: ${{ secrets.MATCH_KEYCHAIN_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          OFFICIAL_VERSION_FLAG: ${{ secrets.OFFICIAL_VERSION_FLAG }}
+          BUILD_OUTPUT_DIR: ${{ github.workspace }}/build
+          BUILD_IPA_NAME: tttest_tf_${{ env.BUILD_TYPE }}
+          BUILD_TYPE: ${{ env.BUILD_TYPE }}
+          FASTLANE_ENV: tttest_tf
+        run: |        
+          [ -d $BUILD_OUTPUT_DIR ] && rm -rf $BUILD_OUTPUT_DIR || true
+          bundle exec fastlane ios archive \
+            output_directory:$BUILD_OUTPUT_DIR \
+            output_name:$BUILD_IPA_NAME \
+            --env $FASTLANE_ENV
+          
+          ls "$BUILD_OUTPUT_DIR"
+          ipa_path="$BUILD_OUTPUT_DIR/$BUILD_IPA_NAME.ipa"
+          [ -f "$ipa_path" ] || exit 1
+
+          echo "ipa_path=$ipa_path" >> $GITHUB_ENV
+          echo "build_configuration=$FASTLANE_ENV" >> $GITHUB_ENV
+          echo "build_ipa_name=$BUILD_IPA_NAME" >> $GITHUB_ENV
+
+      - name: Upload to AppStoreConnect
+        env:
+          IPA_PATH: ${{ env.ipa_path }}
+          APPLE_APIKEY: ${{ secrets.APPLE_DIGITAL_APIKEY }}
+          APPLE_APIISSUER: ${{ secrets.APPLE_DIGITAL_APIISSUER }}
+        run: |
+          xcrun altool --validate-app -f ${IPA_PATH} -t ios --apiKey ${APPLE_APIKEY} --apiIssuer ${APPLE_APIISSUER}
+          xcrun altool --upload-app -f ${IPA_PATH} -t ios --apiKey ${APPLE_APIKEY} --apiIssuer ${APPLE_APIISSUER}
+
+      - name: Upload to crashlytics
+        id: upload_dsym      
+        env:
+          BUILD_OUTPUT_DIR: ${{ github.workspace }}/build
+          BUILD_IPA_NAME: ${{ env.build_ipa_name }}
+          FASTLANE_ENV: ${{ env.build_configuration }}
+        run: |
+          bundle exec fastlane ios upload_dsym \
+            output_directory:$BUILD_OUTPUT_DIR \
+            output_name:$BUILD_IPA_NAME \
+            --env $FASTLANE_ENV
+          
+          ls "$BUILD_OUTPUT_DIR"
+          dsym_path="$BUILD_OUTPUT_DIR/$BUILD_IPA_NAME.app.dSYM.zip"
+          [ -f "$dsym_path" ] || exit 1
+
+      - name: Upload dSYMs to AWS S3
+        id: upload_dsym_s3
+        env:
+          BUILD_OUTPUT_DIR: ${{ github.workspace }}/build
+          BUILD_IPA_NAME: ${{ env.build_ipa_name }}
+          VERSION_NUMBER: ${{ env.VERSION_NUMBER }}
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+          DSYM_S3_PATH: ${{ vars.DSYM_S3_PATH }}
+          DSYM_S3_DOWNLOAD_PATH: ${{ vars.DSYM_S3_DOWNLOAD_PATH }}
+          S3_PROFILE: ${{ secrets.S3_PROFILE }}
+        run: |
+          bundle exec fastlane ios upload_dsym_to_s3 \
+            output_directory:$BUILD_OUTPUT_DIR \
+            output_name:$BUILD_IPA_NAME \
+            version_number:$VERSION_NUMBER \
+            build_number:$BUILD_NUMBER \
+            dsym_s3_path:$DSYM_S3_PATH \
+            dsym_s3_download_path:$DSYM_S3_DOWNLOAD_PATH \
+            s3_profile:$S3_PROFILE
+      
+      - name: Create comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            ## TempTalkTest-${{ env.VERSION_NUMBER }} build: ${{ env.BUILD_NUMBER }} [${{ env.BUILD_TYPE }}]
+            
+            **构建类型**: `${{ env.BUILD_TYPE }}`
+            
+            ${{ env.dsym_upload_status == 'success' && format('**dSYM**: [{0}]({1})', env.dsym_filename, env.dsym_download_url) || format('**dSYM**: ❌ {0} - {1}', env.dsym_filename, env.dsym_error_message) }}

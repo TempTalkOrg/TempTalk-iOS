@@ -3,7 +3,7 @@
 //
 
 #import "OWSTableViewController.h"
-#import "Theme.h"
+#import <TTMessaging/TTMessaging-Swift.h>
 #import "UIColor+OWS.h"
 #import "UIFont+OWS.h"
 #import "UIView+SignalUI.h"
@@ -109,8 +109,8 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
 {
     UIView *selectedBackgroundView = [UIView new];
     cell.selectedBackgroundView = selectedBackgroundView;
-    cell.backgroundColor = Theme.backgroundColor;
-    cell.selectedBackgroundView.backgroundColor = Theme.tableCell2SelectedBackgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
+    cell.selectedBackgroundView.backgroundColor = Theme.bg4Color;
 //    cell.multipleSelectionBackgroundView.backgroundColor = Theme.tableCell2MultiSelectedBackgroundColor;
 
     [self configureCellLabels:cell];
@@ -126,7 +126,7 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
 
 + (UITableViewCell *)newCell
 {
-    return [self newCellWithBackgroundColor:Theme.tableSettingCellBackgroundColor];
+    return [self newCellWithBackgroundColor:Theme.bg1Color];
 }
 
 + (UITableViewCell *)newCellWithBackgroundColor:(UIColor *)backgroundColor
@@ -139,7 +139,7 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
     cell.textLabel.textColor = self.textLabelTextColor;
     
     UIView *selectedBackgroundView = [UIView new];
-    selectedBackgroundView.backgroundColor = [Theme.cellSelectedColor colorWithAlphaComponent:0.9];
+    selectedBackgroundView.backgroundColor = [Theme.bg3Color colorWithAlphaComponent:0.9];
     cell.selectedBackgroundView = selectedBackgroundView;
     return cell;
 }
@@ -156,7 +156,7 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
 }
 
 + (OWSTableItem *)blankItemWithcustomRowHeight:(CGFloat)customRowHeight {
-    return [self blankItemWithcustomRowHeight:customRowHeight backgroundColor:Theme.isDarkThemeEnabled ? Theme.darkThemeBackgroundColor : [UIColor colorWithRGBHex:0xFAFAFA]];
+    return [self blankItemWithcustomRowHeight:customRowHeight backgroundColor:Theme.isDarkThemeEnabled ? [Theme.dark bg1Color] : [UIColor colorWithRGBHex:0xFAFAFA]];
 }
 
 + (OWSTableItem *)blankItemWithcustomRowHeight:(CGFloat)customRowHeight backgroundColor:(UIColor *)backgroundColor {
@@ -232,8 +232,8 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
         cell.textLabel.text = text;
         cell.textLabel.font = self.textLabelFont;
         cell.textLabel.textColor = self.textLabelTextColor;
-        cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-        cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+        cell.backgroundColor = Theme.bg1Color;
+        cell.contentView.backgroundColor = Theme.bg1Color;
         cell.detailTextLabel.text = detailText;
         cell.detailTextLabel.textColor = self.detailTextLabelTextColor;
         cell.detailTextLabel.font = self.detailTextLabelFont;
@@ -263,8 +263,8 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
         cell.textLabel.text = text;
         cell.textLabel.font = self.textLabelFont;
         cell.textLabel.textColor = self.textLabelTextColor;
-        cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-        cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+        cell.backgroundColor = Theme.bg1Color;
+        cell.contentView.backgroundColor = Theme.bg1Color;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
         
         UILabel *detailTextLabel = [UILabel new];
@@ -400,8 +400,8 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
         cell.textLabel.text = text;
         cell.textLabel.font = self.textLabelFont;
         cell.textLabel.textColor = self.textLabelTextColor;
-        cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-        cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+        cell.backgroundColor = Theme.bg1Color;
+        cell.contentView.backgroundColor = Theme.bg1Color;
         cell.detailTextLabel.text = detailText;
         cell.detailTextLabel.font = self.detailTextLabelFont;
         cell.detailTextLabel.textColor = self.detailTextLabelTextColor;
@@ -565,7 +565,7 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
 
         UILabel *accessoryLabel = [UILabel new];
         accessoryLabel.text = accessoryText;
-        accessoryLabel.textColor = Theme.secondaryTextAndIconColor;
+        accessoryLabel.textColor = Theme.tsecondaryColor;
         accessoryLabel.font = self.textLabelFont;
         accessoryLabel.textAlignment = NSTextAlignmentRight;
         [accessoryLabel sizeToFit];
@@ -681,8 +681,8 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
     if (_customCellBlock) {
         UITableViewCell* cell = _customCellBlock();
         
-//        cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-//        cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+//        cell.backgroundColor = Theme.bg1Color;
+//        cell.contentView.backgroundColor = Theme.bg1Color;
         
         return cell;
     }
@@ -702,7 +702,7 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
 }
 
 + (UIColor *)textLabelTextColor {
-    return Theme.primaryTextColor;
+    return Theme.tprimaryColor;
 }
 
 + (UIFont *)detailTextLabelFont {
@@ -710,7 +710,7 @@ const CGFloat kOWSTable_DefaultCellHeight = 52.f;
 }
 
 + (UIColor *)detailTextLabelTextColor {
-    return Theme.ternaryTextColor;
+    return Theme.tthirdColor;
 }
 
 @end
@@ -788,9 +788,9 @@ NSString *const kOWSTableCellIdentifier = @"kOWSTableCellIdentifier";
     [self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:kOWSTableCellIdentifier];
 
 //    [self applyTheme];
-    self.view.backgroundColor = Theme.backgroundColor;
-    self.tableView.backgroundColor = Theme.isDarkThemeEnabled ? Theme.darkThemeBackgroundColor : [UIColor colorWithRGBHex:0xFAFAFA];
-    self.tableView.separatorColor = Theme.cellSeparatorColor;
+    self.view.backgroundColor = Theme.bg1Color;
+    self.tableView.backgroundColor = Theme.isDarkThemeEnabled ? [Theme.dark bg1Color] : [UIColor colorWithRGBHex:0xFAFAFA];
+    self.tableView.separatorColor = Theme.dividerColor;
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -862,12 +862,12 @@ NSString *const kOWSTableCellIdentifier = @"kOWSTableCellIdentifier";
 - (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section
 {
     // Background color
-    view.tintColor = Theme.secondaryBackgroundColor;
+    view.tintColor = Theme.bg2Color;
     
     if([view isKindOfClass:[UITableViewHeaderFooterView class]]) {
         // Text Color
         UITableViewHeaderFooterView *header = (UITableViewHeaderFooterView *)view;
-        [header.textLabel setTextColor:Theme.primaryTextColor];
+        [header.textLabel setTextColor:Theme.tprimaryColor];
    }
 }
 
@@ -1158,9 +1158,9 @@ NSString *const kOWSTableCellIdentifier = @"kOWSTableCellIdentifier";
     [super applyTheme];
     [self.tableView reloadData];
 
-    self.view.backgroundColor = Theme.backgroundColor;
-    self.tableView.backgroundColor = Theme.isDarkThemeEnabled ? Theme.darkThemeBackgroundColor : [UIColor colorWithRGBHex:0xFAFAFA];
-    self.tableView.separatorColor = Theme.cellSeparatorColor;
+    self.view.backgroundColor = Theme.bg1Color;
+    self.tableView.backgroundColor = Theme.isDarkThemeEnabled ? [Theme.dark bg1Color] : [UIColor colorWithRGBHex:0xFAFAFA];
+    self.tableView.separatorColor = Theme.dividerColor;
 }
 
 -(BOOL)hidesBottomBarWhenPushed
@@ -1186,13 +1186,13 @@ NSString *const kOWSTableCellIdentifier = @"kOWSTableCellIdentifier";
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     cell.preservesSuperviewLayoutMargins = YES;
     cell.contentView.preservesSuperviewLayoutMargins = YES;
-    cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-    cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
+    cell.contentView.backgroundColor = Theme.bg1Color;
     cell.separatorInset = UIEdgeInsetsMake(0, 50, 0, 0);
     
     UILabel *rowLabel = [UILabel new];
     rowLabel.text = name;
-    rowLabel.textColor = Theme.primaryTextColor;
+    rowLabel.textColor = Theme.tprimaryColor;
     rowLabel.font = [UIFont systemFontOfSize:16];
     rowLabel.lineBreakMode = NSLineBreakByTruncatingTail;
     rowLabel.numberOfLines = 0;

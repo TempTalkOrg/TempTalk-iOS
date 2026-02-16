@@ -71,6 +71,13 @@ extern NSString *const kLoadedContactsKey;
 - (BOOL)hasNameInSystemContactsForRecipientId:(NSString *)recipientId;
 //获取名字
 - (NSString *)displayNameForPhoneIdentifier:(nullable NSString *)identifier;
+- (NSString *)displayNameForPhoneIdentifier:(nullable NSString *)identifier
+                                transaction:(SDSAnyReadTransaction *)transaction;
+- (NSString *)displayNameForPhoneIdentifier:(nullable NSString *)identifier
+                              signalAccount:(SignalAccount *)signalAccount;
+- (NSString *)displayNameForPhoneIdentifier:(nullable NSString *)identifier
+                              signalAccount:(SignalAccount *)signalAccount
+                                transaction:(SDSAnyReadTransaction *)transaction NS_SWIFT_NAME(displayName(forPhoneIdentifier:signalAccount:transaction:));
 - (NSString *)displayNameForSignalAccount:(SignalAccount *)signalAccount;
 
 //跳过 remark name，仅返回原始name或number
@@ -97,6 +104,8 @@ extern NSString *const kLoadedContactsKey;
  * Used for sorting, respects system contacts name sort order preference.
  */
 - (NSString *)comparableNameForSignalAccount:(SignalAccount *)signalAccount;
+- (NSString *)comparableNameForSignalAccount:(SignalAccount *)signalAccount
+                                 transaction:(SDSAnyReadTransaction *)transaction;
 
 // Generally we prefer the formattedProfileName over the raw profileName so as to
 // distinguish a profile name apart from a name pulled from the system's contacts.
@@ -105,12 +114,20 @@ extern NSString *const kLoadedContactsKey;
 - (nullable NSString *)profileNameForRecipientId:(NSString *)recipientId transaction:(SDSAnyReadTransaction *)transaction;
 - (nullable NSString *)nameFromSystemContactsForRecipientId:(NSString *)recipientId;
 
+/**
+ * Get the contact's nickname (full name) for avatar generation, excluding remark name.
+ * This method is specifically designed for avatar generation to ensure avatars are based on
+ * the user's actual nickname rather than custom remark names.
+ */
+- (nullable NSString *)nicknameForAvatarWithRecipientId:(NSString *)recipientId;
+
 //- (nullable UIImage *)profileImageForPhoneIdentifier:(nullable NSString *)identifier;
 - (nullable NSData *)profileImageDataForPhoneIdentifier:(nullable NSString *)identifier;
 
 - (NSAttributedString *)formattedDisplayNameForSignalAccount:(SignalAccount *)signalAccount font:(UIFont *)font;
 - (NSAttributedString *)formattedFullNameForRecipientId:(NSString *)recipientId font:(UIFont *)font;
 - (NSString *_Nullable)formattedFullNameForRecipientId:(NSString *)recipientId;
+- (NSString *_Nullable)formattedFullNameForRecipientId:(NSString *)recipientId transaction:(SDSAnyReadTransaction *)transaction;
 
 - (NSString *)contactOrProfileNameForPhoneIdentifier:(NSString *)recipientId;
 - (NSString *)contactOrProfileNameForPhoneIdentifier:(NSString *)recipientId transaction:(SDSAnyReadTransaction *)transaction;

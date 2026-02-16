@@ -7,10 +7,10 @@
 
 # Git repository URL for storing certificates and provisioning profiles
 # Replace with your certificates repository URL
-git_url("https://github.com/YOUR_ORG/iOS-certificates.git")
+git_url("https://github.com/difftim/iOS-certificates.git")
 
 storage_mode("git")
-# git_branch('main') # Optional: specify git branch
+git_branch('digital') # Optional: specify git branch
 
 # Certificate types: appstore, adhoc, enterprise, development
 # type(ENV["MATCH_TYPE"]) # Use environment variable

@@ -23,7 +23,7 @@ class DTGroupInCommonController: OWSViewController {
     
     lazy var tableView: UITableView = {
         let tableView = UITableView(frame: .zero, style: .plain)
-        tableView.backgroundColor = Theme.backgroundColor
+        tableView.backgroundColor = Theme.bg1Color
         tableView.delegate = self
         tableView.dataSource = self
         tableView.estimatedRowHeight = 0
@@ -47,7 +47,7 @@ class DTGroupInCommonController: OWSViewController {
     override func applyTheme() {
         super.applyTheme()
         updateTableContents()
-        tableView.backgroundColor = Theme.backgroundColor
+        tableView.backgroundColor = Theme.bg1Color
     }
 
     override func viewDidLoad() {
@@ -109,7 +109,7 @@ extension DTGroupInCommonController: UITableViewDelegate, UITableViewDataSource 
         
         guard !filteredResultGroups.isEmpty else {
             let cell = tableView.dequeueReusableCell(withIdentifier: EmptySearchResultCell.reuseIdentifier, for: indexPath) as! EmptySearchResultCell
-            cell.messageLabel.textColor = Theme.primaryTextColor
+            cell.messageLabel.textColor = Theme.tprimaryColor
             cell.configure(searchState: .noResults)
             
             return cell
@@ -130,12 +130,6 @@ extension DTGroupInCommonController: UITableViewDelegate, UITableViewDataSource 
             let conversationVC = ConversationViewController(thread: groupThread, action: .none)
             guard let self else { return }
             self.navigationController?.pushViewController(conversationVC, animated: true)
-//            guard let navigationController = self.navigationController as? OWSNavigationController else {
-//                return
-//            }
-//            navigationController.pushViewController(conversationVC, animated: true, completion: {
-//                navigationController.remove(toViewController: "DTHomeViewController")
-//            })
         }
     }
     

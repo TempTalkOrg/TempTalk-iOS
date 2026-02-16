@@ -25,14 +25,14 @@ public class DTMeetingActionSheet: OWSViewController {
     public var startOrJoinMeetingBlock: ( () -> Void )?
     
     private let maxAvatarCount = 4
-    
+
     private let contentView = UIView()
     private let stackView = UIStackView()
-    private weak var lbTitle: UILabel!
-    private weak var lbMessage: UILabel!
-    private weak var loading: UIActivityIndicatorView!
-    private weak var btnStart: UIButton!
-    
+    private weak var lbTitle: UILabel?
+    private weak var lbMessage: UILabel?
+    private weak var loading: UIActivityIndicatorView?
+    private weak var btnStart: UIButton?
+
     private var joinType = JoinMeetingType.join
 
     var height: CGFloat {
@@ -48,28 +48,28 @@ public class DTMeetingActionSheet: OWSViewController {
     }
 
     @objc
-    public convenience init(title: String? = nil, 
+    public convenience init(title: String? = nil,
                             message: String? = nil,
                             channelName: String?,
                             joinType: JoinMeetingType = .join,
                             isLiveStream: Bool = false) {
         self.init()
-        
+
         self.joinType = joinType
         createHeader()
         createButtons(joinType: joinType)
-        lbTitle.text = title
+        lbTitle?.text = title
 
         switch joinType {
         case .start:
-            loading.isHidden = true
-            lbMessage.text = DTMeetingActionSheet.startMessage
+            loading?.isHidden = true
+            lbMessage?.text = DTMeetingActionSheet.startMessage
         case .join:
             joinMeeting(channelName: channelName,
                         title: title,
                         isLiveStream: isLiveStream)
         case .checkMembers:
-            checkMembers(channelName: channelName, 
+            checkMembers(channelName: channelName,
                          title: title,
                          isLiveStream: isLiveStream)
         }
@@ -95,24 +95,29 @@ public class DTMeetingActionSheet: OWSViewController {
         }
         
         DTCallManager.sharedInstance().getMeetingOnlineStatus(byChannelName: channelName) { object in
-    
-            let responseObject = object as! [String : Any]
-            let status = (responseObject["status"] as! NSNumber).intValue
+
+            guard let responseObject = object as? [String : Any],
+                  let status = (responseObject["status"] as? NSNumber)?.intValue else {
+                Logger.error("[join meeting] invalid response")
+                self.loadingStop()
+                return
+            }
+
             if (status != 0) {
                 Logger.error("[join meeting] error status: \(status)")
                 self.loadingStop()
                 return
             }
             guard let data = responseObject["data"] as? [String : Any], let members = data["users"] as? [String] else {
-                self.lbMessage.text = self.messageOfMeetingMember(members: [])
-                self.lbMessage.isHidden = false
+                self.lbMessage?.text = self.messageOfMeetingMember(members: [])
+                self.lbMessage?.isHidden = false
                 return
             }
-            
+
             if let name = data["name"] as? String, !name.isEmpty, name != title, !isLiveStream {
-                self.lbTitle.text = name
+                self.lbTitle?.text = name
             }
-            
+
             var removeDuplicatesMembers = [String]()
             //MARK: 刚退会未收到自己退出消息，点击bar请求会议状态成员数组会包含自己
             members.forEach { account in
@@ -138,18 +143,23 @@ public class DTMeetingActionSheet: OWSViewController {
     func checkMembers(channelName: String?,
                       title: String?,
                       isLiveStream: Bool) {
-        lbTitle.text = title
-        lbMessage.text = DTMeetingActionSheet.startMessage
-        
+        lbTitle?.text = title
+        lbMessage?.text = DTMeetingActionSheet.startMessage
+
         guard let channelName = channelName else {
             self.loadingStop()
             Logger.error("[check Members] without channelName")
             return
         }
-        
+
         DTCallManager.sharedInstance().getMeetingOnlineStatus(byChannelName: channelName) { object in
-            let responseObject = object as! [String : Any]
-            let status = (responseObject["status"] as! NSNumber).intValue
+            guard let responseObject = object as? [String : Any],
+                  let status = (responseObject["status"] as? NSNumber)?.intValue else {
+                Logger.error("[check Members] invalid response")
+                self.loadingStop()
+                return
+            }
+
             if (status != 0) {
                 Logger.error("[check Members] error status: \(status)")
                 self.loadingStop()
@@ -160,11 +170,11 @@ public class DTMeetingActionSheet: OWSViewController {
                 self.loadingStop()
                 return
             }
-            
+
             if let name = data["name"] as? String, !name.isEmpty, name != title, !isLiveStream {
-                self.lbTitle.text = name
+                self.lbTitle?.text = name
             }
-            
+
             if let currentGroupMeetingMembers = data["users"] as? [String], !currentGroupMeetingMembers.isEmpty {
                 var removeDuplicatesMembers = [String]()
                 currentGroupMeetingMembers.forEach { account in
@@ -299,8 +309,9 @@ public class DTMeetingActionSheet: OWSViewController {
 //        if btnStart.frame.contains(point) {
 //            return
 //        }
-        
-        let translationY = sender.translation(in: sender.view!).y
+
+        guard let senderView = sender.view else { return }
+        let translationY = sender.translation(in: senderView).y
 
         switch sender.state {
         case .began:
@@ -359,18 +370,18 @@ public class DTMeetingActionSheet: OWSViewController {
         headerStack.addArrangedSubview(messageLabel)
         
         // Loading
-        let loading: UIActivityIndicatorView!
+        let loadingView: UIActivityIndicatorView
         if #available(iOSApplicationExtension 13.0, *) {
-            loading = UIActivityIndicatorView(style: .medium)
+            loadingView = UIActivityIndicatorView(style: .medium)
         } else {
-            loading = UIActivityIndicatorView(style: .gray)
+            loadingView = UIActivityIndicatorView(style: .gray)
         }
-        self.loading = loading
-        loading.hidesWhenStopped = true
-        loading.tintColor = Theme.tabbarTitleNormalColor
-        loading.autoSetDimension(.height, toSize: 81)
-        loading.startAnimating()
-        headerStack.addArrangedSubview(loading)
+        self.loading = loadingView
+        loadingView.hidesWhenStopped = true
+        loadingView.tintColor = Theme.tabbarTitleNormalColor
+        loadingView.autoSetDimension(.height, toSize: 81)
+        loadingView.startAnimating()
+        headerStack.addArrangedSubview(loadingView)
     }
         
     func createMembersView(members: [String]?) {
@@ -489,17 +500,17 @@ public class DTMeetingActionSheet: OWSViewController {
     }
     
     func createButtons(joinType: JoinMeetingType) {
-        
+
         let spacer = UIView()
         spacer.autoSetDimension(.height, toSize: 32)
-        
+
         let btnStart = UIButton(type: .custom)
         self.btnStart = btnStart
         btnStart.backgroundColor = UIColor.ows_themeBlue
-        btnStart.titleLabel!.font = UIFont.systemFont(ofSize: 15)
+        btnStart.titleLabel?.font = UIFont.systemFont(ofSize: 15)
         btnStart.setTitleColor(.white, for: .normal)
         btnStart.setTitleColor(.white, for: .highlighted)
-        var btnTitle: String!
+        let btnTitle: String
         switch joinType {
         case .start, .checkMembers: btnTitle = DTMeetingActionSheet.startTitle
         case .join: btnTitle = DTMeetingActionSheet.joinTitle
@@ -527,14 +538,16 @@ public class DTMeetingActionSheet: OWSViewController {
     }
     
     func updateButtonTitle(newTitle: String) {
-        btnStart.setTitle(newTitle, for: .normal)
-        btnStart.setTitle(newTitle, for: .highlighted)
+        btnStart?.setTitle(newTitle, for: .normal)
+        btnStart?.setTitle(newTitle, for: .highlighted)
     }
-        
+
     func messageOfMeetingMember(members: [String]) -> String {
-        
+
         let readyToJoin = "Ready to join?"
-        let contactsManager = Environment.shared.contactsManager!
+        guard let contactsManager = Environment.shared.contactsManager else {
+            return "No one else is here, " + readyToJoin
+        }
         if (members.isEmpty) {
             return "No one else is here, " + readyToJoin
         }
@@ -564,9 +577,11 @@ public class DTMeetingActionSheet: OWSViewController {
     }
     
     func messageOfInOtherMeetingMember(members: [String]) -> String {
-        
+
         let inAnotherMeeting = "in another meeting."
-        let contactsManager = Environment.shared.contactsManager!
+        guard let contactsManager = Environment.shared.contactsManager else {
+            return ""
+        }
         let displayCount = min(members.count, 4)
         var pureNames = [String]()
         for i in 0..<displayCount {
@@ -588,7 +603,7 @@ public class DTMeetingActionSheet: OWSViewController {
         
     func loadingStop() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            self.loading.stopAnimating()
+            self.loading?.stopAnimating()
         }
     }
 

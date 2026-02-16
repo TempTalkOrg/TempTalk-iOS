@@ -518,6 +518,10 @@ const InfoMessageUserInfoKey InfoMessageUserInfoKeyChangePhoneNumberNew = @"Info
         case TSInfoMessageArchiveMessage: {
             return _customMessage;
         }
+        case TSInfoMessageConfidentialViewed: {
+            // Check current language
+            return Localized(@"CONVERSATION_CONFIDENTIAL_INFO_MESSAGE", @"");
+        }
         default:
             break;
     }
@@ -573,19 +577,6 @@ const InfoMessageUserInfoKey InfoMessageUserInfoKeyChangePhoneNumberNew = @"Info
         [thread anyUpdateWithTransaction:transaction block:^(TSThread * _Nonnull t) {
             [t unarchiveThread];
         }];
-    }
-    
-    if([self.recall checkIntegrity]){
-        DTRealSourceEntity *realSource = self.recall.source;
-        OWSRecall *recall = [[OWSRecall alloc] initWithTimestamp:self.timestamp
-                                                    sourceDevice:self.sourceDeviceId
-                                                          source:self.authorId
-                                               originalTimestamp:realSource.timestamp
-                                            originalSourceDevice:realSource.sourceDevice
-                                                  originalSource:realSource.source
-                                                originalUniqueId:self.uniqueId
-                                                        editable:self.editable];
-        [recall anyInsertWithTransaction:transaction];
     }
 }
 

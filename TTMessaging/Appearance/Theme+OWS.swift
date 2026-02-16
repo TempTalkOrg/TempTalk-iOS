@@ -452,36 +452,15 @@ extension Theme {
 
         public var headerTitleColor: UIColor {
             switch self {
-            case .default: return Theme.primaryTextColor
-            case .translucentDark: return Theme.darkThemePrimaryColor
-            }
-        }
-
-        public var headerMessageColor: UIColor {
-            switch self {
-            case .default: return Theme.primaryTextColor
-            case .translucentDark: return Theme.darkThemeSecondaryTextAndIconColor
+            case .default: return Theme.tprimaryColor
+            case .translucentDark: return Theme.dark.tprimaryColor
             }
         }
 
         public var buttonTextColor: UIColor {
             switch self {
-            case .default: return Theme.primaryTextColor
-            case .translucentDark: return Theme.darkThemePrimaryColor
-            }
-        }
-
-        public var safetyNumberChangeButtonBackgroundColor: UIColor {
-            switch self {
-            case .default: return Theme.conversationButtonBackgroundColor
-            case .translucentDark: return .ows_gray75
-            }
-        }
-
-        public var safetyNumberChangeButtonTextColor: UIColor {
-            switch self {
-            case .default: return Theme.conversationButtonTextColor
-            case .translucentDark: return .ows_accentBlueDark
+            case .default: return Theme.tprimaryColor
+            case .translucentDark: return Theme.dark.tprimaryColor
             }
         }
 
@@ -491,7 +470,7 @@ extension Theme {
 
         public var buttonHighlightColor: UIColor {
             switch self {
-            case .default: return Theme.cellSelectedColor
+            case .default: return Theme.bg3Color
             case .translucentDark: return .ows_whiteAlpha20
             }
         }

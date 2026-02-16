@@ -142,14 +142,18 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
         let contentHeight = max(iconSize, labelsHeight)
         let vMargin: CGFloat = 0
         var height = contentHeight + vMargin * 2
-        
+
         if let attachmentStream = viewItem.attachmentStream() {
             if attachmentStream.isAudio() && !attachmentStream.isVoiceMessage() {
                 height += audioAttachmentFileNameHeight
             }
         }
-        
-        return .init(width: maxMessageWidth, height: height)
+
+        // 使用屏幕宽度的60%作为音频消息的宽度
+        let screenWidth = UIScreen.main.bounds.size.width
+        let audioWidth = screenWidth * 0.6
+
+        return .init(width: audioWidth, height: height)
     }
     
     private func measureSizeForGenericAttachment(minMessageWidth: CGFloat) -> CGSize {

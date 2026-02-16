@@ -23,6 +23,49 @@ extension ConversationViewController {
             viewState.audioPlayer = newValue
         }
     }
+
+    // 音频播放速度：1.0, 1.5, 2.0
+    // 第一次使用全局设置，之后使用本地变量
+    var audioPlaybackRate: Float {
+        get {
+            // 如果本地变量为 nil，从全局设置读取并缓存
+            if viewState.currentAudioPlaybackRate == nil {
+                viewState.currentAudioPlaybackRate = MediaSavePolicyManager.shared.getPlaybackSpeed()
+            }
+            return viewState.currentAudioPlaybackRate ?? 1.0
+        }
+        set {
+            // 更新本地变量（不保存到全局设置）
+            viewState.currentAudioPlaybackRate = newValue
+            // 如果当前有正在播放的音频，更新其播放速度
+            if let audioPlayer = audioPlayer {
+                audioPlayer.setPlaybackRate(newValue)
+            }
+        }
+    }
+
+    // 切换播放速度：1.0 -> 1.5 -> 2.0 -> 1.0
+    @objc func toggleAudioPlaybackRate() {
+        let currentRate = audioPlaybackRate
+        let newRate: Float
+        if currentRate == 1.0 {
+            newRate = 1.5
+        } else if currentRate == 1.5 {
+            newRate = 2.0
+        } else {
+            newRate = 1.0
+        }
+        audioPlaybackRate = newRate
+
+        // 刷新所有音频 cell 的按钮显示
+        collectionView.visibleCells.forEach { cell in
+            if let outgoingCell = cell as? ConversationOutgoingMessageCell {
+                outgoingCell.refreshAudioControlButton()
+            } else if let incomingCell = cell as? ConversationIncomingMessageCell {
+                incomingCell.refreshAudioControlButton()
+            }
+        }
+    }
     
     func resumeAudioPlayer(viewItem: ConversationViewItem, attachmentStream: TSAttachmentStream) {
         playOrPauseAudioPlayer(viewItem: viewItem, attachmentStream: attachmentStream)
@@ -35,13 +78,13 @@ extension ConversationViewController {
     
     private func playOrPauseAudioPlayer(viewItem: ConversationViewItem, attachmentStream: TSAttachmentStream) {
         AssertIsOnMainThread()
-        
+
         // 选中的音频就是当前播放器正在使用的
         if let audioPlayer, let owner = audioPlayer.owner as? String, owner == viewItem.interaction.uniqueId {
             audioPlayer.togglePlayState()
             return
         }
-        
+
         // 第一次播放，或者当前选中音频和播放器正在使用的不同
         let filePath = attachmentStream.filePath()
         guard let filePath, FileManager.default.fileExists(atPath: filePath) else {
@@ -57,6 +100,8 @@ extension ConversationViewController {
         audioPlayer = OWSAudioPlayer(mediaUrl: mediaURL, delegate: viewItem)
         // Associate the player with this media adapter.
         audioPlayer?.owner = viewItem.interaction.uniqueId as AnyObject
+        // 设置播放速度
+        audioPlayer?.setPlaybackRate(audioPlaybackRate)
         audioPlayer?.playWithPlaybackAudioCategory()
     }
 }
@@ -184,14 +229,18 @@ extension ConversationViewController {
         if durationSeconds < kMinimumRecordingTimeSeconds {
             Logger.info("Discarding voice message too short.")
             self.audioRecorder = nil
-            
+
+            // 尝试收起键盘，如果保护启用会被拦截
             dismissKeyBoard()
-            
+            if viewState.isKeyboardProtectionEnabled {
+                Logger.info("[Keyboard] Voice message too short, keyboard protected and not dismissed")
+            }
+
             OWSActionSheets.showActionSheet(
                 title: Localized("VOICE_MESSAGE_TOO_SHORT_ALERT_TITLE"),
                 message: Localized("VOICE_MESSAGE_TOO_SHORT_ALERT_MESSAGE")
             )
-            
+
             return
         }
         

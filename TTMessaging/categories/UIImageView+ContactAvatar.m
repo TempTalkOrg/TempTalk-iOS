@@ -53,8 +53,8 @@ static void * loadKeyPropertyKey = &loadKeyPropertyKey;
                       recipientId:(NSString * _Nullable)recipientId
                       transaction:(SDSAnyReadTransaction *)transaction
                        completion:(void (^ __nullable)(UIImage *))completion {
-    NSString *displayName = [self.contactsManager displayNameForPhoneIdentifier:recipientId transaction:transaction];
-    
+    NSString *displayName = [self.contactsManager rawDisplayNameForPhoneIdentifier:recipientId transaction:transaction];
+
     [self setImageWithContactAvatar:avatar recipientId:recipientId displayName:displayName asyncMaxSize:self.defaultAsyncMaxSize completion:completion];
 }
 

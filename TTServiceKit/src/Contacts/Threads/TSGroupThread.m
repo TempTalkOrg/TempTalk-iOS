@@ -237,6 +237,14 @@ static NSString *const kDTOldToNewGroupIdPrefix = @"WEEK";
         *generate = YES;
         thread = [[self alloc] initWithGroupId:groupId
                                    transaction:transaction];
+
+        // 设置默认过期时间
+        if (thread.expiresInSeconds == 0) {
+            uint32_t defaultExpiry = [thread messageExpiresInSecondsWithTransaction:transaction];
+            thread.expiresInSeconds = defaultExpiry;
+            OWSLogInfo(@"[Thread] set default expiresInSeconds=%u for new group thread: %@", defaultExpiry, thread.uniqueId);
+        }
+
         [thread anyInsertWithTransaction:transaction];
     }
     return thread;
@@ -247,10 +255,18 @@ static NSString *const kDTOldToNewGroupIdPrefix = @"WEEK";
     OWSAssertDebug(groupModel);
     OWSAssertDebug(groupModel.groupId.length > 0);
     OWSAssertDebug(transaction);
-    
+
     TSGroupThread *thread = [self threadWithGroupId:groupModel.groupId transaction:transaction];
     if (!thread) {
         thread = [[TSGroupThread alloc] initWithGroupModel:groupModel];
+
+        // 设置默认过期时间
+        if (thread.expiresInSeconds == 0) {
+            uint32_t defaultExpiry = [thread messageExpiresInSecondsWithTransaction:transaction];
+            thread.expiresInSeconds = defaultExpiry;
+            OWSLogInfo(@"[Thread] set default expiresInSeconds=%u for new group thread: %@", defaultExpiry, thread.uniqueId);
+        }
+
         [thread anyInsertWithTransaction:transaction];
     }
     return thread;

@@ -53,6 +53,12 @@ class DTBulletChatView: UIView {
         super.init(frame: frame)
         addSubview(tableView)
         tableView.autoPinEdgesToSuperviewEdges()
+        Logger.info("[BulletChat] DTBulletChatView init with frame: \(frame)")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        Logger.info("[BulletChat] DTBulletChatView layoutSubviews - frame: \(frame), bounds: \(bounds), tableView.frame: \(tableView.frame)")
     }
     
     required public init?(coder: NSCoder) {
@@ -62,16 +68,23 @@ class DTBulletChatView: UIView {
     @objc
     func insertBulletChat(_ chatModel: DTBulletChatModel) {
         guard BulletMessageType(rawValue: chatModel.type) != nil else {
+            Logger.info("[BulletChat] DTBulletChatView insertBulletChat - invalid type: \(chatModel.type)")
             return
         }
-        
+
+        Logger.info("[BulletChat] DTBulletChatView insertBulletChat - type: \(chatModel.type), text: \(chatModel.text), bounds: \(bounds.size), frame: \(frame)")
+
+        // 使用复合键（时间戳 + ID）进行去重，避免快速发送消息时的时间戳冲突
+        let messageKey = "\(chatModel.timestamp)_\(chatModel.id)"
         var isDupli = false
+
         if (origionMsgs.count >= 50) {
             origionMsgs.removeLast()
         }
-            
+
         for origionMsg in origionMsgs {
-            if origionMsg.timestamp == chatModel.timestamp {
+            let existingKey = "\(origionMsg.timestamp)_\(origionMsg.id)"
+            if existingKey == messageKey {
                 isDupli = true
                 break
             }
@@ -79,30 +92,39 @@ class DTBulletChatView: UIView {
         if !isDupli  {
             origionMsgs.append(chatModel)
         }
-        
+
         if (displayMsgs.count >= 5) {
             displayMsgs.removeLast()
         }
-        
-        guard !isDupli else { return }
-        
+
+        guard !isDupli else {
+            Logger.info("[BulletChat] DTBulletChatView insertBulletChat - duplicate message, skipping")
+            return
+        }
+
         if displayMsgs.isEmpty {
             displayMsgs.append(chatModel)
         } else {
             displayMsgs.insert(chatModel, at: 0)
         }
-        
+
+        Logger.info("[BulletChat] DTBulletChatView insertBulletChat - added to displayMsgs, count: \(displayMsgs.count)")
+
         reloadData()
         let disappearDuration = DispatchTimeInterval.seconds(DTMeetingManager.shared.autoHideTimeoutDuration())
         DispatchQueue.main.asyncAfter(deadline: .now() + disappearDuration) { [weak self] in
             guard let self else { return }
-            
+
             if (displayMsgs.contains(chatModel)) {
-                displayMsgs.removeAll { $0.timestamp == chatModel.timestamp }
+                let targetKey = "\(chatModel.timestamp)_\(chatModel.id)"
+                displayMsgs.removeAll { msg in
+                    let msgKey = "\(msg.timestamp)_\(msg.id)"
+                    return msgKey == targetKey
+                }
             }
             reloadData()
         }
-        
+
     }
     
     func reloadData() {
@@ -157,9 +179,9 @@ class DTBulletChatCell: UITableViewCell {
             case .join:
                 attributeMessage = NSAttributedString(string: "joined")
             case .mic_on:
-                attributeMessage = NSAttributedString(string: "turned ON mic 🙋🙋🙋")
+                attributeMessage = NSAttributedString(string: "mic ON 🙋🙋🙋")
             case .mic_off:
-                attributeMessage = NSAttributedString(string: "turned OFF mic 🔕")
+                attributeMessage = NSAttributedString(string: "mic OFF 🔕")
             case .mute_other:
                 attributeMessage = NSAttributedString(string: "muted you 🔕")
             case .start_screen:
@@ -245,7 +267,7 @@ class DTBulletChatCell: UITableViewCell {
         lbPrimary.textColor = .white
         lbPrimary.lineBreakMode = .byWordWrapping
         lbPrimary.numberOfLines = 2
-        lbPrimary.font = .systemFont(ofSize: 18, weight: .medium)
+        lbPrimary.font = .systemFont(ofSize: 16, weight: .regular)
         containerView.addSubview(lbPrimary)
         
         containerView.autoPinEdge(toSuperviewEdge: .top)

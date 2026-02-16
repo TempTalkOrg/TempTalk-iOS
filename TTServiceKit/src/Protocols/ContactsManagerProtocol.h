@@ -32,6 +32,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (nullable NSString *)displayNameForPhoneIdentifier:(NSString *_Nullable)recipientId
                                       signalAccount:(SignalAccount *)signalAccount;
+- (nullable NSString *)displayNameForPhoneIdentifier:(NSString *_Nullable)recipientId
+                                      signalAccount:(SignalAccount *)signalAccount
+                                        transaction:(SDSAnyReadTransaction *)transaction NS_SWIFT_NAME(displayName(forPhoneIdentifier:signalAccount:transaction:));
 - (nullable NSString *)signatureForPhoneIdentifier:(NSString *_Nullable)phoneNumber
                                        transaction:(SDSAnyReadTransaction *)transaction;
 
@@ -53,6 +56,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSComparisonResult)compareSignalAccount:(SignalAccount *)left
                          withSignalAccount:(SignalAccount *)right NS_SWIFT_NAME(compare(signalAccount:with:));
+
+- (NSComparisonResult)compareSignalAccount:(SignalAccount *)left
+                         withSignalAccount:(SignalAccount *)right
+                               transaction:(SDSAnyReadTransaction *)transaction NS_SWIFT_NAME(compare(signalAccount:with:transaction:));
 
 // the avatar image for current logged in user.
 - (nullable UIImage *)localProfileAvatarImage;

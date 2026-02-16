@@ -143,7 +143,7 @@ NS_ASSUME_NONNULL_BEGIN
     self.layer.cornerRadius = 8.0;
     self.layer.borderColor = lineColor.CGColor;
     self.layer.borderWidth = (1.0 / [UIScreen mainScreen].scale);
-    self.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x181A20] : [UIColor colorWithRGBHex:0xFFFFFF];
+    self.backgroundColor = Theme.bg1Color;
 
     UIColor *textColor = [self.conversationStyle bubbleTextColorWithIsIncoming:self.isIncoming];
 

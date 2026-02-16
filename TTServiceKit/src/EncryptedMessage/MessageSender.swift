@@ -88,8 +88,11 @@ extension MessageSender {
         if DTMessageConfig.fetch().tunnelSecurityEnabled || recipient.recipientId().count <= 6 {
             legacyData = plainText
         }
-        
-        let result = try DTMessageParamsBuilder().buildParams(with: message, to: thread, recipient: recipient, messageType: .encryptedMessageType, serializedData: serializedData, legacySerializedData: legacyData, recipientPeerContexts: ermkeys)
+
+        // Generate sync content for non-sync messages
+        let syncContent: Data? = try await generateSyncContent(for: message, attempts: attempts)
+
+        let result = try DTMessageParamsBuilder().buildParams(with: message, to: thread, recipient: recipient, messageType: .encryptedMessageType, serializedData: serializedData, legacySerializedData: legacyData, recipientPeerContexts: ermkeys, syncContent: syncContent)
         
         guard let messageParams = result as? [String: Any] else {
             let errorString = "messageParams convert error."
@@ -97,7 +100,7 @@ extension MessageSender {
             throw OWSAssertionError(errorString)
         }
         
-        let request = TSRequest(url: URL(string: "/v3/messages/\(recipient.recipientId())")!, method: "PUT", parameters: messageParams)
+        let request = TSRequest(url: URL(string: "/v4/messages/\(recipient.recipientId())")!, method: "PUT", parameters: messageParams)
                 
         var responseObject: Any?
         var responseError: Error?
@@ -178,12 +181,6 @@ extension MessageSender {
             self.databaseStorage.write { wTransaction in
                 message.updateWithAllRecipientsMarkedAsSent(with: serverReceipts, transaction: wTransaction)
             }
-            if serverReceipts.needsSync {
-                try await handleEncryptedMessageSentLocally(message: message,
-                                                            toNote: false,
-                                                            attempts: MessageSender.senderRetryAttempts) {
-                }
-            }
             
             completion()
             return
@@ -212,15 +209,25 @@ extension MessageSender {
                           attempts: Int,
                           completion: @escaping () -> Void) async throws -> Void {
         let recipient = SignalRecipient.init(textSecureIdentifier: "-1", relay: "")
-        
-        let (plainText, serializedData, ermkeys) = try await getSerializedData(message: message, identifiers: message.recipientIds(), recipient: recipient, encryptionType: .group, attempts: attempts)
+
+        // Get self recipient ID and add to identifiers
+        var identifiers = message.recipientIds()
+        var selfRecipient: SignalRecipient?
+        databaseStorage.read { transaction in
+            selfRecipient = SignalRecipient.selfRecipient(with: transaction)
+        }
+        if let selfRecipientId = selfRecipient?.recipientId(), !identifiers.contains(selfRecipientId) {
+            identifiers.append(selfRecipientId)
+        }
+
+        let (plainText, serializedData, ermkeys) = try await getSerializedData(message: message, identifiers: identifiers, recipient: recipient, encryptionType: .group, attempts: attempts)
         
         var legacyData: Data?
         if DTMessageConfig.fetch().tunnelSecurityEnabled {
             legacyData = plainText
         }
         
-        let result = try DTMessageParamsBuilder().buildParams(with: message, to: thread, recipient: recipient, messageType: .encryptedMessageType, serializedData: serializedData, legacySerializedData: legacyData, recipientPeerContexts: ermkeys)
+        let result = try DTMessageParamsBuilder().buildParams(with: message, to: thread, recipient: recipient, messageType: .encryptedMessageType, serializedData: serializedData, legacySerializedData: legacyData, recipientPeerContexts: ermkeys, syncContent: nil)
         
         guard let messageParams = result as? [String: Any] else {
             let errorString = "messageParams convert error."
@@ -228,7 +235,7 @@ extension MessageSender {
             throw OWSAssertionError(errorString)
         }
         
-        let request = TSRequest(url: URL(string: "/v3/messages/group/\(thread.serverThreadId)")!, method: "PUT", parameters: messageParams)
+        let request = TSRequest(url: URL(string: "/v4/messages/group/\(thread.serverThreadId)")!, method: "PUT", parameters: messageParams)
         
         var responseObject: Any?
         if socketManager.socketState() != .open {
@@ -262,13 +269,6 @@ extension MessageSender {
             
             self.databaseStorage.write { wTransaction in
                 message.updateWithAllRecipientsMarkedAsSent(with: serverReceipts, transaction: wTransaction)
-            }
-            
-            if serverReceipts.needsSync {
-                try await handleEncryptedMessageSentLocally(message: message,
-                                                            toNote: false,
-                                                            attempts: MessageSender.senderRetryAttempts) {
-                }
             }
             
             completion()
@@ -344,14 +344,7 @@ extension MessageSender {
             self.databaseStorage.write { wTransaction in
                 message.updateWithAllRecipientsMarkedAsSent(with: serverReceipts, transaction: wTransaction)
             }
-            
-            if serverReceipts.needsSync {
-                try await handleEncryptedMessageSentLocally(message: message,
-                                                            toNote: false,
-                                                            attempts: MessageSender.senderRetryAttempts) {
-                }
-            }
-            
+
             completion()
             return
         }
@@ -365,6 +358,40 @@ extension MessageSender {
 
     }
     
+    // only private
+    func generateSyncContent(for message: TSOutgoingMessage,
+                            attempts: Int) async throws -> Data? {
+        guard message.shouldSyncTranscript() else {
+            // note return
+            return nil
+        }
+
+        var selfRecipient: SignalRecipient?
+        databaseStorage.read { transaction in
+            selfRecipient = SignalRecipient.selfRecipient(with: transaction)
+        }
+
+        guard let selfRecipient else {
+            OWSLogger.warn("selfRecipient is nil, cannot generate sync content")
+            return nil
+        }
+
+        let sentMessageTranscript = OWSOutgoingSentMessageTranscript(outgoingMessage: message)
+        sentMessageTranscript.toNote = false
+
+        // Encrypt sync message (same flow as regular message)
+        let (_, serializedData, _) = try await getSerializedData(
+            message: sentMessageTranscript,
+            identifiers: [selfRecipient.recipientId()],
+            recipient: selfRecipient,
+            encryptionType: .private,
+            attempts: attempts
+        )
+
+        OWSLogger.info("Generated sync content for message")
+        return serializedData
+    }
+
     func handleEncryptedMessageSentLocally(message: TSOutgoingMessage,
                                            toNote: Bool,
                                            attempts: Int,
@@ -393,9 +420,6 @@ extension MessageSender {
                                    attempts: attempts) {
                 OWSLogger.info("Successfully sent e2ee sync transcript toNote \(toNote).")
                 completion()
-                self.databaseStorage.write { wTransaction in
-                    message.update(withHasSyncedTranscript: true, transaction: wTransaction)
-                }
             }
         } catch {
             OWSLogger.error("Failed to sent e2ee sync transcript toNote \(toNote): \(error)")
@@ -436,7 +460,7 @@ extension MessageSender {
             OWSLogger.error(errorString)
             throw OWSAssertionError(errorString)
         }
-        
+
         guard let plainText = message.buildPlainTextData(recipient) else {
             let errorString = "plainText is empty."
             OWSLogger.error(errorString)

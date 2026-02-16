@@ -6,7 +6,7 @@
 //
 
 #import "DTInputBarMoreItem.h"
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import "UIColor+OWS.h"
 
 @implementation DTInputToolBarMoreItem

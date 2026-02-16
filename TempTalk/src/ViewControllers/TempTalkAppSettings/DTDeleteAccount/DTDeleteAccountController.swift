@@ -32,7 +32,7 @@ class DTDeleteAccountController: OWSViewController {
     private lazy var leftTitleLabel: UILabel = {
         let leftTitleLabel = UILabel.init()
         leftTitleLabel.font = UIFont.systemFont(ofSize: 20 ,weight: .bold)
-        leftTitleLabel.textColor = Theme.primaryTextColor
+        leftTitleLabel.textColor = Theme.tprimaryColor
         leftTitleLabel.textAlignment = .left
         leftTitleLabel.numberOfLines = 1
         return leftTitleLabel
@@ -41,7 +41,7 @@ class DTDeleteAccountController: OWSViewController {
     private lazy var topTipLabel: UILabel = {
         let tipLabel = UILabel.init()
         tipLabel.font = UIFont.systemFont(ofSize: 14)
-        tipLabel.textColor = Theme.primaryTextColor
+        tipLabel.textColor = Theme.tprimaryColor
         tipLabel.text = Localized("PROFILE_STATUS_DELETE_ACCOUNT_TOP_TIP",comment: "Profile name tip")
         tipLabel.textAlignment = .left
         tipLabel.numberOfLines = 0
@@ -52,7 +52,7 @@ class DTDeleteAccountController: OWSViewController {
         
         let tipLabel = UILabel.init()
         tipLabel.font = UIFont.systemFont(ofSize: 14)
-        tipLabel.textColor = Theme.primaryTextColor
+        tipLabel.textColor = Theme.tprimaryColor
         tipLabel.textAlignment = .left
         tipLabel.numberOfLines = 0
         return tipLabel
@@ -68,7 +68,7 @@ class DTDeleteAccountController: OWSViewController {
         infoTextfield.layer.borderWidth = 1
         infoTextfield.layer.cornerRadius = 8
         infoTextfield.clearButtonMode = .whileEditing
-        infoTextfield.textColor = Theme.primaryTextColor
+        infoTextfield.textColor = Theme.tprimaryColor
         return infoTextfield
     }()
      
@@ -88,7 +88,7 @@ class DTDeleteAccountController: OWSViewController {
     }
     
     func configUI() {
-        view.backgroundColor = Theme.backgroundColor
+        view.backgroundColor = Theme.bg1Color
         view.addSubview(topTipLabel)
         view.addSubview(confirmTipLabel)
         view.addSubview(infoTextfield)
@@ -141,17 +141,23 @@ class DTDeleteAccountController: OWSViewController {
     func configProperty() {
         nextButton.isSelected = false
         nextButton.isUserInteractionEnabled = false
-        
+
         var localNumber: String?
+        var customUid: String?
         self.databaseStorage.asyncRead { transaction in
             localNumber = self.tsAccountManager.localNumber(with: transaction)
+            // 从 Contact 获取 customUid
+            if let localNumber = localNumber {
+                let signalAccount = SignalAccount(recipientId: localNumber, transaction: transaction)
+                customUid = signalAccount?.contact?.customUid
+            }
         } completion: {
             if let localNumber = localNumber {
-                let base58LocalNumber = NSString.base58EncodedNumber(localNumber)
-                
-                var ensureString = base58LocalNumber
-                if base58LocalNumber.count > 6 {
-                    ensureString = base58LocalNumber.substring(from: base58LocalNumber.count - 6)
+                // Get display ID (customUid first, then base58)
+                let displayId = NSString.displayUserId(withCustomUid: customUid, recipientId: localNumber)
+                var ensureString = displayId
+                if !DTParamsUtils.validateString(customUid).boolValue, displayId.count > 6 {
+                    ensureString = displayId.substring(from: displayId.count - 6)
                 }
                 self.confirmString = ensureString
                 let tipLabelText = String(format: Localized("PROFILE_STATUS_DELETE_ACCOUNT_CONFIRM_TIP", comment: ""), ensureString)

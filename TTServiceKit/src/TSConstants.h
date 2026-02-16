@@ -30,7 +30,8 @@ typedef NS_ENUM(NSUInteger, DTServerType) {
     DTServerTypeGIF,
     DTServerTypeCall,
     DTServerTypeSpeech2Text,
-    DTServerTypeAvatar
+    DTServerTypeAvatar,
+    DTServerTypeRoot//根路径（空路径）
 };
 
 typedef NS_ENUM(NSUInteger, DTServToType) {

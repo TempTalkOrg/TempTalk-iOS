@@ -35,14 +35,14 @@ class EmptySearchResultCell: UITableViewCell {
         self.messageLabel = UILabel()
         super.init(style: style, reuseIdentifier: reuseIdentifier)
 
-        self.backgroundColor = Theme.tableCellBackgroundColor
-        contentView.backgroundColor = Theme.backgroundColor
+        self.backgroundColor = Theme.bgpagePrimaryColor
+        contentView.backgroundColor = Theme.bgpagePrimaryColor
         
         selectionStyle = .none
         messageLabel.font = UIFont.ows_dynamicTypeBody
         messageLabel.textAlignment = .center
         messageLabel.numberOfLines = 3
-        messageLabel.textColor = Theme.primaryTextColor
+        messageLabel.textColor = Theme.tprimaryColor
 
         contentView.addSubview(messageLabel)
 
@@ -65,8 +65,8 @@ class EmptySearchResultCell: UITableViewCell {
     }
 
     public func configure(searchState: DTSearchViewState) {
-        self.backgroundColor = Theme.backgroundColor
-        self.contentView.backgroundColor = Theme.backgroundColor
+        self.backgroundColor = Theme.bgpagePrimaryColor
+        self.contentView.backgroundColor = Theme.bgpagePrimaryColor
         switch searchState {
         case .defaultState:
             self.messageLabel.text = Localized("ENTER_KEYWORDS_TO_SEARCH", comment: "Format string when search returns no results. Embeds {{search term}}")
@@ -76,10 +76,10 @@ class EmptySearchResultCell: UITableViewCell {
         }
     }
     public func configure(searchText: String) {
-//        cell.backgroundColor = Theme.tableCellBackgroundColor
-//        cell.contentView.backgroundColor = Theme.tableCellBackgroundColor
-        self.backgroundColor = Theme.tableCellBackgroundColor
-        self.contentView.backgroundColor = Theme.tableCellBackgroundColor
+//        cell.backgroundColor = Theme.bg1Color
+//        cell.contentView.backgroundColor = Theme.bg1Color
+        self.backgroundColor = Theme.bgpagePrimaryColor
+        self.contentView.backgroundColor = Theme.bgpagePrimaryColor
            let format = Localized("HOME_VIEW_SEARCH_NO_RESULTS_FORMAT", comment: "Format string when search returns no results. Embeds {{search term}}")
            let messageText: String = NSString(format: format as NSString, searchText) as String
            self.messageLabel.text = searchText.count > 0 ? messageText : ""

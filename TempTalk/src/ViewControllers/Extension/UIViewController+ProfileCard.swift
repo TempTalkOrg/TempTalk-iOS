@@ -11,17 +11,17 @@ import TTMessaging
 
 @objc
 extension UIViewController {
-    func showProfileCardInfo(with recipientId: String, isFromSameThread : Bool = false, isPresent: Bool = true) {
+    func showProfileCardInfo(with recipientId: String, isFromSameThread : Bool = false, isPresent: Bool = true, isFromContacts: Bool = false) {
         guard !recipientId.isEmpty , let localNumber = TSAccountManager.shared.localNumber(), !localNumber.isEmpty else {
             DTToastHelper.toast(withText: Localized("SHOW_PERSONAL_CARD_FAILED", ""), durationTime: 2)
             return
         }
-        
+
         DTToastHelper.showHud(in: self.view)
-        
+
         DTPersonalCardController.preConfigure(withRecipientId: recipientId) { (account) in
             DTToastHelper.hide()
-            
+
             var profileCardVc: DTPersonalCardController
             if recipientId == localNumber {
                 profileCardVc = DTPersonalCardController(type: .selfNoneEdit, recipientId: recipientId, account: account)
@@ -30,6 +30,7 @@ extension UIViewController {
             }
             profileCardVc.modalPresentationStyle = .popover
             profileCardVc.isFromSameThread = isFromSameThread
+            profileCardVc.isFromContacts = isFromContacts  // 传递来源信息
             if (isPresent){
                 let profileCardNav =  DTPanModalNavController.init()
                 profileCardNav.viewControllers = [profileCardVc]

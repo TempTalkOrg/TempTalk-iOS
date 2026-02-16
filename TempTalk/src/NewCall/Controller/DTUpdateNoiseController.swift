@@ -37,7 +37,7 @@ class DTUpdateNoiseController: OWSTableViewController {
         super.applyTheme()
         updateTableContents()
         
-        view.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.defaultColor
         tableView.backgroundColor = UIColor(rgbHex: 0x2B3139)
         
     }
@@ -167,10 +167,19 @@ class DTUpdateNoiseController: OWSTableViewController {
             image: UIImage(named: "call_critical"),
             title: Localized("CALL_MORE_CRITICAL_ALERT")
         ) {
-            self.dismiss(animated: true) { [weak self] in
-                guard self != nil else { return }
-                Task {
-                    await DTMeetingManager.shared.sendCriticalAlertWithBarrage(Localized("MEETING_CRITICAL_ALERT_DANMU"))
+            // 判断是否需要显示二次确认弹窗
+            if DTMeetingManager.shared.shouldShowCriticalAlertConfirm {
+                // Instant/Group: 显示二次确认弹窗
+                self.dismiss(animated: true) {
+                    DTMeetingManager.shared.presentCriticalAlertConfirmVC()
+                }
+            } else {
+                // 1v1: 直接发送 Critical Alert
+                self.dismiss(animated: true) { [weak self] in
+                    guard self != nil else { return }
+                    Task {
+                        await DTMeetingManager.shared.sendCriticalAlert(message: Localized("MEETING_CRITICAL_ALERT_DANMU"))
+                    }
                 }
             }
         }
@@ -212,11 +221,11 @@ class DTUpdateNoiseController: OWSTableViewController {
 
             switch call.callType {
             case .private:
-                
                 if DTMeetingManager.shared.openCallCamera {
                     items.append(switchCameraTextView)
                 }
-                
+
+                // 1v1 通话：显示 Critical Alert 入口，但点击时不显示二次确认
                 if !DTMeetingManager.shared.inMeeting, call.callState == .outgoing {
                     items.append(criticalTextView)
                 }
@@ -243,6 +252,10 @@ class DTUpdateNoiseController: OWSTableViewController {
             default:
                 if DTMeetingManager.shared.openCallCamera {
                     items.append(switchCameraTextView)
+                }
+                
+                if DTMeetingManager.shared.currentCall.invitedCriticalAlertUsers.count > 0 {
+                    items.append(criticalTextView)
                 }
             }
             self.updateSubviews(items, contentRow: contentRow)

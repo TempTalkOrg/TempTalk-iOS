@@ -10,6 +10,7 @@ import UIKit
 import Foundation
 import TTMessaging
 import TTServiceKit
+import PanModal
 
 final class ConversationViewController: OWSViewController {
     
@@ -17,12 +18,17 @@ final class ConversationViewController: OWSViewController {
     var conversationViewModel: ConversationViewModel
     /// 存储已经处理过的cell
     var handledMessageIds: Set<String> = []
-    
+    /// 存储已查看的机密占位消息ID
+    private var viewedPlaceholderIds: Set<String> = []
+
     var joinCallView = ConversationJoinCallView()
-    
+
     var curRecipientId: String?
     var curCallModel: DTLiveKitCallModel?
-    
+
+    /// 标记是否已经执行过未读数矫正（每次会话打开时重置）
+    private var hasCorrectUnreadCount = false
+
     lazy var layout: ConversationViewLayout = {
         let layout = ConversationViewLayout(conversationStyle: self.conversationStyle)
         return layout
@@ -41,7 +47,8 @@ final class ConversationViewController: OWSViewController {
         action: ConversationViewAction,
         focusMessageId: String? = nil,
         botViewItem: ConversationViewItem? = nil,
-        viewMode: ConversationViewMode = .main
+        viewMode: ConversationViewMode = .main,
+        isFromPersonalCard: Bool = false
     ) {
         viewState = CVViewState(
             thread: thread,
@@ -49,21 +56,22 @@ final class ConversationViewController: OWSViewController {
             focusMessageId: focusMessageId,
             botViewItem: botViewItem
         )
-        
+
         conversationViewModel = ConversationViewModel(
             thread: thread,
             focusMessageIdOnOpen: focusMessageId,
             conversationViewMode: viewMode,
             botViewItem: botViewItem
         )
-        
+
         super.init()
-        
+
         Logger.info("[Conversation] init threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
-        
+
+        self.isFromPersonalCard = isFromPersonalCard
         conversationViewModel.delegate = self
         conversationViewModel.loadInitialMessages()
-        
+
         actionOnOpen = action
         inputAccessoryPlaceholder.delegate = self
     }
@@ -73,7 +81,6 @@ final class ConversationViewController: OWSViewController {
         
         stopRefreshUITimer()
         stopScrollUpdateTimer()
-        cancelPendingInitialMessagesIfNeeded()
         
         NotificationCenter.default.removeObserver(self)
         
@@ -100,24 +107,9 @@ final class ConversationViewController: OWSViewController {
                 
         fetchThreadInfo()
         
-        resetPinnedMappings(animated: false)
-        
         prepareForMentionMessage()
-        createVirtualContactIfNeeded()
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            Logger.info("[Conversation]== Conversation VC ==")
-            if let window = self.view.window {
-                Logger.info("[Conversation] view.window = \(window)")
-            } else {
-                Logger.info("[Conversation] view.window = empty")
-            }
-        }
-    }
-    
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        Logger.info("[Conversation] viewWillAppear threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
+        checkAndUpdateConfidentialMessageAvailability()
     }
     
     override func viewIsAppearing(_ animated: Bool) {
@@ -166,9 +158,9 @@ final class ConversationViewController: OWSViewController {
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        
-        Logger.info("[Conversation] viewDidLayoutSubviews threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
-        
+
+        updateWarningHeaderLayout()
+
         // We resize the inputToolbar whenever it's text is modified, including when setting saved draft-text.
         // However it's possible this draft-text is set before the inputToolbar (an inputAccessoryView) is mounted
         // in the view hierarchy. Since it's not in the view hierarchy, it hasn't been laid out and has no width,
@@ -184,53 +176,51 @@ final class ConversationViewController: OWSViewController {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
+
         Logger.info("[Conversation] viewDidAppear threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
-        
+
         // recover status bar when returning from PhotoPicker, which is dark (uses light status bar)
         setNeedsStatusBarAppearanceUpdate()
-        
+
         markVisibleMessagesAsRead()
         startReadTimer()
         updateNavigationBarSubtitleLabel()
-        
+
         if !viewHasEverAppeared {
             // To minimize time to initial apearance, we initially disable prefetching, but then
             // re-enable it once the view has appeared.
             collectionView.isPrefetchingEnabled = true
-            
+
             syncHasReadStatus()
         }
-        
-        conversationViewModel.focusMessageIdOnOpen = nil
-        
+
         isViewCompletelyAppeared = true
         viewHasEverAppeared = true
         shouldAnimateKeyboardChanges = true
-        
+
         switch actionOnOpen {
         case .compose:
             popKeyBoard()
-            
+
             // When we programmatically pop the keyboard here,
             // the scroll position gets into a weird state and
             // content is hidden behind the keyboard so we restore
             // it to the default position.
             scrollToDefaultPosition(animated: true)
-            
+
         case .audioCall:
             didTapCallNavBtn()
-            
+
         default:
             break
         }
         // Clear the "on open" state after the view has been presented.
         actionOnOpen = .none
-        
+
         ensureScrollDownButton()
         inputToolbar.viewDidAppear()
         loadDraftInCompose()
-        
+
     }
     
     // `viewWillDisappear` is called whenever the view *starts* to disappear,
@@ -239,13 +229,13 @@ final class ConversationViewController: OWSViewController {
     // until `viewDidDisappear`.
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        
+
         Logger.info("[Conversation] viewWillDisappear threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
-        
+
         saveDraft()
         isViewCompletelyAppeared = false
-        dismissKeyBoard()
-        
+        forceDissmissKeyBoard()  // 页面即将消失，强制收起键盘
+
     }
     
     override func viewDidDisappear(_ animated: Bool) {
@@ -272,6 +262,12 @@ final class ConversationViewController: OWSViewController {
         // 清理joinview
         joinCallView.isHidden = true
         joinCallView.removeFromSuperview()
+
+        if navigationController?.viewControllers.contains(self) != true {
+            OWSArchivedMessageJob.shared().inConversation = false
+            OWSArchivedMessageJob.shared().triggerArchiveCheckAfterLeavingConversation()
+            batchDeleteViewedPlaceholders()
+        }
     }
     
     override var canBecomeFirstResponder: Bool {
@@ -312,13 +308,47 @@ final class ConversationViewController: OWSViewController {
         animated flag: Bool,
         completion: (() -> Void)? = nil
     ) {
+        // 尝试收起键盘，如果保护启用会被拦截
         dismissKeyBoard()
+        if viewState.isKeyboardProtectionEnabled {
+            Logger.info("[Keyboard] Present ViewController, keyboard protected and not dismissed")
+        }
         super.present(viewControllerToPresent, animated: flag, completion: completion)
     }
     
     static func setNeedsRefreshGroupInfo(for serverGroupId: String) {
         guard !serverGroupId.isEmpty else { return }
         CVViewState.conversationTagInfo[serverGroupId] = false
+    }
+
+    // MARK: - Confidential Placeholder Management
+
+    private func batchDeleteViewedPlaceholders() {
+        guard !viewedPlaceholderIds.isEmpty else { return }
+
+        let placeholderIds = viewedPlaceholderIds
+        viewedPlaceholderIds.removeAll()
+
+        databaseStorage.asyncWrite { transaction in
+            for uniqueId in placeholderIds {
+                guard let placeholder = TSInfoMessage.anyFetch(
+                    uniqueId: uniqueId,
+                    transaction: transaction
+                ) as? TSInfoMessage,
+                      placeholder.messageType == .confidentialViewed else {
+                    continue
+                }
+
+                // Remove the placeholder directly without redundant update
+                placeholder.anyRemove(transaction: transaction)
+            }
+        }
+    }
+
+    func addViewedPlaceholder(_ uniqueId: String) {
+        // Check if already processed to avoid duplicate database operations
+        guard !viewedPlaceholderIds.contains(uniqueId) else { return }
+        viewedPlaceholderIds.insert(uniqueId)
     }
 }
 
@@ -347,7 +377,13 @@ extension ConversationViewController {
 extension ConversationViewController {
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-        
+
+        // Mark that screen orientation is changing to prevent auto-scroll in adjustInsets
+        if previousTraitCollection?.verticalSizeClass != traitCollection.verticalSizeClass ||
+           previousTraitCollection?.horizontalSizeClass != traitCollection.horizontalSizeClass {
+            isScreenOrientationChanging = true
+        }
+
         updateBarButtonItems()
         updateNavigationBarSubtitleLabel()
     }
@@ -440,9 +476,6 @@ extension ConversationViewController {
                 break
             }
         }
-        
-        // 打开 app 首次拉取 pinned message
-        DTPinnedDataSource.shared().syncPinnedMessage(withServer: serverGroupId)
     }
     
     private func fetchThreadConfig() {
@@ -485,31 +518,10 @@ extension ConversationViewController {
     }
     
     func requestContactInfo() {
-        guard let contactThread = thread as? TSContactThread else {
-            return
-        }
+        guard let contactThread = thread as? TSContactThread else { return }
         let recipientId = contactThread.contactIdentifier()
-        TSAccountManager.sharedInstance().getContactMessageV1(byPhoneNumber: [recipientId]) { [weak self] contacts in
-            guard let self = self, let newContact = contacts.first as? Contact else { return }
-            
-            self.databaseStorage.asyncWrite { transaction in
-                guard let contactsManager = Environment.shared.contactsManager else {return}
-                
-                let account = contactsManager.signalAccount(forRecipientId: recipientId, transaction: transaction)
-                
-                if let account, let contact = account.contact, !contact.isEqual(newContact){
-                    account.contact = newContact
-                    contactsManager.updateSignalAccount(withRecipientId: recipientId, withNewSignalAccount: account, with: transaction)
-                } else if account == nil {
-                    let newAccount = SignalAccount(recipientId: recipientId)
-                    newAccount.contact = newContact
-                    contactsManager.updateSignalAccount(withRecipientId: recipientId, withNewSignalAccount: newAccount, with: transaction)
-                }
-            }
-            
-        } failure: { error in
-            Logger.info("requestContactInfo fail")
-        }
+        guard let contactsManager = Environment.shared.contactsManager else { return }
+        contactsManager.fetchAndUpdateContactInfo(forRecipientId: recipientId)
     }
 }
 
@@ -562,6 +574,26 @@ extension ConversationViewController {
             return
         }
         if (thread.readPositionEntity?.maxServerTime ?? 0) >= lastVisibleSortId {
+
+            // 矫正未读数（每次会话打开时只执行一次）
+            if !hasCorrectUnreadCount {
+                hasCorrectUnreadCount = true
+
+                databaseStorage.asyncWrite { [weak self] transaction in
+                    guard let self = self else { return }
+                    let thread = self.thread
+
+                    // 在 anyUpdate 外部查询一次（只执行1次 SQL）
+                    guard let latestThread = TSThread.anyFetch(uniqueId: thread.uniqueId,
+                                                               transaction: transaction) else { return }
+                    let unreadCount = latestThread.getUnreadMessageCount(with: transaction)
+
+                    thread.anyUpdate(transaction: transaction) { instance in
+                        instance.updateUnreadMessageCount(unreadCount)
+                    }
+                }
+            }
+
             return
         }
         
@@ -627,62 +659,60 @@ extension ConversationViewController {
             }
         }
     }
-    
-    func createVirtualContactIfNeeded() {
-        guard !isGroupConversation, let contactIdentifier = thread.contactIdentifier() else {
+}
+
+// MARK: - Confidential Message Availability
+
+extension ConversationViewController {
+    /// Check and update confidential message availability based on group size
+    /// - For groups with ≥20 members: hide confidential message toggle and disable if currently enabled
+    /// - For groups with <20 members: show confidential message toggle normally
+    /// - This should only be called when group membership changes, not on every view appearance
+    func checkAndUpdateConfidentialMessageAvailability() {
+        guard isGroupConversation, let groupThread = thread as? TSGroupThread else {
             return
         }
-        var currentSignalAccount: SignalAccount?
-        databaseStorage.read { transaction in
-            currentSignalAccount = self.contactsManager.signalAccount(
-                forRecipientId: contactIdentifier,
-                transaction: transaction
-            )
-        }
-        if let currentSignalAccount, !(currentSignalAccount.contact?.isExternal ?? false) {
-            return
-        }
-        
-        let needSkipCreate = conversationTagInfo[contactIdentifier] ?? false
-        if needSkipCreate {
-            return
-        }
-        
-        let request = OWSRequestFactory.getV1ContactExtId(contactIdentifier)
-        let baseAPI = DTBaseAPI()
-        baseAPI.send(request) { [weak self] entity in
-            
-            guard let self else { return }
-            guard entity.status == 0 else { return }
-           
-            var newSignalAccount: SignalAccount
-            if let currentSignalAccount {
-                newSignalAccount = currentSignalAccount
-                newSignalAccount.contact?.isExternal = true
-                newSignalAccount.contact?.number = contactIdentifier
-                newSignalAccount.contact?.extId = (entity.data["extId"] as? NSNumber) ?? NSNumber(value: 0)
-            } else {
-                newSignalAccount = SignalAccount(recipientId: contactIdentifier)
-                let contact = Contact(recipientId: contactIdentifier)
-                contact.isExternal = true
-                contact.extId = (entity.data["extId"] as? NSNumber) ?? NSNumber(value: 0)
-                newSignalAccount.contact = contact
+
+        let memberCount = groupThread.groupModel.groupMemberIds.count
+        let groupConfig = DTGroupConfig.fetch()
+        let threshold = groupConfig.confidentialModeThreshold
+        let shouldDisableConfidential = memberCount >= threshold
+
+        // Update button visibility
+        updateConfidentialButtonVisibility()
+
+        // If group has ≥threshold members and confidential mode is currently enabled, disable it
+        if shouldDisableConfidential {
+            if let conversationEntity = thread.conversationEntity,
+               conversationEntity.confidentialMode == .confidential {
+                disableConfidentialModeForLargeGroup()
             }
-            
-            self.databaseStorage.asyncWrite { transaction in
-                self.contactsManager.updateSignalAccount(
-                    withRecipientId: contactIdentifier,
-                    withNewSignalAccount: newSignalAccount,
-                    with: transaction
-                )
-                transaction.addAsyncCompletionOnMain { [weak self] in
-                    guard let self = self else { return }
-                    self.updateNavigationTitle()
-                    self.conversationTagInfo[contactIdentifier] = true
+        }
+    }
+
+    /// Disable confidential mode for groups with ≥threshold members
+    private func disableConfidentialModeForLargeGroup() {
+        let configApi = DTSetConversationApi()
+        configApi.requestConfigConfidentialMode(withConversationID: thread.serverThreadId,
+                                                confidentialMode: 0) { [weak self] conversationEntity in
+            guard let self = self else { return }
+            self.inputToolbar.inputToolbarState = .normal
+            self.thread.conversationEntity = conversationEntity
+            self.databaseStorage.asyncWrite { wTransaction in
+                self.thread.anyUpdate(transaction: wTransaction) { thread in
+                    thread.conversationEntity = conversationEntity
+
+                    DataUpdateUtil.shared.updateConversation(thread: thread,
+                                                             expireTime: conversationEntity.messageExpiry,
+                                                             messageClearAnchor: NSNumber(value: conversationEntity.messageClearAnchor))
+                }
+                wTransaction.addAsyncCompletionOnMain {
+                    NotificationCenter.default.post(name: .DTConversationDidChange, object: nil)
                 }
             }
-            
-        } failure: { _ in }
+        } failure: { error in
+            Logger.error("Failed to disable confidential mode for large group: \(error)")
+        }
     }
 }
 
@@ -690,10 +720,10 @@ extension ConversationViewController {
 
 extension ConversationViewController {
     override func applyTheme() {
-        
+
         applyThemeWithoutReloadData()
         applyThemeForReminderView()
-        
+
         conversationViewModel.cleanCardCaches()
         reloadData()
         applyThemeForInputToolBar()
@@ -702,22 +732,32 @@ extension ConversationViewController {
     
     private func applyThemeWithoutReloadData() {
         AssertIsOnMainThread()
-        
-        view.backgroundColor = Theme.toolbarBackgroundColor
-        collectionView.backgroundColor = Theme.backgroundColor
-        
+
+        view.backgroundColor = Theme.bg1Color
+        collectionView.backgroundColor = Theme.bg1Color
+
         headerView.applyTheme()
-        applyThemeForPinView()
         updateNavigationBarSubtitleLabel()
-        
+
         applyThemeForForwardToolbar()
-        
+
         friendReqBar.applyTheme()
+
+        if showWarningHeader {
+            warningHeaderView.applyTheme()
+        }
     }
     
     private func applyThemeForInputToolBar() {
+        // 尝试收起键盘，如果保护启用会被拦截
         dismissKeyBoard()
+        if viewState.isKeyboardProtectionEnabled {
+            Logger.info("[Keyboard] Apply theme for input toolbar, keyboard protected and not dismissed")
+        }
         recreateInputToolbar()
         reloadBottomBar()
     }
+
+    // MARK: - Reshow PersonalCard
+
 }

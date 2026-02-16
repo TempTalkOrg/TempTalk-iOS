@@ -6,7 +6,7 @@
 //
 
 #import "UITabBar+BadgeCount.h"
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <PureLayout/PureLayout.h>
 
 #define TabbarItemNums 4.0
@@ -20,7 +20,7 @@
     bview.tag = 888 + index;
     bview.layer.cornerRadius = 5;
     bview.clipsToBounds = YES;
-    bview.backgroundColor = Theme.redBgroundColor;
+    bview.backgroundColor = Theme.errorColor;
     CGRect tabFram = self.frame;
     
     float percentX = (float)((index+0.6) / TabbarItemNums);
@@ -43,7 +43,7 @@
     backgroundView.tag = 888 + (NSInteger)index;
     backgroundView.layer.cornerRadius = 9;
     backgroundView.clipsToBounds = YES;
-    backgroundView.backgroundColor = Theme.redBgroundColor;
+    backgroundView.backgroundColor = Theme.errorColor;
     
     [self addSubview:backgroundView];
     [self bringSubviewToFront:backgroundView];

@@ -31,13 +31,13 @@ class DTFloatingView: UIView {
     }
 
     func setupUI() {
-        
+
         lastOrigion = NSValue(cgPoint: CGPoint(x: 5, y: 150))
         backgroundColor = UIColor(rgbHex: 0x333333)
         layer.cornerRadius = 5
         layer.borderWidth = 1
         layer.masksToBounds = true
-        layer.borderColor = UIColor.white.cgColor
+        layer.borderColor = Theme.lineColor.cgColor
         autoSetDimensions(to: CGSize(width: 80, height: 100))
         
         stateView = UIImageView(image: UIImage(named: "floating_voice"))

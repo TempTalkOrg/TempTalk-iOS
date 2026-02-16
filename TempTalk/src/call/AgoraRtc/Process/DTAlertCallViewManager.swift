@@ -130,16 +130,39 @@ extension DTAlertCallViewManager {
     }
     
     func bringLiveKitAlertCalls(to window: UIWindow) {
-        
+
         lkAlertCalls.forEach {
             let callAlertView = $0.alertCallView
             callAlertView.removeFromSuperview()
             window.addSubview(callAlertView)
-            
+
             callAlertView.autoHCenterInSuperview()
             callAlertView.autoPinTopToSuperviewMargin()
             callAlertView.autoSetDimension(.height, toSize: 131)
             callAlertView.autoSetDimension(.width, toSize: min(screenHeight, screenWidth) - 16)
+        }
+    }
+
+    /// 清理不在活跃会议列表中的 alert views
+    func cleanStaleAlertCalls() {
+        let activeRoomIds = RoomIdManager.shared.getAllActiveRoomIds()
+
+        lkAlertCalls.removeAll { alert in
+            guard let roomId = alert.liveKitCall?.roomId else {
+                Logger.info("\(logTag) remove alert with nil roomId")
+                return true
+            }
+
+            let isStale = !activeRoomIds.contains(roomId)
+            if isStale {
+                Logger.info("\(logTag) remove stale alert for roomId: \(roomId)")
+                // 清理 timer 和 view，使用可选链防止 timer 为 nil 时崩溃
+                alert.callTimer.invalidate()
+                if alert.alertCallView.superview != nil {
+                    alert.alertCallView.removeFromSuperview()
+                }
+            }
+            return isStale
         }
     }
     

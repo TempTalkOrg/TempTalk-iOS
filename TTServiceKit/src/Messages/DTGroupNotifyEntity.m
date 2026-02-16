@@ -83,18 +83,6 @@
 
 @end
 
-@implementation DTPinnedMessageNotifyEntity
-
-+ (NSDictionary *)JSONKeyPathsByPropertyKey {
-    
-    NSMutableDictionary *map = [NSDictionary mtl_identityPropertyMapWithModel:[self class]].mutableCopy;
-    map[@"pinId"] = @"id";
-    
-    return map.copy;
-}
-
-@end
-
 @implementation DTGroupMemberNotifyEntity
 
 + (NSDictionary *)JSONKeyPathsByPropertyKey{
@@ -122,10 +110,6 @@
 
 + (NSValueTransformer *)groupAnnouncementsJSONTransformer {
     return [MTLJSONAdapter arrayTransformerWithModelClass:[DTGroupAnnouncementNotifyEntity class]];
-}
-
-+ (NSValueTransformer *)groupPinsJSONTransformer {
-    return [MTLJSONAdapter arrayTransformerWithModelClass:[DTPinnedMessageNotifyEntity class]];
 }
 
 + (NSValueTransformer *)groupRemindJSONTransformer {

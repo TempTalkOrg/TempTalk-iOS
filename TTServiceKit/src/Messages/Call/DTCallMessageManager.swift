@@ -23,7 +23,7 @@ public protocol DTCallMessageDelegate: NSObjectProtocol {
                               envelopeSourceDevice: UInt32?,
                               serverTimestamp: UInt64?)
 
-    func handleJoinedMessage(roomId: String)
+    func handleJoinedMessage(roomId: String, envelope: DSKProtoEnvelope)
     
     func handleRemoteCanceledMessage(roomId: String)
     
@@ -66,9 +66,8 @@ public protocol DTCallMessageDelegate: NSObjectProtocol {
             if let roomId = calling.roomID,
                let envelopRoomId,
                !roomId.isEmpty && !envelopRoomId.isEmpty,
-               roomId != envelopRoomId { // envelop 中 roomId 和 CallMessage 中 roomId 都非空时，两者不相等报错
+               roomId != envelopRoomId {
                 Logger.error("calling roomid 不一致")
-                // TODO: call throw error
                 return
             }
             
@@ -127,7 +126,7 @@ public protocol DTCallMessageDelegate: NSObjectProtocol {
                 return
             }
             
-            delegate?.handleJoinedMessage(roomId: roomId)
+            delegate?.handleJoinedMessage(roomId: roomId, envelope: envelope)
         } else if let cancel = callMessage.cancel { // call 取消
             // [1on1]
             // cancel: caller 取消 Call
@@ -156,14 +155,11 @@ public protocol DTCallMessageDelegate: NSObjectProtocol {
                 Logger.error("roomId 为空")
                 return
             }
-            
+
             delegate?.handleWasHungupMessage(roomId: roomId)
         } else {
-            // TODO: call prod error
             let errorPayload = OWSAnalyticsEvents.messageManagerErrorCallMessageNoActionablePayload()
             Logger.error("\(errorPayload) \(envelope)")
         }
     }
 }
-
-// 1on1 caller -> call

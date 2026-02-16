@@ -67,9 +67,8 @@
                 originalTimestamp:(uint64_t)originalTimestamp
              originalSourceDevice:(uint32_t)originalSourceDevice
                    originalSource:(NSString *)originalSource
-                 originalUniqueId:(NSString *)originalUniqueId
                          editable:(BOOL)editable{
-    if(self = [super initWithUniqueId:originalUniqueId]){
+    if(self = [super init]){
         self.timestamp = timestamp;
         self.sourceDevice = sourceDevice;
         self.source = source;

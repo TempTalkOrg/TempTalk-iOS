@@ -64,8 +64,8 @@ class ConversationEmojiSheetViewController: OWSViewController {
     }
     
     override func applyTheme() {
-        view.backgroundColor = Theme.stickBackgroundColor
-        collectionView.backgroundColor = Theme.stickBackgroundColor
+        view.backgroundColor = Theme.bg2Color
+        collectionView.backgroundColor = Theme.bg2Color
         collectionView.reloadData()
     }
 }
@@ -142,9 +142,9 @@ private class EmojiSheetCell: UICollectionViewCell {
     }
     
     func refreshTheme() {
-        backgroundColor = Theme.stickBackgroundColor
-        contentView.backgroundColor = Theme.stickBackgroundColor
-        selectedView.backgroundColor = (item?.isSelected ?? false) ? Theme.hairlineColor : .clear
+        backgroundColor = Theme.bg2Color
+        contentView.backgroundColor = Theme.bg2Color
+        selectedView.backgroundColor = (item?.isSelected ?? false) ? Theme.lineColor : .clear
     }
 }
 

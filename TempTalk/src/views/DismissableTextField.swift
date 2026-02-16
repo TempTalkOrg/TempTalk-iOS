@@ -23,7 +23,7 @@ class DismissInputBar: UIToolbar {
         self.items = [spacer, dismissButton]
         self.isTranslucent = false
         self.isOpaque = true
-        self.barTintColor = Theme.toolbarBackgroundColor
+        self.barTintColor = Theme.bg1Color
 
         self.autoresizingMask = .flexibleHeight
         self.translatesAutoresizingMaskIntoConstraints = false

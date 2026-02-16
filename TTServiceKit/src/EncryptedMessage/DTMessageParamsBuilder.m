@@ -64,6 +64,7 @@
                                     serializedData:(NSData *)serializedData
                               legacySerializedData:(NSData * __nullable)legacySerializedData
                              recipientPeerContexts:(NSArray<DTMsgPeerContextParams *> *)recipientPeerContexts
+                                       syncContent:(NSData * __nullable)syncContent
                                              error:(NSError **)error {
     
     OWSAssertDebug(serializedData);
@@ -118,7 +119,12 @@
     messageParams.timestamp = message.timestamp;
     messageParams.silent = message.isSilent;
     messageParams.recipients = recipientPeerContexts;
-    
+
+    // Set syncContent if provided
+    if (syncContent) {
+        messageParams.syncContent = [syncContent base64EncodedString];
+    }
+
     NSError *jsonError;
     NSDictionary *jsonDict = [MTLJSONAdapter JSONDictionaryFromModel:messageParams error:&jsonError];
 

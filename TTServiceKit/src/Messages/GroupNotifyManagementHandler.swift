@@ -84,7 +84,9 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
                        timeStamp:timeStamp,
                        transaction: transaction)
 
-        } else if groupNotifyEntity.groupNotifyDetailedType == .kickoutGroup {
+        } else if groupNotifyEntity.groupNotifyDetailedType == .kickoutGroup ||
+                    groupNotifyEntity.groupNotifyDetailedType == .kickoutAutoClear ||
+                    groupNotifyEntity.groupNotifyDetailedType == .groupAccountInvalid {
             
             kickoutGroup(envelope: envelope,
                          groupNotifyEntity: groupNotifyEntity,
@@ -228,7 +230,6 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
         ///自己有被邀请进群
         if let localNumber = localNumber, filteredUids.contains(where: {$0 == localNumber}) {
             
-            DTPinnedDataSource.shared().syncPinnedMessage(withServer: groupNotifyEntity.gid)
             let baseInfo = DTGroupBaseInfoEntity()
             baseInfo.name = newGroupThread.name(with: transaction)
             baseInfo.gid = newGroupThread.serverThreadId;
@@ -389,7 +390,6 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
         let meGroupNotifyEntity = groupNotifyEntity.members.filter {$0.uid == localNumber}.first
         let inviteCode = meGroupNotifyEntity?.inviteCode;
         
-        DTPinnedDataSource.shared().removeAllPinnedMessage(groupNotifyEntity.gid)
         DTGroupUtils.removeGroupBaseInfo(withGid: groupNotifyEntity.gid, transaction: transaction)
         if newGroupThread.isSticked {
             newGroupThread.unstickThread(with: transaction)
@@ -496,9 +496,10 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
                       newGroupThread: TSGroupThread,
                       timeStamp: UInt64,
                       transaction: SDSAnyWriteTransaction) {
-        
-        DTPinnedDataSource.shared().removeAllPinnedMessage(groupNotifyEntity.gid)
+
+        Logger.info("[Group Notify] dismiss group")
         DTGroupUtils.removeGroupBaseInfo(withGid: groupNotifyEntity.gid, transaction: transaction)
+
         newGroupThread.anyRemove(transaction: transaction)
     }
 }

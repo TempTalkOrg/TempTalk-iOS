@@ -25,6 +25,9 @@ class AppSettingsViewController : SettingBaseViewController {
         mainTableView.estimatedRowHeight = 44
         mainTableView.contentInsetAdjustmentBehavior = .automatic
         mainTableView.rowHeight = UITableView.automaticDimension
+        mainTableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 15, right: 0)
+        mainTableView.showsVerticalScrollIndicator = false
+        mainTableView.showsHorizontalScrollIndicator = false
         mainTableView.register(DTSettingDescriptionCell.self, forCellReuseIdentifier: settingDescriptionCell_AppSettings)
         mainTableView.register(DTBlankCell.self, forCellReuseIdentifier: reuse_identifier_style_blank)
         return mainTableView
@@ -51,16 +54,14 @@ class AppSettingsViewController : SettingBaseViewController {
     public lazy var nameLabel: UILabel = {
         let nameLabel = UILabel.init()
         nameLabel.font = UIFont.ows_dynamicTypeTitle3
-        nameLabel.adjustsFontForContentSizeCategory = true
-        nameLabel.textColor = Theme.primaryTextColor
+        nameLabel.textColor = Theme.tprimaryColor
         return nameLabel
     }()
-    
+
     public lazy var signatureLabel: UILabel = {
         let signatureLabel = UILabel.init()
         signatureLabel.font = UIFont.ows_dynamicTypeBody2
-        signatureLabel.adjustsFontForContentSizeCategory = true
-        signatureLabel.textColor = Theme.secondaryTextColor
+        signatureLabel.textColor = Theme.tsecondaryColor
         signatureLabel.text = Localized("PROFILE_VIEW_TITLE")
         return signatureLabel
     }()
@@ -84,26 +85,49 @@ class AppSettingsViewController : SettingBaseViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+
         prepareHeaderView()
         prepareView()
         prepareLayout()
         prepareTheme()
         NotificationCenter.default.addObserver(self, selector: #selector(signalAccountsDidChange), name: NSNotification.Name.OWSContactsManagerSignalAccountsDidChange, object: nil)
+
+        // 监听文字大小变化
+        NotificationCenter.default.addObserver(self, selector: #selector(textSizeDidChange), name: .textSizeDidChange, object: nil)
     }
-    
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         updateUserInfo()
     }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc
+    func textSizeDidChange() {
+        // 立即在主线程更新数据源和刷新表格
+        AssertIsOnMainThread()
+
+        // 更新头部标签的字体
+        nameLabel.font = UIFont.ows_dynamicTypeTitle3
+        signatureLabel.font = UIFont.ows_dynamicTypeBody2
+
+        self.databaseStorage.read { transaction in
+            self.dataSource = self.getDataSource(transaction: transaction)
+        }
+
+        self.mainTableView.reloadData()
+    }
     
     override func applyTheme() {
         super.applyTheme()
-        view.backgroundColor = Theme.bgelevateColor
-        mainTableView.backgroundColor = Theme.bgelevateColor
-        self.mainTableView.tableHeaderView?.backgroundColor = Theme.bgelevateColor
-        signatureLabel.textColor = Theme.secondaryTextColor
-        nameLabel.textColor = Theme.primaryTextColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
+        self.mainTableView.tableHeaderView?.backgroundColor = Theme.bgpageSecondaryColor
+        signatureLabel.textColor = Theme.tsecondaryColor
+        nameLabel.textColor = Theme.tprimaryColor
         prepareHeaderView()
         self.databaseStorage.asyncRead { sdsAnyReadTransaction in
             self.dataSource = self.getDataSource(transaction: sdsAnyReadTransaction)
@@ -149,8 +173,8 @@ class AppSettingsViewController : SettingBaseViewController {
     }
     
     func prepareTheme() {
-        view.backgroundColor = Theme.bgelevateColor
-        mainTableView.backgroundColor = Theme.bgelevateColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
     func prepareUIData() {
@@ -204,13 +228,12 @@ class AppSettingsViewController : SettingBaseViewController {
     }
     
     func prepareLayout() {
-        mainTableView.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0), excludingEdge: .bottom)
-        mainTableView.autoPinBottomToSuperviewMargin(withInset: 15)
+        mainTableView.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0))
     }
     
     func prepareHeaderView() {
         let headerView = UIView()
-        headerView.backgroundColor = Theme.bgelevateColor
+        headerView.backgroundColor = Theme.bgpageSecondaryColor
 
         let headerContainerView = UIView()
         headerContainerView.clipsToBounds = true
@@ -240,9 +263,8 @@ class AppSettingsViewController : SettingBaseViewController {
 
         let shareContactLabel = UILabel()
         shareContactLabel.font = UIFont.ows_dynamicTypeBody
-        shareContactLabel.adjustsFontForContentSizeCategory = true
-        shareContactLabel.textColor = Theme.primaryTextColor
-        shareContactLabel.text = Localized("CONTACT_SHARE_CONTACT_TO_FRIENTS")
+        shareContactLabel.textColor = Theme.tprimaryColor
+        shareContactLabel.text = Localized("ENTER_CODE_MYCODE")
 
         let shareContactQRIcon = UIImageView(image: UIImage(named: "setting_qrcode"))
 
@@ -365,8 +387,8 @@ extension AppSettingsViewController : UITableViewDelegate,UITableViewDataSource 
         if(settingMeItem.cellStyle == .blank){
             let cell = tableView.dequeueReusableCell(withIdentifier: reuse_identifier_style_blank, for: indexPath) as? DTBlankCell
             guard let defaultStyleCell = cell else { return UITableViewCell.init()}
-            defaultStyleCell.backgroundColor = Theme.bgelevateColor
-            defaultStyleCell.contentView.backgroundColor = Theme.bgelevateColor
+            defaultStyleCell.backgroundColor = Theme.bgpageSecondaryColor
+            defaultStyleCell.contentView.backgroundColor = Theme.bgpageSecondaryColor
             return defaultStyleCell
         } else if(settingMeItem.cellStyle == .onlyAccessory || settingMeItem.cellStyle == .accessoryAndDescription) {
             let cell = tableView.dequeueReusableCell(withIdentifier: settingDescriptionCell_AppSettings, for: indexPath) as? DTSettingDescriptionCell
@@ -385,7 +407,7 @@ extension AppSettingsViewController : UITableViewDelegate,UITableViewDataSource 
             }
             defaultStyleCell.selectionStyle = .none
             defaultStyleCell.reloadCell(model: settingMeItem)
-            defaultStyleCell.backgroundColor = Theme.bgelevateColor
+            defaultStyleCell.backgroundColor = Theme.bgpageSecondaryColor
             defaultStyleCell.contentView.backgroundColor = Theme.bg1Color
             return defaultStyleCell
         } else {
@@ -418,6 +440,9 @@ extension AppSettingsViewController : UITableViewDelegate,UITableViewDataSource 
             //TODO: theme窗口需要单独提出来
             let themeSettingVC = DTThemeSettingsTableViewController()
             self.navigationController?.pushViewController(themeSettingVC, animated: true)
+        case .some(.textSize):
+            let textSizeVC = DTTextSizeSettingsController()
+            self.navigationController?.pushViewController(textSizeVC, animated: true)
         case .some(.language):
             //TODO: 设置语言的接口
             let languageSettingVC = DTLanguageSettingTableViewController()
@@ -436,7 +461,7 @@ extension AppSettingsViewController : UITableViewDelegate,UITableViewDataSource 
     }
     
     func presentFeedbackView() {
-        let thread = TSContactThread.getOrCreateThread(contactId: "+10000")
+        let thread = TSContactThread.getOrCreateThread(contactId: TSConstants.officialBotId)
         SignalApp.shared().presentTargetConversation(for: thread, action: .none, focusMessageId: nil)
     }
 }

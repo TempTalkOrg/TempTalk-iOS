@@ -10,8 +10,8 @@ class SAELoadViewController: UIViewController {
 
     weak var delegate: ShareViewDelegate?
 
-    var activityIndicator: UIActivityIndicatorView!
-    var progressView: UIProgressView!
+    var activityIndicator: UIActivityIndicatorView?
+    var progressView: UIProgressView?
 
     var progress: Progress? {
         didSet {
@@ -20,7 +20,7 @@ class SAELoadViewController: UIViewController {
             }
 
             updateProgressViewVisability()
-            progressView.observedProgress = progress
+            progressView?.observedProgress = progress
         }
     }
 
@@ -31,13 +31,13 @@ class SAELoadViewController: UIViewController {
 
         // Prefer to show progress view when progress is present
         if self.progress == nil {
-            activityIndicator.startAnimating()
-            self.progressView.isHidden = true
-            self.activityIndicator.isHidden = false
+            activityIndicator?.startAnimating()
+            self.progressView?.isHidden = true
+            self.activityIndicator?.isHidden = false
         } else {
-            activityIndicator.stopAnimating()
-            self.progressView.isHidden = false
-            self.activityIndicator.isHidden = true
+            activityIndicator?.stopAnimating()
+            self.progressView?.isHidden = false
+            self.activityIndicator?.isHidden = true
         }
     }
 
@@ -69,12 +69,14 @@ class SAELoadViewController: UIViewController {
         activityIndicator.autoCenterInSuperview()
 
         progressView = UIProgressView(progressViewStyle: .default)
-        progressView.observedProgress = progress
+        progressView?.observedProgress = progress
 
-        self.view.addSubview(progressView)
-        progressView.autoVCenterInSuperview()
-        progressView.autoPinWidthToSuperview(withMargin: ScaleFromIPhone5(30))
-        progressView.progressTintColor = UIColor.white
+        if let progressView = progressView {
+            self.view.addSubview(progressView)
+            progressView.autoVCenterInSuperview()
+            progressView.autoPinWidthToSuperview(withMargin: ScaleFromIPhone5(30))
+            progressView.progressTintColor = UIColor.white
+        }
 
         updateProgressViewVisability()
 

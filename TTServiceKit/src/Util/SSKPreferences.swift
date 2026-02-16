@@ -346,4 +346,18 @@ public class SSKPreferences: NSObject {
         appUserDefaults.set(value, forKey: hasGrdbDatabaseCorruptionKey)
         appUserDefaults.synchronize()
     }
+
+    // MARK: - Confidential Message Alert
+
+    private static var hasShownConfidentialMessageAlertKey: String { "hasShownConfidentialMessageAlert" }
+
+    @objc
+    public static func hasShownConfidentialMessageAlert(transaction: SDSAnyReadTransaction) -> Bool {
+        return store.getBool(hasShownConfidentialMessageAlertKey, defaultValue: false, transaction: transaction)
+    }
+
+    @objc
+    public static func setHasShownConfidentialMessageAlert(_ value: Bool, transaction: SDSAnyWriteTransaction) {
+        store.setBool(value, key: hasShownConfidentialMessageAlertKey, transaction: transaction)
+    }
 }

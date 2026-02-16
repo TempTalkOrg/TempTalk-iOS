@@ -30,6 +30,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (NSString *)base58EncodedNumber:(NSString *)encodedString;
 
+/// 获取用户ID显示文本，优先使用customUid，次选使用base58编码的uid
+/// @param customUid 自定义用户ID
+/// @param recipientId 用户ID（电话号码）
++ (NSString *)displayUserIdWithCustomUid:(nullable NSString *)customUid recipientId:(NSString *)recipientId;
+
 @end
 
 NS_ASSUME_NONNULL_END

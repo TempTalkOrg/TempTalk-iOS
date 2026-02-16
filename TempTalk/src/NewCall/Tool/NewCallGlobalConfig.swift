@@ -7,60 +7,62 @@
 //
 
 import Foundation
+import TTServiceKit
 
 struct CallConfig {
-    var autoLeave: AutoLeaveConfig?
-    var chatPresets: [String] = []
-    var muteOtherEnabled: Bool = false
-    let chat: ChatConfig?
-    var createCallMsg: Bool = false
-    var clusters: [[String: String]] = []
-    var excludedNameRegex: String = ""
+    let autoLeave: AutoLeaveConfig
+    let chatPresets: [String]
+    let muteOtherEnabled: Bool
+    let chat: ChatConfig
+    let createCallMsg: Bool
+    let clusters: [[String: String]]
+    let excludedNameRegex: String
+    let bubbleMessage: BubbleMessageConfig
 
     // 派生属性
-    var soloMemberTimeoutResult: Int? {
-        autoLeave?.promptReminder.soloMemberTimeout
-    }
-    
-    var silenceTimeoutResult: Int? {
-        autoLeave?.promptReminder.silenceTimeout
-    }
-    
-    var runAfterReminderTimeoutResult: Int? {
-        autoLeave?.runAfterReminderTimeout
-    }
-    
-    var autoHideTimeoutResult: Int? {
-        chat?.autoHideTimeout
+    var soloMemberTimeoutResult: Int {
+        autoLeave.promptReminder.soloMemberTimeout
     }
 
-    init?(from dict: [String: Any]) {
-        // autoLeave
+    var silenceTimeoutResult: Int {
+        autoLeave.promptReminder.silenceTimeout
+    }
+
+    var runAfterReminderTimeoutResult: Int {
+        autoLeave.runAfterReminderTimeout
+    }
+
+    var autoHideTimeoutResult: Int {
+        chat.autoHideTimeout
+    }
+
+    init(from dict: [String: Any]) {
+        // autoLeave - 使用默认值或解析
         if let autoLeaveDict = dict["autoLeave"] as? [String: Any] {
             self.autoLeave = AutoLeaveConfig(from: autoLeaveDict)
+        } else {
+            self.autoLeave = AutoLeaveConfig.default
         }
 
         // chatPresets
-        if let chatPresets = dict["chatPresets"] as? [String] {
-            self.chatPresets = chatPresets
-        }
+        self.chatPresets = dict["chatPresets"] as? [String] ?? []
 
         // chat
         if let chatDict = dict["chat"] as? [String: Any] {
             self.chat = ChatConfig(from: chatDict)
         } else {
-            self.chat = nil // ✅ 因为 chat 是 let，必须显式初始化
+            self.chat = ChatConfig.default
         }
 
         // createCallMsg
-        if let createCallMsg = dict["createCallMsg"] as? Bool {
-            self.createCallMsg = createCallMsg
-        }
+        self.createCallMsg = dict["createCallMsg"] as? Bool ?? false
 
         // clusters
         if let callServersDict = dict["callServers"] as? [String: Any],
            let clusters = callServersDict["clusters"] as? [[String: String]] {
             self.clusters = clusters
+        } else {
+            self.clusters = []
         }
 
         // excludedNameRegex
@@ -68,32 +70,39 @@ struct CallConfig {
            let bluetooth = denoiseDict["bluetooth"] as? [String: Any],
            let excludedNameRegex = bluetooth["excludedNameRegex"] as? String {
             self.excludedNameRegex = excludedNameRegex
+        } else {
+            self.excludedNameRegex = ""
         }
 
         // muteOtherEnabled
-        if let muteOtherEnabled = dict["muteOtherEnabled"] as? Bool {
-            self.muteOtherEnabled = muteOtherEnabled
+        self.muteOtherEnabled = dict["muteOtherEnabled"] as? Bool ?? false
+
+        // bubbleMessage
+        if let bubbleMessageDict = dict["bubbleMessage"] as? [String: Any] {
+            self.bubbleMessage = BubbleMessageConfig(from: bubbleMessageDict)
+        } else {
+            self.bubbleMessage = BubbleMessageConfig.default
         }
     }
+
+    // 默认配置
+    static let `default` = CallConfig(from: [:])
 }
 
 struct AutoLeaveConfig {
     let promptReminder: PromptReminder
     let runAfterReminderTimeout: Int
-    
-    init?(from dict: [String: Any]) {
-        guard let reminderDict = dict["promptReminder"] as? [String: Any],
-              let reminder = PromptReminder(from: reminderDict) else {
-            Logger.error("Invalid promptReminder config")
-            return nil
+
+    init(from dict: [String: Any]) {
+        // promptReminder
+        if let reminderDict = dict["promptReminder"] as? [String: Any] {
+            self.promptReminder = PromptReminder(from: reminderDict)
+        } else {
+            self.promptReminder = PromptReminder.default
         }
-        
-        guard let reminderTimeout = Self.parseTimeout(dict["runAfterReminderTimeout"]) else {
-            Logger.error("Invalid runAfterReminderTimeout")
-            return nil
-        }
-        self.promptReminder = reminder
-        self.runAfterReminderTimeout = reminderTimeout
+
+        // runAfterReminderTimeout
+        self.runAfterReminderTimeout = Self.parseTimeout(dict["runAfterReminderTimeout"]) ?? 30
     }
 
     // 统一超时解析方法
@@ -105,18 +114,16 @@ struct AutoLeaveConfig {
         default: return nil
         }
     }
+
+    // 默认配置
+    static let `default` = AutoLeaveConfig(from: [:])
 }
 
 struct ChatConfig {
     let autoHideTimeout: Int
-    
-    init?(from dict: [String: Any]) {
-        // 确保字典中有正确的值
-        guard let autoHideTimeout = dict["autoHideTimeout"] as? Int else {
-            Logger.error("Missing or invalid autoHideTimeout value")
-            return nil
-        }
-        self.autoHideTimeout = autoHideTimeout
+
+    init(from dict: [String: Any]) {
+        self.autoHideTimeout = Self.parseTimeout(dict["autoHideTimeout"]) ?? 5
     }
 
     // 统一超时解析方法
@@ -128,28 +135,23 @@ struct ChatConfig {
         default: return nil
         }
     }
+
+    // 默认配置
+    static let `default` = ChatConfig(from: [:])
 }
 
 struct PromptReminder {
     let soloMemberTimeout: Int
     let silenceTimeout: Int
-    
-    init?(from dict: [String: Any]) {
-        // 解析 soloMemberTimeout
-        guard let soloTimeout = Self.parseTimeout(dict["soloMemberTimeout"]) else {
-            Logger.error("Invalid soloMemberTimeout")
-            return nil
-        }
-        
-        // 解析 silenceTimeout
-        guard let silenceTimeout = Self.parseTimeout(dict["silenceTimeout"]) else {
-            Logger.error("Invalid silenceTimeout")
-            return nil
-        }
-        
-        self.soloMemberTimeout = soloTimeout
-        self.silenceTimeout = silenceTimeout
+
+    init(from dict: [String: Any]) {
+        // 解析 soloMemberTimeout，默认 60 秒
+        self.soloMemberTimeout = Self.parseTimeout(dict["soloMemberTimeout"]) ?? 60
+
+        // 解析 silenceTimeout，默认 120 秒
+        self.silenceTimeout = Self.parseTimeout(dict["silenceTimeout"]) ?? 120
     }
+
     // 统一超时解析方法
     private static func parseTimeout(_ value: Any?) -> Int? {
         switch value {
@@ -159,4 +161,133 @@ struct PromptReminder {
         default: return nil
         }
     }
+
+    // 默认配置
+    static let `default` = PromptReminder(from: [:])
 }
+
+struct BubbleMessageConfig {
+    let emojiPresets: [String]
+    let textPresets: [String]
+    let columns: [Int]
+    let baseSpeed: Int
+    let deltaSpeed: Int
+
+    init(from dict: [String: Any]) {
+        // emojiPresets - 默认 emoji 预设
+        self.emojiPresets = dict["emojiPresets"] as? [String] ?? [
+            "👍",
+            "👏",
+            "🎉",
+            "🚀",
+            "❤️",
+            "😂"
+        ]
+
+        // textPresets - 默认文本预设
+        self.textPresets = dict["textPresets"] as? [String] ?? [
+            "Agree ✅",
+            "Disagree ⛔️",
+            "Bye 👋",
+            "Can't hear 🙉"
+        ]
+
+        // columns - 默认值为屏幕左侧 10%, 40%, 70% 的位置
+        self.columns = dict["columns"] as? [Int] ?? [10, 40, 70]
+
+        // baseSpeed - 默认 4600 毫秒
+        self.baseSpeed = dict["baseSpeed"] as? Int ?? 4600
+
+        // deltaSpeed - 默认 400 毫秒
+        self.deltaSpeed = dict["deltaSpeed"] as? Int ?? 400
+    }
+
+    // 默认配置
+    static let `default` = BubbleMessageConfig(from: [:])
+}
+
+// MARK: - CallConfigManager
+class CallConfigManager {
+
+    // 默认配置字典
+    private static func defaultConfigDict() -> [String: Any] {
+        return [
+            "chatPresets": [
+                "Good 👍",
+                "Bad 😝",
+                "Agree ✅",
+                "Disagree ❌",
+                "Gotta go, bye",
+                "Please go faster",
+                "Please make screen bigger",
+                "Can't hear you. Bad Signal",
+                "Can't hear you. Your voice is too low"
+            ],
+            "muteOtherEnabled": false,
+            "createCallMsg": false,
+            "autoLeave": [
+                "promptReminder": [
+                    "soloMemberTimeout": 60000,
+                    "silenceTimeout": 120000
+                ],
+                "runAfterReminderTimeout": 30000
+            ],
+            "chat": [
+                "autoHideTimeout": 5000
+            ],
+            "bubbleMessage": [
+                "emojiPresets": ["👍", "👏", "🎉", "🚀", "❤️", "😂"],
+                "textPresets": ["Agree ✅", "Disagree ⛔️", "Bye 👋", "Can't hear 🙉"],
+                "columns": [10, 40, 70],
+                "baseSpeed": 4600,
+                "deltaSpeed": 400
+            ],
+            "callServers": [
+                "clusters": []
+            ],
+            "denoise": [
+                "bluetooth": [
+                    "excludedNameRegex": "airpods"
+                ]
+            ]
+        ]
+    }
+
+    // 同步获取配置（参考 DTGroupConfig 的实现）
+    static func fetchCallConfig() -> CallConfig {
+        var result: CallConfig!
+
+        DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "call") { config, error in
+            var finalConfig = defaultConfigDict()
+
+            // 如果获取成功，合并配置（服务器配置覆盖默认配置）
+            if error == nil, let serverConfig = config as? [String: Any] {
+                finalConfig = mergeConfig(base: finalConfig, override: serverConfig)
+            }
+
+            // 创建 CallConfig 对象
+            result = CallConfig(from: finalConfig)
+        }
+
+        return result
+    }
+
+    // 递归合并配置字典
+    private static func mergeConfig(base: [String: Any], override: [String: Any]) -> [String: Any] {
+        var merged = base
+
+        for (key, value) in override {
+            if let baseDict = base[key] as? [String: Any],
+               let overrideDict = value as? [String: Any] {
+                // 递归合并嵌套字典
+                merged[key] = mergeConfig(base: baseDict, override: overrideDict)
+            } else {
+                // 直接覆盖
+                merged[key] = value
+            }
+        }
+
+        return merged
+    }
+}
+

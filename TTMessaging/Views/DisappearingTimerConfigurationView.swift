@@ -23,7 +23,7 @@ public class DisappearingTimerConfigurationView: UIView {
             // gesture recognizer is only enabled when a delegate is assigned.
             // This lets us use this view as either an interactive button
             // or as a non-interactive status indicator
-            pressGesture.isEnabled = delegate != nil
+            pressGesture?.isEnabled = delegate != nil
         }
     }
 
@@ -47,7 +47,7 @@ public class DisappearingTimerConfigurationView: UIView {
 
     private let imageView: UIImageView
     private let label: UILabel
-    private var pressGesture: UILongPressGestureRecognizer!
+    private var pressGesture: UILongPressGestureRecognizer?
 
     public required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
@@ -67,18 +67,18 @@ public class DisappearingTimerConfigurationView: UIView {
 
         super.init(frame: CGRect.zero)
 
-        applyTintColor(self.tintColor)
+        applyTintColor(self.tintColor ?? .white)
 
         // Gesture, simulating button touch up inside
         let gesture = UILongPressGestureRecognizer(target: self, action: #selector(pressHandler))
         gesture.minimumPressDuration = 0
         self.pressGesture = gesture
-        self.addGestureRecognizer(pressGesture)
+        self.addGestureRecognizer(gesture)
 
         // disable gesture recognizer until a delegate is assigned
         // this lets us use the UI as either an interactive button
         // or as a non-interactive status indicator
-        pressGesture.isEnabled = false
+        gesture.isEnabled = false
 
         // Accessibility
         self.accessibilityLabel = Localized("DISAPPEARING_MESSAGES_LABEL", comment: "Accessibility label for disappearing messages")
@@ -105,7 +105,7 @@ public class DisappearingTimerConfigurationView: UIView {
         if gestureRecognizer.state == .began {
             applyTintColor(UIColor.gray)
         } else if gestureRecognizer.state == .ended {
-            applyTintColor(self.tintColor)
+            applyTintColor(self.tintColor ?? .white)
 
             let location = gestureRecognizer.location(in: self)
             let isTouchUpInside = self.bounds.contains(location)
@@ -123,9 +123,11 @@ public class DisappearingTimerConfigurationView: UIView {
         }
     }
 
-    override public var tintColor: UIColor! {
+    override public var tintColor: UIColor? {
         didSet {
-            applyTintColor(tintColor)
+            if let tintColor = tintColor {
+                applyTintColor(tintColor)
+            }
         }
     }
 

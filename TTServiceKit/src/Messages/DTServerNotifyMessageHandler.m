@@ -254,8 +254,8 @@ NSString * const NotifyCallEndRoomIdKey = @"roomId";
                 OWSLogError(@"format DTCoWorkerApprovedNotifyEntity failed");
                 return;
             }
-            
-            NSString *localNumber = [TSAccountManager shared].localNumber;
+
+            NSString *localNumber = [[TSAccountManager shared] localNumberWithTransaction:transaction];
             if (localNumber == nil) {
                 OWSLogError(@"missing localNumber");
                 return;

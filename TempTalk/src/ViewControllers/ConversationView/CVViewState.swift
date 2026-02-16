@@ -48,17 +48,20 @@ class CVViewState: NSObject {
     var headerView: ConversationHeaderView?
     lazy var remindView = DTRemindView()
     lazy var blockView = UIView()
-    
+
     var threadBackButton: UIBarButtonItem?
+    var threadPopBackButton: UIBarButtonItem?
     var cancelMultiButton: UIBarButtonItem?
     var moreButton: UIBarButtonItem?
     var askFriendBtn: UIBarButtonItem?
     var quickGroupBtn: UIBarButtonItem?
     
     var inputToolbar: ConversationInputToolbar?
-    
+
     var friendReqBar: DTRequestBar?
     var friendReqTime: TimeInterval = 0
+    var warningHeaderView: DTConversationWarningHeaderView?
+    var warningHeaderTopConstraint: NSLayoutConstraint?
     
     //用于机密消息附件预览后清除
     var genericAttachmenViewItem: ConversationViewItem?
@@ -73,12 +76,10 @@ class CVViewState: NSObject {
     var isViewVisible = false
     var isUserScrolling = false
     var isWaitingForDeceleration = false
-    // 偶现isViewVisible因为顺序问题。不正确的问题
-    var hasPendingInitialLoad = false
-    var pendingInitialLoadCompletion: ((Bool) -> Void)?
     
     var viewHasEverAppeared = false
     var shouldAnimateKeyboardChanges = false
+    var hasCompletedInitialScroll = false
     
     var atLocation: UInt = 0
     weak var atVC: ChooseAtMembersViewController?
@@ -89,17 +90,31 @@ class CVViewState: NSObject {
     var isShowLoadNewerHeader = false
     var isShowFetchOlderHeader = false
     var isShowFetchNewerHeader = false
+
+    // 防止在加载过程中重复触发加载
+    var isLoadingOlderItems = false
+    var isLoadingNewerItems = false
     
     var lastVisibleSortId: UInt64 = .zero
     var lastNotifySequenceId: UInt64 = .zero
     var lastMsgSequenceId: UInt64 = .zero
     
     var isViewCompletelyAppeared = false
-    
+
     var peek = false
     var hasUnreadMessages = false
     var scrollDownButton: ConversationScrollButton?
     var dateSeparatorView: ConversationDateSeparatorView?
+
+    // MARK: - Keyboard Protection
+    /// 键盘保护状态：当键盘弹出后，防止非用户操作导致的键盘收起
+    var isKeyboardProtectionEnabled = false
+
+    // MARK: - Initial Scroll Position Protection
+    /// 存储初始滚动到未读消息的目标位置，用于防止键盘闪现导致的位置偏移
+    var initialScrollTargetOffset: CGFloat?
+    /// 初始滚动保护的截止时间，超过此时间后清除保护
+    var initialScrollProtectionDeadline: Date?
     
     var lastPosition: CGFloat = .zero
     var isScrollUp = false
@@ -129,13 +144,14 @@ class CVViewState: NSObject {
     var forwardType: DTForwardMessageType = .oneByOne
     var forwardMessageItems: [ConversationViewItem] = []
     var targetThreads: [TSThread] = []
-    
-    // MARK: pin message
-    var pinView: DTConversationPinView?
-    var pinMessages: [TSMessage] = []
-    var pinAPI: DTGroupPinAPI?
-    var isShowingPinView = false
-    
+
+    // MARK: call
+    var isReturningFromCallWindow = false
+    var isScreenOrientationChanging = false
+    var isFromPersonalCard = false
+    var isFullScreenMode = false
+    var floatingWindowIsCompactMode = false  // 浮动窗口是否处于compact模式（50%）
+
     // MARK: photo
     var photoBrowser: DTPhotoBrowserHelper?
     var loadingView: UIActivityIndicatorView?
@@ -144,6 +160,7 @@ class CVViewState: NSObject {
     var audioPlayer: OWSAudioPlayer?
     var audioRecorder: DTAudioRecorder?
     var voiceMessageUUID: UUID?
+    var currentAudioPlaybackRate: Float? // 当前会话的播放速度，nil 表示使用全局设置
     lazy var recordVoiceNoteAudioActivity: AudioActivity = {
         let activity = AudioActivity(audioDescription: "Voice Message Recording")
         return activity
@@ -208,10 +225,6 @@ extension ConversationViewController {
             // 为解决 modal 半屏 viewController 后，图片不展示问题，不去更改 cellIsVisible
             // updateCellsVisible()
             updateShouldObserveDBModifications()
-            if newValue, !wasVisible {
-                Logger.info("[Conversation] deal pending task isViewVisible is \(newValue) wasVisible is \(wasVisible)")
-                processPendingInitialMessagesIfNeeded()
-            }
         }
     }
     
@@ -221,6 +234,24 @@ extension ConversationViewController {
         }
         set {
             viewState.isWaitingForDeceleration = newValue
+        }
+    }
+
+    var isLoadingOlderItems: Bool {
+        get {
+            viewState.isLoadingOlderItems
+        }
+        set {
+            viewState.isLoadingOlderItems = newValue
+        }
+    }
+
+    var isLoadingNewerItems: Bool {
+        get {
+            viewState.isLoadingNewerItems
+        }
+        set {
+            viewState.isLoadingNewerItems = newValue
         }
     }
     
@@ -272,6 +303,31 @@ extension ConversationViewController {
     
     var fetchThreadConfigAPI: DTFetchThreadConfigAPI {
         viewState.fetchThreadConfigAPI
+    }
+
+    var isReturningFromCallWindow: Bool {
+        get { viewState.isReturningFromCallWindow }
+        set { viewState.isReturningFromCallWindow = newValue }
+    }
+
+    var isScreenOrientationChanging: Bool {
+        get { viewState.isScreenOrientationChanging }
+        set { viewState.isScreenOrientationChanging = newValue }
+    }
+
+    var isFromPersonalCard: Bool {
+        get { viewState.isFromPersonalCard }
+        set { viewState.isFromPersonalCard = newValue }
+    }
+
+    var isFullScreenMode: Bool {
+        get { viewState.isFullScreenMode }
+        set { viewState.isFullScreenMode = newValue }
+    }
+
+    var floatingWindowIsCompactMode: Bool {
+        get { viewState.floatingWindowIsCompactMode }
+        set { viewState.floatingWindowIsCompactMode = newValue }
     }
 }
 

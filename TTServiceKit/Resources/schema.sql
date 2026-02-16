@@ -218,7 +218,7 @@ CREATE
             ,"mentionedMsgType" INTEGER
             ,"configurationDurationSeconds" INTEGER
             ,"shouldAffectThreadSorting" BOOLEAN
-            ,"mentions" mentions
+            ,"mentions" BLOB
             ,"storedMessageState" INTEGER
             ,"envelopSource" TEXT
             ,"cardUniqueId" TEXT
@@ -268,6 +268,18 @@ CREATE
     INDEX "index_model_TSInteraction_on_topicActionServerTimeStamp"
         ON "model_TSInteraction"("topicActionServerTimeStamp"
 )
+;
+
+CREATE
+    INDEX "index_interaction_archive_message"
+        ON "model_TSInteraction"("uniqueThreadId", "recordType", "messageType")
+        WHERE "recordType" = 27
+;
+
+CREATE
+    INDEX "index_interaction_migration_outgoing"
+        ON "model_TSInteraction"("recordType", "timestamp", "uniqueThreadId")
+        WHERE "recordType" = 14
 ;
 
 
@@ -427,34 +439,6 @@ CREATE
 CREATE
     INDEX "index_attachment_on_recordType_state"
         ON "model_TSAttachment"("recordType", "state"
-)
-;
-
-CREATE
-    TABLE
-        IF NOT EXISTS "model_DTPinnedMessage" (
-            "id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL
-            ,"recordType" INTEGER NOT NULL
-            ,"uniqueId" TEXT NOT NULL UNIQUE
-                ON CONFLICT FAIL
-            ,"groupId" TEXT
-            ,"incomingMessage" BLOB
-            ,"outgoingMessage" BLOB
-            ,"pinId" TEXT
-            ,"realSource" BLOB
-            ,"timestampForSorting" INTEGER
-        )
-;
-
-CREATE
-    INDEX "index_model_DTPinnedMessage_on_uniqueId"
-        ON "model_DTPinnedMessage"("uniqueId"
-)
-;
-
-CREATE
-    INDEX "index_model_DTPinnedMessage_on_groupId"
-        ON "model_DTPinnedMessage"("groupId"
 )
 ;
 

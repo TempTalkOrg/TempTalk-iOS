@@ -14,7 +14,6 @@
 #import "TSMessage.h"
 #import "DTGetMyGroupsAPI.h"
 #import "DTChatFolderManager.h"
-#import "DTPinnedMessage.h"
 #import "TSInfoMessage.h"
 #import "NSDate+OWS.h"
 #import "DTGroupConfig.h"
@@ -594,29 +593,6 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
     [[NSNotificationCenter defaultCenter] postNotificationNameAsync:DTGroupCriticalAlertChangedNotification
                                                              object:nil
                                                            userInfo:targetIds];
-}
-
-//TODO: 增加serverTimestamp
-+ (void)sendPinSystemMessageWithSource:(NSString *)source
-                       serverTimestamp:(uint64_t)serverTimestamp
-                                thread:(TSThread *)thread
-                         pinnedMessage:(DTPinnedMessage *)pinnedMessage
-                           transaction:(SDSAnyWriteTransaction *)transaction {
-    
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
-    serverTimestamp = serverTimestamp > 0 ? serverTimestamp : now;
-    
-    NSAttributedString *customMessage = [DTGroupUtils getPinnedMessageInfoWithSource:source
-                                                                             message:pinnedMessage.contentMessage
-                                                                         transaction:transaction];
-    
-    TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initActionInfoMessageWithType:TSInfoMessagePinMessage
-                                                                            timestamp:now
-                                                                      serverTimestamp:serverTimestamp
-                                                                             inThread:thread
-                                                                        customMessage:customMessage];
-    infoMessage.realSource = pinnedMessage.realSource;
-    [infoMessage anyInsertWithTransaction:transaction];
 }
 
 + (void)sendGroupReminderMessageWithSource:(NSString *)source

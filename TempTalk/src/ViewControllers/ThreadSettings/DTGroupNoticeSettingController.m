@@ -17,7 +17,7 @@
 
 extern NSString *const DTPersonalGroupConfigChangedNotification;
 
-@interface DTGroupNoticeSettingController ()<UITextViewDelegate>
+@interface DTGroupNoticeSettingController ()<UITextViewDelegate, OWSNavigationChildController>
 @property(nonatomic,strong) Contact *contact;
 @property(nonatomic,strong) NSNumber *globalNotification;//全局的配置信息
 @property(nonatomic,assign) DTGlobalNotificationType type;//全局的配置类型
@@ -38,6 +38,8 @@ extern NSString *const DTPersonalGroupConfigChangedNotification;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     [self setTitle:Localized(@"SETTINGS_GROUP_MESSAGE_NOTIFYCATION", nil)];
     if(self.thread.isGroupThread){
         [[NSNotificationCenter defaultCenter] addObserver:self
@@ -45,6 +47,12 @@ extern NSString *const DTPersonalGroupConfigChangedNotification;
                                                      name:DTPersonalGroupConfigChangedNotification
                                                    object:nil];
     }
+}
+
+- (void)applyTheme {
+    [super applyTheme];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
 }
 
 - (void)personalGroupConfigChangedNotification:(NSNotification *)notification {
@@ -200,7 +208,7 @@ extern NSString *const DTPersonalGroupConfigChangedNotification;
 
 - (UITableViewCell *)custonTipCell {
     UITableViewCell *cell = [OWSTableItem newCell];
-    cell.backgroundColor = Theme.tableCellBackgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
     
     UILabel *detailTextLabel = [UILabel new];
     detailTextLabel.font = [UIFont ows_regularFontWithSize:14.f];
@@ -299,7 +307,7 @@ extern NSString *const DTPersonalGroupConfigChangedNotification;
 
 - (UITableViewCell *)globalNotifyCell {
     UITableViewCell *cell = [OWSTableItem newCell];
-    cell.backgroundColor = Theme.tableCellBackgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
     UIStackView *contentColumnView = [[UIStackView alloc]init];
     contentColumnView.axis = UILayoutConstraintAxisVertical;
     contentColumnView.alignment = UIStackViewAlignmentCenter;
@@ -324,7 +332,7 @@ extern NSString *const DTPersonalGroupConfigChangedNotification;
     
     UILabel *titleLabel = [UILabel new];
     titleLabel.font = [UIFont ows_regularFontWithSize:18.f];
-    titleLabel.textColor = Theme.primaryTextColor;
+    titleLabel.textColor = Theme.tprimaryColor;
     titleLabel.text = Localized(@"SETTINGS_COMMON_GLOBAL_NOTIFICSTION", @"");
     [contentTopRowView addArrangedSubview:titleLabel];
     
@@ -333,7 +341,7 @@ extern NSString *const DTPersonalGroupConfigChangedNotification;
     if (self.isOpenGlobalNotification) {
         notityLabel.textColor = Theme.accentBlueColor;
     }else {
-        notityLabel.textColor = Theme.ternaryTextColor;
+        notityLabel.textColor = Theme.tthirdColor;
     }
     notityLabel.text = [NSString stringWithFormat:@"(%@)",[self getGlobleString]];
     [contentTopRowView addArrangedSubview:notityLabel];
@@ -448,7 +456,7 @@ extern NSString *const DTPersonalGroupConfigChangedNotification;
     paragraphStyle.lineSpacing = 10;
     NSMutableAttributedString *attrStr = [[NSMutableAttributedString alloc] initWithString:text attributes:@{
         NSFontAttributeName:[UIFont systemFontOfSize:12],
-        NSForegroundColorAttributeName:Theme.secondaryTextAndIconColor,
+        NSForegroundColorAttributeName:Theme.tsecondaryColor,
         NSParagraphStyleAttributeName:paragraphStyle
     }];
     [attrStr addAttribute:NSLinkAttributeName value:@"localNotificationAddress://" range:NSMakeRange(text.length-length, length)];
@@ -463,5 +471,27 @@ extern NSString *const DTPersonalGroupConfigChangedNotification;
         _changeYourSettingsInAGroupAPI = [DTChangeYourSettingsInAGroupAPI new];
     }
     return _changeYourSettingsInAGroupAPI;
+}
+
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return false;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpageSecondaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
 }
 @end

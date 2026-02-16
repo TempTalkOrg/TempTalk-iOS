@@ -47,6 +47,10 @@ extern NSString *const TSInboxGroup;
 }
 
 - (void)requestAllActiveThreadsConversationSettingAndSaveResult {
+    if (![TSAccountManager isRegistered]) {
+        return;
+    }
+
     __block NSMutableArray *conversationIds = [NSMutableArray array];
     __block NSMutableArray *conversationStringIds = [NSMutableArray array];
     [self.databaseStorage asyncReadWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
@@ -65,7 +69,10 @@ extern NSString *const TSInboxGroup;
                     [conversationIds addObject:[thread serverThreadId]];
                     
                     if([thread isKindOfClass:[TSContactThread class]]){
-                        NSString *localNumber = [TSAccountManager sharedInstance].localNumber;
+                        NSString *localNumber = [[TSAccountManager sharedInstance] localNumberWithTransaction:transaction];
+                        if (!localNumber) {
+                            return;
+                        }
                         if([localNumber compare:[thread serverThreadId] options:NSCaseInsensitiveSearch | NSNumericSearch] == NSOrderedAscending){
                             NSString *conversationIdString = [NSString stringWithFormat:@"%@:%@",localNumber,[thread serverThreadId]];
                             [conversationStringIds addObject:conversationIdString];
@@ -174,8 +181,11 @@ extern NSString *const TSInboxGroup;
                             if(!DTParamsUtils.validateArray(tmpConversationArr) || tmpConversationArr.count < 2){
                                 return;
                             }
-                            NSString *localNumber = [TSAccountManager sharedInstance].localNumber;
-                            if([entity.conversation containsString:[TSAccountManager sharedInstance].localNumber]){
+                            NSString *localNumber = [[TSAccountManager sharedInstance] localNumberWithTransaction:writeTransaction];
+                            if(![localNumber isKindOfClass:[NSString class]]) {
+                                return;
+                            }
+                            if([entity.conversation containsString:localNumber]){
                                 [tmpConversationArr removeObject:localNumber];
                             }
                             NSString *remoteConversationID = tmpConversationArr.lastObject;
@@ -233,8 +243,11 @@ extern NSString *const TSInboxGroup;
                     if(!DTParamsUtils.validateArray(tmpConversationArr) || tmpConversationArr.count < 2){
                         return;
                     }
-                    NSString *localNumber = [TSAccountManager sharedInstance].localNumber;
-                    if([entity.conversation containsString:[TSAccountManager sharedInstance].localNumber]){
+                    NSString *localNumber = [[TSAccountManager sharedInstance] localNumberWithTransaction:writeTransaction];
+                    if(![localNumber isKindOfClass:[NSString class]]) {
+                        return;
+                    }
+                    if([entity.conversation containsString:localNumber]){
                         [tmpConversationArr removeObject:localNumber];
                     }
                     NSString *remoteConversationID = tmpConversationArr.lastObject;

@@ -92,19 +92,6 @@
     
     if(message.hasAttachments){
         self.apnsMessageInfo.messageType = DTApnsMessageType_GROUP_FILE;
-    }else if (message.quotedMessage.authorId){
-        self.apnsMessageInfo.mentionedPersons = @[message.quotedMessage.authorId];
-        if([message.quotedMessage.authorId isEqualToString:recipientId]){
-            self.apnsMessageInfo.messageType = DTApnsMessageType_GROUP_REPLY_DESTINATION;
-        }else{
-            self.apnsMessageInfo.messageType = DTApnsMessageType_GROUP_REPLY_OTHER;
-        }
-    }else if([message isKindOfClass:[DTOutgoingCallMessage class]] &&
-             ((DTOutgoingCallMessage *)self.message).apnsType){
-        self.apnsMessageInfo.messageType = ((DTOutgoingCallMessage *)self.message).apnsType;
-    }else if([message isKindOfClass:[DTHyperlinkOutgoingMessage class]] &&
-             ((DTHyperlinkOutgoingMessage *)self.message).apnsType){
-        self.apnsMessageInfo.messageType = ((DTHyperlinkOutgoingMessage *)self.message).apnsType;
     }else if (message.atPersons.length){
         NSArray *atPersons = [message.atPersons componentsSeparatedByString:@";"];
         NSMutableArray *editPersons = atPersons.mutableCopy;
@@ -122,6 +109,19 @@
         }else{
             self.apnsMessageInfo.messageType = DTApnsMessageType_GROUP_MENTIONS_OTHER;
         }
+    }else if (message.quotedMessage.authorId){
+        self.apnsMessageInfo.mentionedPersons = @[message.quotedMessage.authorId];
+        if([message.quotedMessage.authorId isEqualToString:recipientId]){
+            self.apnsMessageInfo.messageType = DTApnsMessageType_GROUP_REPLY_DESTINATION;
+        }else{
+            self.apnsMessageInfo.messageType = DTApnsMessageType_GROUP_REPLY_OTHER;
+        }
+    }else if([message isKindOfClass:[DTOutgoingCallMessage class]] &&
+             ((DTOutgoingCallMessage *)self.message).apnsType){
+        self.apnsMessageInfo.messageType = ((DTOutgoingCallMessage *)self.message).apnsType;
+    }else if([message isKindOfClass:[DTHyperlinkOutgoingMessage class]] &&
+             ((DTHyperlinkOutgoingMessage *)self.message).apnsType){
+        self.apnsMessageInfo.messageType = ((DTHyperlinkOutgoingMessage *)self.message).apnsType;
     }else if(self.message.recall){
         self.apnsMessageInfo.messageType = DTApnsMessageType_RECALL_MSG;
         if([self.message isKindOfClass:[DTRecallOutgoingMessage class]]){
@@ -132,9 +132,7 @@
                    [recallMessage.originMessage.quotedMessage.authorId isEqualToString:recipientId]){
                     self.apnsMessageInfo.messageType = DTApnsMessageType_RECALL_MENTIONS_MSG;
                 }
-                if(recallMessage.originMessage.quotedMessage.authorId){
-                    self.apnsMessageInfo.mentionedPersons = @[recallMessage.originMessage.quotedMessage.authorId];
-                }else{
+                if(recallMessage.originMessage.atPersons.length){
                     NSArray *atPersons = [recallMessage.originMessage.atPersons componentsSeparatedByString:@";"];
                     NSMutableArray *editPersons = atPersons.mutableCopy;
                     [editPersons enumerateObjectsUsingBlock:^(NSString *obj, NSUInteger idx, BOOL * _Nonnull stop) {
@@ -143,6 +141,8 @@
                         }
                     }];
                     self.apnsMessageInfo.mentionedPersons = atPersons;
+                }else if(recallMessage.originMessage.quotedMessage.authorId){
+                    self.apnsMessageInfo.mentionedPersons = @[recallMessage.originMessage.quotedMessage.authorId];
                 }
             }
         }

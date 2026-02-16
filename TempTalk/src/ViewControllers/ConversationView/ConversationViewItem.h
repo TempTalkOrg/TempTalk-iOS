@@ -71,10 +71,6 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType);
 
 /// 是否是转发和pin消息页
 @property (nonatomic, assign) BOOL isUseForMessageList;
-/// 原消息是否被pin
-@property (nonatomic, readonly) BOOL isPinned;
-/// 是否是pin消息
-@property (nonatomic, readonly) BOOL isPinMessage;
 /// 是否是机密消息
 @property (nonatomic, readonly) BOOL isConfidentialMessage;
 
@@ -111,6 +107,8 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType);
 - (CGFloat)audioProgressSeconds;
 
 - (void)associateAudioMessageView:(OWSAudioMessageView *)audioMessageView;
+
+- (void)associateAudioCell:(ConversationCell *)cell;
 
 #pragma mark - View State Caching
 

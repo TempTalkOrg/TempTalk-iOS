@@ -158,7 +158,7 @@ class CVBodyTextRenderItem: ConversationRenderItem {
                     )
                     attributedString.addAttribute(
                         .foregroundColor,
-                        value: Theme.primaryTextColor,
+                        value: Theme.tprimaryColor,
                         range: range
                     )
                 }
@@ -173,7 +173,7 @@ class CVBodyTextRenderItem: ConversationRenderItem {
                 }
                 attributedString.addAttribute(
                     .foregroundColor,
-                    value: Theme.themeBlueColor,
+                    value: Theme.tinfoColor,
                     range: range
                 )
                 attributedString.addAttribute(
@@ -184,8 +184,6 @@ class CVBodyTextRenderItem: ConversationRenderItem {
             }
         }
         
-        var shouldIgnoreEvents = false
-        
         let hMargins = conversationStyle.textInsetHorizontal * 2
         let maxTextWidth = floor(conversationStyle.maxMessageWidth - hMargins)
         let numberOfLines = calculateNumberOfLines(
@@ -195,12 +193,9 @@ class CVBodyTextRenderItem: ConversationRenderItem {
         
         let hasTapMore = displayableBodyText.isTextTruncated || numberOfLines > 20
         
-        if hasTapMore {
-            shouldIgnoreEvents = true
-        } else {
-            if let outgoingMessage = viewItem.interaction as? TSOutgoingMessage {
-                shouldIgnoreEvents = outgoingMessage.messageState != .sent
-            }
+        var shouldIgnoreEvents = false
+        if let outgoingMessage = viewItem.interaction as? TSOutgoingMessage {
+            shouldIgnoreEvents = outgoingMessage.messageState != .sent
         }
         
         let isLineTruncated = numberOfLines > 20
@@ -213,7 +208,7 @@ class CVBodyTextRenderItem: ConversationRenderItem {
             textColor: textColor,
             maximumNumberOfLines: maxLines,
             lineBreakMode: lineBreakMode,
-            linkTextAttributes: [.foregroundColor: Theme.themeBlueColor],
+            linkTextAttributes: [.foregroundColor: Theme.tinfoColor],
             shouldIgnoreEvents: shouldIgnoreEvents
         )
         

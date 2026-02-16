@@ -39,6 +39,8 @@
 @property (nonatomic, assign) BOOL isMutedByApp;
 @property (nonatomic, strong) NSMutableDictionary *callerMap;
 @property (nonatomic, strong) NSString *currentChannelName;
+@property (nonatomic, assign) BOOL isPrivateCall;
+@property (nonatomic, assign) BOOL isEndCallOnlyForCallkit;
 
 @end
 
@@ -62,13 +64,25 @@
 {
     self = [super init];
     if (self) {
-        
+
         self.provider = [[CXProvider alloc] initWithConfiguration:self.configuration];
         [_provider setDelegate:self queue:nil];
         [self.callController.callObserver setDelegate:self queue:TTCallQueue];
         self.callerMap = [[NSMutableDictionary alloc] init];
         self.isLocalEndCall = false;
+        self.isEndCallOnlyForCallkit = NO;
+        self.isPrivateCall = false;
+
+        // Register Darwin notification for background call termination
+        // CRITICAL: Must register early to handle locked/background state
+        [[NotificationHandler shared] registerDarwinNotification];
     }
+
+    // 提前初始化 RTC / AudioSession 相关组件(较耗时)，缩短 PushKit 来电回调（didReceiveIncomingPushWith...）到
+    // reportNewIncomingCall + completion 的耗时，降低触发系统 Watchdog（0xbaadca11）导致进程被杀的风险。
+    // 参考：https://developer.apple.com/documentation/xcode/sigkill
+    (void)[DTRTCAudioSession shared];
+
     return self;
 }
 
@@ -111,79 +125,53 @@
     // 一个周期内，重复的来电，不响应。
     if (self.callerMap.allValues.count > 0) {
         OWSLogError(@"%@ callerMap is not empty = %@", self.logTag, self.callerMap);
-        
-        completion();
+
+        [self reportFakeCallCompletion:completion];
         return;
     }
     if ([self.callerMap objectForKey:callerID] != nil) {
         OWSLogError(@"%@ callerMap has the same caller = %@", self.logTag, self.callerMap);
-        
-        completion();
+
+        [self reportFakeCallCompletion:completion];
     } else {
 
         NSUUID *uuid = [NSUUID UUID];
-        [self setUUID:uuid byCallerID:callerID];
-        [self setChannelName:channelName
-                   meetingId:meetingId
-                 meetingName:meetingName
-                isLiveStream:isLiveStream
-                  isSchedule:isSchedule
-                         eid:eid
-                  byCallerID:callerID];
-        [self setMode:mode byCallerID:callerID];
-        [self setEncryptMeetingKey:emkString byCallerID:callerID];
-        [self setMeetingVersionKey:meetingVersion byCallerID:callerID];
-        [self setCallerAccount:callerAccount byCallerID:callerID];
-        
-        BOOL isLiveKitCall = NO;
-        if (calling) {
-            isLiveKitCall = YES;
-            [self setCalling:calling callerId:callerID];
-        }
 
         //MARK: 群呼不允许回拨
-        NSString *value = callerID;
+        NSString *value = [callerID stringByAppendingFormat:@".%@", meetingVersion];
         NSString *nameForDisplay = nil;
-        if (isLiveKitCall) {
-            // 如果是群会或instant会议, value == @"unknown"
-            value = [callerID stringByAppendingFormat:@".%@", meetingVersion];
-            if (!DTParamsUtils.validateString(calling.conversationID.number) && !calling.conversationID.groupID) {
-                nameForDisplay = [NSString stringWithFormat:@"%@'s instant call", [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerID]];
-            } else {
-                if (DTParamsUtils.validateString(calling.conversationID.number)) {
-                    nameForDisplay = [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerAccount];
-                } else if (calling.conversationID.groupID) {
-                    NSData *groupId = calling.conversationID.groupID;
-                    TSGroupThread *groupThread = [TSGroupThread getThreadWithGroupId:groupId];
-                    nameForDisplay = [groupThread nameWithTransaction:nil];
-                    if (!DTParamsUtils.validateString(nameForDisplay)) {
-                        nameForDisplay = meetingName;
-                    }
-                }
-            }
-            if (!DTParamsUtils.validateString(nameForDisplay)) {
-                nameForDisplay = @"Call";
-            }
+        // 如果是群会或instant会议, value == @"unknown"
+        self.isPrivateCall = NO;
+        if (calling.conversationID.hasNumber) {
+            OWSLogInfo(@"[name] ========> private call");
+            nameForDisplay = [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerAccount];
+            self.isPrivateCall = YES;
         } else {
-            BOOL isGroupCall = [mode isEqualToString:DTCallModeGroup];
-            value = isGroupCall ? @"unknown" : callerID;
-            if (isGroupCall) {
-                nameForDisplay = meetingName ?: [DTCallManager defaultMeetingName];
+            TSGroupThread *groupThread = [TSGroupThread getThreadWithGroupId:calling.conversationID.groupID];
+            if ([groupThread isLocalUserInGroup]) {
+                OWSLogInfo(@"[name] ========> group call");
+                nameForDisplay = [groupThread nameWithTransaction:nil];
+                if (!DTParamsUtils.validateString(nameForDisplay)) {
+                    nameForDisplay = meetingName;
+                }
             } else {
-                NSString *callerRecipientId = [callerAccount transforUserAccountToCallNumber];
-                nameForDisplay = callerName ?: [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerRecipientId];
+                OWSLogInfo(@"[name] ========> instant call");
+                nameForDisplay = [NSString stringWithFormat:@"%@'s instant call", [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerID]];
             }
         }
-        
+
+        if (!DTParamsUtils.validateString(nameForDisplay)) {
+            nameForDisplay = @"Call";
+        }
+
         CXHandle *handle = [[CXHandle alloc] initWithType:CXHandleTypeGeneric
                                                     value:value];
-        
+
         self.callUpdate.remoteHandle = handle;
         self.callUpdate.hasVideo = NO;
-
         self.callUpdate.localizedCallerName = nameForDisplay;
-    
-        [DTRTCAudioSession.shared callkitConfig];
+
+        [DTRTCAudioSession.shared callkitReceiveCall:!self.isPrivateCall];
 
         OWSLogInfo(@"%@ 准备展示系统 UI - %@ - %@", self.logTag, callerID, NSThread.currentThread);
 
@@ -192,19 +180,10 @@
             //Report completion to CallKit
             OWSLogInfo(@"%@ Report completion to CallKit - %@", self.logTag, callerID);
             completion();
-            
-            @strongify(self)
-            [self startTimeoutTimerWithCallerId:callerID];
-            
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [[DTMeetingManager shared] startCallTimeoutTimer];
-            });
 
-            OWSLogInfo(@"[call]========>CallKit: startCallTimeoutTimer");
-            
             if (error) {
                 OWSLogError(@"[call]========>CallKit: Current error %@",error.userInfo);
-                
+
                 [self resetVariableData:callerID];
                 //通话创建失败
                 DispatchMainThreadSafe(^{
@@ -213,6 +192,29 @@
                     }
                 });
             }
+            
+            [self setUUID:uuid byCallerID:callerID];
+            [self setChannelName:channelName
+                       meetingId:meetingId
+                     meetingName:meetingName
+                    isLiveStream:isLiveStream
+                      isSchedule:isSchedule
+                             eid:eid
+                      byCallerID:callerID];
+            [self setMode:mode byCallerID:callerID];
+            [self setEncryptMeetingKey:emkString byCallerID:callerID];
+            [self setMeetingVersionKey:meetingVersion byCallerID:callerID];
+            [self setCallerAccount:callerAccount byCallerID:callerID];
+            [self setCalling:calling callerId:callerID];
+            
+            @strongify(self)
+            [self startTimeoutTimerWithCallerId:callerID];
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                OWSLogInfo(@"[call]========>CallKit: startCallTimeoutTimer");
+                [[DTMeetingManager shared] startCallTimeoutTimer];
+            });
+            
         }];
     }
 }
@@ -236,8 +238,8 @@
     startCallAction.video = NO;
     CXTransaction *transaction = [[CXTransaction alloc] init];
     [transaction addAction:startCallAction];
-
-    [DTRTCAudioSession.shared callkitConfig];
+    
+    [DTRTCAudioSession.shared callkitStartCall:NO];
     
     __weak __typeof(self) wself = self;
     [_callController requestTransaction:transaction completion:^( NSError *_Nullable error){
@@ -315,7 +317,7 @@
     }];
 }
 
-- (void)endCallAction:(NSString *)callerId
+- (void)endCallAction:(NSString *)callerId onlyForCallKit:(BOOL)onlyForCallKit
 {
     // 不存在 CallKit 电话
     NSUUID *currentUUID = [self uuidFromCallerID:callerId];
@@ -345,6 +347,7 @@
     
     [self setHungupState:YES byCallerID:callerId];
     self.isLocalEndCall = YES;
+    self.isEndCallOnlyForCallkit = onlyForCallKit;
     CXEndCallAction *endCallAction = [[CXEndCallAction alloc] initWithCallUUID:currentUUID];
     CXTransaction *transaction = [[CXTransaction alloc] init];
     [transaction addAction:endCallAction];
@@ -364,7 +367,7 @@
     });
 }
 
-- (void)endCallActionWithCallerId:(NSString *)callerId
+- (void)endCallActionWithCallerId:(NSString *)callerId onlyForCallKit:(BOOL)onlyForCallKit
 {
     OWSLogInfo(@"%@ callerid:%@", self.logTag, callerId);
     
@@ -386,6 +389,7 @@
     
     [self setHungupState:YES byCallerID:callerId];
     self.isLocalEndCall = YES;
+    self.isEndCallOnlyForCallkit = onlyForCallKit;
     CXEndCallAction *endCallAction = [[CXEndCallAction alloc] initWithCallUUID:currentUUID];
     CXTransaction *transaction = [[CXTransaction alloc] init];
     [transaction addAction:endCallAction];
@@ -431,14 +435,33 @@
 
 #pragma mark - CXCallObserverDelegate
 - (void)callObserver:(CXCallObserver *)callObserver callChanged:(CXCall *)call {
-    OWSLogInfo(@"%@ 通话状态变更: isOutgoing=%d, hasConnected=%d, hasEnded=%d, callUUid%@", self.logTag,
+    OWSLogInfo(@"%@ 通话状态变更: isOutgoing=%d, hasConnected=%d, hasEnded=%d, callUUID=%@", self.logTag,
                call.isOutgoing, call.hasConnected, call.hasEnded, call.UUID.UUIDString);
 }
 
 #pragma mark - CXProviderDelegate
 - (void)providerDidReset:(CXProvider *)provider
 {
-    OWSLogInfo(@"%@ resetedUUID:%ld", self.logTag, provider.pendingTransactions.count);
+    OWSLogInfo(@"%@ providerDidReset - cleaning up all state, pendingTransactions:%ld", self.logTag, provider.pendingTransactions.count);
+
+    // Clear all caller data
+    [self.callerMap removeAllObjects];
+
+    // Reset all state flags
+    self.haveAcceptCall = NO;
+    self.isMutedByApp = NO;
+    self.isPrivateCall = NO;
+    self.isLocalEndCall = NO;
+    self.isEndCallOnlyForCallkit = NO;
+    self.currentChannelName = nil;
+
+    // Stop timeout timer
+    [self stopTimeroutTimer];
+
+    // Notify delegate to reset UI state
+    if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallStatus:callerId:)]) {
+        [self.delegate refreshCurrentCallStatus:CallStatus_None callerId:nil];
+    }
 }
 
 - (void)providerDidBegin:(CXProvider *)provider
@@ -458,71 +481,92 @@
 - (void)provider:(CXProvider *)provider performStartCallAction:(CXStartCallAction *)action
 {
     //通话开始
-    OWSLogInfo(@"%@ start call action uuid %@", self.logTag, action.callUUID.UUIDString);
+    NSString *callerID = [self callerIDFromUUID: action.callUUID];
+    
+    OWSLogInfo(@"%@ start call action uuid: %@, callerID: %@", self.logTag, action.callUUID.UUIDString, callerID);
     if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallStatus:callerId:)]) {
-        NSString *callerID = [self callerIDFromUUID: action.callUUID];
         [self.delegate refreshCurrentCallStatus:CallStatus_ReadyStart callerId:callerID];
     }
+
+    [DTRTCAudioSession.shared callkitHandleCall: NO];
+    [self startedConnectingOutgoingCall: callerID];
     
     [action fulfill];
 }
 
 - (void)provider:(CXProvider *)provider performAnswerCallAction:(CXAnswerCallAction *)action
 {
-    OWSLogInfo(@"%@ provider--answer callUUid%@", self.logTag, action.callUUID.UUIDString);
-    
+    OWSLogInfo(@"%@ provider--answer callUUID: %@", self.logTag, action.callUUID.UUIDString);
+
+    [DTRTCAudioSession.shared callkitHandleCall: YES];
+
     self.haveAcceptCall = YES;
     NSString *callerId = [self callerIDFromUUID: action.callUUID];
     DSKProtoCallMessageCalling *calling = [self callingFromCallerId:callerId];
-    
-    [self stopTimeroutTimer];
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [[DTMeetingManager shared] stopCallTimeoutTimer];
-    });
-    
-    // 1on1 默认开麦, 不触发关麦操作
-    BOOL is1on1Call = NO;
-    DSKProtoConversationId *conversationID = calling.conversationID;
-    if (conversationID.hasNumber) {
-        is1on1Call = YES;
-    }
 
-    if (!is1on1Call) {
-        self.isMutedByApp = NO;
-        [self muteCurrentCall:YES callerId:callerId];
-    }
-    
+    [self stopTimeroutTimer];
+
+    // Fulfill immediately to avoid CallKit watchdog timeout
     [action fulfill];
 
-    [self acceptCallWithCalling:calling];
+    // Defer non-critical operations
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[DTMeetingManager shared] stopCallTimeoutTimer];
+
+        // Mute by default for group calls
+        BOOL is1on1Call = calling.conversationID.hasNumber;
+        if (!is1on1Call) {
+            self.isMutedByApp = NO;
+            [self muteCurrentCall:YES callerId:callerId];
+        }
+
+        [self acceptCallWithCalling:calling];
+    });
 }
 
 //拨打方挂断或被叫方拒绝接听 锁屏情况下接通通话到最后挂断
 - (void)provider:(CXProvider *)provider performEndCallAction:(CXEndCallAction *)action
 {
-    OWSLogInfo(@"%@ end call action 收到挂断指令 UUID: %@", self.logTag, action.callUUID.UUIDString);
-    
+    OWSLogInfo(@"%@ end call action 收到挂断指令 localEnd: %d, onlyForCallKit: %d UUID: %@", self.logTag, self.isLocalEndCall, self.isEndCallOnlyForCallkit, action.callUUID.UUIDString);
+
     //结束通话
     self.haveAcceptCall = NO;
 
     NSString *callerId = [self callerIDFromUUID:action.callUUID];
     DSKProtoCallMessageCalling *calling = [self callingFromCallerId:callerId];
-        
+
     [self stopTimeroutTimer];
+
+    // Validate roomId matches current call
+    NSString *currentRoomId = DTMeetingManager.shared.currentCall.roomId;
+    NSString *targetRoomId = calling.roomID;
+
+    if (currentRoomId && targetRoomId && ![currentRoomId isEqualToString:targetRoomId]) {
+        OWSLogWarn(@"%@ performEndCallAction roomId mismatch, current: %@, target: %@", self.logTag, currentRoomId, targetRoomId);
+        // Stop timer before resetting and returning
+        [[DTMeetingManager shared] stopCallTimeoutTimer];
+        [self resetVariableData:callerId];
+        [action fulfill];
+        return;
+    }
+
+    // 停止 callTimeoutTimer (after validation passes)
+    [[DTMeetingManager shared] stopCallTimeoutTimer];
+
     if (self.isLocalEndCall) {
         // 本地触发挂断 会议中的时候不再挂断
-        if (!DTMeetingManager.shared.inMeeting) {
+        if (!self.isEndCallOnlyForCallkit && !DTMeetingManager.shared.inMeeting) {
             [self hangupFromCallKit:calling.roomID];
-            self.isLocalEndCall = false;
             OWSLogInfo(@"%@ local code trigger end call", self.logTag);
         }
+        self.isLocalEndCall = NO;
+        self.isEndCallOnlyForCallkit = NO;
     } else {
         // 系统UI触发,自己手动挂断的
         [self hangupFromCallKit:calling.roomID];
         OWSLogInfo(@"%@ system UI trigger end call", self.logTag);
     }
-    
+
     [self resetVariableData:callerId];//通话结束
     [action fulfill]; //通话结束立即执行 时间也可以选
 }
@@ -552,8 +596,9 @@
 {
     //audio session 设置
     OWSLogInfo(@"%@ didActivateAudioSession", self.logTag);
-    [DTRTCAudioSession.shared callkitDidActivateAudioSession:audioSession];
+    [DTRTCAudioSession.shared callkitDidActivateAudioSession:audioSession speaker:!self.isPrivateCall];
 }
+
 - (void)provider:(CXProvider *)provider didDeactivateAudioSession:(AVAudioSession *)audioSession
 {
     //call end
@@ -569,7 +614,13 @@
     if (callerId) {
         [self.callerMap removeObjectForKey:callerId];
     }
+    // Reset all call-related state flags
     self.haveAcceptCall = NO;
+    self.isMutedByApp = NO;
+    self.isPrivateCall = NO;
+    self.isLocalEndCall = NO;
+    self.isEndCallOnlyForCallkit = NO;
+    self.currentChannelName = nil;
 }
 
 #pragma mark - 配置
@@ -619,10 +670,9 @@
 - (void)handleVoipCallNotify:(NSDictionary *)apnsInfo completion:(void (^__nullable)(void))completion {
 
     OWSLogInfo(@"========>CallKit: apnsInfo:%@", apnsInfo);
-    
+
     NSDictionary *callInfo = apnsInfo[@"callInfo"];
     NSString *encMsg = apnsInfo[@"msg"];
-    [self registerDarwinNotification];
     
     if (DTParamsUtils.validateDictionary(callInfo)) {
         NSString *channelName = callInfo[@"channelName"];
@@ -721,27 +771,18 @@
 }
 
 #pragma mark - notification
-void DarwinNotificationCallback(CFNotificationCenterRef center,
-                                void *observer,
-                                CFStringRef name,
-                                const void *object,
-                                CFDictionaryRef userInfo) {
-    if (name) {
-        OWSLogInfo(@"[CallKit] receive callkit end action");
-        [[DTMeetingManager shared] endCallActionWithForceEndGroupMeeting:NO completionHandler:^{
-                    
-        }];
-    }
-}
-
-- (void)registerDarwinNotification {
-    CFNotificationCenterRef center = CFNotificationCenterGetDarwinNotifyCenter();
-    CFNotificationCenterAddObserver(center,
-                                    NULL,
-                                    DarwinNotificationCallback,
-                                    CFSTR("com.temptalk.nseCallkitStop"),
-                                    NULL,
-                                    CFNotificationSuspensionBehaviorDeliverImmediately);
-}
+// REMOVED: Old Darwin notification implementation
+// The Darwin notification "com.temptalk.nseCallkitStop" is now handled by
+// NotificationHandler.swift which provides:
+// - Proper roomId validation from UserDefaults
+// - Specific call matching before termination
+// - Better error handling and logging
+// - Avoids duplicate callback registrations
+//
+// Previous implementation issues:
+// 1. No validation of notification name
+// 2. No roomId matching - would end any active call
+// 3. Caused duplicate registrations with NotificationHandler.swift
+// 4. Led to race conditions and potential state corruption
 
 @end

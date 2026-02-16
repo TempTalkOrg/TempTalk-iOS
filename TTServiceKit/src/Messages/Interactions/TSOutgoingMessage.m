@@ -27,6 +27,8 @@
 #import "DTGroupConfig.h"
 #import "OWSDevice.h"
 #import "DTMention.h"
+#import "DTReadPositionEntity.h"
+#import "OWSReadReceiptManager.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -597,7 +599,7 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
                                                   transaction:(SDSAnyWriteTransaction *)transaction
 {
     OWSAssertDebug(transaction);
-    
+
     if ([self isKindOfClass:[OWSOutgoingSentMessageTranscript class]]) {
         OWSOutgoingSentMessageTranscript *syncMsg = (OWSOutgoingSentMessageTranscript *)self;
         if (!syncMsg.toNote) {
@@ -605,21 +607,21 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
             return;
         }
     }
-    
+
     [self anyUpdateOutgoingMessageWithTransaction:transaction
                                             block:^(TSOutgoingMessage *message) {
         if (![message isKindOfClass:[TSOutgoingMessage class]]) {
             return;
         }
-        
+
         message.serverTimestamp = serverReceipts.systemShowTimestamp;
         message.sequenceId = serverReceipts.sequenceId;
         message.notifySequenceId = serverReceipts.notifySequenceId;
-        
+
         for (TSOutgoingMessageRecipientState *recipientState in message.recipientStateMap.allValues) {
             recipientState.state = OWSOutgoingMessageRecipientStateSent;
         }
-        
+
         //send to note need update origin outgoing message state
         if ([self isKindOfClass:[OWSOutgoingSentMessageTranscript class]]) {
             OWSOutgoingSentMessageTranscript *syncMsg = (OWSOutgoingSentMessageTranscript *)self;
@@ -627,9 +629,8 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
                 recipientState.state = OWSOutgoingMessageRecipientStateSent;
             }
         }
-        
+
     }];
-    
 }
 
 - (void)updateWithMarkingAllUnsentRecipientsAsSendingWithTransaction:(SDSAnyWriteTransaction *)transaction
@@ -655,16 +656,6 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
     
 }
 
-- (void)updateWithHasSyncedTranscript:(BOOL)hasSyncedTranscript
-                          transaction:(SDSAnyWriteTransaction *)transaction
-{
-    [self anyUpdateOutgoingMessageWithTransaction:transaction
-                                            block:^(TSOutgoingMessage *message) {
-        [message setHasSyncedTranscript:hasSyncedTranscript];
-    }];
-    
-}
-
 - (void)updateWithCustomMessage:(NSString *)customMessage transaction:(SDSAnyWriteTransaction *)transaction
 {
     OWSAssertDebug(customMessage);
@@ -681,28 +672,6 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
     DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
         [self updateWithCustomMessage:customMessage transaction:writeTransaction];
     });
-}
-
-- (void)updateWithSentRecipient:(NSString *)recipientId
-                 serverReceipts:(nullable DTOutgoingMessageServerReceipts *)serverReceipts
-                    transaction:(SDSAnyWriteTransaction *)transaction
-{
-    OWSAssertDebug(recipientId.length > 0);
-    OWSAssertDebug(transaction);
-    
-    [self anyUpdateOutgoingMessageWithTransaction:transaction
-                                            block:^(TSOutgoingMessage *message) {
-        message.serverTimestamp = serverReceipts.systemShowTimestamp;
-        message.sequenceId = serverReceipts.sequenceId;
-        
-        TSOutgoingMessageRecipientState *_Nullable recipientState
-        = message.recipientStateMap[recipientId];
-        if (!recipientState) {
-            OWSFailDebug(@"%@ Missing recipient state for recipient: %@", self.logTag, recipientId);
-            return;
-        }
-        recipientState.state = OWSOutgoingMessageRecipientStateSent;
-    }];
 }
 
 - (void)updateWithSkippedRecipient:(NSString *)recipientId transaction:(SDSAnyWriteTransaction *)transaction
@@ -859,7 +828,7 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
     
     DSKProtoDataMessageBuilder *builder = [DSKProtoDataMessage builder];
     [builder setTimestamp:self.timestamp];
-    
+
     if ([self.body lengthOfBytesUsingEncoding:NSUTF8StringEncoding] <= kOversizeTextMessageSizeThreshold) {
         [builder setBody:self.body];
     } else {
@@ -1123,9 +1092,10 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
     return nil;
 }
 
+// 标记是否发送同步消息(含note)
 - (BOOL)shouldSyncTranscript
 {
-    return !self.hasSyncedTranscript;
+    return YES;
 }
 
 - (NSString *)statusDescription

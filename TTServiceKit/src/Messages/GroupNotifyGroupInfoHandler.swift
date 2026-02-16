@@ -541,11 +541,13 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
                                                      expireTime: groupNotifyEntity.group?.messageExpiry,
                                                      messageClearAnchor: NSNumber(value: groupNotifyEntity.group?.messageClearAnchor ?? 0))
         }
-        if DTParamsUtils.validateNumber(newGroupModel.messageExpiry).boolValue,
-           DTGroupUtils.isChangedArchiveMessageString(withOldGroupModel: oldGroupModel, newModel: newGroupModel) {
-            
+
+        // 只要归档时间发生变化，就触发归档检查
+        if DTGroupUtils.isChangedArchiveMessageString(withOldGroupModel: oldGroupModel, newModel: newGroupModel) {
             transaction.addAsyncCompletionOnMain {
                 NotificationCenter.default.post(name: NSNotification.Name.DTGroupMessageExpiryConfigChanged, object: nil)
+                // 事务提交后触发归档检查
+                OWSArchivedMessageJob.shared().triggerArchiveCheckImmediately()
             }
         }
     }

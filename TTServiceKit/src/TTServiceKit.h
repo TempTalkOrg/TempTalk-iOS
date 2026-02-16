@@ -29,12 +29,9 @@ FOUNDATION_EXPORT const unsigned char TTServiceKitVersionString[];
 #import <TTServiceKit/OWSOutgoingSyncMessage.h>
 #import <TTServiceKit/DTReadReceiptEntity.h>
 #import <TTServiceKit/DTApnsMessageBuilder.h>
-#import <TTServiceKit/DTPinnedMessage.h>
 #import <TTServiceKit/OWSDisappearingMessagesConfigurationMessage.h>
 #import <TTServiceKit/TSOutgoingMessage.h>
-#import <TTServiceKit/DTRecallMessagesJob.h>
 #import <TTServiceKit/TSIncomingMessage.h>
-#import <TTServiceKit/TSPinOutgoingMessage.h>
 #import <TTServiceKit/TSErrorMessage.h>
 #import <TTServiceKit/TSMessage.h>
 #import <TTServiceKit/DTCardMessageEntity.h>
@@ -179,7 +176,6 @@ FOUNDATION_EXPORT const unsigned char TTServiceKitVersionString[];
 #import <TTServiceKit/DTGetConversationApi.h>
 #import <TTServiceKit/RESTNetworkManager.h>
 #import <TTServiceKit/OWSUploadOperation.h>
-#import <TTServiceKit/DTGroupPinAPI.h>
 #import <TTServiceKit/DTGroupMemberEntity.h>
 #import <TTServiceKit/DTChangeYourSettingsInAGroupAPI.h>
 #import <TTServiceKit/DTGetGroupInfoAPI.h>
@@ -189,13 +185,11 @@ FOUNDATION_EXPORT const unsigned char TTServiceKitVersionString[];
 #import <TTServiceKit/DTGetMyGroupsAPI.h>
 #import <TTServiceKit/DTInviteToGroupAPI.h>
 #import <TTServiceKit/DTRemoveMembersOfAGroupAPI.h>
-#import <TTServiceKit/DTPinnedMessageEntity.h>
 #import <TTServiceKit/DTCltlogAPI.h>
 #import <TTServiceKit/DTAddMembersToAGroupAPI.h>
 #import <TTServiceKit/DTCreateANewGroupAPI.h>
 #import <TTServiceKit/DTDismissAGroupAPI.h>
 #import <TTServiceKit/DTUpdateGroupInfoAPI.h>
-#import <TTServiceKit/DTPinnedDataSource.h>
 #import <TTServiceKit/OWSDeviceProvisioningService.h>
 #import <TTServiceKit/TSVerifyCodeRequest.h>
 #import <TTServiceKit/OWSRequestFactory.h>
@@ -208,8 +202,6 @@ FOUNDATION_EXPORT const unsigned char TTServiceKitVersionString[];
 #import <TTServiceKit/DTQuickCommandAdapter.h>
 #import <TTServiceKit/DTQuickCommand.h>
 #import <TTServiceKit/ATAppUpdater.h>
-#import <TTServiceKit/DTWatermarkHelper.h>
-#import <TTServiceKit/DTWatermarkLayer.h>
 #import <TTServiceKit/TSConstants.h>
 #import <TTServiceKit/SDSCrossProcess.h>
 #import <TTServiceKit/OWSOrphanedDataCleaner.h>

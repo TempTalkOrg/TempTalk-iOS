@@ -111,32 +111,13 @@ extension DTMeetingManager {
     
     //MARK: global config
     func banMicCountdownDuration() -> Int {
-        var timeoutResult = 300000
-        DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "call") { config, _ in
-            guard let raw = config as? [String: Any],
-                  let callConfig = CallConfig(from: raw) else {
-                timeoutResult = 300000
-                return
-            }
-            if self.checkSoloMember() {
-                timeoutResult = callConfig.soloMemberTimeoutResult ?? 300000
-            } else {
-                timeoutResult = callConfig.silenceTimeoutResult ?? 300000
-            }
-        }
+        let callConfig = CallConfigManager.fetchCallConfig()
+        let timeoutResult = checkSoloMember() ? callConfig.soloMemberTimeoutResult : callConfig.silenceTimeoutResult
         return timeoutResult / 1000
     }
-    
+
     func banMicAlertCountdownDuration() -> Int {
-        var runAfterReminderTimeoutResult = 180000
-        DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "call") { config, _ in
-            guard let raw = config as? [String: Any],
-                  let callConfig = CallConfig(from: raw) else {
-                runAfterReminderTimeoutResult = 180000
-                return
-            }
-            runAfterReminderTimeoutResult = callConfig.runAfterReminderTimeoutResult ?? 180000
-        }
-        return Int(runAfterReminderTimeoutResult / 1000)
+        let callConfig = CallConfigManager.fetchCallConfig()
+        return callConfig.runAfterReminderTimeoutResult / 1000
     }
 }

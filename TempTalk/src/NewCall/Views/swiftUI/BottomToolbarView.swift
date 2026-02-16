@@ -130,10 +130,8 @@ public struct BottomToolbarView: View {
                     isSpeakerPhoneChangingBusy = true
                     defer { Task { @MainActor in isSpeakerPhoneChangingBusy = false } }
                     let newSpeakerState = !speakerEnabled
-                    // 保存用户选择的扬声器状态
-                    appCtx.setUserPreferredSpeakerState(newSpeakerState)
+                    Logger.info("\(logTag) pressed speaker: \(speakerEnabled) -> \(newSpeakerState)")
                     DTRTCAudioSession.shared.switchToSpeaker(newSpeakerState)
-                    Logger.info("\(logTag) speaker pressed \(speakerEnabled ? "on" : "off")")
                 }
             }
         }

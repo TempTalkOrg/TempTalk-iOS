@@ -62,18 +62,21 @@ class ConversationMessageRenderItem: ConversationCellRenderItem {
 // MARK: - Incoming Message Render Item
 
 class ConversationIncomingMessageRenderItem: ConversationMessageRenderItem {
-    
+
     static let avatarSize: CGFloat = 36
     static let senderNameViewHeight: CGFloat = 20
     static let skipToOriginIconWidth: CGFloat = 15
+    // Account view height = avatar + spacing below avatar
+    static let accountViewHeight: CGFloat = avatarSize + 4
+    // Bubble leading padding - same as reference project
+    static let leadingPadding: CGFloat = 26
+    static let trailingPadding: CGFloat = 40
     
     // senderNameView
     var isShowSenderNameView = false
     var senderName: NSAttributedString?
     var senderNameId: String = .empty
     var senderNameAuthorId: String = .empty
-    
-    let couldShowSkipToOriginIcon: Bool
     
     var recipientId: String? {
         if let incomingMessage = viewItem.interaction as? TSIncomingMessage {
@@ -97,18 +100,14 @@ class ConversationIncomingMessageRenderItem: ConversationMessageRenderItem {
     }
     
     override init(viewItem: any ConversationViewItem, conversationStyle: ConversationStyle) {
-        var newStyle = conversationStyle
-        couldShowSkipToOriginIcon = viewItem.isUseForMessageList && viewItem.isPinned
-        
-        // 在需要展示 skip 按钮时，messageBubble 的最大宽度需要调整，
-        // 在这里创建一个新的 conversationStyle 并修改 maxMessageWidth，方便后续各种文本高度计算
-        // 注意这里使用了深拷贝，防止修改了全局 conversationStyle 的 maxMessageWidth
-        if couldShowSkipToOriginIcon {
-            let copyStyle = conversationStyle.deepCopy()
-            newStyle = copyStyle
-            newStyle.maxMessageWidth = floor(conversationStyle.contentWidth - Self.skipToOriginIconWidth - Self.msgVStackViewSpacing)
-        }
-        
+        let screenWidth = UIScreen.main.bounds.width
+        // IMPORTANT: Must use deepCopy() because ConversationStyle is a class (reference type)
+        // Without deepCopy(), we would modify the shared style object affecting all cells
+        let newStyle = conversationStyle.deepCopy()
+        // Adjust gutter and max message width based on leading and trailing padding
+        newStyle.gutterLeading = Self.leadingPadding
+        newStyle.gutterTrailing = Self.trailingPadding
+        newStyle.maxMessageWidth = screenWidth - Self.leadingPadding - Self.trailingPadding
         super.init(viewItem: viewItem, conversationStyle: newStyle)
     }
     
@@ -163,7 +162,7 @@ class ConversationIncomingMessageRenderItem: ConversationMessageRenderItem {
                     transaction: transaction
                 )
                 
-                Logger.debug("[Translate] -1- add operation message: \(message.body ?? "")")
+                Logger.debug("[Translate] -1- add operation message")
                 
                 DTTranslateProcessor.sharedInstance().handleMessageForTranslate(
                     with: thread,

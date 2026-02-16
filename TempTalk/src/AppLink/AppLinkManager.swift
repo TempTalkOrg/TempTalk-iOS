@@ -51,18 +51,19 @@ struct AppLinkManager {
             }
         }
         
-        Logger.info("没有找到能处理URL的处理器")
-        
+        Logger.info("没有找到能处理URL的处理器：\(url)")
+
         if !fromExternal, let sourceVC {
             let scheme = url.scheme?.lowercased()
             if scheme == "https" ||
                 scheme == "http" {
-                handleUnknowURL(url, sourceVC: sourceVC, showWarning: true)
+                // iOS 外部链接直接打开，不显示安全提示
+                handleUnknowURL(url, sourceVC: sourceVC, showWarning: false)
             } else {
                 handleUnsupportPlatformURL(url)
             }
         }
-        
+
         return false
     }
     

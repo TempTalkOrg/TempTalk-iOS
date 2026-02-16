@@ -171,12 +171,6 @@ NS_ASSUME_NONNULL_BEGIN
     return request;
 }
 
-+ (TSRequest *)getV1ContactExtId:(nonnull NSString *)uid
-{
-    NSString *path = [NSString stringWithFormat:@"%@/%@/%@", self.textSecureDirectoryAPI, @"extInfo", uid];
-    return [TSRequest requestWithUrl:[NSURL URLWithString:path] method:@"GET" parameters:@{}];
-}
-
 + (TSRequest *)putV1ProfileWithParams:(NSDictionary *)params {
     NSString *path = [NSString stringWithFormat:@"%@", self.v1ProfilePath];
     TSRequest *request = [TSRequest requestWithUrl:[NSURL URLWithString:path] method:@"PUT" parameters:params];

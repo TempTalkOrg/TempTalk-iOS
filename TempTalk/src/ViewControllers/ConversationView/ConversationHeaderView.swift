@@ -64,7 +64,7 @@ public class ConversationHeaderView: UIStackView {
     public required init(thread: TSThread, contactsManager: OWSContactsManager) {
 
         nameView = DTConversationNameView()
-        nameView.nameColor = Theme.primaryTextColor
+        nameView.nameColor = Theme.tprimaryColor
         nameView.lineBreakMode = .byTruncatingMiddle
         nameView.nameFont = titlePrimaryFont
         nameView.setContentHuggingHigh()
@@ -72,7 +72,7 @@ public class ConversationHeaderView: UIStackView {
         nameView.setCompressionResistanceVerticalHigh()
         
         subtitleLabel = UILabel()
-        subtitleLabel.textColor = Theme.ternaryTextColor
+        subtitleLabel.textColor = Theme.tthirdColor
         subtitleLabel.lineBreakMode = .byTruncatingTail
         subtitleLabel.font = subtitleFont
         subtitleLabel.setContentHuggingHigh()
@@ -106,8 +106,8 @@ public class ConversationHeaderView: UIStackView {
     
     @objc
     public func applyTheme() {
-        nameView.nameColor = Theme.primaryTextColor
-        subtitleLabel.textColor = Theme.ternaryTextColor
+        nameView.nameColor = Theme.tprimaryColor
+        subtitleLabel.textColor = Theme.tthirdColor
     }
     
     

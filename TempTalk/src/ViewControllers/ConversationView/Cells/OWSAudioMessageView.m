@@ -86,8 +86,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)updateAudioBottomLabel
 {
     if (self.isAudioPlaying && self.audioProgressSeconds > 0 && self.audioDurationSeconds > 0) {
+        // Use ceil for remaining time to avoid showing 0 too early
+        CGFloat remainingSeconds = self.audioDurationSeconds - self.audioProgressSeconds;
         self.audioBottomLabel.text =
-        [NSString stringWithFormat:@"%@", [OWSFormat formatDurationSeconds:(long)round(self.audioDurationSeconds - self.audioProgressSeconds)]];
+        [NSString stringWithFormat:@"%@", [OWSFormat formatDurationSeconds:(long)ceil(remainingSeconds)]];
     } else {
         self.audioBottomLabel.text =
             [NSString stringWithFormat:@"%@", [OWSFormat formatDurationSeconds:(long)round(self.audioDurationSeconds)]];
@@ -120,7 +122,7 @@ NS_ASSUME_NONNULL_BEGIN
     
     self.audioProgressView.value = self.audioDurationSeconds > 0 ? self.audioProgressSeconds / self.audioDurationSeconds : 0.f;
 
-    UIColor *playedColor = self.isIncoming ? Theme.themeBlueColor2 : Theme.secondaryTextColor;
+    UIColor *playedColor = self.isIncoming ? (Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x82C1FC] : [UIColor colorWithRGBHex:0x056FFA]): Theme.tsecondaryColor;
     self.audioProgressView.playedColor = playedColor;
 }
 
@@ -251,7 +253,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (CGFloat)audioProgressViewWidth
 {
-    return 300;
+    // 屏幕宽度的60% - 播放按钮(32) - 时间标签(40) - 间距(12*2)
+    CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
+    CGFloat maxWidth = screenWidth * 0.6;
+    CGFloat otherElementsWidth = 32 + 40 + 12 * 2; // 播放按钮 + 时间标签 + 间距
+    return maxWidth - otherElementsWidth;
 }
 
 + (UIFont *)labelFont
@@ -277,7 +283,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (UILabel *)voiceAttachmentLabel {
     if (!_voiceAttachmentLabel) {
         _voiceAttachmentLabel = [[UILabel alloc] init];
-        _voiceAttachmentLabel.textColor = Theme.primaryTextColor;
+        _voiceAttachmentLabel.textColor = Theme.tprimaryColor;
         _voiceAttachmentLabel.font = [UIFont systemFontOfSize:14.f];
     }
     return _voiceAttachmentLabel;

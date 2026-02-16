@@ -9,7 +9,7 @@
 #import "DTQuickActionCell.h"
 #import "DTLayoutButton.h"
 #import "UIView+SignalUI.h"
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <TTMessaging/UIColor+OWS.h>
 #import <TTServiceKit/Localize_Swift.h>
 
@@ -44,8 +44,8 @@
         self.callButton.hidden = true;
     }
     [self.quickActionStackView addArrangedSubview:self.shareButton];
-    [self.quickActionStackView autoPinEdge:ALEdgeTop toEdge:ALEdgeTop ofView:self];
-    [self.quickActionStackView autoPinEdge:ALEdgeBottom toEdge:ALEdgeBottom ofView:self withOffset:-24];
+    [self.quickActionStackView autoPinEdge:ALEdgeTop toEdge:ALEdgeTop ofView:self withOffset:16.0];
+    [self.quickActionStackView autoPinEdge:ALEdgeBottom toEdge:ALEdgeBottom ofView:self withOffset:-16];
     [self.quickActionStackView autoPinLeadingToEdgeOfView:self.contentView offset:16.0];
     [self.quickActionStackView autoHCenterInSuperview];
 }
@@ -85,9 +85,9 @@
         [_shareButton setImage:[[UIImage imageNamed:@"user_share_contact"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate] forState:UIControlStateNormal];
         _shareButton.layer.cornerRadius = 8;
         _shareButton.clipsToBounds = true;
-        _shareButton.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x1E2329] : [UIColor colorWithRGBHex:0xFFFFFF];
+        _shareButton.backgroundColor = Theme.bg1Color;
         _shareButton.titleAlignment = DTButtonTitleAlignmentTypeBottom;
-        _shareButton.spacing = 13;
+        _shareButton.spacing = 8;
         _shareButton.tintColor = Theme.isDarkThemeEnabled ? UIColor.whiteColor : UIColor.blackColor;
         [_shareButton setTitleColor:Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xEAECEF] : [UIColor colorWithRGBHex:0x1E2329] forState:UIControlStateNormal];
         [_shareButton addTarget:self action:@selector(shareButtonAction:) forControlEvents:UIControlEventTouchUpInside];
@@ -103,12 +103,12 @@
         [_callButton setImage:[UIImage imageNamed:@"user_voice_call"] forState:UIControlStateNormal];
         _callButton.layer.cornerRadius = 8;
         _callButton.clipsToBounds = true;
-        _callButton.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x1E2329] : [UIColor colorWithRGBHex:0xFFFFFF];
+        _callButton.backgroundColor = Theme.bg1Color;
         _callButton.titleAlignment = DTButtonTitleAlignmentTypeBottom;
         _callButton.tintColor = Theme.isDarkThemeEnabled ? UIColor.whiteColor : UIColor.blackColor;
         [_callButton setTitleColor:Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xEAECEF] : [UIColor colorWithRGBHex:0x1E2329] forState:UIControlStateNormal];
         [_callButton addTarget:self action:@selector(callButtonAction:) forControlEvents:UIControlEventTouchUpInside];
-        _callButton.spacing = 13;
+        _callButton.spacing = 8;
         _callButton.titleLabel.font = [UIFont systemFontOfSize:12];
         [_callButton setTitle:Localized(@"PERSON_CARD_VOICE_CALL",@"") forState:UIControlStateNormal];
     }
@@ -123,9 +123,9 @@
         [_messageButton setImage:[[UIImage imageNamed:@"user_send_message"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate] forState:UIControlStateNormal];
         _messageButton.layer.cornerRadius = 8;
         _messageButton.clipsToBounds = true;
-        _messageButton.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x1E2329] : [UIColor colorWithRGBHex:0xFFFFFF];
+        _messageButton.backgroundColor = Theme.bg1Color;
         [_messageButton addTarget:self action:@selector(messageButtonAction:) forControlEvents:UIControlEventTouchUpInside];
-        _messageButton.spacing = 13;
+        _messageButton.spacing = 8;
         _messageButton.tintColor = Theme.isDarkThemeEnabled ? UIColor.whiteColor : UIColor.blackColor;
         [_messageButton setTitleColor:Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xEAECEF] : [UIColor colorWithRGBHex:0x1E2329] forState:UIControlStateNormal];
         _messageButton.titleAlignment = DTButtonTitleAlignmentTypeBottom;

@@ -21,11 +21,11 @@ Pod::Spec.new do |s|
 TODO: Add long description of the pod here.
                        DESC
 
-  s.homepage         = 'https://github.com/jiangcanming/FTS5SimpleTokenizer'
+  s.homepage         = 'https://github.com/jack/FTS5SimpleTokenizer'
   # s.screenshots     = 'www.example.com/screenshots_1', 'www.example.com/screenshots_2'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
-  s.author           = { 'jiangcanming' => 'jiangcanming1992@gmail.com' }
-  s.source           = { :git => 'https://github.com/jiangcanming/FTS5SimpleTokenizer.git', :tag => s.version.to_s }
+  s.author           = { 'jack' => 'jack109@gmail.com' }
+  s.source           = { :git => 'https://github.com/jack/FTS5SimpleTokenizer.git', :tag => s.version.to_s }
 
   s.ios.deployment_target = "12.0"
   

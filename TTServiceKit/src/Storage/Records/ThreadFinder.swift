@@ -28,6 +28,8 @@ public protocol ThreadFinder {
     func enumerateVisibleUnreadThreads(isArchived: Bool, transaction: ReadTransaction, block: @escaping (TSThread) -> Void)
     
     func fetchStickedCallingThread(transaction: ReadTransaction, block: @escaping (TSThread) -> Void) throws
+
+    func fetchThreadsWithZeroExpiresInSeconds(limit: Int, transaction: ReadTransaction) throws -> [TSThread]
 }
 
 //extension ThreadFinder {
@@ -179,20 +181,28 @@ public class AnyThreadFinder: NSObject, ThreadFinder {
             return try grdbAdapter.fetchStickedCallingThread(transaction: grdb, block: block)
         }
     }
+
+    @objc
+    public func fetchThreadsWithZeroExpiresInSeconds(limit: Int, transaction: SDSAnyReadTransaction) throws -> [TSThread] {
+        switch transaction.readTransaction {
+        case .grdbRead(let grdb):
+            return try grdbAdapter.fetchThreadsWithZeroExpiresInSeconds(limit: limit, transaction: grdb)
+        }
+    }
 }
 
 struct GRDBThreadFinder: ThreadFinder {
     
     func visibleThreadUnreadMsgCount(isArchived: Bool, transaction: GRDBReadTransaction) -> UInt {
+        // isArchived 参数保留用于API兼容性，但不再用于过滤
         let sql = """
             SELECT SUM(\(threadColumn: .unreadMessageCount))
             FROM \(ThreadRecord.databaseTableName)
             WHERE \(threadColumn: .removedFromConversation) = 0
             AND \(threadColumn: .shouldBeVisible) = 1
             AND \(threadColumn: .recordType) != ?
-            AND \(threadColumn: .isArchived) = ?
         """
-        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue, isArchived]
+        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue]
 
         do {
             guard let count = try UInt.fetchOne(transaction.database, sql: sql, arguments: arguments) else {
@@ -202,7 +212,7 @@ struct GRDBThreadFinder: ThreadFinder {
             return count
         } catch {
             owsFailDebug("error:\(error)")
-            
+
             return 0
         }
 
@@ -261,24 +271,7 @@ struct GRDBThreadFinder: ThreadFinder {
     
 
     func visibleThreadCount(isArchived: Bool, transaction: GRDBReadTransaction) -> UInt {
-        /*
-        let sql = """
-            SELECT COUNT(*)
-            FROM \(ThreadRecord.databaseTableName)
-            WHERE \(threadColumn: .removedFromConversation) = 0
-            AND \(threadColumn: .shouldBeVisible) = 1
-            AND \(threadColumn: .recordType) != ?
-            AND \(threadColumn: .isArchived) = ?
-        """
-        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue, isArchived]
-
-        guard let count = try UInt.fetchOne(transaction.database, sql: sql, arguments: arguments) else {
-            owsFailDebug("count was unexpectedly nil")
-            return 0
-        }
-
-        return count
-         */
+        // isArchived 参数保留用于API兼容性，但不再用于过滤
         do {
             let sql = """
                 SELECT COUNT(*)
@@ -286,10 +279,9 @@ struct GRDBThreadFinder: ThreadFinder {
                 WHERE \(threadColumn: .removedFromConversation) = 0
                 AND \(threadColumn: .shouldBeVisible) = 1
                 AND \(threadColumn: .recordType) != ?
-                AND \(threadColumn: .isArchived) = ?
                 \(sqlOrderByCondictions())
                 """
-            let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue, isArchived]
+            let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue]
 
             guard let count = try UInt.fetchOne(transaction.database, sql: sql, arguments: arguments) else {
                 owsFailDebug("count was unexpectedly nil")
@@ -300,45 +292,28 @@ struct GRDBThreadFinder: ThreadFinder {
             owsFailDebug("error: \(error)")
             return 0
         }
-        
-//
-//        try ThreadRecord.fetchCursor(transaction.database, sql: sql, arguments: arguments).forEach { threadRecord in
-//            let thread = try? TSThread.fromRecord(threadRecord)
-//            if let thread = thread, SDSDataFilter.filterThread(thread, chartFolder: currentFolder, transaction: transaction.asAnyRead) {
-//                count += 1
-//            }
-//        }
-//
-//        return count
     }
     
     func enumerateVisibleThreads(isArchived: Bool, range: NSRange, transaction: GRDBReadTransaction, block: @escaping (TSThread) -> Void) throws {
+        // isArchived 参数保留用于API兼容性，但不再用于过滤
         let sql = """
             SELECT *
             FROM \(ThreadRecord.databaseTableName)
             WHERE \(threadColumn: .removedFromConversation) = 0
             AND \(threadColumn: .shouldBeVisible) = 1
             AND \(threadColumn: .recordType) != ?
-            AND \(threadColumn: .isArchived) = ?
             \(sqlOrderByCondictions())
             LIMIT \(range.length)
             OFFSET \(range.location)
             """
-        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue, isArchived]
-        
+        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue]
+
         let cursor = TSThread.grdbFetchCursor(sql: sql, arguments: arguments, transaction: transaction)
         while let thread = try cursor.next() {
             if SDSDataFilter.filterThread(thread, chartFolder: currentFolder, transaction: transaction.asAnyRead) {
                 block(thread)
             }
         }
-
-//        try ThreadRecord.fetchCursor(transaction.database, sql: sql, arguments: arguments).forEach { threadRecord in
-//            let thread = try TSThread.fromRecord(threadRecord)
-//            if SDSDataFilter.filterThread(thread, chartFolder: currentFolder, transaction: transaction.asAnyRead) {
-//                block(thread)
-//            }
-//        }
     }
 
     func enumerateInactiveThreads(transaction: GRDBReadTransaction, block: @escaping (TSThread) -> Void) throws {
@@ -373,31 +348,23 @@ struct GRDBThreadFinder: ThreadFinder {
     }
     
     func enumerateVisibleThreads(isArchived: Bool, transaction: GRDBReadTransaction, block: @escaping (TSThread) -> Void) throws {
+        // isArchived 参数保留用于API兼容性，但不再用于过滤
         let sql = """
             SELECT *
             FROM \(ThreadRecord.databaseTableName)
             WHERE \(threadColumn: .removedFromConversation) = 0
             AND \(threadColumn: .shouldBeVisible) = 1
             AND \(threadColumn: .recordType) != ?
-            AND \(threadColumn: .isArchived) = ?
             \(sqlOrderByCondictions())
             """
-//        LIMIT 500
-        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue, isArchived]
-        
+        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue]
+
         let cursor = TSThread.grdbFetchCursor(sql: sql, arguments: arguments, transaction: transaction)
         while let thread = try cursor.next() {
             if SDSDataFilter.filterThread(thread, chartFolder: currentFolder, transaction: transaction.asAnyRead) {
                 block(thread)
             }
         }
-
-//        try ThreadRecord.fetchCursor(transaction.database, sql: sql, arguments: arguments).forEach { threadRecord in
-//            let thread = try TSThread.fromRecord(threadRecord)
-//            if SDSDataFilter.filterThread(thread, chartFolder: currentFolder, transaction: transaction.asAnyRead) {
-//                block(thread)
-//            }
-//        }
     }
     
     func enumerateVisibleThreads(limit: Int = 500, transaction: GRDBReadTransaction, block: @escaping (TSThread) -> Void) throws {
@@ -422,19 +389,19 @@ struct GRDBThreadFinder: ThreadFinder {
     }
     
     func enumerateVisibleThreads(isArchived: Bool, limit: Int = 500, transaction: GRDBReadTransaction, block: @escaping (TSThread) -> Void) throws {
+        // isArchived 参数保留用于API兼容性，但不再用于过滤
         let sql = """
             SELECT *
             FROM \(ThreadRecord.databaseTableName)
             WHERE \(threadColumn: .removedFromConversation) = 0
             AND \(threadColumn: .shouldBeVisible) = 1
             AND \(threadColumn: .recordType) != ?
-            AND \(threadColumn: .isArchived) = ?
             \(sqlOrderByCondictions())
             LIMIT \(limit)
             """
-        
-        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue, isArchived]
-        
+
+        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue]
+
         let cursor = TSThread.grdbFetchCursor(sql: sql, arguments: arguments, transaction: transaction)
         while let thread = try cursor.next() {
             if SDSDataFilter.filterThread(thread, chartFolder: currentFolder, transaction: transaction.asAnyRead) {
@@ -444,65 +411,48 @@ struct GRDBThreadFinder: ThreadFinder {
     }
     
     func enumerateVisibleThreadIds(isArchived: Bool, transaction: GRDBReadTransaction, block: @escaping (String) -> Void) throws {
+        // isArchived 参数保留用于API兼容性，但不再用于过滤
         let sql = """
             SELECT \(threadColumn: .uniqueId)
             FROM \(ThreadRecord.databaseTableName)
             WHERE \(threadColumn: .removedFromConversation) = 0
             AND \(threadColumn: .shouldBeVisible) = 1
             AND \(threadColumn: .recordType) != ?
-            AND \(threadColumn: .isArchived) = ?
             \(sqlOrderByCondictions())
             """
-        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue, isArchived]
-        
+        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue]
+
         let cursor = try String.fetchCursor(transaction.database,
                                             sql: sql,
                                             arguments: arguments)
         while let uniqueId = try cursor.next() {
             block(uniqueId)
         }
-
-//        try ThreadRecord.fetchCursor(transaction.database, sql: sql, arguments: arguments).forEach { threadRecord in
-//            let thread = try TSThread.fromRecord(threadRecord)
-//            if SDSDataFilter.filterThread(thread, chartFolder: currentFolder, transaction: transaction.asAnyRead) {
-//                block(thread)
-//            }
-//        }
     }
     
     func enumerateVisibleUnreadThreads(isArchived: Bool, transaction: GRDBReadTransaction, block: @escaping (TSThread) -> Void) {
+        // isArchived 参数保留用于API兼容性，但不再用于过滤
         let sql = """
             SELECT *
             FROM \(ThreadRecord.databaseTableName)
             WHERE \(threadColumn: .shouldBeVisible) = 1
             AND \(threadColumn: .recordType) != ?
-            AND \(threadColumn: .isArchived) = ?
             AND \(threadColumn: .removedFromConversation) = 0
             AND (\(threadColumn: .unreadMessageCount) > 0 OR \(threadColumn: .unreadFlag) = 1)
             \(sqlOrderByCondictions())
             """
-        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue, isArchived]
+        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue]
 
         do {
-            
             let cursor = TSThread.grdbFetchCursor(sql: sql, arguments: arguments, transaction: transaction)
             while let thread = try cursor.next() {
                 if SDSDataFilter.filterThread(thread, chartFolder: currentFolder, transaction: transaction.asAnyRead) {
                     block(thread)
                 }
             }
-            
-//            try ThreadRecord.fetchCursor(transaction.database, sql: sql, arguments: arguments).forEach { threadRecord in
-//                let thread = try? TSThread.fromRecord(threadRecord)
-//                if let thread = thread, SDSDataFilter.filterThread(thread, chartFolder: currentFolder, transaction: transaction.asAnyRead) {
-//                    block(thread)
-//                }
-//            }
-            
         } catch {
             owsFailDebug("error: \(error)")
         }
-        
     }
 
     func sortIndex(thread: TSThread, transaction: GRDBReadTransaction) throws -> UInt? {
@@ -533,7 +483,7 @@ struct GRDBThreadFinder: ThreadFinder {
     }
        
     func fetchStickedCallingThread(transaction: GRDBReadTransaction, block: @escaping (TSThread) -> Void) throws {
-        
+
         let sql = """
             SELECT *
             FROM \(ThreadRecord.databaseTableName)
@@ -543,7 +493,7 @@ struct GRDBThreadFinder: ThreadFinder {
             AND \(threadColumn: .isArchived) = ?
             AND \(threadColumn: .stickCallingDate) > 0
         """
-        
+
         let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue, false]
         let cursor = TSThread.grdbFetchCursor(sql: sql, arguments: arguments, transaction: transaction)
         while let thread = try cursor.next() {
@@ -551,6 +501,19 @@ struct GRDBThreadFinder: ThreadFinder {
                 block(thread)
             }
         }
+    }
+
+    func fetchThreadsWithZeroExpiresInSeconds(limit: Int, transaction: GRDBReadTransaction) throws -> [TSThread] {
+        let sql = """
+            SELECT *
+            FROM \(ThreadRecord.databaseTableName)
+            WHERE \(threadColumn: .expiresInSeconds) = 0
+            LIMIT ?
+        """
+
+        let arguments: StatementArguments = [limit]
+        let cursor = TSThread.grdbFetchCursor(sql: sql, arguments: arguments, transaction: transaction)
+        return try cursor.all()
     }
 }
 

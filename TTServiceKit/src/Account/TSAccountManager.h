@@ -73,6 +73,13 @@ NSString *NSStringForOWSRegistrationState(OWSRegistrationState value);
 - (BOOL)isRegistered;
 
 /**
+ *  Warms cached values (localNumber, isRegistered) to prevent database reentrancy issues
+ *  when these values are accessed within a database transaction.
+ *  Should be called early during app/extension startup.
+ */
+- (void)warmCaches;
+
+/**
  *  Returns current phone number for this device, which may not yet have been registered.
  *
  *  @return E164 formatted phone number

@@ -22,10 +22,10 @@ enum ConversationMessageGestureLocation: Int {
 
 extension ConversationMessageBubbleView {
     func addTapGestureHandler() {
-        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapGesture(_:)))
-        self.addGestureRecognizer(tap)
+        // 手势已在 ConversationMessageCell 中添加
+        // 这里只是保留这个方法以保持兼容性
     }
-    
+
     @objc func handleTapGesture(_ sender: UITapGestureRecognizer) {
         guard let viewItem = renderItem?.viewItem else { return }
         guard sender.state == .recognized else {
@@ -33,23 +33,23 @@ extension ConversationMessageBubbleView {
             return
         }
         
-        //tap confidentialMessage, 只有文本消息和单条转发消息需要特殊处理；
+        //tap confidentialMessage, 文本消息和语音消息需要特殊处理，附件走普通流程（已有 handleConfidentialMessageTap 包装）
         if viewItem.isConfidentialMessage {
-            guard let message = viewItem.interaction as? TSMessage else {
-                return
-            }
-            if message.isTextMessage() {
+            if viewItem.messageCellType() == .textMessage || viewItem.messageCellType() == .oversizeTextMessage {
                 delegate?.messageBubbleView?(self, didTapConfidentialTextMessageWith: viewItem)
                 return
-            } else if message.isSingleForward() {
-                delegate?.messageBubbleView?(self, didTapConfidentialSingleForward: viewItem)
+            } else if viewItem.messageCellType() == .audio {
+                delegate?.messageBubbleView?(self, didTapConfidentialTextMessageWith: viewItem)
                 return
             }
         }
         
         if let outgoingMessage = viewItem.interaction as? TSOutgoingMessage {
             if outgoingMessage.messageState == .failed {
-                return
+                // 对于语音消息，允许点击播放
+                if viewItem.messageCellType() != .audio {
+                    return
+                }
             }
             if outgoingMessage.messageState == .sending, !outgoingMessage.isPinnedMessage {
                 // Ignore taps on outgoing messages being sent.
@@ -69,9 +69,6 @@ extension ConversationMessageBubbleView {
             handleMediaTapGesture(viewItem: viewItem)
             
         case .quotedReply:
-            if viewItem.isPinMessage {
-                return
-            }
             if let quotedReply = viewItem.quotedReply {
                 delegate?.messageBubbleView?(
                     self,
@@ -148,7 +145,9 @@ extension ConversationMessageBubbleView {
     }
     
     private func handleMediaTapGesture(viewItem: ConversationViewItem) {
-        switch viewItem.messageCellType() {
+        let cellType = viewItem.messageCellType()
+
+        switch cellType {
         case .stillImage, .animatedImage:
             guard let bodyMediaView else { return }
             guard let attachmentStream = viewItem.attachmentStream() else { return }
@@ -175,12 +174,25 @@ extension ConversationMessageBubbleView {
                 imageView: bodyMediaView
             )
         case .genericAttachment:
-            guard let attachmentStream = viewItem.attachmentStream() else { return }
-            delegate?.messageBubbleView?(
-                self,
-                didTapGenericAttachmentViewWith: viewItem,
-                attachmentStream: attachmentStream
-            )
+            // Check if attachment is downloaded (Stream) or not (Pointer)
+            if let attachmentStream = viewItem.attachmentStream() {
+                // Attachment is downloaded, preview it
+                delegate?.messageBubbleView?(
+                    self,
+                    didTapGenericAttachmentViewWith: viewItem,
+                    attachmentStream: attachmentStream
+                )
+            } else if let attachmentPointer = viewItem.attachmentPointer() {
+                // Attachment is not downloaded (Pointer), trigger download
+                if attachmentPointer.state == .failed || attachmentPointer.state == .enqueued || attachmentPointer.state == .expired {
+                    delegate?.messageBubbleView?(
+                        self,
+                        didTapDownloadFailedAttachmentWith: viewItem,
+                        autoRestart: true,
+                        attachmentPointer: attachmentPointer
+                    )
+                }
+            }
         case .downloadingAttachment:
             guard let attachmentPointer = viewItem.attachmentPointer() else { return }
             if attachmentPointer.state == .failed || attachmentPointer.state == .enqueued || attachmentPointer.state == .expired {

@@ -7,7 +7,7 @@
 //
 
 #import "DTThumbsUpView.h"
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <TTMessaging/UIColor+OWS.h>
 #import <TTMessaging/UIView+SignalUI.h>
 #import <PureLayout/PureLayout.h>

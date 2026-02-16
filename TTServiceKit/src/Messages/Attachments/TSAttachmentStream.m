@@ -145,6 +145,8 @@ NS_ASSUME_NONNULL_BEGIN
     _digest = pointer.digest;
     self.attachmentType = pointer.attachmentType;
     _creationTimestamp = [NSDate new];
+    self.width = pointer.width;
+    self.height = pointer.height;
 
     [self ensureFilePath];
 
@@ -788,7 +790,13 @@ NS_ASSUME_NONNULL_BEGIN
             return CGSizeMake(self.cachedImageWidth.floatValue, self.cachedImageHeight.floatValue);
         }
 
-        CGSize imageSize = [self calculateImageSize];
+        CGSize imageSize = CGSizeZero;
+        if (self.width > 0 && self.height > 0) {
+            imageSize = CGSizeMake(self.width, self.height);
+        } else {
+            imageSize = [self calculateImageSize];
+        }
+        
         if (imageSize.width <= 0 || imageSize.height <= 0) {
             return CGSizeZero;
         }

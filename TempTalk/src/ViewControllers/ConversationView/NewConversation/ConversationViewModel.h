@@ -101,8 +101,6 @@ typedef NS_ENUM(NSUInteger, ConversationUpdateItemType) {
 - (void)conversationViewModelDidLoadMoreItems;
 - (void)conversationViewModelDidUpdateLoadMoreStatus;
 
-- (void)conversationViewModelUpdatePin;
-
 // Called after the view model recovers from a severe error
 // to prod the view to reset its scroll state, etc.
 - (void)conversationViewModelDidReset;
@@ -131,6 +129,7 @@ typedef NS_ENUM(NSUInteger, ConversationUpdateItemType) {
                    botViewItem:(nullable id<ConversationViewItem>)botViewItem NS_DESIGNATED_INITIALIZER;
 
 - (void)clearUnreadMessagesIndicator;
+- (void)clearFocusMessageIndex;
 
 - (nullable NSIndexPath *)indexPathForViewItem:(id<ConversationViewItem>)viewItem;
 

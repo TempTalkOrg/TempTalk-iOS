@@ -39,6 +39,7 @@
         @"chatWithoutReceiptThreshold": @(50),
         @"membersMaxSize": @(200),
         @"messageArchivingTimeOptionValues": @[@(3600), @(172800), @(604800)],
+        @"confidentialModeThreshold": @(20),
     };
 }
 

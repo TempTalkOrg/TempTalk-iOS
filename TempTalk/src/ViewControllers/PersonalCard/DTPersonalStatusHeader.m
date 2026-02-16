@@ -7,7 +7,7 @@
 //
 
 #import "DTPersonalStatusHeader.h"
-#import "Theme.h"
+#import <TTMessaging/TTMessaging-Swift.h>
 #import "UIColor+OWS.h"
 #import "UIFont+OWS.h"
 #import <TTMessaging/UIView+SignalUI.h>
@@ -35,17 +35,17 @@
 - (void)updateInfo:(NSString *_Nullable)title {
     if (title && title.length > 0) {
         self.infoLabel.text = title;
-        self.clearLabel.textColor = Theme.primaryTextColor;
+        self.clearLabel.textColor = Theme.tprimaryColor;
     } else {
         self.infoLabel.text = Localized(@"PERSON_CARD_STATE_SETTING_TIME", @"");
-        self.clearLabel.textColor = Theme.ternaryTextColor;
+        self.clearLabel.textColor = Theme.tthirdColor;
     }
 }
 
 - (void)setupViews {
     _infoLabel = ({
         UILabel *label = [[UILabel alloc] init];
-        label.textColor = Theme.ternaryTextColor;
+        label.textColor = Theme.tthirdColor;
         label.font = [UIFont ows_regularFontWithSize:16.f];
         label.text = Localized(@"PERSON_CARD_STATE_SETTING_TIME", @"");
         label;
@@ -53,7 +53,7 @@
     
     _clearLabel = ({
         UILabel *label = [[UILabel alloc] init];
-        label.textColor = Theme.ternaryTextColor;
+        label.textColor = Theme.tthirdColor;
         label.font = [UIFont ows_regularFontWithSize:18.f];
         label.text = Localized(@"PERSON_CARD_STATE_CLEAR", @"");
         label;

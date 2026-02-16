@@ -38,9 +38,9 @@ class DTSettingDescriptionCell : DTDefaultBaseStyleCell {
     
     override func applyTheme()  {
         super.applyTheme()
-        backgroundColor = Theme.defaultBackgroundColor
-        contentView.backgroundColor = Theme.defaultTableCellBackgroundColor
-        titleLable.textColor = Theme.primaryTextColor
+        backgroundColor = Theme.bgpageSecondaryColor
+        contentView.backgroundColor = Theme.bg1Color
+        titleLable.textColor = Theme.tprimaryColor
         descriptionLabel.textColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x848E9C) : UIColor.color(rgbHex: 0x848E9C)
     }
     
@@ -93,5 +93,10 @@ class DTSettingDescriptionCell : DTDefaultBaseStyleCell {
         guard let cellStyle = model.cellStyle else { return }
 //        OWSLogger.info("\(String(describing: cellStyle))")
     }
-    
+
+    override func updateFonts() {
+        super.updateFonts()
+        descriptionLabel.font = UIFont.ows_dynamicTypeBody
+    }
+
 }

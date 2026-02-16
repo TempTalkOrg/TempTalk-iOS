@@ -111,7 +111,9 @@ extension DTGroupUpdateMessageProcessor {
                 .inviteJoinGroup,
                 .kickoutGroup,
                 .dismissGroup,
-                .destroy:
+                .destroy,
+                .kickoutAutoClear,
+                .groupAccountInvalid:
             return GroupNotifyManagementHandler()
                 
         case .groupNameChange,
@@ -133,10 +135,6 @@ extension DTGroupUpdateMessageProcessor {
           
         case .groupSelfInfoChange:
             return GroupNotifySelfInfoChangeHandler()
-            
-        case .groupAddPin,
-                .groupDeletePin:
-            return GroupNotifyPinUpdateHandler()
                     
         case .groupAddAdmin,
                 .groupDeleteAdmin,

@@ -46,8 +46,6 @@ import DTProto
     var showErrorTost: Bool = false
     // answer的视图
     var answerVC: DTHostingController<CallAnswerView>?
-    // 视图的状态
-    var answerVCPresentationStyle: AnswerVCPresentationStyle = .windowManager
     // startcall 优化
     var startCallThread: TSThread?
     // startcall 优化
@@ -75,22 +73,40 @@ import DTProto
         })
     }
     
-    /// 通话状态枚举
-    enum CallState {
-        case idle
-        case connecting
-        case connected
-        case disconnecting
-        case error
+    /// 会议生命周期状态枚举
+    /// idle -> connecting -> connected -> disconnecting -> idle
+    enum MeetingLifecycleState: String, CustomStringConvertible {
+        case idle           // 空闲，无会议
+        case connecting     // 正在连接（发起或接听中）
+        case connected      // 已连接，会议进行中
+        case disconnecting  // 正在断开连接
+
+        var description: String { rawValue }
+
+        /// 是否允许发起新会议
+        var canStartNewMeeting: Bool {
+            self == .idle
+        }
+
+        /// 是否允许接听新来电
+        var canAcceptNewCall: Bool {
+            self == .idle
+        }
+
+        /// 是否处于活跃状态（非空闲）
+        var isActive: Bool {
+            self != .idle
+        }
     }
-    
+
     /// 通话错误枚举
     enum CallError: Error, LocalizedError {
         case messageCreationFailed
         case connectionFailed
         case roomContextCreationFailed
         case invalidState
-        
+        case alreadyInMeeting
+
         var errorDescription: String? {
             switch self {
             case .messageCreationFailed:
@@ -101,56 +117,102 @@ import DTProto
                 return "Failed to create room context"
             case .invalidState:
                 return "Invalid call state"
+            case .alreadyInMeeting:
+                return "Already in a meeting"
             }
         }
     }
-    
-    /// 状态管理串行队列
-    let stateQueue = DispatchQueue(label: "com.temptalk.call.state", qos: .userInitiated)
-    
-    /// 当前通话状态
-    var callState: CallState = .idle {
-        didSet {
-            Logger.info("\(logTag) Call state changed: \(oldValue) -> \(callState)")
-            handleStateChange(from: oldValue, to: callState)
-        }
+
+    /// 状态锁，保护 lifecycleState 的线程安全
+    private let stateLock = NSLock()
+
+    /// 当前会议生命周期状态（内部存储）
+    private var _lifecycleState: MeetingLifecycleState = .idle
+
+    /// 当前会议生命周期状态（线程安全访问）
+    var lifecycleState: MeetingLifecycleState {
+        stateLock.withLock { _lifecycleState }
     }
-    
-    /// 线程安全的状态更新
-    func updateCallState(_ newState: CallState) {
-        stateQueue.async { [weak self] in
-            guard let self = self else { return }
-            self.callState = newState
-        }
-    }
-    
-    /// 当前是否在会议中
-    var inMeeting: Bool = false {
-        willSet {
-            if newValue {
-                hasMeeting = true
-                updateCallState(.connecting)
-            } else {
-                updateCallState(.idle)
+
+    /// 原子性尝试转换状态（仅当当前状态为 expectedState 时才转换）
+    /// - Returns: 是否成功转换
+    @discardableResult
+    func tryTransition(from expectedState: MeetingLifecycleState, to newState: MeetingLifecycleState) -> Bool {
+        stateLock.withLock {
+            guard _lifecycleState == expectedState else {
+                Logger.error("\(logTag) State transition failed: expected \(expectedState), but was \(_lifecycleState)")
+                return false
             }
-            OWSAudioSession.shared.inCalling = newValue
-            if newValue {
-                DispatchMainThreadSafe { [self] in
-                    startCallDurationTimer()
-                }
-            }
+            let oldState = _lifecycleState
+            _lifecycleState = newState
+            Logger.info("\(logTag) State: \(oldState) -> \(newState)")
+            handleStateChange(to: newState)
+            return true
         }
     }
-        
-    /// 当前是否有会议(包含正在连接中的)
-    var hasMeeting: Bool = false {
-        didSet {
-            if hasMeeting {
-                DeviceSleepManager.shared.addBlock(blockObject: self)
-                OWSAudioSession.shared.inCalling = true
-            } else {
+
+    /// 强制转换到目标状态
+    func forceTransition(to newState: MeetingLifecycleState) {
+        stateLock.withLock {
+            let oldState = _lifecycleState
+            _lifecycleState = newState
+            Logger.info("\(logTag) State: \(oldState) -> \(newState) (forced)")
+            handleStateChange(to: newState)
+        }
+    }
+
+    /// 处理状态变化的副作用（在锁内调用，保持简单）
+    private func handleStateChange(to newState: MeetingLifecycleState) {
+        switch newState {
+        case .idle:
+            DispatchQueue.main.async {
                 DeviceSleepManager.shared.removeBlock(blockObject: self)
                 OWSAudioSession.shared.inCalling = false
+            }
+        case .connecting:
+            DispatchQueue.main.async {
+                DeviceSleepManager.shared.addBlock(blockObject: self)
+                OWSAudioSession.shared.inCalling = true
+            }
+        case .connected:
+            DispatchQueue.main.async { [weak self] in
+                self?.startCallDurationTimer()
+            }
+        case .disconnecting:
+            break
+        }
+
+        // 将当前呼叫对应的 Join 条与生命周期同步（只做 add，不在本地退出时移除，避免会议仍在时条目消失）
+        if newState == .connecting || newState == .connected {
+            DispatchQueue.main.async { [weak self] in
+                guard
+                    let self,
+                    let rid = self.currentCall.roomId,
+                    !rid.isEmpty
+                else { return }
+                self.handleMeetingBar(roomId: rid, action: .add)
+            }
+        }
+    }
+
+    /// 当前是否在会议中（兼容旧代码）
+    var inMeeting: Bool {
+        get { lifecycleState == .connected }
+        set {
+            if newValue {
+                tryTransition(from: .connecting, to: .connected)
+            }
+        }
+    }
+
+    /// 当前是否有会议(包含正在连接中的)（兼容旧代码）
+    var hasMeeting: Bool {
+        get { lifecycleState.isActive }
+        set {
+            if newValue {
+                tryTransition(from: .idle, to: .connecting)
+            } else {
+                forceTransition(to: .idle)
             }
         }
     }
@@ -186,6 +248,8 @@ import DTProto
     // 评分触发保护，防止多次消费评分逻辑
     var hasTriggeredRating: Bool = false
     var feedbackIsNetworkPoor: Bool? = false
+    // Deferred rating: PanModal can't present in background, defer to foreground
+    var hasPendingRating: Bool = false
     /// 最近一次会议时长，用于在清理资源后决定是否展示评分弹窗
     var lastMeetingDuration: TimeInterval?
     
@@ -213,31 +277,14 @@ import DTProto
     
     override init() {
         super.init()
-        
+
         let callMessageManager = DTCallMessageManager.shared
         callMessageManager.delegate = self
         registerNotifications()
-        
-        NotificationHandler.shared.registerDarwinNotification()
+
+        // Darwin notification is registered in DTCallKitManager.init
+        // No need to register here to avoid duplicate registration
         LiveKitSDK.setLogger(OSLogger(minLevel: .debug))
     }
     
-    /// 处理状态变化
-    private func handleStateChange(from oldState: CallState, to newState: CallState) {
-        switch (oldState, newState) {
-        case (.idle, .connecting):
-            Logger.info("\(logTag) Starting call connection")
-        case (.connecting, .connected):
-            Logger.info("\(logTag) Call connected successfully")
-        case (.connected, .disconnecting):
-            Logger.info("\(logTag) Starting call disconnection")
-        case (.disconnecting, .idle):
-            Logger.info("\(logTag) Call disconnected successfully")
-        case (_, .error):
-            Logger.error("\(logTag) Call entered error state")
-            handleCallError()
-        default:
-            Logger.warn("\(logTag) Unexpected state transition: \(oldState) -> \(newState)")
-        }
-    }
 }

@@ -68,12 +68,6 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
 
 #pragma mark -
 
-typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
-    OWSRootWindowVisibilityStateUnknown = 0,
-    OWSRootWindowVisibilityStateVisible,
-    OWSRootWindowVisibilityStateHidden,
-};
-
 @interface OWSWindowManager () <ReturnToCallViewControllerDelegate>
 
 // UIWindowLevelNormal
@@ -100,10 +94,6 @@ typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
 @property (nonatomic) BOOL isPhotoLibraryAuth;
 
 @property (nonatomic, nullable) UIViewController *callViewController;
-
-@property (nonatomic) OWSRootWindowVisibilityState rootWindowVisibilityState;
-@property (nonatomic) BOOL isRootAppearanceTransitionInProgress;
-@property (nonatomic) BOOL rootAppearanceTargetVisible;
 
 @end
 
@@ -149,10 +139,6 @@ typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
     self.callViewWindow = [self createCallViewWindow:rootWindow];
     self.callViewWindow.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     
-    self.rootWindowVisibilityState = rootWindow.hidden ? OWSRootWindowVisibilityStateHidden : OWSRootWindowVisibilityStateVisible;
-    self.isRootAppearanceTransitionInProgress = NO;
-    self.rootAppearanceTargetVisible = self.rootWindowVisibilityState == OWSRootWindowVisibilityStateVisible;
-    
     [self ensureWindowState];
 }
 
@@ -165,7 +151,7 @@ typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
     window.hidden = YES;
     window.windowLevel = UIWindowLevel_CallView();
     window.opaque = YES;
-    window.backgroundColor = Theme.backgroundColor;
+    window.backgroundColor = Theme.bg1Color;
 
     UIViewController *viewController = [OWSWindowRootViewController new];
     viewController.view.backgroundColor = [UIColor blackColor];
@@ -191,6 +177,18 @@ typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
 
     _isScreenBlockActive = isScreenBlockActive;
 
+    [self ensureWindowState];
+}
+
+- (void)setIsPhotoLibraryAuth:(BOOL)isPhotoLibraryAuth
+{
+    OWSAssertIsOnMainThread();
+
+    _isPhotoLibraryAuth = isPhotoLibraryAuth;
+
+    // When photo library auth state changes, ensure window state is updated
+    // This is important when transitioning back from photo library (isPhotoLibraryAuth=NO)
+    // to ensure any pending window state changes are processed
     [self ensureWindowState];
 }
 
@@ -225,12 +223,7 @@ typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
     self.callNavigationController.viewControllers = @[callViewController];
     self.shouldShowCallView = YES;
 
-    [self ensureWindowState];
-    
-    if (!animated) {
-        [self ensureRootWindowHidden];
-    } else {
-        [self ensureRootWindowShown];
+    if (animated)  {
         CGRect screenBounds = [UIScreen mainScreen].bounds;
         self.callViewWindow.frame = CGRectOffset(screenBounds, 0, -screenBounds.size.height);
 
@@ -239,10 +232,10 @@ typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
                             options:UIViewAnimationOptionCurveEaseInOut animations:^{
             self.callViewWindow.frame = screenBounds;
         } completion:^(BOOL finished) {
-            if (self.shouldShowCallView) {
-                [self ensureRootWindowHidden];
-            }
+            [self ensureWindowState];
         }];
+    } else {
+        [self ensureWindowState];
     }
 }
 
@@ -258,34 +251,35 @@ typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
     OWSAssertIsOnMainThread();
 //    OWSAssertDebug(callViewController);
 //    OWSAssertDebug(self.callViewController);
-    
+
     if (![self hasCall]) {
-        
-        OWSLogWarn(@"[call] has ended early!");
+        OWSLogError(@"[call] has ended early!");
+        if (completion) {
+            completion();
+        }
         return;
     }
 
-//    if (self.callViewController != callViewController) {
-//        OWSLogWarn(@"[call] %@ Ignoring end call request from obsolete call view controller.", self.logTag);
-//        return;
-//    }
-
-    // Dettach callViewController from window.
-//    [self.callNavigationController popToRootViewControllerAnimated:NO];
-    
     UIViewController *presentedVC = self.callNavigationController.presentedViewController;
     if (presentedVC) {
+        OWSLogInfo(@"[Window] endCall completed, dismiss presentedVC");
         [presentedVC dismissViewControllerAnimated:NO completion:nil];
     }
     UIViewController *viewController = [OWSWindowRootViewController new];
     viewController.view.backgroundColor = [UIColor blackColor];
     self.callNavigationController.viewControllers = @[viewController];
-    
+
     self.callViewController = nil;
 
     self.shouldShowCallView = NO;
 
     [self ensureWindowState];
+
+    OWSLogInfo(@"[Window] endCall completed, rootWindow.hidden=%d, isKeyWindow=%d",
+               self.rootWindow.hidden, self.rootWindow.isKeyWindow);
+    if (completion) {
+        completion();
+    }
 }
 
 - (void)leaveCallView
@@ -353,11 +347,16 @@ typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
     // window level and are shown/hidden as necessary.
     //
     // Note that we always "hide" before we "show".
-    
+
+    OWSLogInfo(@"[Window] ensureWindowState: isScreenBlockActive=%d, callViewController=%@, shouldShowCallView=%d, isPhotoLibraryAuth=%d",
+               self.isScreenBlockActive, self.callViewController, self.shouldShowCallView, self.isPhotoLibraryAuth);
+
     if (self.isPhotoLibraryAuth) {
+        // Reset defer counter when skipping due to photo library auth
+        // to prevent accumulation across multiple calls
         return;
     }
-    
+
     if (self.isScreenBlockActive) {
         // Show Screen Block.
         OWSLogInfo(@"[Window] show screen windows");
@@ -376,7 +375,6 @@ typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
         [self ensureRootWindowShown];
         [self ensureCallViewWindowHidden];
         [self ensureScreenBlockWindowHidden];
-        
     } else {
         // Show Root Window
         OWSLogInfo(@"[Window] show Root windows default");
@@ -404,6 +402,7 @@ typedef NS_ENUM(NSUInteger, OWSRootWindowVisibilityState) {
     // on the vc on top of its navigation stack.
     
     if (!self.rootWindow.isKeyWindow || self.rootWindow.hidden) {
+        OWSLogInfo(@"%@ showing root window. makeKeyAndVisible", self.logTag);
         [self.rootWindow makeKeyAndVisible];
     }
 }

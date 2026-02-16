@@ -73,6 +73,8 @@ var defaultRoomName: String {
     var controlType: String?
     /// 邀请人的id列表
     var inviteCallees: [String]?
+    /// 已发送过 Critical Alert 的邀请人 id 列表（用于去重）
+    var invitedCriticalAlertUsers: Set<String> = Set()
     /// 发起本地会议的时间戳
     var timestamp: UInt64?
     /// 发起本地会议的服务器时间戳（calling用evelop，其余用接口）
@@ -85,12 +87,16 @@ var defaultRoomName: String {
     var roomSid: String?
     /// startCall优化之后会返回响应body
     var ttcalResponseBody: Livekit_TTCallResponseBody?
+    var ttcalResponseOptions: Livekit_TTCallOptions?
     
     private var _roomName: String = ""
     var roomName: String {
         get {
             if callType == .private {
                 //获取昵称
+                guard let caller = caller, !caller.isEmpty else {
+                    return _roomName
+                }
                 let name = Environment.shared.contactsManager.displayName(forPhoneIdentifier: caller)
                 if name == caller {
                     //获取昵称失败
@@ -107,6 +113,9 @@ var defaultRoomName: String {
                     return _roomName
                 }
             } else if callType == .instant {
+                guard let caller = caller, !caller.isEmpty else {
+                    return "instant call"
+                }
                 let name = Environment.shared.contactsManager.displayName(forPhoneIdentifier: caller)
                 if name == caller {
                     //获取昵称失败
@@ -122,7 +131,7 @@ var defaultRoomName: String {
                 return _roomName
             }
         }
-        
+
         set(newValue) {
             _roomName = newValue
         }

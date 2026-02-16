@@ -262,27 +262,21 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
         presentationView.layer.magnificationFilter = CALayerContentsFilter.trilinear
         presentationView.contentMode = .scaleAspectFit
         presentationView.backgroundColor = Theme.isDarkThemeEnabled ? .ows_black : .ows_white
-        
+
+        // 机密照片阅后即焚：查看时立即删除消息
         if let message = self.initialDetailItem?.message as? TSIncomingMessage, message.messageModeType == .confidential {
             OWSReadReceiptManager.shared().confidentialMessageWasReadLocally(message)
+            self.databaseStorage.asyncWrite { wTransaction in
+                message.anyRemove(transaction: wTransaction)
+            }
         }
-        
-    }
-    
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        guard let message = self.initialDetailItem?.message as? TSIncomingMessage, message.messageModeType == .confidential else {
-            return
-        }
-        self.databaseStorage.asyncWrite { wTransaction in
-            message.anyRemove(transaction: wTransaction)
-        }
+
     }
 
     // MARK: Present/Dismiss
 
-    private var currentItem: MediaGalleryItem {
-        return self.pageViewController!.currentItem
+    private var currentItem: MediaGalleryItem? {
+        return self.pageViewController?.currentItem
     }
 
     private var replacingView: UIView?
@@ -356,7 +350,7 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
         // by our presentationView. Swapping them out should be imperceptible.
         self.presentationView.isHidden = false
         // We don't hide the pageViewController entirely - e.g. we want the toolbars to fade in.
-        pageViewController.currentViewController.view.isHidden = true
+        pageViewController.currentViewController?.view.isHidden = true
         detailView.backgroundColor = .clear
         self.view.backgroundColor = Theme.isDarkThemeEnabled ? .ows_black : .ows_white
 
@@ -391,7 +385,7 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
                            completion: { (_: Bool) in
                             // At this point our presentation view should be overlayed perfectly
                             // with our media view. Swapping them out should be imperceptible.
-                            pageViewController.currentViewController.view.isHidden = false
+                            pageViewController.currentViewController?.view.isHidden = false
                             self.presentationView.isHidden = true
 
                             self.view.isUserInteractionEnabled = true
@@ -500,13 +494,13 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
             return
         }
 
-        mediaPageViewController.currentViewController.view.isHidden = true
+        mediaPageViewController.currentViewController?.view.isHidden = true
         self.presentationView.isHidden = false
 
         // Move the presentationView back to it's initial position, i.e. where
         // it sits on the screen in the conversation view.
         let changedItems = currentItem != self.initialDetailItem
-        if changedItems {
+        if changedItems, let currentItem = currentItem {
             self.presentationView.image = currentItem.fullSizedImage
             self.applyOffscreenMediaViewConstraints()
         } else {
@@ -723,14 +717,15 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
                     }
 
                     let date = item.galleryDate
-                    
+
                     if galleryItems.first(where: {$0.attachmentStream.uniqueId == item.attachmentStream.uniqueId}) != nil {
                         return
                     }
 
                     galleryItems.append(item)
-                    if sections[date] != nil {
-                        sections[date]!.append(item)
+                    if var sectionItems = sections[date] {
+                        sectionItems.append(item)
+                        sections[date] = sectionItems
 
                         // so we can update collectionView
                         newGalleryItems.append(item)

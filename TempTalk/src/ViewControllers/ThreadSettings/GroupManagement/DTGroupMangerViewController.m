@@ -27,7 +27,7 @@ CGFloat const kItemNumber = 7;
 
 
 extern NSString *const kDTAddToGroupItemIdentifier;
-@interface DTGroupMangerViewController ()<UICollectionViewDataSource,UICollectionViewDelegate,DTGroupMemberControllerDelegate>
+@interface DTGroupMangerViewController ()<UICollectionViewDataSource,UICollectionViewDelegate,DTGroupMemberControllerDelegate, OWSNavigationChildController>
 @property (nonatomic, strong) TSGroupThread *thread;
 @property (nonatomic, strong) NSMutableArray *selectedIdsArr;
 @property (nonatomic, strong) NSMutableArray *defaultIconArr;
@@ -43,6 +43,8 @@ extern NSString *const kDTAddToGroupItemIdentifier;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     [self setTitle:Localized(@"LIST_GROUP_MEMBERS_MANAGER", nil)];
    
     [self updateTableContents];
@@ -57,6 +59,12 @@ extern NSString *const kDTAddToGroupItemIdentifier;
                                              selector:@selector(criticalAlertNotifyDidChange:)
                                                  name:DTGroupCriticalAlertChangedNotification
                                                object:nil];
+}
+
+- (void)applyTheme {
+    [super applyTheme];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -285,8 +293,8 @@ extern NSString *const kDTAddToGroupItemIdentifier;
 #pragma mark delegate
 - (UITableViewCell *)getGroupMembersCell {
     UITableViewCell *cell = [OWSTableItem newCell];
-    cell.backgroundColor = Theme.tableCellBackgroundColor;
-    cell.contentView.backgroundColor = Theme.tableCellBackgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
+    cell.contentView.backgroundColor = Theme.bg1Color;
     
     UIStackView *columnStackView = [UIStackView new];
     columnStackView.axis = UILayoutConstraintAxisVertical;
@@ -310,7 +318,7 @@ extern NSString *const kDTAddToGroupItemIdentifier;
     
     UILabel *titleLabel = [UILabel new];
     titleLabel.font = [UIFont ows_regularFontWithSize:18.f];
-    titleLabel.textColor = Theme.primaryTextColor;
+    titleLabel.textColor = Theme.tprimaryColor;
     titleLabel.text = Localized(@"LIST_GROUP_MEMBERS_ADMIN",@"");
 //    [cell.contentView addSubview:titleLabel];
     [topRowStackView addArrangedSubview:titleLabel];
@@ -323,7 +331,7 @@ extern NSString *const kDTAddToGroupItemIdentifier;
     
     UILabel *numberLabel = [UILabel new];
     numberLabel.font = titleLabel.font = [UIFont ows_regularFontWithSize:18.f];
-    numberLabel.textColor = Theme.secondaryTextAndIconColor;
+    numberLabel.textColor = Theme.tsecondaryColor;
     numberLabel.textAlignment = NSTextAlignmentRight;
     [topRowStackView addArrangedSubview:numberLabel];
     
@@ -641,5 +649,28 @@ extern NSString *const kDTAddToGroupItemIdentifier;
         [self updateTableContents];
     }];
 }
+
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return false;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpageSecondaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
+}
+
 
 @end

@@ -15,7 +15,6 @@ protocol MessageActionsDelegate: AnyObject {
     func messageActionsMultiSelectItem(_ conversationViewItem: ConversationViewItem)
     func messageActionsTranslateForItem(_ conversationViewItem: ConversationViewItem)
     func messageActionsOriginalTranslateForItem(_ conversationViewItem: ConversationViewItem)
-    func messageActionsPinItem(_ conversationViewItem: ConversationViewItem)
     func messageActionDeleteItem(_ conversationViewItem: ConversationViewItem)
     func messageEmojiReactionItem(_ conversationViewItem: ConversationViewItem, emoji: String)
 }
@@ -104,9 +103,16 @@ struct MenuActionBuilder {
         })
     }
     
-    static func saveMedia(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
+    static func saveMedia(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate, isImage: Bool = false) -> MenuAction {
+        let title: String
+        if isImage {
+            title = Localized("MESSAGE_ACTION_SAVE_MEDIA_IMAGE", comment: "Action sheet button title for saving image")
+        } else {
+            title = Localized("MESSAGE_ACTION_SAVE_MEDIA", comment: "Action sheet button title")
+        }
+
         return MenuAction(image: #imageLiteral(resourceName: "ic_download"),
-                          title: Localized("MESSAGE_ACTION_SAVE_MEDIA", comment: "Action sheet button title"),
+                          title: title,
                           subtitle: nil,
                           block: { (_) in
             conversationViewItem.saveMediaAction()
@@ -131,9 +137,16 @@ struct MenuActionBuilder {
         })
     }
     
-    static func forwardToNote(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
+    static func forwardToNote(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate, isImage: Bool = false) -> MenuAction {
+        let title: String
+        if isImage {
+            title = Localized("MESSAGE_ACTION_FORWARD_TO_NOTE_IMAGE", comment: "Action sheet button title for saving image to self")
+        } else {
+            title = Localized("MESSAGE_ACTION_FORWARD_TO_NOTE", comment: "Action sheet button title")
+        }
+
         return MenuAction(image: #imageLiteral(resourceName: "ic_saveNote"),
-                          title: Localized("MESSAGE_ACTION_FORWARD_TO_NOTE", comment: "Action sheet button title"),
+                          title: title,
                           subtitle: nil,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsForwardItemToNote(conversationViewItem)
@@ -149,29 +162,17 @@ struct MenuActionBuilder {
         })
     }
     
-    static func pinMessage(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        let actionTitle = conversationViewItem.isPinned ? Localized("MESSAGE_ACTION_UNPIN_MESSAGE", comment: "Action sheet button title") : Localized("MESSAGE_ACTION_PIN_MESSAGE", comment: "Action sheet button title")
-        let actionIcon = conversationViewItem.isPinned ? "ic_unpin" : "ic_pin"
-        return MenuAction(image: #imageLiteral(resourceName: actionIcon),
-                          title: actionTitle,
-                          subtitle: nil,
-                          block: { [weak delegate] (_) in
-            delegate?.messageActionsPinItem(conversationViewItem)
-        })
-    }
-    
 }
 
 @objcMembers
 class ConversationViewItemActions: NSObject {
     
     class func emojiReaction(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuEmojiAction {
-        guard conversationViewItem.interaction is TSMessage else {
+        guard let message = conversationViewItem.interaction as? TSMessage else {
             OWSLogger.error("interaction is not TSMessage class")
             return MenuEmojiAction(emojis: DTReactionHelper.recentlyUsed(), block: {_ in })
         }
-        
-        let message = conversationViewItem.interaction as! TSMessage
+
         let selectedEmojis = DTReactionHelper.selectedEmojis(message)
         
         return MenuEmojiAction(emojis: DTReactionHelper.recentlyUsed(), selectedEmojis: selectedEmojis, block: { [weak delegate] emoji in
@@ -212,45 +213,6 @@ class ConversationViewItemActions: NSObject {
         return false
     }
     
-    // TODO: 逻辑放到 conversationViewItem 里
-    class func shouldPin(conversationViewItem: ConversationViewItem) -> Bool {
-        
-        if !conversationViewItem.isGroupThread {
-            return false
-        }
-        
-        guard let message = conversationViewItem.interaction as? TSMessage else {
-            return false
-        }
-        
-        if message.isPinned {
-            return true
-        }
-        
-        if conversationViewItem.isCombindedForwardMessage {
-            guard let forwardMessage = conversationViewItem.combinedForwardingMessage else {
-                return false
-            }
-            
-            // 和 mac 同步一下
-            let forwardAttachmentIds = forwardMessage.allForwardingAttachmentIds()
-            var forwardStreams: [TSAttachmentStream]!
-            self.databaseStorage.read { transaction in
-                forwardStreams = forwardMessage.forwardingAttachmentStreams(with:transaction)
-            }
-            return forwardAttachmentIds.count == forwardStreams.count
-        }
-                
-        if conversationViewItem.hasMediaActionContent {
-            if let attachmentStream = conversationViewItem.attachmentStream() {
-                return !attachmentStream.isAudio()
-            }
-            return true
-        }
-        
-        return true
-    }
-    
     @objc class func confidentialActions(conversationViewItem: ConversationViewItem ,delegate: MessageActionsDelegate) -> [MenuAction] {
         
         var actions: [MenuAction] = []
@@ -284,11 +246,6 @@ class ConversationViewItemActions: NSObject {
         
         let forwardAction = MenuActionBuilder.forward(conversationViewItem: conversationViewItem, delegate: delegate)
         actions.append(forwardAction)
-        
-        if shouldPin(conversationViewItem: conversationViewItem) {
-            let pinAction = MenuActionBuilder.pinMessage(conversationViewItem: conversationViewItem, delegate: delegate)
-            actions.append(pinAction)
-        }
         
         if conversationViewItem.hasBodyTextActionContent &&
             conversationViewItem.canShowTranslateAction() {
@@ -330,11 +287,6 @@ class ConversationViewItemActions: NSObject {
             copyTextAction = MenuActionBuilder.copyText(conversationViewItem: conversationViewItem, delegate: delegate)
         }
         
-        var pinAction: MenuAction?
-        if shouldPin(conversationViewItem: conversationViewItem) {
-            pinAction = MenuActionBuilder.pinMessage(conversationViewItem: conversationViewItem, delegate: delegate)
-        }
-        
         var translateTextAction: MenuAction?
         if conversationViewItem.hasBodyTextActionContent &&
             conversationViewItem.canShowTranslateAction() {
@@ -367,7 +319,6 @@ class ConversationViewItemActions: NSObject {
                 quoteAction,
                 copyTextAction,
                 forwardAction,
-                pinAction,
                 translateTextAction,
                 multiSelectAction,
                 forwardToNoteAction,
@@ -381,7 +332,6 @@ class ConversationViewItemActions: NSObject {
                 copyTextAction,
                 forwardAction,
                 translateTextAction,
-                pinAction,
                 multiSelectAction,
                 forwardToNoteAction,
                 deleteAction,
@@ -394,32 +344,29 @@ class ConversationViewItemActions: NSObject {
     
     @objc class func mediaActions(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> [MenuAction] {
         let quoteAction = MenuActionBuilder.quote(conversationViewItem: conversationViewItem, delegate: delegate)
-        
-        var pinAction: MenuAction?
+
         var copyMediaAction: MenuAction?
         var saveMediaAction: MenuAction?
         var speechToTextAction: MenuAction?
         var multiSelectAction: MenuAction?
         var forwardAction: MenuAction?
         var forwardToNoteAction: MenuAction?
-        
+
         if conversationViewItem.hasMediaActionContent {
             var isAudio = false
+            var isImage = false
             if let attachmentStream = conversationViewItem.attachmentStream() {
                 isAudio = attachmentStream.isAudio()
+                isImage = attachmentStream.isImage()
             }
-            
-            if shouldPin(conversationViewItem: conversationViewItem) {
-                pinAction = MenuActionBuilder.pinMessage(conversationViewItem: conversationViewItem, delegate: delegate)
-            }
-            
+
             if !isAudio {
                 //版本支持转发未下载的附件后，附件是否可以复制需要加上文件是否已下载的判断
                 if let _ = conversationViewItem.attachmentStream() {
                     copyMediaAction = MenuActionBuilder.copyMedia(conversationViewItem: conversationViewItem, delegate: delegate)
                 }
             }
-            
+
             if conversationViewItem.attachmentStream()?.attachmentType == .voiceMessage {
                 if conversationViewItem.showTranslateAction() {
                     speechToTextAction = MenuActionBuilder.convertSpeechToText(conversationViewItem: conversationViewItem, delegate: delegate)
@@ -427,36 +374,35 @@ class ConversationViewItemActions: NSObject {
                     speechToTextAction = MenuActionBuilder.convertSpeechToTextWithOriginalText(conversationViewItem: conversationViewItem, delegate: delegate)
                 }
             }
-            
+
             if conversationViewItem.canSaveMedia() {
-                saveMediaAction = MenuActionBuilder.saveMedia(conversationViewItem: conversationViewItem, delegate: delegate)
+                saveMediaAction = MenuActionBuilder.saveMedia(conversationViewItem: conversationViewItem, delegate: delegate, isImage: isImage)
             }
-              
+
             if !isAudio {
                 multiSelectAction = MenuActionBuilder.multiSelect(conversationViewItem: conversationViewItem, delegate: delegate)
                 forwardAction = MenuActionBuilder.forward(conversationViewItem: conversationViewItem, delegate: delegate)
             }
-            
-            forwardToNoteAction = MenuActionBuilder.forwardToNote(conversationViewItem: conversationViewItem, delegate: delegate)
+
+            forwardToNoteAction = MenuActionBuilder.forwardToNote(conversationViewItem: conversationViewItem, delegate: delegate, isImage: isImage)
         }
-        
+
         var deleteAction: MenuAction?
         if showDeleteAction(conversationViewItem: conversationViewItem) {
             deleteAction = MenuActionBuilder.deleteMessage(conversationViewItem: conversationViewItem, delegate: delegate)
         }
-        
+
         var recallAction: MenuAction?
         if (showRecallAction(conversationViewItem: conversationViewItem, delegate: delegate)){
             recallAction = MenuActionBuilder.recall(conversationViewItem: conversationViewItem, delegate: delegate)
         }
-        
+
         let showDetailsAction = MenuActionBuilder.showDetails(conversationViewItem: conversationViewItem, delegate: delegate)
-        
+
         let actions: [MenuAction] = [
             quoteAction,
             copyMediaAction,
             forwardAction,
-            pinAction,
             saveMediaAction,
             speechToTextAction,
             multiSelectAction,
@@ -465,18 +411,13 @@ class ConversationViewItemActions: NSObject {
             recallAction,
             showDetailsAction
         ].compactMap { $0 }
-        
+
         return actions
     }
     
     @objc class func quotedMessageActions(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> [MenuAction] {
         
         let quoteAction = MenuActionBuilder.quote(conversationViewItem: conversationViewItem, delegate: delegate)
-        
-        var pinAction: MenuAction?
-        if shouldPin(conversationViewItem: conversationViewItem) {
-            pinAction = MenuActionBuilder.pinMessage(conversationViewItem: conversationViewItem, delegate: delegate)
-        }
         
         var multiSelectAction: MenuAction?
         var forwardAction: MenuAction?
@@ -504,7 +445,6 @@ class ConversationViewItemActions: NSObject {
         let actions: [MenuAction] = [
             quoteAction,
             forwardAction,
-            pinAction,
             multiSelectAction,
             forwardToNoteAction,
             deleteAction,
@@ -530,11 +470,6 @@ class ConversationViewItemActions: NSObject {
         
         let forwardToNoteAction = MenuActionBuilder.forwardToNote(conversationViewItem: conversationViewItem, delegate: delegate)
         actions.append(forwardToNoteAction)
-        
-        if shouldPin(conversationViewItem: conversationViewItem) {
-            let pinAction = MenuActionBuilder.pinMessage(conversationViewItem: conversationViewItem, delegate: delegate)
-            actions.append(pinAction)
-        }
         
         if showDeleteAction(conversationViewItem: conversationViewItem) {
             let deleteAction = MenuActionBuilder.deleteMessage(conversationViewItem: conversationViewItem, delegate: delegate)

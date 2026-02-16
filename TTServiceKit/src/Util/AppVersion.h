@@ -58,6 +58,9 @@ NS_ASSUME_NONNULL_BEGIN
 // App Name Management
 - (NSString *)getAppDisplayNameForNotification;
 
+// Hardware Info
+- (NSString *)hardwareInfoString;
+
 + (NSComparisonResult)compareAppVersion:(NSString *)lhs with:(NSString *)rhs;
 
 @end

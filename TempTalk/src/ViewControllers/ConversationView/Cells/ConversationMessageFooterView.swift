@@ -38,7 +38,6 @@ class ConversationMessageFooterView: UIView {
     private lazy var footerTimeLabel: UILabel = {
         let label = UILabel()
         label.font = .ows_dynamicTypeCaption2
-        label.adjustsFontForContentSizeCategory = true
         return label
     }()
     
@@ -122,10 +121,10 @@ class ConversationMessageFooterView: UIView {
     
     func refreshTheme() {
         if !replyButton.isHidden {
-            replyButton.setTitleColor(Theme.themeBlueColor, for: .normal)
+            replyButton.setTitleColor(Theme.tinfoColor, for: .normal)
         }
         if !footerTimeLabel.isHidden {
-            footerTimeLabel.textColor = Theme.ternaryTextColor
+            footerTimeLabel.textColor = Theme.tthirdColor
         }
     }
 }

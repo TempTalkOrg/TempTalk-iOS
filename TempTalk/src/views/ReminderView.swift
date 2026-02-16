@@ -57,10 +57,10 @@ class ReminderView: UIView {
         switch (mode) {
         case .nag:
             self.backgroundColor = Theme.isDarkThemeEnabled ? UIColor.ows_reminderDarkYellow : UIColor.ows_reminderYellow
-            label.textColor = Theme.lightThemePrimaryColor
+            label.textColor = UIColor.color(rgbHex: 0x1E2329)
         case .explanation:
             self.backgroundColor = Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0x1C1C1C) : UIColor(rgbHex: 0xF5F5F5)
-            label.textColor = Theme.primaryTextColor
+            label.textColor = Theme.tprimaryColor
         }
     }
 
@@ -97,7 +97,7 @@ class ReminderView: UIView {
         // Label
         label.font = UIFont.ows_dynamicTypeSubheadline
         container.addArrangedSubview(label)
-        label.textColor = Theme.lightThemePrimaryColor
+        label.textColor = UIColor.color(rgbHex: 0x1E2329)
         label.numberOfLines = 0
         label.lineBreakMode = .byWordWrapping
         label.setCompressionResistanceVerticalHigh()

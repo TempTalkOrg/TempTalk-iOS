@@ -67,13 +67,13 @@ NS_ASSUME_NONNULL_BEGIN
     [Environment.shared.preferences unsetRecordedAPNSTokens];
     // 重新登录前重置需要拉取通讯录标识
     [Environment.shared.contactsManager clearShouldBeInitializedTag];
-    [DTCalendarManager.shared removeLocalMeetings];
-    [DTCalendarManager.shared cancelEventLocalNotification:nil];
     [AppEnvironment.shared.notificationPresenter clearAllNotificationsExceptCategoryIdentifiers:nil];
     
     //screen lock
     [[ScreenLock sharedManager] removePasscode];
     [[ScreenLock sharedManager] removePattern];
+    
+    [[TSMessageReadPositionCache shared] clearAllCache];
     
     [self showNewLoginView:fromViewController];
 }

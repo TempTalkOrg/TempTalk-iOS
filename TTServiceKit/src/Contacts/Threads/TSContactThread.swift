@@ -14,7 +14,7 @@ extension TSContactThread {
         
         let number = self.contactIdentifier()
         
-        if number == "+10000" ||
+        if number == TSConstants.officialBotId ||
             number == TSAccountManager.localNumber() {
             return true
         }

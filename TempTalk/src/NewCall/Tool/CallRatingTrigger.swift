@@ -34,12 +34,12 @@ final class CallRatingTrigger {
             userDefaults.set(today, forKey: dateKey)
             userDefaults.set(0, forKey: countKey)
             userDefaults.set(false, forKey: triggeredKey)
-            print("[Rating] 🎲 New day: \(today), threshold=\(threshold)")
+            Logger.debug("[Rating] New day: \(today), threshold=\(threshold)")
         }
 
         // 如果今天已经弹过，就不再弹
         if userDefaults.bool(forKey: triggeredKey) {
-            print("[Rating] 🚫 Already triggered today")
+            Logger.debug("[Rating] Already triggered today")
             return false
         }
 
@@ -52,18 +52,18 @@ final class CallRatingTrigger {
         // ✅ 情况 1：通话中出现严重网络问题，立即触发
         if hasSevereQualityIssue {
             userDefaults.set(true, forKey: triggeredKey)
-            print("[Rating] ⚠️ Trigger due to poor network, count=\(newCount)")
+            Logger.info("[Rating] Trigger due to poor network, count=\(newCount)")
             return true
         }
 
         // ✅ 情况 2：当天通话次数等于阀值时触发
         if newCount == threshold {
             userDefaults.set(true, forKey: triggeredKey)
-            print("[Rating] ✅ Trigger by threshold: \(newCount)")
+            Logger.info("[Rating] Trigger by threshold: \(newCount)")
             return true
         }
 
-        print("[Rating] ⏭️ Skip: count=\(newCount), threshold=\(threshold)")
+        Logger.debug("[Rating] Skip: count=\(newCount), threshold=\(threshold)")
         return false
     }
 

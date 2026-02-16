@@ -7,9 +7,6 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:yelling.pro</string>
-		<string>applinks:chative.difft.org</string>
-		<string>applinks:chative.com</string>
-		<string>webcredentials:chative.com</string>
 		<string>applinks:temptalk.app</string>
 	</array>
 	<key>com.apple.developer.default-data-protection</key>

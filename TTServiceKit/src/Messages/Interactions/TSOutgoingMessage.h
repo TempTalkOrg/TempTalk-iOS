@@ -292,8 +292,6 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:associatedUniqueThr
 // 注意外层是否有 transaction
 - (void)updateWithSendingError:(NSError *)error;
 
-- (void)updateWithHasSyncedTranscript:(BOOL)hasSyncedTranscript
-                          transaction:(SDSAnyWriteTransaction *)transaction;
 - (void)updateWithCustomMessage:(NSString *)customMessage transaction:(SDSAnyWriteTransaction *)transaction;
 - (void)updateWithCustomMessage:(NSString *)customMessage;
 

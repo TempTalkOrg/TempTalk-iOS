@@ -7,7 +7,7 @@
 //
 
 #import "DTHomeVirtualCell.h"
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <TTMessaging/UIView+SignalUI.h>
 #import <TTMessaging/UIFont+OWS.h>
 #import <TTMessaging/UIColor+OWS.h>
@@ -143,17 +143,17 @@
 }
 
 - (void)configUIStyle {
-    self.backgroundColor = Theme.tableCellBackgroundColor;
-    self.contentView.backgroundColor = Theme.stickBackgroundColor;
+    self.backgroundColor = Theme.bg1Color;
+    self.contentView.backgroundColor = Theme.bg2Color;
     
     UIView *selectedBackgroundView = [UIView new];
-    selectedBackgroundView.backgroundColor = [Theme.secondaryBackgroundColor colorWithAlphaComponent:0.08];
+    selectedBackgroundView.backgroundColor = [Theme.bg2Color colorWithAlphaComponent:0.08];
     self.selectedBackgroundView = selectedBackgroundView;
     
     self.nameLabel.font = self.nameFont;
-    self.nameLabel.textColor = Theme.primaryTextColor;
+    self.nameLabel.textColor = Theme.tprimaryColor;
     
-    self.callOnlineLabel.textColor = Theme.secondaryTextAndIconColor;
+    self.callOnlineLabel.textColor = Theme.tsecondaryColor;
     self.callDurationLabel.textColor = [UIColor ows_whiteColor];
     self.callDurationContainer.layer.cornerRadius = 4;
     //(self.callDurationLabel.font.lineHeight+10)*0.5;

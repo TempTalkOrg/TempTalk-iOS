@@ -29,7 +29,7 @@ public extension DTCallManager {
             self.meetingUrlSession().performNonmainRequest(request) { response in
                 
                 if let responseBodyJson = response.responseBodyJson {
-                    Logger.debug("\(self.logTag) getLiveToken response:\(responseBodyJson)")
+                    Logger.debug("\(self.logTag) getLiveToken response received")
                 }
 
                 do {
@@ -319,7 +319,7 @@ public extension DTCallManager {
             self.meetingUrlSession().performNonmainRequest(request) { response in
                 
                 if let responseBodyJson = response.responseBodyJson {
-                    Logger.debug("\(self.logTag) getCenRtmToken response:\(responseBodyJson)")
+                    Logger.debug("\(self.logTag) getCenRtmToken response received")
                 }
 
                 do {

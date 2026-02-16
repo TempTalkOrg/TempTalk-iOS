@@ -26,6 +26,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)textViewWillBeginDragging:(UIScrollView *)scrollView;
 - (void)textViewDidBecomeFirstResponder:(UITextView *)textView;
 
+/// 返回 YES 允许成为 first responder，返回 NO 阻止（用于先收起 attachment 键盘再弹出 system 键盘）
+- (BOOL)textViewShouldBecomeFirstResponder:(UITextView *)textView;
+
 @end
 
 #pragma mark -

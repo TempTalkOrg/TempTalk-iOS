@@ -172,7 +172,6 @@ BOOL IsNoteToSelfEnabled(void)
 
 - (void)removeAllThreadInteractionsWithTransaction:(SDSAnyWriteTransaction *)transaction
 {
-    
     // We can't safely delete interactions while enumerating them, so
     // we collect and delete separately.
     //
@@ -200,11 +199,17 @@ BOOL IsNoteToSelfEnabled(void)
             OWSFailDebug(@"couldn't load thread's interaction for deletion.");
             continue;
         }
-        if(![interaction isKindOfClass:[TSMessage class]]){
-            [interaction anyRemoveWithTransaction:transaction];
-        }else{
-            [[OWSArchivedMessageJob sharedJob] archiveMessage:(TSMessage *)interaction transaction:transaction];
+
+        // Skip TSInfoMessageArchiveMessage - these are system messages showing "Messages above have expired"
+        if ([interaction isKindOfClass:[TSInfoMessage class]]) {
+            TSInfoMessage *infoMessage = (TSInfoMessage *)interaction;
+            if (infoMessage.messageType == TSInfoMessageArchiveMessage) {
+                OWSLogInfo(@"Skipping archive system message during thread cleanup");
+                continue;
+            }
         }
+
+        [interaction anyRemoveWithTransaction:transaction];
         OWSLogInfo(@"removeAllThreadInteractions message timestamp for sorting: %llu", interaction.timestampForSorting);
     }
 
@@ -220,22 +225,64 @@ BOOL IsNoteToSelfEnabled(void)
 // 清理空的会话
 + (void)cleanupEmptyVisibleThreadsWithTransaction:(SDSAnyWriteTransaction *)transaction
 {
-    OWSLogInfo(@"Starting cleanup of empty visible threads");
-    
-    NSArray<NSString *> *emptyThreadIds = [InteractionFinder findThreadsWithOnlyArchiveMessagesWithTransaction:transaction];
+    OWSLogInfo(@"[Archive] Starting cleanup of empty visible threads");
 
-    OWSLogInfo(@"Found %lu threads with only archived messages, which will be deleted", (unsigned long)emptyThreadIds.count);
-    
-    // 删除空的thread
+    NSArray<NSString *> *emptyThreadIds = [InteractionFinder findThreadsWithOnlyArchiveMessagesWithTransaction:transaction];
+    OWSLogInfo(@"[Archive] Found %lu threads with only archived messages", (unsigned long)emptyThreadIds.count);
+
     for (NSString *threadId in emptyThreadIds) {
         TSThread *thread = [TSThread anyFetchWithUniqueId:threadId transaction:transaction];
         if (thread) {
-            OWSLogInfo(@"Deleting empty visible thread: %@", threadId);
-            [thread anyRemoveWithTransaction:transaction];
+            [self processThreadForCleanup:thread now:[NSDate date] transaction:transaction];
         }
     }
-    
-    OWSLogInfo(@"Cleanup completed, deleted %lu empty visible threads", (unsigned long)emptyThreadIds.count);
+
+    OWSLogInfo(@"[Archive] Cleanup completed");
+}
+
+// 处理单个 thread 的清理逻辑
++ (void)processThreadForCleanup:(TSThread *)thread
+                            now:(NSDate *)now
+                    transaction:(SDSAnyWriteTransaction *)transaction
+{
+    NSString *threadId = thread.uniqueId;
+
+    // 跳过 saved 或 stick 的会话
+    if ([DTActiveConversationConfigHelper shouldSkipCleanupForThread:thread]) {
+        OWSLogInfo(@"[Archive] Skipping thread: %@ (saved or sticked)", threadId);
+        return;
+    }
+
+    // 如果没有 archivalDate，说明这是旧数据或时序问题
+    // 需要设置 archivalDate 和 isArchived，开始 7 天倒计时
+    if (!thread.archivalDate) {
+        OWSLogInfo(@"[Archive] Setting archivalDate for thread: %@ (old data or timing issue)", threadId);
+        [thread anyUpdateWithTransaction:transaction block:^(TSThread * _Nonnull t) {
+            t.archivalDate = now;
+            t.isArchived = YES;
+        }];
+        return;  // 本次不删除，等待下次检查时超过清理间隔再删除
+    }
+
+    // 获取该 thread 类型的清理间隔
+    NSTimeInterval cleanupInterval = [DTActiveConversationConfigHelper getCleanupIntervalForThread:thread];
+
+    // 间隔为 0，表示不清理
+    if (cleanupInterval == 0) {
+        OWSLogInfo(@"[Archive] Skipping thread: %@ (cleanup interval is 0)", threadId);
+        return;
+    }
+
+    // 检查是否超过清理间隔
+    NSTimeInterval timeSinceArchival = [now timeIntervalSinceDate:thread.archivalDate];
+    if (timeSinceArchival >= cleanupInterval) {
+        OWSLogInfo(@"[Archive] Deleting thread: %@ (archived for %.0f seconds, cleanup interval: %.0f seconds)",
+                  threadId, timeSinceArchival, cleanupInterval);
+        [thread anyRemoveWithTransaction:transaction];
+    } else {
+        OWSLogInfo(@"[Archive] Keeping thread: %@ (archived for %.0f seconds, needs %.0f more seconds)",
+                  threadId, timeSinceArchival, cleanupInterval - timeSinceArchival);
+    }
 }
 
 
@@ -587,16 +634,13 @@ BOOL IsNoteToSelfEnabled(void)
         return;
     }
     
-    //更新非撤回消息，并且同一条消息时间没有变化，onlyNeedTouch = YES；
+    //更新消息时间没有变化，onlyNeedTouch = YES；
     BOOL onlyNeedTouch = NO;
     BOOL msgTimestampForSortingChanged = NO;
     if(!isInserted){
-        
         msgTimestampForSortingChanged = [self checkLastMsgTimestampForSortingChanged:lastMessage lastMessageDate:lastMessageDate];
         
-        if(!([lastMessage isKindOfClass:[TSMessage class]] && [((TSMessage *)lastMessage) isRecalMessage]) &&
-           !msgTimestampForSortingChanged &&
-           !([lastMessage isKindOfClass:[TSMessage class]] && ((TSMessage *)lastMessage).cardVersion > self.lastestMsg.cardVersion)){
+        if(!msgTimestampForSortingChanged){
             onlyNeedTouch = YES;
         }
     }
@@ -632,11 +676,7 @@ BOOL IsNoteToSelfEnabled(void)
         if(!instance.lastestMsg.dateForSorting ||
            msgTimeIntervalDiff >= 0 ||
            (!isInserted && [instance checkIsTheSameMessage:lastMessage] && msgTimeIntervalDiff != 0)){
-            if (((TSMessage *)lastMessage).isRecalMessage) {
-                instance.lastestMsg = [self previousMessageWithTransaction:transaction];
-            } else {
-                instance.lastestMsg = (TSMessage *)lastMessage;
-            }
+            instance.lastestMsg = (TSMessage *)lastMessage;
             if (count == 1){
                 OWSLogInfo(@"updateWithLastMessage update lastestMsg %llu", lastMessage.timestampForSorting);
             }
@@ -648,6 +688,14 @@ BOOL IsNoteToSelfEnabled(void)
         if (count == 1){
             NSUInteger unreadCount = [instance getUnreadMessageCountWithTransaction:transaction];
             [instance updateUnreadMessageCount:unreadCount];
+            [self updateUnreadMessageCount:unreadCount];
+
+            // 新逻辑：如果没有未读数且 lastMessage 是 outgoing message，生成 read position
+            if (unreadCount == 0 && [lastMessage isKindOfClass:[TSOutgoingMessage class]]) {
+                [instance generateReadPositionForOutgoingMessageIfNeeded:(TSOutgoingMessage *)lastMessage
+                                                                   thread:instance
+                                                              transaction:transaction];
+            }
         }
         count++;
     }];
@@ -688,19 +736,17 @@ BOOL IsNoteToSelfEnabled(void)
     }
 }
 
-- (void)updateLatestMentionedMsg:(TSInteraction *)interaction {
-    
-    if([interaction isKindOfClass:[TSMessage class]] && [((TSMessage *)interaction) isRecalMessage]){
-        if(DTParamsUtils.validateString(_mentionedMeMsg.uniqueMessageId) &&
-           [interaction.uniqueId isEqualToString:_mentionedMeMsg.uniqueMessageId]){
-            _mentionedMeMsg = nil;
-        }else if (DTParamsUtils.validateString(_mentionedAllMsg.uniqueMessageId) &&
-                  [interaction.uniqueId isEqualToString:_mentionedAllMsg.uniqueMessageId]){
-            _mentionedAllMsg = nil;
-        }
-        
-        return;
+- (void)updateRecalledMentionedMsg:(TSInteraction *)interaction {
+    if(DTParamsUtils.validateString(_mentionedMeMsg.uniqueMessageId) &&
+       [interaction.uniqueId isEqualToString:_mentionedMeMsg.uniqueMessageId]){
+        _mentionedMeMsg = nil;
+    }else if (DTParamsUtils.validateString(_mentionedAllMsg.uniqueMessageId) &&
+              [interaction.uniqueId isEqualToString:_mentionedAllMsg.uniqueMessageId]){
+        _mentionedAllMsg = nil;
     }
+}
+
+- (void)updateLatestMentionedMsg:(TSInteraction *)interaction {
     
     if (![interaction isKindOfClass:[TSIncomingMessage class]]) return;
     
@@ -811,11 +857,15 @@ BOOL IsNoteToSelfEnabled(void)
     [self resetIsArchivedColum];
 }
 
-- (void)archiveOversizeThreadWithTransaction:(SDSAnyWriteTransaction *)transaction {
+- (void)updateArchiveStateWithTransaction:(SDSAnyWriteTransaction *)transaction {
     _messageDraft = @"";
-    _stickDate = nil;
+    // 不再清除置顶状态，因为 isArchived 只用于清理逻辑，不影响列表显示
+    // 置顶的thread即使消息被归档，也应该继续显示在列表顶部
+    // _stickDate = nil;
     self.archivalDate = [NSDate date];
     [self resetIsArchivedColum];
+    OWSLogInfo(@"[Archive] updateArchiveState: thread %@ - isArchived=%d, archivalDate=%@, stickDate=%@",
+               self.uniqueId, self.isArchived, self.archivalDate, self.stickDate);
 }
 
 - (void)unarchiveThread {
@@ -1138,34 +1188,50 @@ BOOL IsNoteToSelfEnabled(void)
 }
 
 - (void)resetIsArchivedColum{
-    
+
     BOOL previousStatus = _isArchived;
-    
+
     NSDate *lastMessageDate = self.lastMessageDate;
     NSDate *archivalDate    = self.archivalDate;
+
+    // 新逻辑：如果有新消息且有 archivalDate，清除 archivalDate
     if (lastMessageDate && archivalDate) {
-        _isArchived = ([archivalDate timeIntervalSinceDate:lastMessageDate] > 0) ? YES : NO;
+        if ([lastMessageDate timeIntervalSinceDate:archivalDate] > 0) {
+            // 新消息比归档时间晚，说明有新消息到来，清除归档状态
+            _archivalDate = nil;
+            _isArchived = NO;
+            OWSLogInfo(@"[Archive] resetIsArchivedColum: thread %@ - new message arrived, clearing archivalDate and setting isArchived=NO", self.uniqueId);
+        } else {
+            // 归档时间比最后消息晚，保持归档状态
+            _isArchived = YES;
+        }
     } else if (archivalDate) {
+        // 只有 archivalDate，没有消息，保持归档状态
         _isArchived = YES;
-    }else{
+    } else {
+        // 没有 archivalDate，不归档
         _isArchived = NO;
     }
-    
+
     if(_isArchived != previousStatus){
+        OWSLogInfo(@"[Archive] resetIsArchivedColum: thread %@ - isArchived changed from %d to %d (lastMessageDate=%@, archivalDate=%@)",
+                   self.uniqueId, previousStatus, _isArchived, lastMessageDate, archivalDate);
         self.isArchived = _isArchived;
     }
 }
 
 - (void)updateReadPositionEntity:(DTReadPositionEntity *)readPositionEntity {
-    
+
     OWSLogInfo(@"will updateReadPositionEntity:%@", readPositionEntity);
-    if(readPositionEntity.maxServerTime &&
-       readPositionEntity.maxServerTime >= _readPositionEntity.maxServerTime){
+    if (readPositionEntity.maxServerTime &&
+           readPositionEntity.maxServerTime >= _readPositionEntity.maxServerTime) {
         OWSLogInfo(@"did updateReadPositionEntity:%@", readPositionEntity);
         self.readPositionEntity = readPositionEntity;
         [self refreshLatestMentionedMsg];
+    } else {
+        OWSLogDebug(@"skip updateReadPositionEntity - old:%@ new:%@", _readPositionEntity, readPositionEntity);
     }
-    
+
 }
 
 - (BOOL)previewEqualTo:(id)objc {
@@ -1179,7 +1245,6 @@ BOOL IsNoteToSelfEnabled(void)
     if(self.isArchived == rObjc.isArchived &&
        self.isUnread == rObjc.isUnread &&
        ((!self.lastestMsg.uniqueId && !rObjc.lastestMsg.uniqueId) || [self.lastestMsg.uniqueId isEqualToString:rObjc.lastestMsg.uniqueId]) &&
-       self.lastestMsg.isRecalMessage == rObjc.lastestMsg.isRecalMessage &&
        (self.unreadMessageCount == rObjc.unreadMessageCount ||
         [[OWSFormat formatIntMax99:self.unreadMessageCount] isEqualToString:[OWSFormat formatIntMax99:rObjc.unreadMessageCount]]) &&
        ((!self.lastMessageDate && !rObjc.lastMessageDate) || [self.lastMessageDate isEqualToDate:rObjc.lastMessageDate]) &&
@@ -1241,9 +1306,9 @@ BOOL IsNoteToSelfEnabled(void)
 
 - (void)anyWillRemoveWithTransaction:(SDSAnyWriteTransaction *)transaction
 {
-    
+
     [SDSDatabaseStorage.shared updateIdMappingWithThread:self transaction:transaction];
-    
+
     [super anyWillRemoveWithTransaction:transaction];
 
     [self removeAllThreadInteractionsWithTransaction:transaction];
@@ -1266,19 +1331,65 @@ BOOL IsNoteToSelfEnabled(void)
 //    }
 }
 
+- (void)generateReadPositionForOutgoingMessageIfNeeded:(TSOutgoingMessage *)outgoingMessage
+                                                thread:(TSThread *)thread
+                                           transaction:(SDSAnyWriteTransaction *)transaction {
+    if (outgoingMessage.serverTimestamp > 0) {
+        NSString *localNumber = [[TSAccountManager shared] localNumberWithTransaction:transaction];
+        if (localNumber) {
+            NSData *groupId = nil;
+            if (thread.isGroupThread) {
+                TSGroupThread *groupThread = (TSGroupThread *)thread;
+                groupId = groupThread.groupModel.groupId;
+            }
+
+            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId
+                                                                                         readAt:outgoingMessage.timestamp
+                                                                                  maxServerTime:outgoingMessage.serverTimestamp
+                                                                               notifySequenceId:outgoingMessage.notifySequenceId
+                                                                                  maxSequenceId:outgoingMessage.sequenceId];
+
+            [OWSReadReceiptManager.sharedManager updateSelfReadPositionEntity:readPosition
+                                                                       thread:thread
+                                                                  transaction:transaction];
+
+            OWSLogInfo(@"[ReadPosition] Auto-generated read position for outgoing message in thread with no unread: %llu", outgoingMessage.timestamp);
+        }
+    }
+}
+
 - (void)updateWithRemovedMessage:(TSInteraction *)message transaction:(SDSAnyWriteTransaction *)transaction
 {
     OWSAssertDebug(message != nil);
     OWSAssertDebug(transaction != nil);
-    
+
+    __block NSUInteger count = 0;
     if([message.uniqueId isEqualToString:self.lastestMsg.uniqueId]){
         OWSLogInfo(@"update thread lastInteraction.");
         TSInteraction *interaction = [self lastInteractionForInboxWithTransaction:transaction];
         [self anyUpdateWithTransaction:transaction
                                  block:^(TSThread * instance) {
             instance.lastestMsg = (TSMessage *)interaction;
+            [instance updateRecalledMentionedMsg:message];
+            if (count == 1){
+                NSUInteger unreadCount = [instance getUnreadMessageCountWithTransaction:transaction];
+                [instance updateUnreadMessageCount:unreadCount];
+                [self updateUnreadMessageCount:unreadCount];
+            }
+            count++;
         }];
     }else{
+        OWSLogInfo(@"update thread unreadCount.");
+        [self anyUpdateWithTransaction:transaction
+                                 block:^(TSThread * instance) {
+            [instance updateRecalledMentionedMsg:message];
+            if (count == 1){
+                NSUInteger unreadCount = [instance getUnreadMessageCountWithTransaction:transaction];
+                [instance updateUnreadMessageCount:unreadCount];
+                [self updateUnreadMessageCount:unreadCount];
+            }
+            count++;
+        }];
         [self scheduleTouchFinalizationWithTransaction:transaction];
     }
 }

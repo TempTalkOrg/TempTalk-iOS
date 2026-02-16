@@ -81,7 +81,7 @@ class ConversationSearchViewController: UITableViewController {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(applyTheme),
-            name: NSNotification.Name.ThemeDidChange,
+            name: .themeDidChange,
             object: nil
         )
         
@@ -109,11 +109,11 @@ class ConversationSearchViewController: UITableViewController {
     }
     
     @objc func applyTheme() {
-        view.backgroundColor = Theme.backgroundColor
-        tableView.backgroundColor = Theme.backgroundColor
-        tableView.separatorColor = Theme.cellSeparatorColor
+        view.backgroundColor = Theme.bgpagePrimaryColor
+        tableView.backgroundColor = Theme.bgpagePrimaryColor
+        tableView.separatorColor = Theme.dividerColor
         let textField : UITextField? = searchBar.textField
-        textField?.textColor = Theme.primaryTextColor
+        textField?.textColor = Theme.tprimaryColor
         self.tableView.reloadData()
     }
     
@@ -184,30 +184,42 @@ class ConversationSearchViewController: UITableViewController {
             var dataArray: [RenderSection] = []
             if !searchResultSet.recentConversations.isEmpty {
                 let renderRows = self.gengertRecentRows(recents: searchResultSet.recentConversations, keyword: searchResultSet.searchText)
-                dataArray.append(.recent(renders: renderRows, results: searchResultSet.recentConversations))
+                if !renderRows.isEmpty {
+                    dataArray.append(.recent(renders: renderRows, results: searchResultSet.recentConversations))
+                }
             }
-            
+
             if !searchResultSet.contacts.isEmpty {
                 let renderRows = self.gengertContactRows(contacts: searchResultSet.contacts, keyword: searchResultSet.searchText)
-                dataArray.append(.contact(renders: renderRows, results: searchResultSet.contacts))
+                if !renderRows.isEmpty {
+                    dataArray.append(.contact(renders: renderRows, results: searchResultSet.contacts))
+                }
             }
-            
+
             if !searchResultSet.conversations.isEmpty {
                 let renderRows = self.gengertGroupRows(groups: searchResultSet.conversations, keyword: searchResultSet.searchText)
-                dataArray.append(.group(renders: renderRows, results: searchResultSet.conversations))
+                if !renderRows.isEmpty {
+                    dataArray.append(.group(renders: renderRows, results: searchResultSet.conversations))
+                }
             }
-            
+
             if !searchResultSet.filteredMessagesThreads.isEmpty {
                 let renderRows = self.gengertMessageRows(
                     threads: searchResultSet.filteredMessagesThreads,
                     messageMap: searchResultSet.filteredMessagesDict
                 )
-                dataArray.append(.message(renders: renderRows, results: searchResultSet.filteredMessagesThreads, map: searchResultSet.filteredMessagesDict))
+                if !renderRows.isEmpty {
+                    dataArray.append(.message(renders: renderRows, results: searchResultSet.filteredMessagesThreads, map: searchResultSet.filteredMessagesDict))
+                }
             }
-            
+
             DispatchQueue.main.async {
                 self.dataArray = dataArray
-                self.tableView.separatorStyle = .singleLine
+                if dataArray.isEmpty {
+                    self.tableView.separatorStyle = .none
+                } else {
+                    self.tableView.separatorStyle = .singleLine
+                }
                 self.tableView.reloadData()
             }
         }
@@ -228,7 +240,7 @@ class ConversationSearchViewController: UITableViewController {
             let date = DateUtil.formatDateShort(item.thread.lastMessageDate ?? item.thread.creationDate) // DateUtil.shortDate(from: item.thread.lastMessageDate ?? item.thread.creationDate)
             let threadName = item.thread.isNoteToSelf ? MessageStrings.noteToSelf() : item.threadName
             if threadName.lowercased().contains(keyword) {
-                let attribute = gengertAttribute(threadName, match: keyword, font: SearchFonts.body, color: Theme.primaryTextColor)
+                let attribute = gengertAttribute(threadName, match: keyword, font: SearchFonts.body, color: Theme.tprimaryColor)
                 renderRows.append(.recent(icon: iconRender, name: .attribute(attribute), lastMessage: .normal(item.lastMessage), date: date))
             } else {
                 renderRows.append(.recent(icon: iconRender, name: .normal(threadName), lastMessage: .normal(item.lastMessage), date: date))
@@ -246,49 +258,44 @@ class ConversationSearchViewController: UITableViewController {
             let avatar = contact.avatar as? [String : Any]
             let iconRender: IconRender = .account(avatar: avatar ?? [:], recipientId: item.recipientId)
             let date = TimeZoneUntil.timeZoneFrom(contact: contact).orEmpty
+            let remarkName = item.signalAccount.remarkName
+
             if contact.fullName.lowercased().contains(keyword) || searcher.noteSearchKey.contains(keyword) {
                 var name = contact.fullName
                                 if item.recipientId == TSAccountManager.localNumber() {
                                     name = Localized("LOCAL_ACCOUNT_DISPLAYNAME")
                                 }
-                              
-                let attribute = gengertAttribute(name, match: keyword, font: SearchFonts.body, color: Theme.primaryTextColor)
+
+                let attribute = gengertAttribute(name, match: keyword, font: SearchFonts.body, color: Theme.tprimaryColor)
                 let others: [String] = [
-                    contact.signature, contact.email,
-                     item.recipientId
+                    remarkName, contact.signature, contact.email
                 ].compactMap {
                     guard let result = $0, !result.isEmpty else { return nil }
                     return result
                 }
                 renderRows.append(.contact(icon: iconRender, name: .attribute(attribute), sign: .normal(others.first.orEmpty), email: .normal(others.second.orEmpty), date: date))
-                
-            }else if let signature = contact.signature, signature.lowercased().contains(keyword) {
+
+            } else if let remarkName = remarkName, remarkName.lowercased().contains(keyword) {
+                // Display remarkName as the main name when matched
+                let attribute = gengertAttribute(remarkName, match: keyword, font: SearchFonts.body, color: Theme.tprimaryColor)
+                let others: [String] = [
+                    contact.signature, contact.email
+                ].compactMap {
+                    guard let result = $0, !result.isEmpty else { return nil }
+                    return result
+                }
+                renderRows.append(.contact(icon: iconRender, name: .attribute(attribute), sign: .normal(others.first.orEmpty), email: .normal(others.second.orEmpty), date: date))
+
+            } else if let signature = contact.signature, signature.lowercased().contains(keyword) {
                 let attribute = gengertAttribute(signature, match: keyword)
-                let others: [String?] = [contact.email,
-                                         item.recipientId
-                ]
+                let others: [String?] = [remarkName, contact.email]
                 let shouldRender = others.first { $0?.isEmpty == false } ?? .empty
                 renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: .attribute(attribute), email: .normal(shouldRender.orEmpty), date: date))
-                
+
             } else if let email = contact.email, email.lowercased().contains(keyword) {
                 let attribute = gengertAttribute(email, match: keyword)
                 let others: [String] = [
-                    contact.signature.orEmpty,
-                    item.recipientId
-                ]
-                guard let firstIndex = others.firstIndex(where: { !$0.isEmpty }) else {
-                    renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: .attribute(attribute), email: .normal(.empty), date: date))
-                    continue
-                }
-                let shouldRender = others[safe: firstIndex].orEmpty
-                let sign: RenderText = firstIndex == 0 ? .normal(shouldRender) : .attribute(attribute)
-                let email: RenderText = firstIndex == 0 ? .attribute(attribute) : .normal(shouldRender)
-                renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: sign, email: email, date: date))
-                
-            } else if item.recipientId.lowercased().contains(keyword) {
-                let attribute = gengertAttribute(item.recipientId, match: keyword)
-                let others: [String] = [
-                    contact.signature.orEmpty, contact.email.orEmpty,
+                    remarkName.orEmpty, contact.signature.orEmpty
                 ]
                 guard let firstIndex = others.firstIndex(where: { !$0.isEmpty }) else {
                     renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: .attribute(attribute), email: .normal(.empty), date: date))
@@ -300,7 +307,7 @@ class ConversationSearchViewController: UITableViewController {
                 renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: sign, email: email, date: date))
             }
         }
-        if contacts.count >= kDefaultShowMoreNum {
+        if renderRows.count >= kDefaultShowMoreNum && contacts.count > renderRows.count {
             renderRows.append(.more)
         }
         return renderRows
@@ -311,11 +318,11 @@ class ConversationSearchViewController: UITableViewController {
         for item in groups where renderRows.count < kDefaultShowMoreNum {
             let iconRender = IconRender.group(thread: item.thread, contactsManager: self.contactsManager)
             if item.accounts.isEmpty, item.groupName.lowercased().contains(keyword) {
-                let attribute = gengertAttribute(item.groupName, match: keyword, font: SearchFonts.body, color: Theme.primaryTextColor)
+                let attribute = gengertAttribute(item.groupName, match: keyword, font: SearchFonts.body, color: Theme.tprimaryColor)
                 renderRows.append(.group(icon: iconRender, name: .attribute(attribute), include: .normal(.empty)))
-                
+
             } else if let account = item.accounts.first, let contact = account.contact {
-                guard let renderText = [contact.fullName, contact.email, account.recipientId].first(where: { $0?.lowercased().contains(keyword) == true }) else {
+                guard let renderText = [contact.fullName, account.remarkName, contact.email].first(where: { $0?.lowercased().contains(keyword) == true }) else {
                     continue
                 }
                 let attribute = gengertAttribute(renderText.orEmpty, match: keyword)
@@ -323,7 +330,7 @@ class ConversationSearchViewController: UITableViewController {
                 renderRows.append(.group(icon: iconRender, name: .normal(item.groupName), include: .attribute(attribute)))
             }
         }
-        if groups.count >= kDefaultShowMoreNum {
+        if renderRows.count >= kDefaultShowMoreNum && groups.count > renderRows.count {
             renderRows.append(.more)
         }
         return renderRows
@@ -347,7 +354,7 @@ class ConversationSearchViewController: UITableViewController {
         return renderRows
     }
     
-    private func gengertAttribute(_ nString: String, match: String, font: UIFont = SearchFonts.small, color: UIColor = Theme.ternaryTextColor) -> NSMutableAttributedString {
+    private func gengertAttribute(_ nString: String, match: String, font: UIFont = SearchFonts.small, color: UIColor = Theme.tthirdColor) -> NSMutableAttributedString {
         NSMutableAttributedString.covertString(nString, match: match, attributes: [.font: font, .foregroundColor: color], matchAttributes: [.foregroundColor: UIColor.ows_darkSkyBlue])
     }
     
@@ -530,8 +537,8 @@ class ConversationSearchViewController: UITableViewController {
             return .init()
         }
         cell.separatorInset = UIEdgeInsets(top: 0, left: 75, bottom: 0, right: 0)
-        cell.backgroundColor = Theme.tableCellBackgroundColor
-        cell.contentView.backgroundColor = Theme.tableCellBackgroundColor
+        cell.backgroundColor = Theme.bgpagePrimaryColor
+        cell.contentView.backgroundColor = Theme.bgpagePrimaryColor
         return cell
     }
     
@@ -552,7 +559,7 @@ class ConversationSearchViewController: UITableViewController {
         // R:0.46 G:0.46 B:0.5 A:0.24
         view.tintColor = UIColor(red: 0.46, green: 0.46, blue: 0.5, alpha: 0.24)
         
-        (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = Theme.secondaryTextAndIconColor
+        (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = Theme.tsecondaryColor
     }
     
     override func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
@@ -716,15 +723,20 @@ extension ConversationSearchViewController {
         case group(icon: IconRender, name: RenderText, include: RenderText)
         case message(thread: ThreadViewModel, overrideSnippet: NSAttributedString, date: Date)
         case more
-        
+
         var subheadlineSize: CGFloat {
-            return UIFont.preferredFont(forTextStyle: .subheadline).pointSize
+            // 使用固定字体大小（15pt），忽略系统 Dynamic Type
+            let baseSize: CGFloat = 15.0
+            let scaleFactor = TextSizeManager.currentScaleFactor
+            return baseSize * scaleFactor
         }
-        
+
         var height: CGFloat {
             switch self {
             case .message:
-                return subheadlineSize < 17 ? 60 : 70
+                // 根据 App 内字体大小设置计算 cell 高度
+                let scaleFactor = TextSizeManager.currentScaleFactor
+                return scaleFactor > 1.0 ? 70 : 60
             case .more:
                 return 46.0
             default:

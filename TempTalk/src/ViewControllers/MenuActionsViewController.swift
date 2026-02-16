@@ -289,7 +289,7 @@ class MenuActionSheetView: UIView, MenuActionViewDelegate, DTEmojiReactionDelega
 
         super.init(frame: frame)
 
-        backgroundColor = Theme.tableCellBackgroundColor
+        backgroundColor = Theme.bg1Color
         addSubview(actionStackView)
         actionStackView.autoPinEdgesToSuperviewEdges()
 
@@ -307,7 +307,7 @@ class MenuActionSheetView: UIView, MenuActionViewDelegate, DTEmojiReactionDelega
     }
     
     func applyTheme() {
-        backgroundColor = Theme.tableCellBackgroundColor
+        backgroundColor = Theme.bg1Color
 
         if let emojiView {
             emojiView.applyTheme()
@@ -530,23 +530,23 @@ class MenuActionView: UIButton {
         super.init(frame: CGRect.zero)
 
         isUserInteractionEnabled = true
-        backgroundColor = Theme.tableCellBackgroundColor
+        backgroundColor = Theme.bg1Color
 
         icon = UIImageView(image: action.image)
         let imageWidth: CGFloat = 24.5
         icon.autoSetDimensions(to: CGSize(width: imageWidth, height: imageWidth))
-        icon.tintColor = Theme.secondaryTextAndIconColor
+        icon.tintColor = Theme.tsecondaryColor
         icon.isUserInteractionEnabled = false
 
         lbTitle = UILabel()
         lbTitle.font = UIFont.ows_dynamicTypeBody2
-        lbTitle.textColor = Theme.primaryTextColor
+        lbTitle.textColor = Theme.tprimaryColor
         lbTitle.text = action.title
         lbTitle.isUserInteractionEnabled = false
 
         lbSubtitle = UILabel()
         lbSubtitle.font = UIFont.ows_dynamicTypeCaption1
-        lbSubtitle.textColor = Theme.secondaryTextAndIconColor
+        lbSubtitle.textColor = Theme.tsecondaryColor
         lbSubtitle.text = action.subtitle
         lbSubtitle.isUserInteractionEnabled = false
 
@@ -572,24 +572,24 @@ class MenuActionView: UIButton {
     override var isHighlighted: Bool {
         didSet {
             if isHighlighted {
-                backgroundColor = Theme.cellSelectedColor
+                backgroundColor = Theme.bg3Color
             } else {
-                backgroundColor = Theme.tableCellBackgroundColor
+                backgroundColor = Theme.bg1Color
             }
         }
     }
     
     func applyTheme() {
-        backgroundColor = Theme.tableCellBackgroundColor
+        backgroundColor = Theme.bg1Color
 
-        lbTitle.textColor = Theme.primaryTextColor
-        lbSubtitle.textColor = Theme.secondaryTextAndIconColor
-        icon.tintColor = Theme.secondaryTextAndIconColor
+        lbTitle.textColor = Theme.tprimaryColor
+        lbSubtitle.textColor = Theme.tsecondaryColor
+        icon.tintColor = Theme.tsecondaryColor
 
         if isHighlighted {
-            backgroundColor = Theme.cellSelectedColor
+            backgroundColor = Theme.bg3Color
         } else {
-            backgroundColor = Theme.tableCellBackgroundColor
+            backgroundColor = Theme.bg1Color
         }
     }
 
@@ -642,7 +642,7 @@ class DTEmojiActionView: UIStackView, UIGestureRecognizerDelegate {
         
         expandView = UIView()
         lineMiddle = UIView()
-        lineMiddle.backgroundColor = Theme.hairlineColor
+        lineMiddle.backgroundColor = Theme.lineColor
         lineMiddle.autoSetDimension(.height, toSize: 1)
         expandView.addSubview(lineMiddle)
         
@@ -651,7 +651,7 @@ class DTEmojiActionView: UIStackView, UIGestureRecognizerDelegate {
         arrow.contentMode = .center
         arrow.isUserInteractionEnabled = true
         arrow.layer.cornerRadius = 12
-        arrow.backgroundColor = Theme.conversationInputBackgroundColor
+        arrow.backgroundColor = Theme.bg3Color
         arrow.tintColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0xB7BDC6) : UIColor.color(rgbHex: 0x474D57)
 
         arrow.autoSetDimensions(to: .square(24))
@@ -733,8 +733,8 @@ class DTEmojiActionView: UIStackView, UIGestureRecognizerDelegate {
         emojiContainers().forEach {
             $0.applyTheme()
         }
-        lineMiddle.backgroundColor = Theme.hairlineColor
-        arrow.backgroundColor = Theme.conversationInputBackgroundColor
+        lineMiddle.backgroundColor = Theme.lineColor
+        arrow.backgroundColor = Theme.bg3Color
         arrow.tintColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0xB7BDC6) : UIColor.color(rgbHex: 0x474D57)
     }
     
@@ -750,7 +750,7 @@ class DTEmojiActionView: UIStackView, UIGestureRecognizerDelegate {
     }
     
     fileprivate func gradientColor(alpha: CGFloat) -> CGColor {
-        Theme.tableCellBackgroundColor.withAlphaComponent(alpha).cgColor
+        Theme.bg1Color.withAlphaComponent(alpha).cgColor
     }
     
     @objc
@@ -830,13 +830,13 @@ class DTEmojiContainer: UIView {
         if selected {
             backgroundView.backgroundColor = Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0x6A6D74) : UIColor(rgbHex: 0xE8F4FC)
         } else {
-            backgroundView.backgroundColor = Theme.tableCellBackgroundColor
+            backgroundView.backgroundColor = Theme.bg1Color
         }
     }
     
     func applyTheme() {
         
-        backgroundColor = Theme.tableCellBackgroundColor
+        backgroundColor = Theme.bg1Color
         setBackgroundColor(isSelected)
     }
     

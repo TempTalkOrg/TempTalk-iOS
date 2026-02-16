@@ -526,7 +526,7 @@ extern CGFloat const kAvatarSize;
     if (recipientId) {
         
         UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
-        pasteboard.string = recipientId;
+        [DTSecurePasteboard setString:recipientId];
         
         NSString *fullPrefix = Localized(@"CONTACT_NUMBER_DESCRIPTION_HEADER", @"copy to pastboard");
         NSString *prefix = [fullPrefix substringToIndex:fullPrefix.length - 2];
@@ -545,7 +545,7 @@ extern CGFloat const kAvatarSize;
     if (email) {
         
         UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
-        pasteboard.string = email;
+        [DTSecurePasteboard setString:email];
 
         NSString *fullPrefix = Localized(@"CONTACT_EMAIL_DESCRIPTION_HEADER", @"copy to pastboard");
         NSString *prefix = [fullPrefix substringToIndex:fullPrefix.length - 2];

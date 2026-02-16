@@ -31,6 +31,28 @@ public class TSConstants: NSObject {
     private static let currentBundleId = Bundle.main.object(forInfoDictionaryKey: "CFBundleIdentifier")
     static let temptalkBundleId = "org.difft.chative"
     
+    private static var FlavorId: String {
+        let bundle = Bundle.main.infoDictionary ?? [:]
+        let appName = bundle["CFBundleDisplayName"] as? String ?? ""
+        let appId = Bundle.main.bundleIdentifier ?? ""
+        let version = bundle["CFBundleShortVersionString"] as? String ?? ""
+        let versionFlag = {
+            if let path = Bundle.main.path(forResource: "AppConfig", ofType: "plist"),
+                let dict = NSDictionary(contentsOfFile: path) as? [String: Any],
+                let flag = dict["OFFICIAL_VERSION_FLAG"] as? String,
+               DTParamsUtils.validateString(flag).boolValue,
+                !flag.contains("OFFICIAL_VERSION_FLAG")  {
+                return flag
+            }
+            return "cinnamon"
+        }()
+                
+        let crcInput = [appName, appId, version, versionFlag].joined(separator: "|")
+        let crc32Value = CRC32Util.checksum(crcInput)
+        let hexString = String(format: "%08x ", crc32Value)
+        return hexString
+    }
+    
     @objc public static var appName: DTAPPName {
         return .tempTalk
     }
@@ -117,8 +139,17 @@ public class TSConstants: NSObject {
             return result.url
         }
     }
+
+    // 根路径服务（空路径）
+    @objc
+    public static var rootServiceURL: String {
+        get {
+            guard let result = serviceUrlPath(with: DTServerToRoot) else { return "" }
+            return result.url
+        }
+    }
     
-    @objc public static var appUserAgent: String { "\(TSConstants.displayNameForUA)/\(AppVersion.shared().currentAppReleaseVersion) (\(UIDevice.current.model); iOS \(UIDevice.current.systemVersion); Scale/\(UIScreen.main.scale))" }
+    @objc public static var appUserAgent: String { "\(TSConstants.displayNameForUA)/\(AppVersion.shared().currentAppReleaseVersion) (\(AppVersion.shared().hardwareInfoString()); iOS \(UIDevice.current.systemVersion); Scale/\(UIScreen.main.scale); Build/\(AppVersion.shared().currentAppBuildVersion); AppId \(TSConstants.currentBundleId ?? TSConstants.temptalkBundleId); FlavorId \(TSConstants.FlavorId))" }
     
     @objc public static var appDisplayName: String { shared.appDisplayName }
     
@@ -212,6 +243,14 @@ extension TSConstants {
     
     // 根据name获取对应的url和认证类型
     public static func serviceUrlPath(with name: String) -> (url: String, domain: String, certType: String)? {
+        // Special handling for root service (empty path)
+        if name == DTServerToRoot {
+            let finalDomain = defaultMainHost
+            let finalCertType = "self"
+            let url = defaultSchema + finalDomain
+            return (url, finalDomain, finalCertType)
+        }
+
         // 1. 找到服务
         guard let service = defaultServerConfig.services.first(where: { $0.name == name }) else { return nil }
         
@@ -281,7 +320,7 @@ private class TSConstantsTempTalkProduction: TSConstantsProtocol {
     public let appDisplayName = "Yelling"
     public let displayNameForUA = "Yelling"
     public let appLogoName: String = "logoTempTalk"
-    public let officialBotName: String = "TTSupport"
+    public let officialBotName: String = "Support Team"
     public let officialBotId: String = "+10000"
 
     public let applicationGroup = "group.org.difft.chative"
@@ -299,7 +338,7 @@ private class TSConstantsTempTalkTest: TSConstantsProtocol {
     public let appDisplayName = "YellingTest"
     public let displayNameForUA = "YellingTest"
     public let appLogoName: String = "logoTempTalk"
-    public let officialBotName: String = "TTSupport"
+    public let officialBotName: String = "Support Team"
     public let officialBotId: String = "+10000"
 
     public let applicationGroup = "group.org.difft.chativetest"

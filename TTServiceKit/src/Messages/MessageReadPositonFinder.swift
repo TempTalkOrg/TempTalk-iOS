@@ -113,8 +113,7 @@ struct GRDBMessageReadPositonFinder: MessageReadPositonFinder {
             ORDER BY \(messageReadPositionColumn: .maxServerTime) DESC
             LIMIT 1
             """
-        let arguments: StatementArguments = [uniqueThreadId, TSAccountManager.localNumber()]
-        
+        let arguments: StatementArguments = [uniqueThreadId, TSAccountManager.shared.localNumber(with: transaction.asAnyRead)]
         return TSMessageReadPosition.grdbFetchOne(sql: sql, arguments: arguments, transaction: transaction)
         
     }
@@ -183,9 +182,7 @@ struct GRDBMessageReadPositonFinder: MessageReadPositonFinder {
             WHERE \(messageReadPositionColumn: .recipientId) = ?
             AND \(messageReadPositionColumn: .creationTimestamp) <= ?
             """
-        
-        let arguments: StatementArguments = [TSAccountManager.localNumber(), timestamp]
-        
+        let arguments: StatementArguments = [TSAccountManager.shared.localNumber(with: transaction.asAnyRead), timestamp]
         try transaction.database.execute(sql: sql, arguments: arguments)
         
     }

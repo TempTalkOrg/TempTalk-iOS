@@ -18,7 +18,7 @@ class ContactNameFieldView: UIView {
     let name: String
     let initialValue: String?
 
-    var valueView: UITextField!
+    var valueView: UITextField?
 
     var hasUnsavedChanges = false
 
@@ -67,13 +67,14 @@ class ContactNameFieldView: UIView {
 
         valueView = UITextField()
         if let initialValue = initialValue {
-            valueView.text = initialValue
+            valueView?.text = initialValue
         }
-        valueView.font = UIFont.ows_dynamicTypeBody
-        valueView.textColor = UIColor.black
-        stackView.addArrangedSubview(valueView)
-
-        valueView.addTarget(self, action: #selector(textFieldDidChange), for: .editingChanged)
+        valueView?.font = UIFont.ows_dynamicTypeBody
+        valueView?.textColor = UIColor.black
+        if let valueView = valueView {
+            stackView.addArrangedSubview(valueView)
+            valueView.addTarget(self, action: #selector(textFieldDidChange), for: .editingChanged)
+        }
     }
 
     @objc func wasTapped(sender: UIGestureRecognizer) {
@@ -83,7 +84,7 @@ class ContactNameFieldView: UIView {
             return
         }
 
-        valueView.becomeFirstResponder()
+        valueView?.becomeFirstResponder()
     }
 
     @objc func textFieldDidChange(sender: UITextField) {
@@ -100,7 +101,7 @@ class ContactNameFieldView: UIView {
     }
 
     public func value() -> String {
-        guard let value = valueView.text else {
+        guard let value = valueView?.text else {
             return ""
         }
         return value

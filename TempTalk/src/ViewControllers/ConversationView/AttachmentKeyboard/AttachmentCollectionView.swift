@@ -79,7 +79,7 @@ class AttachmentCollectionView: UICollectionView {
         dataSource = self
         delegate = self
 
-        backgroundColor = Theme.defaultBackgroundColor
+        backgroundColor = Theme.defaultColor
         showsHorizontalScrollIndicator = false
         isPagingEnabled = true
         bounces = false
@@ -224,7 +224,7 @@ private class RecentPhotoCell: UICollectionViewCell {
 
     private let imageContainer =  {
         let view = UIView()
-        view.backgroundColor = Theme.defaultTableCellBackgroundColor
+        view.backgroundColor = Theme.bgpopupColor
         view.layer.cornerRadius = 8
         view.layer.masksToBounds = true
         
@@ -294,7 +294,7 @@ private class RecentPhotoCell: UICollectionViewCell {
         get { return imageView.image }
         set {
             imageView.image = newValue
-            imageView.backgroundColor = newValue == nil ? Theme.washColor : .clear
+            imageView.backgroundColor = newValue == nil ? (Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0x3B3B3B) : UIColor(rgbHex: 0xE9E9E9)) : .clear
         }
     }
 

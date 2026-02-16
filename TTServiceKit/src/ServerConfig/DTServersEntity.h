@@ -19,6 +19,7 @@ extern NSString *const DTServerToCall;
 extern NSString *const DTServerToFileSharing;
 extern NSString *const DTServerToSpeech2text;
 extern NSString *const DTServerToAvatar;
+extern NSString *const DTServerToRoot;
 
 @interface DTServersEntity : MTLModel<MTLJSONSerializing>
 

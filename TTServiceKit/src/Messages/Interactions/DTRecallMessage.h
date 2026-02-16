@@ -10,6 +10,7 @@
 #import <Mantle/Mantle.h>
 #import "MTLModel.h"
 @class DTMention;
+@class SDSAnyWriteTransaction;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -22,25 +23,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, strong) DTRealSourceEntity *source;
 
-@property (nonatomic, copy) NSString *body;
-
-@property (nonatomic, copy) NSString *atPersons;
-
-@property (nonatomic, readonly, nullable) NSArray <DTMention *> *mentions;
-
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
-                           source:(DTRealSourceEntity *)source
-                             body:(NSString *)body
-                        atPersons:(NSString *)atPersons
-                         mentions:(nullable NSArray <DTMention *> *)mentions;
+                           source:(DTRealSourceEntity *)source;
 
 + (DTRecallMessage *)recallWithDataMessage:(DSKProtoDataMessage *)dataMessage;
 
 - (BOOL)checkIntegrity;
 
-- (void)clearOriginContent;
-
 - (BOOL)isValidRecallMessageWithSource:(NSString *)source;
+
+- (void)insertRecordWithSource:(NSString *)source
+                  sourceDevice:(uint32_t)sourceDevice
+                     timestamp:(uint64_t)timestamp
+                   transaction:(SDSAnyWriteTransaction *)transaction;
 
 @end
 

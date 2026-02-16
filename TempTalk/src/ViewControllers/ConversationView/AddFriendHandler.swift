@@ -129,7 +129,7 @@ class AddFriendHandler: NSObject{
                 contactThread = latestThread
             } completion: {
                 if let contactThread {
-                    ThreadUtil.sendMessage(withText: Localized("CONTACT_REQUEST"), atPersons: nil, mentions: nil, in: contactThread, quotedReplyModel: nil, messageSender: self.messageSender)
+                    let message = ThreadUtil.sendMessage(withText: Localized("CONTACT_REQUEST"), atPersons: nil, mentions: nil, in: contactThread, quotedReplyModel: nil, messageSender: self.messageSender)
                 }
             }
         } failure: { errorString in

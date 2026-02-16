@@ -194,11 +194,26 @@ NSString *NSStringForOWSRegistrationState(OWSRegistrationState value)
         return YES;
     } else {
         @synchronized (self) {
-            // Cache this once it's true since it's called alot, involves a dbLookup, and once set - it doesn't change.
-            _isRegistered = [self storedLocalNumber] != nil;
+            // Cache this once it's true since it's called a lot and involves a DB lookup.
+            // Also cache the localNumber for localNumber() to use, avoiding duplicate DB lookup.
+            // After warmCaches is called at startup, both caches are pre-populated.
+            NSString *number = [self storedLocalNumber];
+            _isRegistered = number != nil;
+            self.cachedLocalNumber = number;
         }
     }
     return _isRegistered;
+}
+
+- (void)warmCaches
+{
+    // Warm cached values to prevent database reentrancy issues when these
+    // values are accessed within a database transaction.
+    // This should be called early during app/extension startup, before any
+    // code might access these values inside a DB transaction.
+    //
+    // isRegistered warms both _isRegistered and cachedLocalNumber in one DB lookup.
+    [self isRegistered];
 }
 
 - (void)didRegister
@@ -710,14 +725,18 @@ NSString *NSStringForOWSRegistrationState(OWSRegistrationState value)
     OWSAssertIsOnMainThread();
     OWSAssertDebug(AppReadiness.isAppReady);
 
-    OWSLogVerbose(@"");
-
-    // Any database write by the main app might reflect a deregistration,
-    // so clear the cached "is registered" state.  This will significantly
-    // erode the value of this cache in the SAE.
+    // Extensions (SAE, NSE) receive this callback when the main app writes to the database.
+    // Any write might reflect a registration state change (login/logout/deregistration),
+    // so we clear registration caches to force fresh DB reads.
+    //
+    // Note: We don't clear cachedLocalNumber here because isRegistered() does its own
+    // DB lookup and updates cachedLocalNumber. Code should always check isRegistered()
+    // before using localNumber(), so cachedLocalNumber will be refreshed naturally.
     @synchronized(self)
     {
         _isRegistered = NO;
+        _isRegistered         = NO;
+        _cachedIsDeregistered = nil;
     }
 }
 

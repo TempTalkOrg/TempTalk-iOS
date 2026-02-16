@@ -33,9 +33,9 @@ class DTMoreSearchResultCell: UITableViewCell {
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
 
-        self.backgroundColor = Theme.tableCellBackgroundColor
-        contentView.backgroundColor = Theme.tableCellBackgroundColor
-        self.backgroundColor = Theme.tableCellBackgroundColor
+        self.backgroundColor = Theme.bg1Color
+        contentView.backgroundColor = Theme.bg1Color
+        self.backgroundColor = Theme.bg1Color
         self.accessoryType = UITableViewCell.AccessoryType.disclosureIndicator
         selectionStyle = .none
         addSubviews()
@@ -73,7 +73,12 @@ class DTMoreSearchResultCell: UITableViewCell {
 
 class ConversationSearchTableViewCell: UITableViewCell {
     public static let reuseIdentifier: String = "ConversationSearchTableViewCell"
-    public static let cellHeight: CGFloat = 70.0
+
+    // 根据 App 内字体大小设置动态计算 cell 高度
+    public static var cellHeight: CGFloat {
+        let scaleFactor = TextSizeManager.currentScaleFactor
+        return scaleFactor > 1.0 ? 70.0 : 60.0
+    }
 
     override func prepareForReuse() {
         super.prepareForReuse()
@@ -279,12 +284,12 @@ class ConversationSearchTableViewCell: UITableViewCell {
     }
     
     func refreshTheme() {
-        backgroundColor = Theme.tableCellBackgroundColor
-        contentView.backgroundColor = Theme.tableCellBackgroundColor
-        nameLabel.textColor = Theme.primaryTextColor
-        signLabel.textColor = Theme.ternaryTextColor
-        lastLabel.textColor = Theme.ternaryTextColor
-        dateLabel.textColor = Theme.ternaryTextColor
+        backgroundColor = Theme.bg1Color
+        contentView.backgroundColor = Theme.bg1Color
+        nameLabel.textColor = Theme.tprimaryColor
+        signLabel.textColor = Theme.tthirdColor
+        lastLabel.textColor = Theme.tthirdColor
+        dateLabel.textColor = Theme.tthirdColor
     }
     
     // MARK: - lazy

@@ -30,67 +30,89 @@ public extension UIFont {
 
     // MARK: - Dynamic Type
 
-    class var dynamicTypeTitle1: UIFont { UIFont.preferredFont(forTextStyle: .title1) }
+    /// 获取固定大小的字体（忽略系统 Dynamic Type）
+    private class func fixedSizeFont(forTextStyle textStyle: UIFont.TextStyle) -> UIFont {
+        let baseSize: CGFloat
+        switch textStyle {
+        case .largeTitle:
+            baseSize = 34.0
+        case .title1:
+            baseSize = 28.0
+        case .title2:
+            baseSize = 22.0
+        case .title3:
+            baseSize = 20.0
+        case .headline:
+            baseSize = 17.0
+        case .body:
+            baseSize = 17.0
+        case .callout:
+            baseSize = 16.0
+        case .subheadline:
+            baseSize = 15.0
+        case .footnote:
+            baseSize = 13.0
+        case .caption1:
+            baseSize = 12.0
+        case .caption2:
+            baseSize = 11.0
+        default:
+            baseSize = 17.0
+        }
+        return UIFont.systemFont(ofSize: baseSize)
+    }
 
-    class var dynamicTypeTitle2: UIFont { UIFont.preferredFont(forTextStyle: .title2) }
+    class var dynamicTypeTitle1: UIFont {
+        fixedSizeFont(forTextStyle: .title1).scaled()
+    }
 
-    class var dynamicTypeTitle3: UIFont { UIFont.preferredFont(forTextStyle: .title3) }
+    class var dynamicTypeTitle2: UIFont {
+        fixedSizeFont(forTextStyle: .title2).scaled()
+    }
 
-    class var dynamicTypeHeadline: UIFont { UIFont.preferredFont(forTextStyle: .headline) }
+    class var dynamicTypeTitle3: UIFont {
+        fixedSizeFont(forTextStyle: .title3).scaled()
+    }
 
-    class var dynamicTypeBody: UIFont { UIFont.preferredFont(forTextStyle: .body) }
+    class var dynamicTypeHeadline: UIFont {
+        fixedSizeFont(forTextStyle: .headline).scaled()
+    }
 
-    class var dynamicTypeBody2: UIFont { UIFont.preferredFont(forTextStyle: .subheadline) }
+    class var dynamicTypeBody: UIFont {
+        fixedSizeFont(forTextStyle: .body).scaled()
+    }
 
-    class var dynamicTypeCallout: UIFont { UIFont.preferredFont(forTextStyle: .callout) }
+    class var dynamicTypeBody2: UIFont {
+        fixedSizeFont(forTextStyle: .subheadline).scaled()
+    }
 
-    class var dynamicTypeSubheadline: UIFont { UIFont.preferredFont(forTextStyle: .subheadline) }
+    class var dynamicTypeCallout: UIFont {
+        fixedSizeFont(forTextStyle: .callout).scaled()
+    }
 
-    class var dynamicTypeFootnote: UIFont { UIFont.preferredFont(forTextStyle: .footnote) }
+    class var dynamicTypeSubheadline: UIFont {
+        fixedSizeFont(forTextStyle: .subheadline).scaled()
+    }
 
-    class var dynamicTypeCaption1: UIFont { UIFont.preferredFont(forTextStyle: .caption1) }
+    class var dynamicTypeFootnote: UIFont {
+        fixedSizeFont(forTextStyle: .footnote).scaled()
+    }
 
-    class var dynamicTypeCaption2: UIFont { UIFont.preferredFont(forTextStyle: .caption2) }
+    class var dynamicTypeCaption1: UIFont {
+        fixedSizeFont(forTextStyle: .caption1).scaled()
+    }
+
+    class var dynamicTypeCaption2: UIFont {
+        fixedSizeFont(forTextStyle: .caption2).scaled()
+    }
 
     // MARK: - Dynamic Type Clamped
 
-    // We clamp the dynamic type sizes at the max size available
-    // without "larger accessibility sizes" enabled.
-    static private var maxPointSizeMap: [UIFont.TextStyle: CGFloat] = [
-        .title1: 34,
-        .title2: 28,
-        .title3: 26,
-        .headline: 23,
-        .body: 23,
-        .callout: 22,
-        .subheadline: 21,
-        .footnote: 19,
-        .caption1: 18,
-        .caption2: 17,
-        .largeTitle: 40
-    ]
-
     private class func preferredFontClamped(forTextStyle textStyle: UIFont.TextStyle) -> UIFont {
-        // From the documentation of -[id<UIContentSizeCategoryAdjusting> adjustsFontForContentSizeCategory:]
-        // Dynamic sizing is only supported with fonts that are:
-        // a. Vended using UIFont.preferredFont(forTextStyle:)
-        // b. Vended from UIFontMetrics.scaledFont(for:) or one of its variants
-        //
-        // If we clamp fonts by checking the resulting point size and then creating a new, smaller UIFont with
-        // a fallback max size, we'll lose dynamic sizing. Max sizes can be specified using UIFontMetrics though.
-        //
-        // UIFontMetrics will only operate on unscaled fonts. So we do this dance to cap the system default styles
-        // 1. Grab the standard, unscaled font by using the default trait collection
-        // 2. Use UIFontMetrics to scale it up, capped at the desired max size
-        let defaultTraitCollection = UITraitCollection(preferredContentSizeCategory: .large)
-        let unscaledFont = UIFont.preferredFont(forTextStyle: textStyle, compatibleWith: defaultTraitCollection)
-
-        let desiredStyleMetrics = UIFontMetrics(forTextStyle: textStyle)
-        guard let maxPointSize = maxPointSizeMap[textStyle] else {
-            owsFailDebug("Missing max point size for style: \(textStyle)")
-            return desiredStyleMetrics.scaledFont(for: unscaledFont)
-        }
-        return desiredStyleMetrics.scaledFont(for: unscaledFont, maximumPointSize: maxPointSize)
+        // 使用固定大小的字体，忽略系统 Dynamic Type
+        let baseFont = fixedSizeFont(forTextStyle: textStyle)
+        let scaledFont = baseFont.scaled()
+        return scaledFont
     }
 
     class var dynamicTypeLargeTitle1Clamped: UIFont { preferredFontClamped(forTextStyle: .largeTitle) }

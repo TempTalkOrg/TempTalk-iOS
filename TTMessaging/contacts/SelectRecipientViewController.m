@@ -68,14 +68,14 @@ NSString *const kSelectRecipientViewControllerCellIdentifier = @"kSelectRecipien
 
 - (void)applyTheme {
     [super applyTheme];
-    self.tableView.backgroundColor = Theme.backgroundColor;
+    self.tableView.backgroundColor = Theme.bg1Color;
 }
 
 - (void)loadView
 {
     [super loadView];
 
-    self.view.backgroundColor = Theme.backgroundColor;
+    self.view.backgroundColor = Theme.bg1Color;
 
     _contactsViewHelper = [[ContactsViewHelper alloc] initWithDelegate:self];
 
@@ -117,7 +117,7 @@ NSString *const kSelectRecipientViewControllerCellIdentifier = @"kSelectRecipien
     [_tableViewController.view autoPinEdgeToSuperviewEdge:ALEdgeBottom];
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 60;
-    self.tableView.backgroundColor = Theme.backgroundColor;
+    self.tableView.backgroundColor = Theme.bg1Color;
     OWSSearchBar *searchBar = [OWSSearchBar new];
     _searchBar = searchBar;
     searchBar.customPlaceholder = Localized(@"SEARCH_BYNAMEORNUMBER_PLACEHOLDER_TEXT",

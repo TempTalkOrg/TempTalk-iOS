@@ -225,8 +225,7 @@ const NSUInteger kOWSProfileManager_MaxAvatarDiameter = 640;
             OWSAssertDebug(userProfile);
             NSURL *url = [NSURL URLWithString:avatarUrlPath];
             NSString* avatarId = url.path.lastPathComponent;
-            OWSLogDebug(@"tryToUpdateService profileName:%@ avatarId:%@ avatarFileName:%@",
-                      profileName, avatarId, avatarFileName);
+            OWSLogDebug(@"tryToUpdateService - updating profile with avatar");
             
             DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
                 [userProfile updateWithProfileName:profileName
@@ -448,9 +447,8 @@ const NSUInteger kOWSProfileManager_MaxAvatarDiameter = 640;
         OWSLogError(@"%@: %lu",
             self.whitelistedPhoneNumbersStore.collection,
             (unsigned long)[self.whitelistedPhoneNumbersStore numberOfKeysWithTransaction:transaction]);
-        for (NSString *key in [self.whitelistedPhoneNumbersStore allKeysWithTransaction:transaction]) {
-            OWSLogError(@"\t profile whitelist user phone number: %@", key);
-        }
+        // Phone numbers are PII - don't log them
+        // Count already logged above
         OWSLogError(@"%@: %lu",
             self.whitelistedGroupsStore.collection,
             (unsigned long)[self.whitelistedGroupsStore numberOfKeysWithTransaction:transaction]);

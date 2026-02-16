@@ -201,8 +201,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)getGroupAccountsByDefaultSortMethod:(NSArray<SignalAccount *> *) sortParms withSearchText:searchText sortResultHandler:(void(^)(NSString *, NSArray<SignalAccount *> *))sortResultHandler {
     ContactsSearcher *searcher = [ContactsSearcher new];
-    NSArray<SignalAccount *> * result = [searcher getGroupAccountsByDefaultSortMethodWithSortParms:sortParms];
-    if(result) sortResultHandler(searchText, result);
+    __block NSArray<SignalAccount *> *sortedResult = nil;
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+        sortedResult = [searcher getGroupAccountsByDefaultSortMethodWithSortParms:sortParms transaction:transaction];
+    }];
+    if(sortedResult) sortResultHandler(searchText, sortedResult);
 }
 
 

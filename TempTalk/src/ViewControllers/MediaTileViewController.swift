@@ -70,7 +70,7 @@ public class MediaTileViewController: UICollectionViewController, MediaGalleryDa
     }
     
     @objc func applyTheme() {
-        collectionView.backgroundColor = Theme.backgroundColor
+        collectionView.backgroundColor = Theme.bgpageSecondaryColor
     }
 
     // MARK: View Lifecycle Overrides
@@ -85,7 +85,7 @@ public class MediaTileViewController: UICollectionViewController, MediaGalleryDa
             return
         }
 
-        collectionView.backgroundColor = Theme.backgroundColor
+        collectionView.backgroundColor = Theme.bgpageSecondaryColor
 
         collectionView.register(MediaGalleryCell.self, forCellWithReuseIdentifier: MediaGalleryCell.reuseIdentifier)
         collectionView.register(MediaGallerySectionHeader.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader, withReuseIdentifier: MediaGallerySectionHeader.reuseIdentifier)
@@ -110,22 +110,25 @@ public class MediaTileViewController: UICollectionViewController, MediaGalleryDa
         ]
         footerBar.setItems(footerItems, animated: false)
 
-        self.view.addSubview(self.footerBar)
-        footerBar.barTintColor = UIColor.ows_signalBrandBlue
-        footerBar.autoPinWidthToSuperview()
-        footerBar.autoSetDimension(.height, toSize: kFooterBarHeight)
-        self.footerBarBottomConstraint = footerBar.autoPinEdge(toSuperviewEdge: .bottom, withInset: -kFooterBarHeight)
+        if let footerBar = self.footerBar {
+            self.view.addSubview(footerBar)
+            footerBar.barTintColor = UIColor.ows_signalBrandBlue
+            footerBar.autoPinWidthToSuperview()
+            footerBar.autoSetDimension(.height, toSize: kFooterBarHeight)
+            self.footerBarBottomConstraint = footerBar.autoPinEdge(toSuperviewEdge: .bottom, withInset: -kFooterBarHeight)
+        }
 
         updateSelectButton()
         
-        NotificationCenter.default.addObserver(self, selector: #selector(applyTheme), name: NSNotification.Name.ThemeDidChange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applyTheme), name: .themeDidChange, object: nil)
     }
 
     private func indexPath(galleryItem: MediaGalleryItem) -> IndexPath? {
         guard let sectionIdx = galleryDates.firstIndex(of: galleryItem.galleryDate) else {
             return nil
         }
-        guard let rowIdx = galleryItems[galleryItem.galleryDate]!.firstIndex(of: galleryItem) else {
+        guard let items = galleryItems[galleryItem.galleryDate],
+              let rowIdx = items.firstIndex(of: galleryItem) else {
             return nil
         }
 
@@ -429,7 +432,7 @@ public class MediaTileViewController: UICollectionViewController, MediaGalleryDa
 
     var isInBatchSelectMode = false {
         didSet {
-            collectionView!.allowsMultipleSelection = isInBatchSelectMode
+            collectionView?.allowsMultipleSelection = isInBatchSelectMode
             updateSelectButton()
             updateDeleteButton()
         }
@@ -442,9 +445,9 @@ public class MediaTileViewController: UICollectionViewController, MediaGalleryDa
         }
 
         if let count = collectionView.indexPathsForSelectedItems?.count, count > 0 {
-            self.deleteButton.isEnabled = true
+            self.deleteButton?.isEnabled = true
         } else {
-            self.deleteButton.isEnabled = false
+            self.deleteButton?.isEnabled = false
         }
     }
 
@@ -470,17 +473,19 @@ public class MediaTileViewController: UICollectionViewController, MediaGalleryDa
 
         // show toolbar
         UIView.animate(withDuration: 0.1, delay: 0, options: .curveEaseInOut, animations: {
-            NSLayoutConstraint.deactivate([self.footerBarBottomConstraint])
-            self.footerBarBottomConstraint = self.footerBar.autoPinEdge(toSuperviewSafeArea: .bottom)
+            if let footerBarBottomConstraint = self.footerBarBottomConstraint {
+                NSLayoutConstraint.deactivate([footerBarBottomConstraint])
+            }
+            self.footerBarBottomConstraint = self.footerBar?.autoPinEdge(toSuperviewSafeArea: .bottom)
 
-            self.footerBar.superview?.layoutIfNeeded()
+            self.footerBar?.superview?.layoutIfNeeded()
 
             // ensure toolbar doesn't cover bottom row.
             collectionView.contentInset.bottom += self.kFooterBarHeight
         }, completion: nil)
 
         // disabled until at least one item is selected
-        self.deleteButton.isEnabled = false
+        self.deleteButton?.isEnabled = false
 
         // Don't allow the user to leave mid-selection, so they realized they have
         // to cancel (lose) their selection if they leave.
@@ -502,9 +507,11 @@ public class MediaTileViewController: UICollectionViewController, MediaGalleryDa
 
         // hide toolbar
         UIView.animate(withDuration: 0.1, delay: 0, options: .curveEaseInOut, animations: {
-            NSLayoutConstraint.deactivate([self.footerBarBottomConstraint])
-            self.footerBarBottomConstraint = self.footerBar.autoPinEdge(toSuperviewEdge: .bottom, withInset: -self.kFooterBarHeight)
-            self.footerBar.superview?.layoutIfNeeded()
+            if let footerBarBottomConstraint = self.footerBarBottomConstraint {
+                NSLayoutConstraint.deactivate([footerBarBottomConstraint])
+            }
+            self.footerBarBottomConstraint = self.footerBar?.autoPinEdge(toSuperviewEdge: .bottom, withInset: -self.kFooterBarHeight)
+            self.footerBar?.superview?.layoutIfNeeded()
 
             // undo "ensure toolbar doesn't cover bottom row."
             collectionView.contentInset.bottom -= self.kFooterBarHeight
@@ -558,9 +565,9 @@ public class MediaTileViewController: UICollectionViewController, MediaGalleryDa
         present(actionSheet, animated: true)
     }
 
-    var footerBar: UIToolbar!
-    var deleteButton: UIBarButtonItem!
-    var footerBarBottomConstraint: NSLayoutConstraint!
+    var footerBar: UIToolbar?
+    var deleteButton: UIBarButtonItem?
+    var footerBarBottomConstraint: NSLayoutConstraint?
     let kFooterBarHeight: CGFloat = 40
 
     // MARK: MediaGalleryDataSourceDelegate
@@ -963,7 +970,7 @@ extension MediaTileViewController : OWSNavigationChildController {
     // TODO: 所有页面切换到 swift 后，删除
     public var preferredNavigationBarStyle: OWSNavigationBarStyle { .blur }
 
-    public var navbarBackgroundColorOverride: UIColor? { nil }
+    public var navbarBackgroundColorOverride: UIColor? { Theme.bgpageSecondaryColor }
 
     public var navbarTintColorOverride: UIColor? { nil }
 

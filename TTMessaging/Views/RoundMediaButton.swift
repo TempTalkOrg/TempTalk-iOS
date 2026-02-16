@@ -53,7 +53,7 @@ open class RoundMediaButton: UIButton {
 
         contentEdgeInsets = UIEdgeInsets(margin: Self.defaultContentInset)
         layoutMargins = UIEdgeInsets(margin: Self.defaultInset)
-        tintColor = Theme.darkThemePrimaryColor
+        tintColor = Theme.dark.tprimaryColor
         insetsLayoutMarginsFromSafeArea = false
 
         setCompressionResistanceHigh()
@@ -134,7 +134,7 @@ open class RoundMediaButton: UIButton {
 
         switch backgroundStyle {
         case .solid:
-            backgroundView?.backgroundColor = backgroundColor(for: state) ?? backgroundColor(for: .normal)
+            backgroundView?.backgroundColor = backgroundColor(for: state) ?? backgroundColor(for: .normal) ?? RoundMediaButton.defaultBackgroundColor
 
         default:
             break

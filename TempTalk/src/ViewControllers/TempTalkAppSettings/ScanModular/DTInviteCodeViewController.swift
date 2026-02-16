@@ -8,6 +8,8 @@
 import Foundation
 import SnapKit
 import QRCode
+import TTMessaging
+import TTServiceKit
 
 struct InviteCodeEntity: Codable {
     var inviteCode: String
@@ -17,7 +19,7 @@ struct InviteCodeEntity: Codable {
     var inviteLink: String
 }
 
-final class DTInviteCodeViewController: SettingBaseViewController {
+final class DTInviteCodeViewController: OWSViewController {
     
     var displayLink: CADisplayLink?
     var startTimestamp: UInt64 = 0
@@ -37,7 +39,7 @@ final class DTInviteCodeViewController: SettingBaseViewController {
     
     fileprivate lazy var backBtn: UIButton = {
         let backBtn = UIButton()
-        backBtn.setTitleColor(Theme.primaryTextColor, for: .normal)
+        backBtn.setTitleColor(Theme.tprimaryColor, for: .normal)
         backBtn.setBackgroundImage(UIImage.init(named: "NavBarBackNew"), for: .normal)
         backBtn.addTarget(self, action: #selector(backBtnClick), for: .touchUpInside)
         return backBtn
@@ -141,7 +143,7 @@ final class DTInviteCodeViewController: SettingBaseViewController {
     
     fileprivate lazy var enterCodeActionView: DTInviteActionView = {
         var iconImage: UIImage
-        if let image = UIImage(named: "invite_enter_code") {
+        if let image = UIImage(named: "add_contacts") {
             iconImage = image
         } else {
             iconImage = #imageLiteral(resourceName: "icon_unselected")
@@ -326,13 +328,11 @@ final class DTInviteCodeViewController: SettingBaseViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        self.navigationController?.navigationBar.isHidden = true
         startDownCode()
     }
-    
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        self.navigationController?.navigationBar.isHidden = false
         stopDownCode()
     }
     
@@ -443,11 +443,11 @@ final class DTInviteCodeViewController: SettingBaseViewController {
     
     override func applyTheme() {
         super.applyTheme()
-        self.view.backgroundColor = Theme.defaultBackgroundColor
+        self.view.backgroundColor = Theme.defaultColor
         avatarView.backgroundColor = UIColor.clear
-        cardContainerView.backgroundColor = Theme.defaultTableCellBackgroundColor
-        nameLabel.textColor = Theme.primaryTextColor
-        tipsLabel.textColor = Theme.secondaryTextColor
+        cardContainerView.backgroundColor = Theme.bgpopupColor
+        nameLabel.textColor = Theme.tprimaryColor
+        tipsLabel.textColor = Theme.tsecondaryColor
         self.view.subviews.forEach {
             if let subview = $0 as? DTInviteActionView {
                 subview.applyTheme()
@@ -719,8 +719,27 @@ private class DTInviteActionView: UIView {
     }
     
     func applyTheme() {
-        iconImageView.backgroundColor = Theme.defaultTableCellBackgroundColor
-        iconImageView.tintColor = Theme.tabbarTitleNormalColor
-        titleLabel.textColor = Theme.primaryTextColor
+        iconImageView.backgroundColor = Theme.bgpopupColor
+        iconImageView.tintColor = Theme.tsecondaryColor
+        titleLabel.textColor = Theme.tprimaryColor
     }
+}
+
+
+extension DTInviteCodeViewController: OWSNavigationChildController {
+
+    public var navbarBackgroundColorOverride: UIColor? { nil }
+
+    public var childForOWSNavigationConfiguration: OWSNavigationChildController? { nil }
+
+    public var preferredNavigationBarStyle: OWSNavigationBarStyle { .solid }
+
+    public var navbarTintColorOverride: UIColor? { nil }
+
+    public var prefersNavigationBarHidden: Bool {
+        return true  // 隐藏导航栏
+    }
+
+    public var shouldCancelNavigationBack: Bool { false }
+
 }

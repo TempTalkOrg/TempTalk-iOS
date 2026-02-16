@@ -1,35 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!--
-    Firebase Configuration Template
-    
-    This is a template file for Firebase configuration. 
-    Replace the placeholder values with your actual Firebase project settings.
-    
-    DO NOT commit real Firebase configuration to version control!
-    
-    To use:
-    1. Copy this file to GoogleService-Info-[environment].plist
-    2. Replace all placeholder values with your actual Firebase project values
--->
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>YOUR_CLIENT_ID.apps.googleusercontent.com</string>
+	<string>234043257616-m7jg91vltrb3pbgi2ctfk27rantsl0fh.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.YOUR_CLIENT_ID</string>
+	<string>com.googleusercontent.apps.234043257616-m7jg91vltrb3pbgi2ctfk27rantsl0fh</string>
 	<key>API_KEY</key>
-	<string>YOUR_FIREBASE_API_KEY_HERE</string>
+	<string>AIzaSyDejjBdzUB8pATNpCA2qFRc0NLTIBsZ6Yc</string>
 	<key>GCM_SENDER_ID</key>
-	<string>YOUR_SENDER_ID</string>
+	<string>234043257616</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>your.app.bundle.identifier</string>
+	<string>org.difft.chative</string>
 	<key>PROJECT_ID</key>
-	<string>your-firebase-project-id</string>
+	<string>chative-33aeb</string>
 	<key>STORAGE_BUCKET</key>
-	<string>your-firebase-project-id.appspot.com</string>
+	<string>chative-33aeb.appspot.com</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -41,6 +29,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:YOUR_SENDER_ID:ios:YOUR_APP_ID</string>
+	<string>1:234043257616:ios:e71fefa050df57a5f5ab95</string>
 </dict>
 </plist>

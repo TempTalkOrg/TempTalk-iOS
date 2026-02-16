@@ -643,8 +643,7 @@ NS_ASSUME_NONNULL_BEGIN
     [actionSheet addAction:openAction];
     
     ActionSheetAction *copyAction = [[ActionSheetAction alloc] initWithTitle:Localized(@"IMAGE_RECOGNIZATION_ACTION_COPY_URL", @"") style:ActionSheetActionStyleDestructive handler:^(ActionSheetAction * _Nonnull action) {
-        UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
-        pasteboard.string = payload;
+        [DTSecurePasteboard setString:payload];
     }];
     [actionSheet addAction:copyAction];
     

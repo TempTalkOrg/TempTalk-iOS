@@ -11,35 +11,24 @@ import LiveKit
 
 extension DTMeetingManager {
     func sampleBulletRtmCalls() -> [String] {
-        var rtmCalls: [String] = ["Good 👍",
-                                  "Bad 😝",
-                                  "Agree ✅",
-                                  "Disagree ❌",
-                                  "Gotta go, bye",
-                                  "Please go faster",
-                                  "Please make screen bigger",
-                                  "Can't hear you. Bad Signal",
-                                  "Can't hear you. Your voice is too low"]
-        DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "call") { config, _ in
-            guard let raw = config as? [String: Any],
-                  let callConfig = CallConfig(from: raw) else {
-                return
-            }
-            rtmCalls = callConfig.chatPresets
-        }
-        return rtmCalls
+        let callConfig = CallConfigManager.fetchCallConfig()
+        return callConfig.chatPresets
     }
-    
+
+    func bubbleMessageConfig() -> BubbleMessageConfig {
+        let callConfig = CallConfigManager.fetchCallConfig()
+        return callConfig.bubbleMessage
+    }
+
+    func quickMessagePresets() -> [String] {
+        let config = bubbleMessageConfig()
+        // 合并 emojiPresets 和 textPresets
+        return config.emojiPresets + config.textPresets
+    }
+
     func autoHideTimeoutDuration() -> Int {
-        var timeoutResult = 9000
-        DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "call") { config, _ in
-            guard let raw = config as? [String: Any],
-                  let callConfig = CallConfig(from: raw) else {
-                return
-            }
-            timeoutResult = callConfig.autoHideTimeoutResult ?? 9000
-        }
-        return Int(timeoutResult / 1000)
+        let callConfig = CallConfigManager.fetchCallConfig()
+        return callConfig.autoHideTimeoutResult / 1000
     }
     
     func fetchSharingItem() -> DTMultiChatItemModel? {
@@ -83,27 +72,13 @@ extension DTMeetingManager {
     }
     
     func openMuteOtherEnabled() -> Bool {
-        var muteOtherEnabled: Bool = false
-        DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "call") { config, _ in
-            guard let raw = config as? [String: Any],
-                  let callConfig = CallConfig(from: raw) else {
-                return
-            }
-            muteOtherEnabled = callConfig.muteOtherEnabled
-        }
-        return muteOtherEnabled
+        let callConfig = CallConfigManager.fetchCallConfig()
+        return callConfig.muteOtherEnabled
     }
-    
+
     func createCallMsgEnabled() -> Bool {
-        var createCallMsg: Bool = false
-        DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "call") { config, _ in
-            guard let raw = config as? [String: Any],
-                  let callConfig = CallConfig(from: raw) else {
-                return
-            }
-            createCallMsg = callConfig.createCallMsg
-        }
-        return createCallMsg
+        let callConfig = CallConfigManager.fetchCallConfig()
+        return callConfig.createCallMsg
     }
     
     // MARK: - 参会人排序
@@ -396,6 +371,7 @@ extension DTMeetingManager {
     func prepareForMeetingStart(isCaller: Bool = true,
                                 thread: TSThread? = nil,
                                 timestamp: UInt64? = nil,
+                                serverTimestamp: UInt64? = nil,
                                 source: String? = nil) {
         // 处理开始会议的主叫和非主叫的逻辑
         prepareForMeetingCaller(isCaller: isCaller,
@@ -404,6 +380,7 @@ extension DTMeetingManager {
         guard currentCall.createCallMsg else { return }
         prepareForMeetingStartOrInvite(thread: thread,
                                        timestamp: timestamp,
+                                       serverTimestamp: serverTimestamp,
                                        isOutgoing: source == "startCall")
     }
     
@@ -434,15 +411,16 @@ extension DTMeetingManager {
         Task { @MainActor in
             if isOutgoing ?? false  {
                 if currentCall.controlType == DTMeetingManager.sourceControlStart {
-                    currentCall.callType == .group ? sendOutgoingLocalGroupStartCallMessage(thread: thread)
-                    : sendOutgoingLocalPrivateStartCallMessage(thread: thread)
+                    currentCall.callType == .group
+                        ? sendOutgoingLocalGroupStartCallMessage(thread: thread, serverTimestamp: serverTimestamp)
+                        : sendOutgoingLocalPrivateStartCallMessage(thread: thread, serverTimestamp: serverTimestamp)
                 }
             } else {
                 maybeGenerateMeetingMessage(roomID: currentCall.roomId ?? "") {
                     if currentCall.controlType == DTMeetingManager.sourceControlStart {
                         currentCall.callType == .group
-                        ? receiveIncomingLocalGroupStartCallMessage()
-                        : receiveIncomingLocalPrivateStartCallMessage()
+                            ? receiveIncomingLocalGroupStartCallMessage(serverTimestamp: serverTimestamp)
+                            : receiveIncomingLocalPrivateStartCallMessage(serverTimestamp: serverTimestamp)
                     }
                 }
             }
@@ -589,6 +567,20 @@ extension DTMeetingManager {
         let callVC = callWindow.findTopViewController()
         callVC.presentPanModal(noiseNav)
     }
+
+    func presentCriticalAlertConfirmVC() {
+        let invitedUserIds = Array(currentCall.invitedCriticalAlertUsers)
+        let confirmVC = DTCriticalAlertConfirmController(invitedUserIds: invitedUserIds, callType: currentCall.callType)
+        confirmVC.modalPresentationStyle = .popover
+        let confirmNav = DTPanModalNavController(rootViewController: confirmVC,
+                                                       defaultHeight: 195,
+                                                 ignorePanGestureInContent: false,
+                                                 forbidPanGesture: true)
+        confirmNav.navigationBar.isHidden = true
+        let callWindow = OWSWindowManager.shared().callViewWindow
+        let callVC = callWindow.findTopViewController()
+        callVC.presentPanModal(confirmNav)
+    }
     
     func updateVideoView(item: DTMultiChatItemModel, containView: UIView, aboveView: UIView) {
         if let allParticipants = roomContext?.room.allParticipants, let recipientId = item.recipientId {
@@ -683,26 +675,13 @@ extension DTMeetingManager {
     }
     
     func fetchClustersConfig(completion: @escaping ([[String: String]]) -> Void) {
-        DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "call") { config, _ in
-            guard let raw = config as? [String: Any],
-            let callConfig = CallConfig(from: raw) else {
-                completion([])
-                return
-            }
-            completion(callConfig.clusters)
-        }
+        let callConfig = CallConfigManager.fetchCallConfig()
+        completion(callConfig.clusters)
     }
-    
+
     func denoiseNameRegex() -> String {
-        var denoiseNameRegex = "airpods"
-        DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "call") { config, _ in
-            guard let raw = config as? [String: Any],
-                  let callConfig = CallConfig(from: raw) else {
-                return
-            }
-            denoiseNameRegex = callConfig.excludedNameRegex
-        }
-        return denoiseNameRegex
+        let callConfig = CallConfigManager.fetchCallConfig()
+        return callConfig.excludedNameRegex
     }
     
     func startSpeedTest() {
@@ -711,6 +690,12 @@ extension DTMeetingManager {
     
     func isInputAirPods(portName: String) -> Bool {
         let denoiseNameRegex = denoiseNameRegex()
+
+        // 如果没有配置排除规则，返回 false（不是 AirPods）
+        guard !denoiseNameRegex.isEmpty else {
+            return false
+        }
+
         let pattern = "(?i)\(NSRegularExpression.escapedPattern(for: denoiseNameRegex))"
         let regex = try! NSRegularExpression(pattern: pattern)
 

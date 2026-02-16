@@ -269,11 +269,6 @@ extension ConversationViewController: MessageActionsDelegate {
         showOriginalLanguage(conversationViewItem: conversationViewItem)
     }
     
-    /// pin 或 unpin
-    func messageActionsPinItem(_ conversationViewItem: ConversationViewItem) {
-        pinOrUnpinMessage(viewItem: conversationViewItem)
-    }
-    
     /// 删除
     func messageActionDeleteItem(_ conversationViewItem: ConversationViewItem) {
         let actionSheet = ActionSheetController(message: Localized("MESSAGE_ACTION_DELETE_MESSAGE_TIPS"))
@@ -385,7 +380,7 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
                 block: { _ in
                     if let selectedRange = selectionView.getSelection() {
                         let selectedString = textView.text.substring(withRange: selectedRange)
-                        UIPasteboard.general.string = selectedString
+                        DTSecurePasteboard.setString(selectedString)
                     }
                 }
             )
@@ -464,7 +459,7 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
 // MARK: - Private
 
 private extension ConversationMessageType {
-    func messageActions(viewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> [MenuAction] {
+    public func messageActions(viewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> [MenuAction] {
         switch self {
         case .text:
             return ConversationViewItemActions.textActions(conversationViewItem: viewItem, delegate: delegate)
@@ -487,7 +482,7 @@ private extension ConversationMessageType {
         }
     }
     
-    func confidentialActions(viewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> [MenuAction] {
+    public func confidentialActions(viewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> [MenuAction] {
         return ConversationViewItemActions.confidentialActions(conversationViewItem: viewItem, delegate: delegate)
     }
 }

@@ -49,36 +49,41 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
 - (void)applyTheme {
     [super applyTheme];
     
-    [self.doneButton setTitleColor:Theme.themeBlueColor forState:UIControlStateSelected];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableViewController.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableViewController.tableView.backgroundColor = Theme.bgpageSecondaryColor;
+    
+    [self.doneButton setTitleColor:Theme.tinfoColor forState:UIControlStateSelected];
     if (self.presentingViewController) {
-        [self.navigationItem.leftBarButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.themeBlueColor} forState:UIControlStateNormal];
-        [self.navigationItem.leftBarButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.themeBlueColor} forState:UIControlStateHighlighted];
+        [self.navigationItem.leftBarButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tinfoColor} forState:UIControlStateNormal];
+        [self.navigationItem.leftBarButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tinfoColor} forState:UIControlStateHighlighted];
     }
     
     if (self.view.window.windowLevel == UIWindowLevel_CallView()) {
-        [self.navigationController.navigationBar setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.primaryTextColor}];
-        self.navigationController.navigationBar.tintColor = Theme.primaryTextColor;
+        [self.navigationController.navigationBar setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tprimaryColor}];
+        self.navigationController.navigationBar.tintColor = Theme.tprimaryColor;
     }
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = Theme.isDarkThemeEnabled?[UIColor colorWithRgbHex:0x282828]:[UIColor colorWithRgbHex:0xFFFFFF];
-    self.tableViewController.view.backgroundColor = Theme.isDarkThemeEnabled?[UIColor colorWithRgbHex:0x282828]:[UIColor colorWithRgbHex:0xFFFFFF];
-    
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableViewController.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableViewController.tableView.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableViewController.tableView.rowHeight = 70;
+
     self.doneButton = [[UIButton alloc] init];
     self.doneButton.titleLabel.font = [UIFont ows_regularFontWithSize:17];
     self.doneButton.userInteractionEnabled = NO;
     self.doneButton.selected = NO;
     [self.doneButton setTitle:Localized(@"BUTTON_DONE", @"") forState:UIControlStateNormal];
     [self.doneButton setTitleColor:[UIColor grayColor] forState:UIControlStateNormal];
-    [self.doneButton setTitleColor:Theme.themeBlueColor forState:UIControlStateSelected];
+    [self.doneButton setTitleColor:Theme.tinfoColor forState:UIControlStateSelected];
     [self.doneButton addTarget:self action:@selector(doneAction) forControlEvents:UIControlEventTouchUpInside];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:self.doneButton];
     self.tableViewController.tableView.allowsMultipleSelection = true;
     self.tableViewController.tableView.allowsMultipleSelectionDuringEditing = true;
     self.tableViewController.canEditRow = NO;
-    self.tableViewController.tableView.editing = YES;
     //处理底部的用户选择框
     [self creatBottomContainView];
     [self configBottomContainViewLayoput];
@@ -250,11 +255,32 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     if (!signalAccount.recipientId) {
         return;
     }
+
     [self.memberRecipientIds removeObject:signalAccount.recipientId];
     [self.memberRecipientIdsArr removeObject:signalAccount.recipientId];
     [self.indexPathMap removeObjectForKey:signalAccount.recipientId];
     [self dealDoneButtonState];
     [self.selectedAccountToolView reloadWithData:self.memberRecipientIdsArr];
+
+    // 更新cell的selectionStatus
+    NSIndexPath *indexPath = [self.indexPathMap objectForKey:signalAccount.recipientId];
+    if (indexPath) {
+        UITableViewCell *cell = [self.tableViewController.tableView cellForRowAtIndexPath:indexPath];
+        if ([cell isKindOfClass:ContactTableViewCell.class]) {
+            ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
+            contactCell.selectionStatus = ContactCellSelectionStatusUnselected;
+        }
+    } else {
+        // 如果没有indexPath，遍历可见cells查找并更新
+        for (ContactTableViewCell *cell in self.tableViewController.tableView.visibleCells) {
+            if ([cell isKindOfClass:ContactTableViewCell.class]) {
+                if ([cell.signalAccount.recipientId isEqualToString:signalAccount.recipientId]) {
+                    cell.selectionStatus = ContactCellSelectionStatusUnselected;
+                    break;
+                }
+            }
+        }
+    }
 }
 
 - (void)signalAccountWasSelected:(SignalAccount *)signalAccount withIndexPath:(nonnull NSIndexPath *)indexPath
@@ -272,7 +298,7 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     if (self.addToGroupDelegate &&
         [self.addToGroupDelegate respondsToSelector:@selector(checkShouldToastCannnotBeSelected:)] &&
         ![self.addToGroupDelegate checkShouldToastCannnotBeSelected:signalAccount.recipientId]) {
-        OWSLogDebug(@"recipientId:%@ cannot invite user to a meeting", signalAccount.recipientId);
+        OWSLogDebug(@"User cannot be invited to meeting");
         return;
     }
 
@@ -422,11 +448,6 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
                 }
             }];
         });
-        
-        //MARK: 添加成员预约会议相关
-        [DTCalendarManager.shared groupChangeWithGid:self.thread.serverThreadId
-                                          actionCode:3
-                                              target:newJoinMember];
 
         NSString *channelName = [DTCallManager generateGroupChannelNameBy:self.thread];
         [[DTCallManager sharedInstance] putMeetingGroupMemberInviteBychannelName:channelName success:^(id _Nonnull responseObject) {
@@ -590,6 +611,45 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     }
     return _indexPathMap;
 }
+
+#pragma mark - OWSTableViewControllerDelegate
+
+- (void)originalTableView:(UITableView *)tableView
+          willDisplayCell:(UITableViewCell *)cell
+        forRowAtIndexPath:(NSIndexPath *)indexPath {
+
+    if (![cell isKindOfClass:ContactTableViewCell.class]) {
+        return;
+    }
+
+    ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
+    contactCell.selectionStatus = ContactCellSelectionStatusUnselected;
+
+    SignalAccount *signalAccount = contactCell.signalAccount;
+    NSString *virtualUserId = contactCell.cellView.virtualUserId;
+
+    BOOL isSelected = NO;
+    if (signalAccount.recipientId) {
+        isSelected = [self.memberRecipientIds containsObject:signalAccount.recipientId];
+    } else if (DTParamsUtils.validateString(virtualUserId)) {
+        isSelected = [self.memberRecipientIds containsObject:virtualUserId];
+    }
+
+    if (isSelected) {
+        contactCell.selectionStatus = ContactCellSelectionStatusSelected;
+        [tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionNone];
+    }
+}
+
+- (void)originalTableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+    if ([cell isKindOfClass:ContactTableViewCell.class]) {
+        ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
+        contactCell.selectionStatus = ContactCellSelectionStatusSelected;
+    }
+}
+
 @end
 
 NS_ASSUME_NONNULL_END

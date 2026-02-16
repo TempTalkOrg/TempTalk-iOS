@@ -56,6 +56,13 @@ typedef enum : NSUInteger {
                      attachmentId:(NSString *)attachmentId
                           success:(DTTranslateSuccessBlock)success
                           failure:(DTTranslateFailureBlock)failure;
+
+// 简化版翻译方法，用于临时文本翻译（不需要 thread，不存储结果）
+- (void)translateText:(NSString *)text
+           targetLang:(DTTranslateMessageType)targetLang
+              success:(DTTranslateSuccessBlock)success
+              failure:(DTTranslateFailureBlock)failure;
+
 //通过message获取带翻译内容
 - (NSString *)getTargetTranferContents:(TSMessage *)message;
 

@@ -80,39 +80,104 @@ public class DTPanModalNavController: OWSNavigationController, PanModalPresentab
         }
     }
     
-    public override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        
-        // 修复：在屏幕方向变化时，确保PanModal布局正确更新
-        panModalSetNeedsLayoutUpdate()
-    }
-    
+    /// 保存原始的 defaultHeight，用于 pop 时恢复
+    private var originalDefaultHeight: CGFloat?
+
     public override func popViewController(animated: Bool) -> UIViewController? {
-        let vc = super.popViewController(animated: animated)
-        panModalSetNeedsLayoutUpdate()
-        return vc
+        // 记录被 pop 的 VC 是否需要 longForm
+        let poppedVCNeedsLongForm = topViewController?.panModalNeedsLongForm ?? false
+        let poppedVC = super.popViewController(animated: animated)
+
+        // 如果 pop 掉的是需要 longForm 的 VC，而新的 topVC 不需要，则恢复到 shortForm
+        let newTopVCNeedsLongForm = topViewController?.panModalNeedsLongForm ?? false
+
+        if poppedVCNeedsLongForm && !newTopVCNeedsLongForm {
+            // 恢复原始高度
+            if let originalHeight = originalDefaultHeight {
+                defaultHeight = originalHeight
+            }
+            isShortFormEnabled = true
+
+            // 延迟执行，确保 pop 动画完成后再更新
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                guard let self = self else { return }
+                self.updatePanModalHeight()
+            }
+        } else {
+            panModalSetNeedsLayoutUpdate()
+        }
+
+        return poppedVC
+    }
+
+    /// 强制更新 PanModal 高度
+    private func updatePanModalHeight() {
+        guard let presentationController = presentationController as? PanModalPresentationController else {
+            return
+        }
+
+        // 根据当前 topVC 决定目标状态
+        let targetState: PanModalPresentationController.PresentationState =
+            (topViewController?.panModalNeedsLongForm ?? false) ? .longForm : .shortForm
+
+        // 强制刷新布局并转换到目标状态
+        presentationController.setNeedsLayoutUpdate()
+        presentationController.transition(to: targetState)
     }
     
     public override func pushViewController(_ viewController: UIViewController, animated: Bool) {
+        // 如果新的 VC 需要 longForm 高度（四分之三屏）
+        let needsLongForm = viewController.panModalNeedsLongForm
+
+        if needsLongForm {
+            // 保存原始高度
+            if originalDefaultHeight == nil {
+                originalDefaultHeight = defaultHeight
+            }
+        }
+
         super.pushViewController(viewController, animated: animated)
-        panModalSetNeedsLayoutUpdate()
+
+        if needsLongForm {
+            // push 完成后立即更新高度（此时 topViewController 已经是新的 VC）
+            DispatchQueue.main.async { [weak self] in
+                self?.updatePanModalHeight()
+            }
+        } else {
+            panModalSetNeedsLayoutUpdate()
+        }
     }
-    
+
     // MARK: - Pan Modal Presentable
-    
+
     public var panScrollable: UIScrollView? {
-        return (topViewController as? PanModalPresentable)?.panScrollable
+        // 返回 nil 避免某些 scrollView 导致死循环
+        if let child = topViewController as? PanModalPresentable {
+            return child.panScrollable
+        }
+        return nil
     }
-    
+
     public var shortFormHeight: PanModalHeight {
+        // 只有当子 VC 明确需要 longForm 时，才使用子 VC 的 shortFormHeight
+        if let child = topViewController, child.panModalNeedsLongForm {
+            if let panModalChild = child as? PanModalPresentable {
+                return panModalChild.shortFormHeight
+            }
+        }
+        // 否则使用 defaultHeight
         return isShortFormEnabled ? .contentHeight(defaultHeight) : .contentHeight(UIScreen.main.bounds.height)
     }
-    
+
     public var longFormHeight: PanModalHeight {
-        if let child = topViewController as? PanModalPresentable {
-            return child.longFormHeight
+        // 只有当子 VC 明确需要 longForm 时，才使用子 VC 的 longFormHeight
+        if let child = topViewController, child.panModalNeedsLongForm {
+            if let panModalChild = child as? PanModalPresentable {
+                return panModalChild.longFormHeight
+            }
         }
-        return .contentHeight(UIScreen.main.bounds.height)
+        // 否则使用 defaultHeight 或全屏
+        return isShortFormEnabled ? .contentHeight(defaultHeight) : .contentHeight(UIScreen.main.bounds.height)
     }
     
     public var scrollIndicatorInsets: UIEdgeInsets {
@@ -144,7 +209,10 @@ public class DTPanModalNavController: OWSNavigationController, PanModalPresentab
     public func willTransition(to state: PanModalPresentationController.PresentationState) {
         guard isShortFormEnabled, case .longForm = state
         else { return }
-        
+
+        // 只有当 topViewController 明确需要 longForm 时才允许展开到全屏
+        guard topViewController?.panModalNeedsLongForm == true else { return }
+
         isShortFormEnabled = false
         panModalSetNeedsLayoutUpdate()
     }
@@ -162,5 +230,12 @@ extension UIViewController {
     @objc
     public var isPanModalPresentable: Bool {
         (self as? PanModalPresentable) != nil
+    }
+
+    /// 标记该 VC 是否需要使用 longForm 高度（四分之三屏）
+    /// 子类可以重写此属性来指定自己需要的高度模式
+    @objc
+    open var panModalNeedsLongForm: Bool {
+        return false
     }
 }

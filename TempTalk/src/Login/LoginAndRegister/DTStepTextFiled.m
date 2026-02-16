@@ -7,7 +7,7 @@
 //
 
 #import "DTStepTextFiled.h"
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <TTMessaging/UIColor+OWS.h>
 #import <TTServiceKit/DTParamsBaseUtils.h>
 #import <TTServiceKit/CALayer+DTFrame.h>
@@ -222,6 +222,7 @@
     if (_textView != noti.object) {
         return;
     }
+
     NSString *text = [_textView.text stringByReplacingOccurrencesOfString:@" " withString:@""];
     [self resetContentWIthString:text];
 }
@@ -339,7 +340,7 @@
     [self xx_setDefault];
     // trim space
     NSString *text = [content stringByReplacingOccurrencesOfString:@" " withString:@""];
-    
+
     // number & alphabet
     NSMutableString *mstr = @"".mutableCopy;
     for (NSUInteger i = 0; i < text.length; ++i) {
@@ -361,23 +362,28 @@
             }
         }
     }
-    
+
     text = mstr;
     NSUInteger count = _config.inputBoxNumber;
     if (text.length > count) {
         text = [text substringToIndex:count];
     }
+
+    // 临时移除通知监听，防止递归调用
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:UITextFieldTextDidChangeNotification object:_textView];
     _textView.text = text;
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(xx_textChange:) name:UITextFieldTextDidChangeNotification object:_textView];
+
     if (_inputBlock) {
         _inputBlock(text);
     }
-    
+
     // set value
     [self xx_setValue:text];
-    
+
     // Flicker Animation
     [self xx_flickerAnimation:text];
-    
+
     if (_inputFinish) {
         [self xx_finish];
     }

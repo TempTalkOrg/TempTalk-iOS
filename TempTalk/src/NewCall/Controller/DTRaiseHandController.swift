@@ -29,7 +29,7 @@ class DTRaiseHandController: OWSTableViewController {
         super.applyTheme()
         updateTableContents()
         
-        view.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.defaultColor
         tableView.backgroundColor = UIColor(rgbHex: 0x2B3139)
         
     }

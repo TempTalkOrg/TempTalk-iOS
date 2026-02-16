@@ -34,7 +34,7 @@ class DTTextSelectionView: UIView {
         let imageView = UIImageView()
         imageView.isUserInteractionEnabled = false
         imageView.image = generateKnobImage(
-            color: Theme.themeBlueColor,
+            color: Theme.tinfoColor,
             diameter: Constants.knobDiameter
         )
         imageView.alpha = 0
@@ -45,7 +45,7 @@ class DTTextSelectionView: UIView {
         let imageView = UIImageView()
         imageView.isUserInteractionEnabled = false
         imageView.image = generateKnobImage(
-            color: Theme.themeBlueColor,
+            color: Theme.tinfoColor,
             diameter: Constants.knobDiameter,
             inverted: true
         )
@@ -257,7 +257,7 @@ class DTTextSelectionView: UIView {
             if let current = self.highlightOverlay {
                 highlightOverlay = current
             } else {
-                let selectionColor = Theme.themeBlueColor.withAlphaComponent(0.4)
+                let selectionColor = Theme.tinfoColor.withAlphaComponent(0.4)
                 highlightOverlay = DTTextSelectionHighlightingView(color: selectionColor)
                 highlightOverlay.isUserInteractionEnabled = false
                 highlightOverlay.innerRadius = 2.0

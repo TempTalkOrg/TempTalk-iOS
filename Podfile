@@ -95,13 +95,6 @@ def configure_testable_build(installer)
       end
     end
     
-    if target.name == 'OAuthSwift'
-        # 遍历每个目标的构建配置
-        target.build_configurations.each do |config|
-          config.build_settings['APPLICATION_EXTENSION_API_ONLY'] = 'NO'
-        end
-    end
-    
     target.build_configurations.each do |build_configuration|
       next unless ["Debug", "Debug_test", "Release_test"].include?(build_configuration.name)
 #      build_configuration.build_settings['ONLY_ACTIVE_ARCH'] = 'YES'

@@ -157,13 +157,18 @@ extension HomeViewController {
             default:
                 break
             }
-            
+
             if !forceReloadItemIds.isEmpty {
-                newSnapshot.reloadItems(forceReloadItemIds)
+                // 使用 reconfigureItems 代替 reloadItems 来避免 cell 重新创建
+                if #available(iOS 15.0, *) {
+                    newSnapshot.reconfigureItems(forceReloadItemIds)
+                } else {
+                    newSnapshot.reloadItems(forceReloadItemIds)
+                }
             }
         }
-        
-        self.dataSource.apply(newSnapshot, animatingDifferences: animated) {
+
+        self.dataSource.apply(newSnapshot, animatingDifferences: false) {
             if let completion {
                 completion()
             }
@@ -347,7 +352,8 @@ extension HomeViewController {
     }
     
     @objc func updateHasArchivedThreadsRow() {
-        self.hasArchivedThreadsRow = self.homeViewMode == .inbox && self.threadMapping.archiveCount > 0 && !self.isSelectedFolder()
+        // 不显示"已归档会话"入口
+        self.hasArchivedThreadsRow = false
     }
 }
 
@@ -445,20 +451,28 @@ extension HomeViewController: UITableViewDelegate {
             return .empty
         }
     }
-    
+
     var subheadlineSize: CGFloat {
-        return UIFont.preferredFont(forTextStyle: .subheadline).pointSize
+        // 使用固定字体大小（15pt），忽略系统 Dynamic Type
+        let baseSize: CGFloat = 15.0
+        let scaleFactor = TextSizeManager.currentScaleFactor
+        return baseSize * scaleFactor
     }
-    
+
     public func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         if indexPath.section == HomeViewControllerSection.reminders.rawValue {
             return UITableView.automaticDimension
         }
-        ///主要适配首页的预览在动态字体下高度不足导致的裁剪问题
-        if subheadlineSize < 17 {
-            return 60
-        } else {
+
+        // 根据 App 内字体大小设置计算 cell 高度
+        // 默认模式：60pt，大字体模式：70pt
+        let scaleFactor = TextSizeManager.currentScaleFactor
+        if scaleFactor > 1.0 {
+            // 大字体模式
             return 70
+        } else {
+            // 默认模式
+            return 60
         }
     }
     
@@ -510,35 +524,25 @@ extension HomeViewController: UITableViewDelegate {
             }
             var actions: [UIContextualAction] = []
             // 只有处于全部分组可以删除会话，处于分组时可以把会话移出分组（推荐分组会话不能手动移出）
-            if !self.isSelectedFolder() {
-                let deleteAction = UIContextualAction(
-                    style: .destructive,
-                    title: Localized("TXT_DELETE_TITLE")
-                ) { [weak self] action, sourceView, completion in
-                    guard let self else {
-                        completion(true)
-                        return
-                    }
-                    self.tableViewCellDidTapDelete(indexPath: indexPath)
-                    completion(true)
-                }
-                actions.append(deleteAction)
-            } else {
-                if !self.isSelectedRecommendFolder(), self.homeViewMode != .archive {
-                    let removeAction = UIContextualAction(
-                        style: .destructive,
-                        title: Localized("CHAT_FOLDER_ITEM_REMOVE")
-                    ) { [weak self] action, sourceView, completion in
-                        guard let self else {
-                            completion(true)
-                            return
-                        }
-                        self.removeFolderThread(thread)
-                        completion(true)
-                    }
-                    actions.append(removeAction)
-                }
+            var deleteTitle = Localized("TXT_DELETE_TITLE")
+            // 防止 Accessibility bug：title 不能为空，否则会崩溃
+            if deleteTitle.isEmpty {
+                deleteTitle = "Delete"
             }
+            let deleteAction = UIContextualAction(
+                style: .destructive,
+                title: deleteTitle
+            ) { [weak self] action, sourceView, completion in
+                guard let self else {
+                    completion(true)
+                    return
+                }
+                self.tableViewCellDidTapDelete(indexPath: indexPath)
+                completion(true)
+            }
+            deleteAction.backgroundColor = .systemRed
+            deleteAction.image = nil  // 明确设置 image 为 nil，避免 UIKit 创建默认图像视图导致崩溃
+            actions.append(deleteAction)
             
             if self.homeViewMode != .archive {
                 let stickActionTitle = thread.isSticked ? Localized("HOME_TABLE_ACTION_UNSTICK") : Localized("HOME_TABLE_ACTION_STICK")
@@ -575,7 +579,7 @@ extension HomeViewController: UITableViewDelegate {
         guard self.isViewLoaded && self.view.window != nil else {
             return nil
         }
-        
+
         guard let section = HomeViewControllerSection(rawValue: indexPath.section) else {
             return nil
         }
@@ -587,9 +591,14 @@ extension HomeViewController: UITableViewDelegate {
             var actions: [UIContextualAction] = []
             if let groupThread = thread as? TSGroupThread, groupThread.isLocalUserInGroup() {
                 let isOwner = groupThread.groupModel.groupOwner == TSAccountManager.localNumber()
+                var title = Localized(isOwner ? "CONFIRM_DISBAND" : "LEAVE_BUTTON_TITLE")
+                // 防止 Accessibility bug：title 不能为空，否则会崩溃
+                if title.isEmpty {
+                    title = "Disband or Leave"
+                }
                 let leaveAction = UIContextualAction(
                     style: .destructive,
-                    title: Localized(isOwner ? "CONFIRM_DISBAND" : "LEAVE_BUTTON_TITLE")
+                    title: title
                 ) { [weak self] action, sourceView, completion in
                     guard let self else {
                         completion(true)
@@ -602,48 +611,25 @@ extension HomeViewController: UITableViewDelegate {
                     )
                     completion(true)
                 }
+                leaveAction.backgroundColor = .systemRed
+                leaveAction.image = nil  // 明确设置 image 为 nil，避免 UIKit 创建默认图像视图导致崩溃
                 actions.append(leaveAction)
             }
-            
-            if self.currentGroup == AnyThreadFinder.inboxGroup, !DTChatFolderManager.shared().chatFolders.isEmpty {
-                let folderAction = UIContextualAction(
-                    style: .normal,
-                    title: Localized("FLOATVIEW_ACTION_CHAT_FOLDER")
-                ) { [weak self] action, sourceView, completion in
-                    guard let self else {
-                        completion(true)
-                        return
-                    }
-                    if let groupThread = thread as? TSGroupThread, !groupThread.isLocalUserInGroup() {
-                        DTToastHelper.toast(withText: "You're not in the group", durationTime: 1)
-                        completion(true)
-                        return
-                    }
-                    
-                    let chatFolderVC = DTChatFolderController()
-                    chatFolderVC.selectedThread = thread
-                    let folderNav = OWSNavigationController(rootViewController: chatFolderVC)
-                    self.navigationController?.present(folderNav, animated: true)
-                    completion(true)
-                }
-                folderAction.backgroundColor = .ows_gray25
-                actions.append(folderAction)
+
+            // 如果没有任何 action，返回 nil 避免 iOS 内部崩溃
+            guard !actions.isEmpty else {
+                return nil
             }
-            
-            if self.currentGroup == AnyThreadFinder.inboxGroup {
-                let archiveAction = self.getArchiveContextualAction(indexpath: indexPath)
-                actions.append(archiveAction)
-            }
-            
+
             let config = UISwipeActionsConfiguration(actions: actions)
             config.performsFirstActionWithFullSwipe = false
             return config
-            
+
         default:
             return nil
         }
     }
-    
+
     private func tableViewCellDidTapDelete(indexPath: IndexPath) {
         guard indexPath.section == HomeViewControllerSection.conversations.rawValue else {
             Logger.error("failure: unexpected section: \(indexPath.section)")

@@ -16,26 +16,26 @@ let monthly = "monthly"
 
 @objcMembers
 class DTGroupReminderController: OWSTableViewController {
-    
-    var thread: TSThread!
-    
+
+    var thread: TSThread?
+
     var updateCompleteBlock: ( () -> Void )?
-    
+
     lazy var updateGroupInfoAPI = DTUpdateGroupInfoAPI()
-    
+
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
         navigationItem.title = Localized("SETTINGS_ITEM_GROUP_REMINDER", comment: "group reminder")
         updateTableContents()
-        
+
         NotificationCenter.default.addObserver(self, selector: #selector(updateTableContents(noti:)), name: .DTGroupPeriodicRemind, object: nil)
     }
-    
+
     @objc func updateTableContents(noti: Notification) {
         guard let notiThread = noti.object as? TSGroupThread else {
             return
@@ -43,11 +43,11 @@ class DTGroupReminderController: OWSTableViewController {
         self.thread = notiThread
         updateTableContents()
     }
-    
+
     func updateTableContents() {
-        
-        guard let groupThread = self.thread as? TSGroupThread else {
-            OWSLogger.error("\(thread.serverThreadId) not group thread")
+
+        guard let thread = self.thread, let groupThread = thread as? TSGroupThread else {
+            OWSLogger.error("not group thread")
             navigationController?.popViewController(animated: true)
             return
         }
@@ -110,6 +110,7 @@ class DTGroupReminderController: OWSTableViewController {
         }
         
         DTToastHelper.showHud(in: view)
+        guard let thread = thread else { return }
         updateGroupInfoAPI.sendUpdateGroup(withGroupId: thread.serverThreadId, updateInfo: ["remindCycle" : cycle]) { entity in
             DTToastHelper.hide()
             self.databaseStorage.asyncWrite { transaction in

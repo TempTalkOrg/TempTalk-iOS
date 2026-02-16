@@ -49,6 +49,7 @@ import TTServiceKit
     
     func expandButtonPressed(_ inputToolbar: ConversationInputToolbar)
     
+    func beginInput()
 }
 
 @objc public enum InputToolbarState: Int {
@@ -83,11 +84,10 @@ import TTServiceKit
     @objc var inputToolbarState: InputToolbarState {
         didSet {
             guard oldValue != inputToolbarState else { return }
-//            attachmentKeyboardIfLoaded?.inputToolbarState = inputToolbarState
             ensureButtonVisibility(withAnimation: true, doLayout: true)
         }
     }
-    
+
     @objc var relationship: InputToolbarRelationship {
         didSet {
             guard oldValue != relationship else { return }
@@ -95,8 +95,18 @@ import TTServiceKit
             ensureButtonVisibility(withAnimation: true, doLayout: true)
         }
     }
-    
+
     var threadType: InputToolbarThreadType
+
+    /// Whether confidential message button should be hidden (for groups with ≥20 members)
+    var shouldHideConfidentialButton: Bool = false {
+        didSet {
+            guard oldValue != shouldHideConfidentialButton else { return }
+
+            // Simply hide/show the button without removing from view hierarchy
+            confideButton.isHidden = shouldHideConfidentialButton
+        }
+    }
 
     private weak var inputToolbarDelegate: ConversationInputToolbarDelegate?
 
@@ -197,7 +207,7 @@ import TTServiceKit
     
     private lazy var expandButton: UIButton = {
         let button = UIButton(type: .custom)
-        button.tintColor = Theme.primaryIconColor
+        button.tintColor = Theme.iconColor
         button.addTarget(self, action: #selector(expandButtonPressed), for: .touchUpInside)
         button.setImage(UIImage(named: "input_expand"), for: .normal)
         button.autoSetDimensions(to: CGSize(square: LayoutMetrics.minToolbarItemHeight))
@@ -224,7 +234,7 @@ import TTServiceKit
     public lazy var inputTextView: ConversationInputTextView = {
         let inputTextView = ConversationInputTextView()
         inputTextView.textViewToolbarDelegate = self
-        inputTextView.font = .preferredFont(forTextStyle: .body)
+        inputTextView.font = .ows_dynamicTypeBodyFont()
         inputTextView.setContentHuggingHigh()
         inputTextView.setCompressionResistanceHigh()
         inputTextView.accessibilityIdentifier = UIView.accessibilityIdentifier(in: self, name: "inputTextView")
@@ -233,7 +243,7 @@ import TTServiceKit
     
     private lazy var confideButton: UIButton = {
         let button = UIButton(type: .custom)
-        button.tintColor = Theme.primaryIconColor
+        button.tintColor = Theme.iconColor
         button.accessibilityLabel = OWSLocalizedString(
             "INPUT_TOOLBAR_CONFIDE_BUTTON_ACCESSIBILITY_LABEL",
             comment: "accessibility label for the button which switch input mode to confide"
@@ -243,7 +253,7 @@ import TTServiceKit
         button.setImage(UIImage(named: "input_attachment_confide"), for: .normal)
         button.setImage(UIImage(named: "input_attachment_confide_select"), for: .selected)
         button.autoSetDimensions(to: CGSize(square: LayoutMetrics.minToolbarItemHeight))
-                    
+
         return button
     }()
     
@@ -280,12 +290,15 @@ import TTServiceKit
     private let vStackRoundingView = UIView.container()
     
     private var msgContentRConstraint: NSLayoutConstraint?
-    
+
+    private var confideButtonConstraints: [NSLayoutConstraint] = []
+
+    private var addOrCancelButtonConstraints: [NSLayoutConstraint] = []
+
     private var lastNumberOflines = 0
     
     private let mainPanelView: UIView = {
         let view = UIView()
-        // TODO: keyboard for tool duplicate
         view.layoutMargins = UIEdgeInsets(hMargin: (UIDevice.current.isPlusSizePhone ? 20 : 16) - 16, vMargin: 0)
         return view
     }()
@@ -340,19 +353,19 @@ import TTServiceKit
         messageContentVStack.setCompressionResistanceHorizontalLow()
 
         // Wrap vertical stack into a view with rounded corners.
-        vStackRoundingView.backgroundColor = Theme.stickBackgroundColor
+        vStackRoundingView.backgroundColor = Theme.bg2Color
         vStackRoundingView.layer.cornerRadius = 8
         vStackRoundingView.clipsToBounds = true
         
         mainPanelView.addSubview(expandButton)
         expandButton.autoPinEdge(toSuperviewMargin: .left)
         expandButton.autoPinEdge(toSuperviewEdge: .top)
-        expandButton.isHidden = false
-        
+        expandButton.isHidden = true  // Initially hidden, will be shown when text reaches 3+ lines
+
         vStackRoundingView.addSubview(messageContentVStack)
         messageContentVStack.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets.zero, excludingEdge: .right)
+        // Use a lower priority constraint to avoid conflicts when confideButton is repositioned
         msgContentRConstraint = messageContentVStack.autoPinEdge(toSuperviewMargin: .right, withInset: 52)
-        
         setupConfideButtonLayout(showExpand: false)
         
         
@@ -372,11 +385,13 @@ import TTServiceKit
         //
         // + Attachment button: pinned to the bottom left corner.
         mainPanelView.addSubview(addOrCancelButton)
-        addOrCancelButton.autoPinEdge(toSuperviewMargin: .left)
-        addOrCancelButton.autoPinEdge(toSuperviewEdge: .bottom)
+        let leftConstraint = addOrCancelButton.autoPinEdge(toSuperviewMargin: .left)
+        let bottomConstraint = addOrCancelButton.autoPinEdge(toSuperviewEdge: .bottom)
         let isFriend = InputToolbarRelationship.notFriend != relationship
         let addOrCancelButtonSize = isFriend ? CGSize(square: LayoutMetrics.minToolbarItemHeight) : CGSizeMake(12, CGFLOAT_MIN)
-        addOrCancelButton.autoSetDimensions(to: addOrCancelButtonSize)
+        let widthConstraint = addOrCancelButton.autoSetDimension(.width, toSize: addOrCancelButtonSize.width)
+        let heightConstraint = addOrCancelButton.autoSetDimension(.height, toSize: addOrCancelButtonSize.height)
+        addOrCancelButtonConstraints = [leftConstraint, bottomConstraint, widthConstraint, heightConstraint]
 
         // Voice Message | Keyboard | Send: pinned to the bottom right corner.
         mainPanelView.addSubview(rightEdgeControlsView)
@@ -407,9 +422,9 @@ import TTServiceKit
         let backgroundExtension: CGFloat = 500
         let extendedBackgroundView = UIView()
         if UIAccessibility.isReduceTransparencyEnabled {
-            extendedBackgroundView.backgroundColor = Theme.toolbarBackgroundColor
+            extendedBackgroundView.backgroundColor = Theme.bg1Color
         } else {
-            extendedBackgroundView.backgroundColor = Theme.toolbarBackgroundColor.withAlphaComponent(OWSNavigationBar.backgroundBlurMutingFactor)
+            extendedBackgroundView.backgroundColor = Theme.bg1Color.withAlphaComponent(OWSNavigationBar.backgroundBlurMutingFactor)
 
             let blurEffectView = UIVisualEffectView(effect: Theme.barBlurEffect)
             // Alter the visual effect view's tint to match our background color
@@ -429,13 +444,12 @@ import TTServiceKit
         extendedBackgroundView.autoPinEdge(toSuperviewEdge: .top)
         extendedBackgroundView.autoPinEdge(toSuperviewEdge: .bottom, withInset: -backgroundExtension)
 
-        //
-        topSepLine.backgroundColor = .confidential == inputToolbarState ? .ows_themeBlue : Theme.stickBackgroundColor
+        topSepLine.backgroundColor = .confidential == inputToolbarState ? .ows_themeBlue : Theme.bg2Color
         addSubview(topSepLine)
         topSepLine.autoPinEdgesToSuperviewEdges(with: .zero, excludingEdge: .bottom)
         topSepLine.autoSetDimension(.height, toSize: 0.5)
         let bottomSepLine = UIView()
-        bottomSepLine.backgroundColor = Theme.stickBackgroundColor
+        bottomSepLine.backgroundColor = Theme.bg2Color
         addSubview(bottomSepLine)
         bottomSepLine.autoPinEdgesToSuperviewEdges(with: .zero, excludingEdge: .top)
         bottomSepLine.autoSetDimension(.height, toSize: 0.5)
@@ -459,25 +473,31 @@ import TTServiceKit
     }
     
     func setupConfideButtonLayout(showExpand: Bool) {
-                
+        // Remove old constraints first to avoid conflicts
+        NSLayoutConstraint.deactivate(confideButtonConstraints)
+        confideButtonConstraints.removeAll()
+
         confideButton.removeFromSuperview()
-        
         if showExpand {
             mainPanelView.addSubview(confideButton)
-            confideButton.autoAlignAxis(.vertical, toSameAxisOf: rightEdgeControlsView.sendButton)
-            confideButton.autoPinEdge(toSuperviewEdge: .top)
-            confideButton.autoSetDimensions(to: CGSize(width: LayoutMetrics.minTextViewHeight, height: LayoutMetrics.minTextViewHeight))
-            
+            let verticalConstraint = confideButton.autoAlignAxis(.vertical, toSameAxisOf: rightEdgeControlsView.sendButton)
+            let topConstraint = confideButton.autoPinEdge(toSuperviewEdge: .top)
+            let widthConstraint = confideButton.autoSetDimension(.width, toSize: LayoutMetrics.minTextViewHeight)
+            let heightConstraint = confideButton.autoSetDimension(.height, toSize: LayoutMetrics.minTextViewHeight)
+
+            confideButtonConstraints = [verticalConstraint, topConstraint, widthConstraint, heightConstraint]
             msgContentRConstraint?.constant = -6
-            
+
         } else {
             vStackRoundingView.addSubview(confideButton)
-            confideButton.autoPinEdge(toSuperviewEdge: .right)
-            confideButton.autoPinEdge(toSuperviewEdge: .bottom)
-            confideButton.autoSetDimensions(to: CGSize(width: LayoutMetrics.minTextViewHeight, height: LayoutMetrics.minTextViewHeight))
-            
+            let rightConstraint = confideButton.autoPinEdge(toSuperviewEdge: .right)
+            let bottomConstraint = confideButton.autoPinEdge(toSuperviewEdge: .bottom)
+            let widthConstraint = confideButton.autoSetDimension(.width, toSize: LayoutMetrics.minTextViewHeight)
+            let heightConstraint = confideButton.autoSetDimension(.height, toSize: LayoutMetrics.minTextViewHeight)
+
+            confideButtonConstraints = [rightConstraint, bottomConstraint, widthConstraint, heightConstraint]
             msgContentRConstraint?.constant = -28
-            
+
         }
     }
 
@@ -526,7 +546,7 @@ import TTServiceKit
             inputTextView.placeholder = placeholderText
         }
         confideButton.isSelected = isConfidentialMode
-        topSepLine.backgroundColor = isConfidentialMode ? .ows_themeBlue : Theme.stickBackgroundColor
+        topSepLine.backgroundColor = isConfidentialMode ? .ows_themeBlue : Theme.bg2Color
 
         let animator: UIViewPropertyAnimator?
         if isAnimated {
@@ -550,13 +570,19 @@ import TTServiceKit
         addOrCancelButton.setAppearance(addOrCancelButtonAppearance, usingAnimator: animator)
         let isFriend = InputToolbarRelationship.notFriend != relationship
         let addOrCancelButtonSize = isFriend ? CGSize(square: LayoutMetrics.minToolbarItemHeight) : CGSizeMake(12, CGFLOAT_MIN)
-        addOrCancelButton.autoSetDimensions(to: addOrCancelButtonSize)
+
+        // Update size constraints if they exist
+        if addOrCancelButtonConstraints.count >= 4 {
+            addOrCancelButtonConstraints[2].constant = addOrCancelButtonSize.width
+            addOrCancelButtonConstraints[3].constant = addOrCancelButtonSize.height
+        }
         addOrCancelButton.isHidden = !isFriend
 
         // Hide text input field if Voice Message UI is presented or make it visible otherwise.
         // Do not change "isHidden" because that'll cause inputTextView to lose focus.
         let inputTextViewAlpha: CGFloat = rightEdgeControlsState == .voice ? 0 : 1
         let voiceMemoViewAlpha: CGFloat = 1 - inputTextViewAlpha
+
         if let animator {
             animator.addAnimations {
                 self.inputTextView.alpha = inputTextViewAlpha
@@ -565,7 +591,7 @@ import TTServiceKit
             }
         } else {
             inputTextView.alpha = inputTextViewAlpha
-            confideButton.alpha = inputTextViewAlpha
+            self.confideButton.alpha = inputTextViewAlpha
             voiceMemoView.alpha = voiceMemoViewAlpha
         }
         
@@ -621,7 +647,7 @@ import TTServiceKit
     }
 
     @objc func updateFontSizes() {
-        inputTextView.font = .ows_dynamicTypeBody
+        inputTextView.font = .ows_dynamicTypeBodyFont()
     }
 
     // MARK: hold to talk Button
@@ -700,40 +726,34 @@ import TTServiceKit
         private func updateImageColorAndBackground() {
             switch gestureState {
             case .holdToTalk:
-                
                 tipLable.textColor = ConversationStyle.bubbleTextColorIncoming
                 tipLable.text = OWSLocalizedString("INPUTTOOL_VOICE_HOLD_TO_TALK", comment: "")
-                
+
                 waveView.stopAnimation()
                 waveView.isHidden = true
-                
-                backgroundColor = Theme.hairlineColor
-                
+
+                backgroundColor = Theme.lineColor
+
             case .releaseToSend:
-                
                 tipLable.textColor = .white
                 tipLable.text = OWSLocalizedString("INPUTTOOL_VOICE_RELEASE_TO_SEND", comment: "")
-                
+
                 waveView.isHidden = false
                 waveView.setBarColor(color: .white)
                 waveView.startAnimation()
-                
+
                 backgroundColor = .ows_themeBlue
             case .releaseToCancel:
-                
-                tipLable.textColor = Theme.thirdTextAndIconColor
+                tipLable.textColor = Theme.tdisableColor
                 tipLable.text = OWSLocalizedString("INPUTTOOL_VOICE_RELEASE_TO_SEND", comment: "")
-                
+
                 waveView.isHidden = false
-                waveView.setBarColor(color: Theme.thirdTextAndIconColor)
-//                waveView.stopAnimation()
-//                waveView.startAnimation()
-                
-                backgroundColor = Theme.hairlineColor
-                break
+                waveView.setBarColor(color: Theme.tdisableColor)
+
+                backgroundColor = Theme.lineColor
             }
         }
-        
+
         func stopAnimation() {
             waveView.stopAnimation()
         }
@@ -756,13 +776,12 @@ import TTServiceKit
                 guard _state != newValue else { return }
                 _state = newValue
                 configureViewsForState(_state)
-//                invalidateIntrinsicContentSize()
             }
         }
 
         lazy var voiceButton: UIButton = {
             let button = UIButton(type: .system)
-            button.tintColor = Theme.primaryIconColor
+            button.tintColor = Theme.iconColor
             button.accessibilityLabel = OWSLocalizedString(
                 "INPUT_TOOLBAR_VOICE_MEMO_BUTTON_ACCESSIBILITY_LABEL",
                 comment: "accessibility label for the button which switch input mode to voice"
@@ -774,13 +793,13 @@ import TTServiceKit
             button.accessibilityIdentifier = UIView.accessibilityIdentifier(in: self, name: "voiceControlButton")
             button.setImage(UIImage(imageLiteralResourceName: "ic_inputbar_mic"), for: .normal)
             button.autoSetDimensions(to: CGSize(square: LayoutMetrics.minToolbarItemHeight))
-                        
+
             return button
         }()
-        
+
         lazy var keyboardButton: UIButton = {
             let button = UIButton(type: .system)
-            button.tintColor = Theme.primaryIconColor
+            button.tintColor = Theme.iconColor
             button.accessibilityLabel = OWSLocalizedString(
                 "INPUT_TOOLBAR_KEYBOARD_BUTTON_ACCESSIBILITY_LABEL",
                 comment: "accessibility label for the button which shows the regular keyboard instead of sticker picker"
@@ -790,7 +809,7 @@ import TTServiceKit
             button.autoSetDimensions(to: CGSize(square: LayoutMetrics.minToolbarItemHeight))
             return button
         }()
-        
+
         lazy var sendButton: UIButton = {
             let button = UIButton(type: .custom)
             button.accessibilityLabel = MessageStrings.sendButton()
@@ -945,7 +964,7 @@ import TTServiceKit
             switch appearance {
             case .add:
                 iconImageView.alpha = 1
-                iconImageView.tintColor = Theme.primaryIconColor
+                iconImageView.tintColor = Theme.iconColor
                 roundedCornersBackground.alpha = 0
                 roundedCornersBackground.transform = .scale(0.05)
 
@@ -1179,7 +1198,7 @@ import TTServiceKit
         gradientContainerView.autoSetDimension(.height, toSize: voiceMemoBGHeight)
                 
         let cancelLabel = UILabel()
-        cancelLabel.textColor = Theme.primaryTextColor
+        cancelLabel.textColor = Theme.tprimaryColor
         cancelLabel.font = .systemFont(ofSize: 14)
         cancelLabel.text = OWSLocalizedString("Release to Cancel", comment: "")
         cancelLabel.numberOfLines = 1
@@ -1189,9 +1208,9 @@ import TTServiceKit
         let redCircleView = UIButton()
         redCircleView.layer.cornerRadius = voiceMemoCancelBtnHeight / 2
         redCircleView.layer.masksToBounds = true
-        redCircleView.setBackgroundColor(Theme.thirdTextAndIconColor, for: .normal)
+        redCircleView.setBackgroundColor(Theme.tdisableColor, for: .normal)
         redCircleView.setImage((UIImage(named: "inputtoolbar_voice_close")), for: .normal)
-        redCircleView.setBackgroundColor(Theme.redBgroundColor, for: .selected)
+        redCircleView.setBackgroundColor(Theme.errorColor, for: .selected)
         redCircleView.setImage((UIImage(named: "inputtoolbar_voice_close")), for: .selected)
         redCircleView.autoSetDimensions(to: CGSize(square: voiceMemoCancelBtnHeight))
         self.voiceMemoCancleCircle = redCircleView
@@ -1261,21 +1280,21 @@ import TTServiceKit
     // 更新放大圆圈
     private func updateVoiceMemoTipState() {
         AssertIsOnMainThread()
-                
+
         ConversationInputToolbar.makeView {
             self.voiceMemoCancleCircle?.transform = true == self.inCancleRecordCircle ? .scale(1.2) : .identity
-            self.voiceMemoCancleCircle?.isSelected = self.inCancleRecordCircle!
+            self.voiceMemoCancleCircle?.isSelected = self.inCancleRecordCircle ?? false
             self.voiceMemoCancelLabel?.alpha = true == self.inCancleRecordCircle ? 1 : 0
         }
-        
+
         ensureButtonVisibility(withAnimation: true, doLayout: true)
-        
+
         Logger.debug("[keyboard] \(voiceMemoView.gestureState)")
     }
 
     @objc
     private func handleVoiceMemoLongPress(gesture: UILongPressGestureRecognizer) {
-        
+
         switch gesture.state {
         case .possible, .cancelled, .failed:
             voiceMemoRecordingState = .idle
@@ -1284,7 +1303,7 @@ import TTServiceKit
             Logger.debug("[keyboard] gesture state: began.")
             voiceMemoRecordingState = .recording
             voiceMemoGestureStartLocation = gesture.location(in: self)
-            
+
             ImpactHapticFeedback.impactOccurred(style: .light)
             inputToolbarDelegate?.voiceMemoGestureDidStart()
             recordingProcessor.start()
@@ -1294,11 +1313,11 @@ import TTServiceKit
                 owsFailDebug("voiceMemoGestureStartLocation is nil")
                 return
             }
-            
+
             let point = gesture.location(in: voiceMemoCancleCircle)
             inCancleRecordCircle = voiceMemoCancleCircle?.point(inside: point, with: nil)
-            
-            Logger.debug("[keyboard] gesture state: changed, point: \(point), inCircle: \(inCancleRecordCircle!)")
+
+            Logger.debug("[keyboard] gesture state: changed, point: \(point), inCircle: \(inCancleRecordCircle ?? false)")
         case .ended:
             
             switch voiceMemoRecordingState {
@@ -1356,7 +1375,7 @@ import TTServiceKit
     // by making UIViewController a first responder and vending input bar as `inputView`.
     private(set) var isSwitchingKeyboard = false
 
-    private enum KeyboardType {
+    @objc enum KeyboardType: Int {
         case system
         case attachment
     }
@@ -1399,16 +1418,6 @@ import TTServiceKit
         if desiredKeyboardType == keyboardType {
             setDesiredKeyboardType(.system, animated: animated)
         } else {
-            // For switching to anything other than the system keyboard,
-            // make sure this conversation isn't blocked before presenting it.
-//            if inputToolbarDelegate.isBlockedConversation() {
-//                inputToolbarDelegate.showUnblockConversationUI { [weak self] isBlocked in
-//                    guard let self = self, !isBlocked else { return }
-//                    self.toggleKeyboardType(keyboardType, animated: animated)
-//                }
-//                return
-//            }
-
             setDesiredKeyboardType(keyboardType, animated: animated)
         }
 
@@ -1417,7 +1426,7 @@ import TTServiceKit
 
     private func setDesiredKeyboardType(_ keyboardType: KeyboardType, animated: Bool) {
         Logger.debug("keyboardType: \(keyboardType) ")
-        
+
         guard _desiredKeyboardType != keyboardType else { return }
 
         _desiredKeyboardType = keyboardType
@@ -1446,9 +1455,12 @@ import TTServiceKit
 
     private func restoreDesiredKeyboardIfNecessary() {
         AssertIsOnMainThread()
-        if desiredKeyboardType != .system && !desiredFirstResponder.isFirstResponder {
-            desiredFirstResponder.becomeFirstResponder()
-        }
+
+        guard desiredKeyboardType != .system else { return }
+        guard let responder = desiredFirstResponder else { return }
+        guard !responder.isFirstResponder else { return }
+
+        responder.becomeFirstResponder()
     }
 
     private func cacheKeyboardIfNecessary() {
@@ -1473,31 +1485,30 @@ import TTServiceKit
         _ = inputTextView.becomeFirstResponder()
         _ = inputTextView.resignFirstResponder()
 
-        // TODO: keyboard mention
-//        inputTextView.reloadMentionState()
-
         UIView.setAnimationsEnabled(true)
     }
 
     @objc var isInputViewFirstResponder: Bool {
         return inputTextView.isFirstResponder
-        || attachmentKeyboardIfLoaded?.isFirstResponder ?? false
     }
 
     private func ensureFirstResponderState() {
         restoreDesiredKeyboardIfNecessary()
     }
 
-    private var desiredFirstResponder: UIResponder {
+    @objc var desiredFirstResponder: UIResponder? {
         switch desiredKeyboardType {
-        case .system: return inputTextView
-        case .attachment: return attachmentKeyboard
+        case .system:
+            return inputTextView
+        case .attachment:
+            return attachmentKeyboard
         }
     }
 
     @objc func beginEditingMessage() {
-        guard !desiredFirstResponder.isFirstResponder else { return }
-        desiredFirstResponder.becomeFirstResponder()
+        guard let responder = desiredFirstResponder else { return }
+        guard !responder.isFirstResponder else { return }
+        responder.becomeFirstResponder()
     }
 
     @objc func endEditingMessage() {
@@ -1526,16 +1537,9 @@ import TTServiceKit
         guard inputTextView.isFirstResponder || isMeasuringKeyboardHeight else { return }
         let newHeight = keyboardEndFrame.size.height - frame.size.height
         
-//        Logger.debug("[keyboard] EndFrame: \(keyboardEndFrame)")
-//        Logger.debug("[keyboard] toolbar: \(frame)")
-//        Logger.debug("[keyboard] newHeight: \(newHeight)")
-        
         guard newHeight > 0 else { return }
-//        attachmentKeyboard.updateSystemKeyboardHeight(newHeight)
-        if isMeasuringKeyboardHeight {
-            isMeasuringKeyboardHeight = false
-            hasMeasuredKeyboardHeight = true
-        }
+        isMeasuringKeyboardHeight = false
+        hasMeasuredKeyboardHeight = true
     }
     
     @objc func startGroupAt() {
@@ -1611,8 +1615,13 @@ extension ConversationInputToolbar {
 
     @objc
     private func confideButtonPressed() {
+        // Prevent toggling if button should be hidden (for groups with ≥20 members)
+        guard !shouldHideConfidentialButton else {
+            return
+        }
+
         ImpactHapticFeedback.impactOccurred(style: .light)
-        
+
         inputToolbarDelegate?.confideButtonPressed()
     }
     
@@ -1623,10 +1632,8 @@ extension ConversationInputToolbar {
             return
         }
 
-        // TODO: keyboard 移除语音草稿模式
         guard !isShowingVoiceMemoUI else {
             voiceMemoRecordingState = .idle
-
             return
         }
 
@@ -1647,38 +1654,41 @@ extension ConversationInputToolbar {
 
 extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
     public func textViewDidBeginEditing(_ textView: UITextView) {
-        
+        if !isMeasuringKeyboardHeight, let inputToolbarDelegate = inputToolbarDelegate {
+            inputToolbarDelegate.beginInput()
+        }
     }
     
     public func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        //是新增at就触发弹框
+        // Trigger mention popup when @ is typed
         if text == "@" {
             let range = textView.selectedRange
             inputToolbarDelegate?.atIsActive(location: UInt(range.location + 1))
         }
-        
+
         return true
     }
-    
+
     public func textViewWillBeginDragging(_ scrollView: UIScrollView) {
-        
+        // Required by protocol
     }
 
     private func updateHeightWithTextView(_ textView: UITextView) {
-
-
         var maxLines = 4
         if !expandButton.isHidden {
             maxLines = 3
         }
         let currentLines = numberOfLines(in: textView)
         let showExpand = currentLines >= maxLines
+
+        // Update expand button visibility based on line count
         expandButton.isHidden = !showExpand
+
         if lastNumberOflines != currentLines {
             lastNumberOflines = currentLines
             setupConfideButtonLayout(showExpand: showExpand)
         }
-        
+
         DispatchQueue.main.async {
             let contentSize = textView.sizeThatFits(CGSizeMake(textView.width, CGFLOAT_MAX))
 
@@ -1687,9 +1697,9 @@ extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
                 min: LayoutMetrics.minTextViewHeight,
                 max: UIDevice.current.isIPad ? LayoutMetrics.maxIPadTextViewHeight : LayoutMetrics.maxTextViewHeight
             )
-            
+
             self.inputTextView.contentSize = CGSize(width: .zero, height: contentSize.height)
-            
+
             Logger.debug("\(self.logTag) newHeight: \(newHeight)")
 
             guard newHeight != self.textViewHeight else { return }
@@ -1704,7 +1714,6 @@ extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
 
             self.invalidateIntrinsicContentSize()
         }
-        
     }
 
     public func textViewDidChange(_ textView: UITextView) {
@@ -1715,9 +1724,8 @@ extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
 
         updateHeightWithTextView(textView)
         ensureButtonVisibility(withAnimation: true, doLayout: true)
-        
     }
-    
+
     func numberOfLines(in textView: UITextView) -> Int {
         guard textView.font != nil else { return 0 }
         
@@ -1737,23 +1745,41 @@ extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
         return lineCount
     }
 
-    func textViewDidChangeSelection(_ textView: UITextView) { }
+
+    public func textViewShouldBecomeFirstResponder(_ textView: UITextView) -> Bool {
+        if attachmentKeyboardIfLoaded?.isFirstResponder == true {
+            desiredKeyboardType = .system
+            ensureButtonVisibility(withAnimation: true, doLayout: true)
+
+            var observer: NSObjectProtocol?
+            observer = NotificationCenter.default.addObserver(
+                forName: UIResponder.keyboardDidHideNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self = self else { return }
+                if let observer {
+                    NotificationCenter.default.removeObserver(observer)
+                }
+                self.inputTextView.becomeFirstResponder()
+            }
+
+            endEditingMessage()
+            return false
+        }
+        return true
+    }
 
     public func textViewDidBecomeFirstResponder(_ textView: UITextView) {
         setDesiredKeyboardType(.system, animated: true)
     }
 }
 
-
 extension ConversationInputToolbar: AttachmentKeyboardDelegate {
 
     var isGroup: Bool {
         inputToolbarDelegate?.isGroup() ?? false
     }
-
-//    func didSelectRecentPhoto(asset: PHAsset, attachment: SignalAttachment) {
-//        inputToolbarDelegate?.didSelectRecentPhoto(asset: asset, attachment: attachment)
-//    }
 
     func didTapPhotos() {
         inputToolbarDelegate?.photosButtonPressed()
@@ -1766,7 +1792,7 @@ extension ConversationInputToolbar: AttachmentKeyboardDelegate {
     func didTapVoiceCall() {
         inputToolbarDelegate?.voiceCallButtonPressed()
     }
-    
+
     func didTapVideoCall() {
         inputToolbarDelegate?.videoCallButtonPressed()
     }
@@ -1778,16 +1804,15 @@ extension ConversationInputToolbar: AttachmentKeyboardDelegate {
     func didTapContact() {
         inputToolbarDelegate?.contactButtonPressed()
     }
-    
+
     func didTapConfidentialMode() {
         inputToolbarDelegate?.confideButtonPressed()
     }
-    
+
     func didTapMention() {
         inputToolbarDelegate?.mentionButtonPressed()
     }
 }
-
 
 extension ConversationInputToolbar: RecordingLimitProcessorDelegate {
     func recordingLimitProcessorShouldShowCountdown(secondsLeft: Int) {

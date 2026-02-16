@@ -193,8 +193,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)applyTheme {
     
     [self updateTableContents];
-    self.tableView.backgroundColor = Theme.backgroundColor;
-    self.tableView.separatorColor = Theme.cellSeparatorColor;
+    self.tableView.backgroundColor = Theme.bg1Color;
+    self.tableView.separatorColor = Theme.dividerColor;
 }
 
 #pragma mark - Table Contents
@@ -633,8 +633,8 @@ NS_ASSUME_NONNULL_BEGIN
     NSString *prefix = Localized(isGroupSection ? @"MENTIONS_GROUP_MEMBERS_LIST_TITLE" : @"MENTIONS_OTHER_CONTACTS_LIST_TITLE", @"");
     NSString *suffix = Localized(isGroupSection ? @"MENTIONS_GROUP_MEMBERS_LIST_SUBTITLE" : @"MENTIONS_OTHER_CONTACTS_LIST_SUBTITLE", @"");
     
-    NSAttributedString *attributePrefix = [[NSAttributedString alloc] initWithString:prefix attributes:@{NSForegroundColorAttributeName : Theme.primaryTextColor}];
-    NSAttributedString *attributeSuffix = [[NSAttributedString alloc] initWithString:suffix attributes:@{NSForegroundColorAttributeName : Theme.ternaryTextColor}];
+    NSAttributedString *attributePrefix = [[NSAttributedString alloc] initWithString:prefix attributes:@{NSForegroundColorAttributeName : Theme.tprimaryColor}];
+    NSAttributedString *attributeSuffix = [[NSAttributedString alloc] initWithString:suffix attributes:@{NSForegroundColorAttributeName : Theme.tthirdColor}];
     NSMutableAttributedString *mutableAttributeText = [NSMutableAttributedString new];
     [mutableAttributeText appendAttributedString:attributePrefix];
     [mutableAttributeText appendAttributedString:attributeSuffix];
@@ -648,7 +648,7 @@ NS_ASSUME_NONNULL_BEGIN
     if (ChooseMemberPageTypeMention == self.pageType) {
         
         headerView = [UIView new];
-        headerView.backgroundColor = Theme.tableCellBackgroundColor;
+        headerView.backgroundColor = Theme.bg1Color;
         
         UILabel *lbTitle = [UILabel new];
         lbTitle.font = [UIFont systemFontOfSize:13];

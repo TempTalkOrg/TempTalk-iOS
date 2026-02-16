@@ -8,7 +8,7 @@
 #import "UIView+SignalUI.h"
 #import <TTServiceKit/SignalAccount.h>
 #import <TTServiceKit/TSContactThread.h>
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import "Environment.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -50,14 +50,15 @@ NS_ASSUME_NONNULL_BEGIN
 {
     OWSAssertDebug(!self.cellView);
 
-    self.backgroundColor = Theme.bg1Color;
-    self.contentView.backgroundColor = Theme.bg1Color;
+    self.backgroundColor = Theme.bgpagePrimaryColor;
+    self.contentView.backgroundColor = Theme.bgpagePrimaryColor;
+    self.selectionStyle = UITableViewCellSelectionStyleNone;
     self.selectedBackgroundView = ({
         UIView *selectedBackgroundView = [UIView new];
-        selectedBackgroundView.backgroundColor = Theme.bg1Color;
+        selectedBackgroundView.backgroundColor = Theme.bgpagePrimaryColor;
         selectedBackgroundView;
     });
-    
+
     self.preservesSuperviewLayoutMargins = YES;
     self.contentView.preservesSuperviewLayoutMargins = YES;
 
@@ -138,10 +139,11 @@ NS_ASSUME_NONNULL_BEGIN
     [super prepareForReuse];
 
     [self.cellView prepareForReuse];
-    self.backgroundColor = Theme.bg1Color;
-    self.contentView.backgroundColor = Theme.bg1Color;
+    self.backgroundColor = Theme.bgpagePrimaryColor;
+    self.contentView.backgroundColor = Theme.bgpagePrimaryColor;
     self.accessoryType = UITableViewCellAccessoryNone;
     self.selected = NO;
+    self.selectionStatus = ContactCellSelectionStatusNone;
 }
 
 - (BOOL)hasAccessoryText

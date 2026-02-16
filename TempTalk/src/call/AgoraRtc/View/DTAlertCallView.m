@@ -116,7 +116,7 @@
                 detail = content;
             }
         } else {
-            detail = incomingMessage.body ?: @"[critical alert]";
+            detail = incomingMessage.body ?: @"[Critical Alert]";
         }
         self.subTitleLabel.text = detail;
         

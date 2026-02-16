@@ -27,24 +27,18 @@ public struct DTCircleLoadingView: View {
     
     public var body: some View {
         ZStack {
-            if connectState == .disconnected {
-                Image("ic_rtc_warning")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            } else {
-                CircleArc()
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                    .rotationEffect(.degrees(isAnimating ? 360 : 0))
-                    .animation(connectState == .connecting ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isAnimating)
-                    .onAppear {
-                        if connectState == .connecting {
-                            isAnimating = true
-                        }
+            CircleArc()
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                .animation(connectState == .connecting ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isAnimating)
+                .onAppear {
+                    if connectState == .connecting {
+                        isAnimating = true
                     }
-                    .onChange(of: connectState) { newState in
-                        isAnimating = (newState == .connecting)
-                    }
-            }
+                }
+                .onChange(of: connectState) { newState in
+                    isAnimating = (newState == .connecting)
+                }
         }
         .frame(width: 12, height: 12) // 可根据需要调整
     }

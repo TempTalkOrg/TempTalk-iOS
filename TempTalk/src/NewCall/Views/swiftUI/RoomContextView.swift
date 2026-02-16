@@ -6,9 +6,9 @@ import SwiftUI
 struct RoomContextView: View {
     @EnvironmentObject var appCtx: LiveKitContext
     @EnvironmentObject var roomCtx: RoomContext
-    
-    @StateObject private var currentCall = DTMeetingManager.shared.currentCall
-    @StateObject private var dataManager = RoomDataManager.shared
+
+    @ObservedObject private var currentCall = DTMeetingManager.shared.currentCall
+    @ObservedObject private var dataManager = RoomDataManager.shared
     
     @State private var isRightItemHidden: Bool = true
     @State private var isGroupMembers: Bool = false
@@ -18,6 +18,10 @@ struct RoomContextView: View {
     @State private var delayTask: Task<Void, Never>?
     
     var body: some View {
+        let safeBottom = bottomSafeArea()
+        let toolbarHeight: CGFloat = 60
+        let overlayBottomInset = safeBottom + toolbarHeight
+
         ZStack {
             // 背景色
             backgroundView
@@ -27,8 +31,9 @@ struct RoomContextView: View {
                 .environmentObject(appCtx)
                 .environmentObject(roomCtx)
 
-            // 弹幕和控制层
+            // 弹幕和控制层（放在底部工具栏之上）
             BulletOverlayView(
+                bottomInset: overlayBottomInset,
                 showQuickPanel: $showQuickPanel,
                 hasRaiseHand: $dataManager.hasRaiseHands
             )
@@ -61,8 +66,7 @@ struct RoomContextView: View {
             .environmentObject(roomCtx)
             .environmentObject(roomCtx.room)
             .frame(maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, 60)
-            .ignoresSafeArea(edges: .bottom)
+            .padding(.bottom, safeBottom > 0 ? 24 : 20)
         }
         .onAppear {
             delayTask = Task {
@@ -111,6 +115,29 @@ struct RoomContextView: View {
         }
         return false
     }
+
+    private func bottomSafeArea() -> CGFloat {
+        // 优先使用通话窗口的 safeAreaInsets，更稳定
+        let callWindow = OWSWindowManager.shared().callViewWindow
+        let bottom = callWindow.safeAreaInsets.bottom
+
+        // 如果通话窗口的值有效，使用它
+        if bottom.isFinite && bottom > 0 {
+            let maxBottomInset: CGFloat = 34 // avoid pathological values
+            return min(bottom, maxBottomInset)
+        }
+
+        // 降级方案：从 windowScene 获取
+        guard
+            let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+            let window = windowScene.windows.first(where: { $0.isKeyWindow })
+        else {
+            return 0
+        }
+        let windowBottom = window.safeAreaInsets.bottom
+        guard windowBottom.isFinite else { return 0 }
+        return max(0, min(windowBottom, 34))
+    }
 }
 
 struct CallContentView: View {
@@ -143,12 +170,16 @@ struct CallContentView: View {
 
 struct CallerWaitingView: View {
     @EnvironmentObject var roomCtx: RoomContext
-    @StateObject var currentCall = DTMeetingManager.shared.currentCall
-    
+    @ObservedObject var currentCall = DTMeetingManager.shared.currentCall
+
     // 15秒超时逻辑
     @State private var callingStartTime: Date?
     @State private var callingTimer: Timer?
     @State private var showTimeoutAlert: Bool = false
+
+    // Tips 气泡相关
+    @State private var showTipsBubble = false
+    @State private var tipsButtonFrame: CGRect = .zero
     
     func otherRecipientId() -> String {
         var recipientId = currentCall.conversationId ?? ""
@@ -185,26 +216,62 @@ struct CallerWaitingView: View {
                 }
             
                 if showTimeoutAlert {
-                    Button(action: sendTimeoutMessage) {
-                        HStack(spacing: 8) {
-                            Image("call_calling_critical")
-                            Text(Localized("MEETING_CRITICAL_ALERT_TIPS"))
+                    HStack(spacing: 8) {
+                        Image("call_calling_critical")
+
+                        HStack(spacing: 0) {
+                            Text(Localized("MEETING_CRITICAL_ALERT_NO_ANSWER"))
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundColor(.white)
+
+                            Button(action: sendTimeoutMessage) {
+                                Text(Localized("MEETING_CRITICAL_ALERT_SEND"))
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundColor(Color(hex: 0x82C1FC))
+                            }
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color(rgbHex: 0x2B3139))
-                        .cornerRadius(8)
-                        .shadow(radius: 2)
+
+                        // Tips 按钮（在同一个背景内）
+                        Button(action: {
+                            showTipsBubble.toggle()
+                        }) {
+                            Image("critical_alert_confirm_tips")
+                                .resizable()
+                                .frame(width: 14, height: 14)
+                        }
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: CallerWaitingTipsButtonFramePreferenceKey.self,
+                                    value: geo.frame(in: .global)
+                                )
+                            }
+                        )
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color(rgbHex: 0x2B3139))
+                    .cornerRadius(8)
+                    .shadow(radius: 2)
                     .padding(.top, 45)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .animation(.easeInOut(duration: 0.3), value: showTimeoutAlert)
                 }
+
+                // Tips 气泡（只在超时提示显示时才显示）
+                if showTipsBubble && showTimeoutAlert {
+                    CallerWaitingTipsBubbleView(
+                        text: Localized("CRITICAL_ALERT_CONFIRM_TIPS_MESSAGE"),
+                        buttonFrame: tipsButtonFrame
+                    )
+                    .transition(.opacity)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onPreferenceChange(CallerWaitingTipsButtonFramePreferenceKey.self) { frame in
+            tipsButtonFrame = frame
+        }
         .onAppear {
             startCallingTimerIfNeeded()
         }
@@ -244,38 +311,52 @@ struct CallerWaitingView: View {
         callingTimer = nil
         callingStartTime = nil
         showTimeoutAlert = false
+        showTipsBubble = false
     }
     
     private func sendTimeoutMessage() {
         Task {
-            await DTMeetingManager.shared.sendCriticalAlertWithBarrage(Localized("MEETING_CRITICAL_ALERT_DANMU"))
+            await DTMeetingManager.shared.sendCriticalAlert(message: Localized("MEETING_CRITICAL_ALERT_DANMU"))
         }
-        // 关闭提示
+        // 关闭提示和气泡
         showTimeoutAlert = false
+        showTipsBubble = false
     }
 }
 
 struct BulletOverlayView: View {
+    let bottomInset: CGFloat
     @Binding var showQuickPanel: Bool
     @Binding var hasRaiseHand: Bool
 
     var body: some View {
-        let quickMessagePanelWidth: CGFloat = 270
+        let paddingLeading: CGFloat = 30
+        let paddingOverlayLeading: CGFloat = 45
+        let controlViewHeight: CGFloat = 36
+        let spacing: CGFloat = 10
+        let controlStackHeight = controlViewHeight + (hasRaiseHand ? controlViewHeight + spacing : 0)
+        let quickPanelBottom = bottomInset + controlStackHeight + spacing
+        let bulletBottom = quickPanelBottom
 
-        ZStack {
-            
-            let paddingBottom: CGFloat = hasRaiseHand ? 90 + 36 + 10 : 90
-            let paddingLeading: CGFloat = 30
-            let paddingOverlayLeading: CGFloat = 45
-            let controlViewHeight: CGFloat = 36
-            let paddingMargin: CGFloat = 10
-            
+        let currentScreenSize = UIScreen.main.bounds.size
+        let isLandscape = currentScreenSize.width > currentScreenSize.height
+        let bulletChatWidth = isLandscape ? currentScreenSize.width * 0.5 : min(currentScreenSize.width, currentScreenSize.height)
+
+        return ZStack {
             DTBulletChatViewRepresentable()
-                .frame(width: min(screenWidth, screenHeight))
+                .frame(width: bulletChatWidth)
                 .padding(.leading, paddingLeading)
-                .padding(.bottom, paddingBottom + paddingMargin * 0.5 + controlViewHeight)
+                .padding(.bottom, bulletBottom - 5)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .allowsHitTesting(false)
-            
+
+            // 添加气泡消息视图
+            DTEmojiFlyingViewRepresentable(containerSize: CGSize(width: bulletChatWidth, height: 0))
+                .frame(width: bulletChatWidth)
+                .padding(.leading, paddingLeading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .allowsHitTesting(false)
+
             if showQuickPanel {
                 Color.black.opacity(0.001)
                     .ignoresSafeArea()
@@ -291,17 +372,20 @@ struct BulletOverlayView: View {
             }
             
             if showQuickPanel {
+                let config = DTMeetingManager.shared.bubbleMessageConfig()
                 QuickMessagePanelUIKitWrapper(
-                    messages: DTMeetingManager.shared.sampleBulletRtmCalls()
+                    emojiPresets: config.emojiPresets,
+                    textPresets: config.textPresets
                 ) { message in
                     Task {
-                        await DTMeetingManager.shared.sendDanmu(message)
+                        // 发送气泡类型消息
+                        await DTMeetingManager.shared.sendDanmu(message, type: .bubble)
                         showQuickPanel = false
                     }
                 }
-                .frame(width: quickMessagePanelWidth, height: 270)
+                .frame(width: 300, height: 170)
                 .padding(.leading, paddingOverlayLeading)
-                .padding(.bottom, paddingBottom + paddingMargin + controlViewHeight)
+                .padding(.bottom, quickPanelBottom)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .allowsHitTesting(true)
                 .onTapGesture {
@@ -318,15 +402,16 @@ struct BulletOverlayView: View {
                     .frame(height: controlViewHeight)
                     .frame(width: DTMeetingManager.shared.calculateRaiseHandsWidth())
                     .padding(.leading, paddingOverlayLeading)
-                    .padding(.bottom, paddingBottom)
+                    .padding(.bottom, bottomInset + controlViewHeight + spacing)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     .allowsHitTesting(hasRaiseHand)
             }
 
             DTBulletChatControlViewRepresentable(showQuickPanel: $showQuickPanel)
-                .frame(width: 172, height: controlViewHeight)
+                .frame(height: controlViewHeight)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.leading, paddingOverlayLeading)
-                .padding(.bottom, 90)
+                .padding(.bottom, bottomInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .allowsHitTesting(true)
         }
@@ -368,5 +453,85 @@ extension Color {
         let green = Double((rgbHex >> 8) & 0xFF) / 255.0
         let blue = Double(rgbHex & 0xFF) / 255.0
         self.init(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+    }
+}
+
+// MARK: - Caller Waiting Tips Bubble View
+
+struct CallerWaitingTipsBubbleView: View {
+    let text: String
+    let buttonFrame: CGRect
+
+    var body: some View {
+        let screenWidth = UIScreen.main.bounds.width
+        let bubbleMaxWidth: CGFloat = 220
+        let bubblePadding: CGFloat = 20
+
+        // 计算气泡的 X 位置，确保不超出屏幕（向左偏移）
+        let bubbleX: CGFloat = {
+            let idealX = buttonFrame.midX - 60  // 向左偏移，让箭头在右侧
+            let halfWidth = bubbleMaxWidth / 2
+
+            if idealX - halfWidth < bubblePadding {
+                // 左边界限制
+                return bubblePadding + halfWidth
+            } else if idealX + halfWidth > screenWidth - bubblePadding {
+                // 右边界限制
+                return screenWidth - bubblePadding - halfWidth
+            } else {
+                return idealX
+            }
+        }()
+
+        // 计算箭头相对于气泡的偏移量（箭头指向按钮中心）
+        let arrowOffset = buttonFrame.midX - bubbleX
+
+        VStack(spacing: -2) {
+            // 箭头（指向上方的按钮）
+            HStack(spacing: 0) {
+                Spacer()
+                    .frame(width: max(0, bubbleMaxWidth / 2 + arrowOffset - 7))
+
+                CallerWaitingTriangleShape()
+                    .fill(Color(hex: 0x5E6673))
+                    .frame(width: 14, height: 8)
+
+                Spacer()
+            }
+            .frame(width: bubbleMaxWidth)
+
+            // 气泡内容
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(width: bubbleMaxWidth, alignment: .leading)
+                .background(Color(hex: 0x5E6673))
+                .cornerRadius(8)
+        }
+        .position(
+            x: bubbleX + 15,
+            y: buttonFrame.maxY - 8
+        )
+    }
+}
+
+struct CallerWaitingTriangleShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct CallerWaitingTipsButtonFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
     }
 }

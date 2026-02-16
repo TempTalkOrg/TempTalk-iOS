@@ -15,7 +15,7 @@
 #import <TTServiceKit/DTParamsBaseUtils.h>
 
 extern NSString *const kGlobalNotificationInfoPublicKey;
-@interface DTScopeOfNoticeController ()
+@interface DTScopeOfNoticeController ()<OWSNavigationChildController>
 @property(nonatomic,strong) Contact *contact;
 @property(nonatomic,strong) NSNumber *globalNotification;
 @property(nonatomic,assign) DTGlobalNotificationType type;
@@ -27,6 +27,8 @@ extern NSString *const kGlobalNotificationInfoPublicKey;
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(signalAccountsDidChange:)
                                                  name:OWSContactsManagerSignalAccountsDidChangeNotification
@@ -175,7 +177,7 @@ extern NSString *const kGlobalNotificationInfoPublicKey;
 
 - (UITableViewCell *)custonTipCell {
     UITableViewCell *cell = [OWSTableItem newCell];
-    cell.backgroundColor = Theme.tableCellBackgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
     
     UILabel *detailTextLabel = [UILabel new];
     detailTextLabel.font = [UIFont ows_regularFontWithSize:14.f];
@@ -235,6 +237,34 @@ extern NSString *const kGlobalNotificationInfoPublicKey;
         default:
             break;
     }
+}
+
+- (void)applyTheme {
+    [super applyTheme];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
+}
+
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return false;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpageSecondaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
 }
 
 @end

@@ -13,8 +13,8 @@ class DTSearchStateView : UIView {
     private var searchState :DTSearchViewState?
     private lazy var tipLabel :UILabel = {
         tipLabel = UILabel()
-        tipLabel.font = UIFont.systemFont(ofSize: 18)
-        tipLabel.textColor = Theme.primaryTextColor
+        tipLabel.dt_setFont(.dt_headline)  // 18pt 映射到 headline
+        tipLabel.textColor = Theme.tprimaryColor
         return tipLabel
     }()
     

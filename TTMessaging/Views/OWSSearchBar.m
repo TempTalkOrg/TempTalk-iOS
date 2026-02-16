@@ -3,7 +3,7 @@
 //
 
 #import "OWSSearchBar.h"
-#import "Theme.h"
+#import <TTMessaging/TTMessaging-Swift.h>
 #import "UIView+SignalUI.h"
 #import <TTMessaging/TTMessaging-Swift.h>
 
@@ -26,7 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
         [self applyTheme];
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(themeDidChange:)
-                                                     name:ThemeDidChangeNotification
+                                                     name:NSNotification.ThemeDidChange
                                                    object:nil];
 
     }
@@ -42,7 +42,7 @@ NS_ASSUME_NONNULL_BEGIN
         [self applyTheme];
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(themeDidChange:)
-                                                     name:ThemeDidChangeNotification
+                                                     name:NSNotification.ThemeDidChange
                                                    object:nil];
     }
     return self;
@@ -56,7 +56,7 @@ NS_ASSUME_NONNULL_BEGIN
         [self applyTheme];
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(themeDidChange:)
-                                                     name:ThemeDidChangeNotification
+                                                     name:NSNotification.ThemeDidChange
                                                    object:nil];
 
     }
@@ -71,7 +71,7 @@ NS_ASSUME_NONNULL_BEGIN
         [self applyTheme];
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(themeDidChange:)
-                                                     name:ThemeDidChangeNotification
+                                                     name:NSNotification.ThemeDidChange
                                                    object:nil];
     }
 
@@ -98,7 +98,7 @@ NS_ASSUME_NONNULL_BEGIN
         if ([view isKindOfClass:NSClassFromString(@"UIButtonLabel")]) {
             UILabel *lbCancel = (UILabel *)view;
             if ([lbCancel.text isEqualToString:@"Cancel"] || [lbCancel.text isEqualToString:@"取消"]) {
-                lbCancel.textColor = Theme.alertCancelColor;
+                lbCancel.textColor = Theme.tprimaryColor;
                 lbCancel.font = [UIFont systemFontOfSize:15];
             }
         }
@@ -114,7 +114,7 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 - (void)setAttributePlaceholder:(NSString *)placeholder API_AVAILABLE(ios(13.0)) {
-    self.searchTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:placeholder attributes:@{NSFontAttributeName : [UIFont systemFontOfSize:14], NSForegroundColorAttributeName : Theme.thirdTextAndIconColor}];
+    self.searchTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:placeholder attributes:@{NSFontAttributeName : [UIFont systemFontOfSize:14], NSForegroundColorAttributeName : Theme.tdisableColor}];
 }
 
 - (void)dealloc {
@@ -133,14 +133,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)applyTheme
 {
-    self.backgroundColor = Theme.backgroundColor;
-    self.barTintColor = Theme.primaryTextColor;
-    self.textField.tintColor = Theme.primaryTextColor;
-    self.textField.textColor = Theme.primaryTextColor;
+    self.backgroundColor = Theme.bgpagePrimaryColor;
+    self.barTintColor = Theme.tprimaryColor;
+    self.textField.tintColor = Theme.tprimaryColor;
+    self.textField.textColor = Theme.tprimaryColor;
     if (self.customPlaceholder) {
         [self setAttributePlaceholder:self.customPlaceholder];
     }
-    UIImage *backgroundImage = [UIImage imageWithColor:Theme.stickBackgroundColor size:CGSizeMake(kScreenWidth - 70, 36)];
+    UIImage *backgroundImage = [UIImage imageWithColor:Theme.bg5Color size:CGSizeMake(kScreenWidth - 70, 36)];
     [self setSearchFieldBackgroundImage:backgroundImage forState:UIControlStateNormal];
 }
 
@@ -148,10 +148,10 @@ NS_ASSUME_NONNULL_BEGIN
 {
     OWSAssertIsOnMainThread();
 
-//    UIColor *foregroundColor = Theme.secondaryTextAndIconColor;
-//    searchBar.tintColor = Theme.secondaryTextAndIconColor;
+//    UIColor *foregroundColor = Theme.tsecondaryColor;
+//    searchBar.tintColor = Theme.tsecondaryColor;
     searchBar.barStyle = Theme.barStyle;
-//    searchBar.barTintColor = Theme.backgroundColor;
+//    searchBar.barTintColor = Theme.bg1Color;
 
     // Hide searchBar border.
     // Alternatively we could hide the border by using `UISearchBarStyleMinimal`, but that causes an issue when toggling
@@ -177,7 +177,7 @@ NS_ASSUME_NONNULL_BEGIN
         [searchBar setImage:nil forSearchBarIcon:UISearchBarIconSearch state:UIControlStateNormal];
     }
 
-    UIColor *searchFieldBackgroundColor = Theme.searchFieldBackgroundColor;
+    UIColor *searchFieldBackgroundColor = Theme.bg2Color;
     if (style == OWSSearchBarStyle_SecondaryBar) {
         searchFieldBackgroundColor = Theme.isDarkThemeEnabled ? UIColor.ows_gray95Color : UIColor.ows_gray05Color;
     } else if ([searchBar isKindOfClass:[OWSSearchBar class]]
@@ -189,7 +189,7 @@ NS_ASSUME_NONNULL_BEGIN
         if ([view isKindOfClass:[UITextField class]]) {
             UITextField *textField = (UITextField *)view;
 //            textField.backgroundColor = searchFieldBackgroundColor;
-//            textField.textColor = Theme.primaryTextColor;
+//            textField.textColor = Theme.tprimaryColor;
 //            textField.keyboardAppearance = Theme.keyboardAppearance;
             [textField autoPinEdgesToSuperviewMargins];
         }

@@ -37,12 +37,13 @@ extension ConversationViewController: ConversationViewModelDelegate {
     }
     
     func conversationViewModelDidLoadInitialMessages(completion: @escaping ((Bool) -> Void)) {
+        Logger.info("[Conversation] handle initial messages, threadId:\(thread.uniqueId)")
+        
         guard isViewVisible else {
-            Logger.info("[Conversation] queue refresh ui for initial messages until view visible, threadId:\(thread.uniqueId)")
-            storePendingInitialLoadCompletion(completion)
+            Logger.info("[Conversation] cancel refresh ui for initial messages, isViewVisible = false, threadId:\(thread.uniqueId)")
+            completion(false)
             return
         }
-        Logger.info("[Conversation] handle initial messages, threadId:\(thread.uniqueId)")
         performInitialMessagesRefresh(completion: completion)
     }
     
@@ -77,16 +78,22 @@ extension ConversationViewController: ConversationViewModelDelegate {
         AssertIsOnMainThread()
         
         // FIX: https://developer.apple.com/forums/thread/728797
-        if !isViewLoaded {
-            Logger.info("[Conversation] ignored (isViewLoaded=\(isViewLoaded), shouldObserve=\(shouldObserveDBModifications)) updateType=\(conversationUpdate.conversationUpdateType) threadId:\(thread.uniqueId)")
+        if !isViewLoaded || !shouldObserveDBModifications {
             // It's safe to ignore updates before the view loads;
             // viewWillAppear will call resetContentAndLayout.
             completion?(false)
-            return
             
-        } else if !shouldObserveDBModifications && CurrentAppContext().isInBackground() {
-            Logger.info("[Conversation] ignore refresh when isViewDidLoaded:\(isViewLoaded), shouldObserveDBModifications:\(shouldObserveDBModifications) threadId:\(thread.uniqueId)")
-            isNeedReloadAfterAppEnterForeground = true
+            // 3.1.8 当应用进入后台，websocket 还未断开时，仍然能接收到 database change，
+            // 但此时 shouldObserveDBModifications = false，无法触发刷新，而 app 返回前台后，若没有新的数据，也无法刷新
+            // 为了解决上述问题，当应用进入后台且接收到 database change 时，记录下标志位 isNeedReloadAfterAppEnterForeground，
+            // 在应用返回前台时进行刷新
+            if CurrentAppContext().isInBackground() {
+                Logger.info("[Conversation] ignore refresh when app in background, threadId:\(thread.uniqueId)")
+                isNeedReloadAfterAppEnterForeground = true
+            } else {
+                Logger.info("[Conversation] ignore refresh when isViewDidLoaded:\(isViewLoaded), shouldObserveDBModifications:\(shouldObserveDBModifications) threadId:\(thread.uniqueId)")
+            }
+            
             return
         }
         
@@ -146,24 +153,19 @@ extension ConversationViewController: ConversationViewModelDelegate {
             // nothing visible yet
             return
         }
-        
+
         guard let viewItem = viewItem(for: indexPath.row) else {
             owsFailDebug("viewItem was unexpectedly nil")
             return
         }
-        
-        var cell: UICollectionViewCell?
-        if #available(iOS 18, *) {
-            cell = collectionView.cellForItem(at: indexPath)
-        } else {
-            cell = viewItem.dequeueCell(for: collectionView, indexPath: indexPath)
-        }
-        guard let cell else {
-            owsFailDebug("cell was unexpectedly nil")
+
+        // 使用 layoutAttributesForItem 获取准确的 frame
+        guard let layoutAttributes = collectionView.layoutAttributesForItem(at: indexPath) else {
+            owsFailDebug("layoutAttributes was unexpectedly nil")
             return
         }
-        
-        let frame = cell.frame
+
+        let frame = layoutAttributes.frame
         let contentOffset = collectionView.contentOffset
         scrollStateBeforeLoadingMore = ConversationScrollState(
             referenceViewItem: viewItem,
@@ -174,47 +176,46 @@ extension ConversationViewController: ConversationViewModelDelegate {
     
     public func conversationViewModelDidLoadMoreItems() {
         AssertIsOnMainThread()
-        
         self.layout.prepare()
-        
+
         guard let scrollState = self.scrollStateBeforeLoadingMore else {
             owsFailDebug("scrollState was unexpectedly nil")
+            isLoadingOlderItems = false
+            isLoadingNewerItems = false
             return
         }
-        
+
         guard let newIndexPath = conversationViewModel.indexPath(for: scrollState.referenceViewItem) else {
             owsFailDebug("newIndexPath was unexpectedly nil")
+            isLoadingOlderItems = false
+            isLoadingNewerItems = false
             return
         }
-        
-        var cell: UICollectionViewCell?
-        if #available(iOS 18, *) {
-            cell = collectionView.cellForItem(at: newIndexPath)
-        } else {
-            cell = scrollState.referenceViewItem.dequeueCell(for: collectionView, indexPath: newIndexPath)
-        }
-        guard let cell else {
-            owsFailDebug("cell was unexpectedly nil")
+
+        // 强制布局更新，确保 cell 的位置是正确的
+        collectionView.layoutIfNeeded()
+
+        // 使用 layoutAttributesForItem 而不是 cell.frame，因为它总是返回正确的布局信息
+        guard let layoutAttributes = collectionView.layoutAttributesForItem(at: newIndexPath) else {
+            owsFailDebug("layoutAttributes was unexpectedly nil")
             return
         }
-        
-        let newFrame = cell.frame
+
+        let newFrame = layoutAttributes.frame
         // distance from top of cell to top of content pane.
         let previousDistance = scrollState.referenceFrame.origin.y - scrollState.contentOffset.y
         let newDistance = newFrame.origin.y - previousDistance
-        
+
         let newContentOffset = CGPointMake(0, newDistance)
         collectionView.contentOffset = newContentOffset
+        isLoadingOlderItems = false
+        isLoadingNewerItems = false
     }
     
     public func conversationViewModelDidUpdateLoadMoreStatus() {
         AssertIsOnMainThread()
         
         let _ = updateShowLoadMoreHeaders()
-    }
-    
-    public func conversationViewModelUpdatePin() {
-        resetPinnedMappings(animated: true)
     }
     
     // Called after the view model recovers from a severe error
@@ -275,7 +276,11 @@ extension ConversationViewController: ConversationViewModelDelegate {
             self.updateLastVisibleSortIdWithSneakyAsyncTransaction()
             
             let lastVisibleIndexPath = self.lastVisibleIndexPath
-            if !updateContext.ignoreScrollToDefaultPosition, (scrollToBottom || lastVisibleIndexPath == nil) {
+
+            // Don't auto-scroll to bottom if there's a focus message from search
+            let hasFocusMessageFromSearch = conversationViewModel.focusMessageIdOnOpen != nil
+
+            if !updateContext.ignoreScrollToDefaultPosition, (scrollToBottom || lastVisibleIndexPath == nil), !hasFocusMessageFromSearch {
                 self.scrollToBottom(animated: false)
             }
             
@@ -300,51 +305,20 @@ extension ConversationViewController {
                 if isFinished {
                     self.updateLastVisibleSortId()
                 }
-                
+
                 completion(isFinished)
-                
+
                 self.updateContentInsets(animated: false, forceScrollToDefaultPosition: true)
-                self.conversationViewModel.focusMessageIdOnOpen = nil
+                // Don't clear focusMessageIdOnOpen here - it needs to persist across viewState recreations
+                // until the user manually scrolls. This prevents the focus from being lost when
+                // reloadViewItems() creates a new ConversationViewState.
+                // self.conversationViewModel.focusMessageIdOnOpen = nil  // ← Commented out
                 
                 if self.viewHasEverAppeared {
                     self.markVisibleMessagesAsRead()
                 }
             }
         }
-    }
-    
-    private func storePendingInitialLoadCompletion(_ completion: @escaping (Bool) -> Void) {
-        if let staleCompletion = consumePendingInitialLoadCompletion() {
-            staleCompletion(false)
-        }
-        Logger.info("[Conversation] storePendingInitialLoadCompletion messages, threadId:\(thread.uniqueId)")
-        viewState.pendingInitialLoadCompletion = completion
-        viewState.hasPendingInitialLoad = true
-    }
-    
-    private func consumePendingInitialLoadCompletion() -> ((Bool) -> Void)? {
-        let completion = viewState.pendingInitialLoadCompletion
-        viewState.pendingInitialLoadCompletion = nil
-        viewState.hasPendingInitialLoad = false
-        Logger.info("[Conversation] consumePendingInitialLoadCompletion messages, threadId:\(thread.uniqueId)")
-        return completion
-    }
-    
-    func processPendingInitialMessagesIfNeeded() {
-        guard isViewVisible,
-              viewState.hasPendingInitialLoad,
-              let completion = consumePendingInitialLoadCompletion() else {
-            Logger.error("[Conversation] resume pending initial messages refresh,isViewVisible=\(isViewVisible) hasPendingInitialLoad = \(viewState.hasPendingInitialLoad) threadId:\(thread.uniqueId)")
-            return
-        }
-        Logger.info("[Conversation] resume pending initial messages refresh, threadId:\(thread.uniqueId)")
-        performInitialMessagesRefresh(completion: completion)
-    }
-    
-    func cancelPendingInitialMessagesIfNeeded() {
-        guard let completion = consumePendingInitialLoadCompletion() else { return }
-        Logger.info("[Conversation] cancel pending initial messages refresh, threadId:\(thread.uniqueId)")
-        completion(false)
     }
 }
 

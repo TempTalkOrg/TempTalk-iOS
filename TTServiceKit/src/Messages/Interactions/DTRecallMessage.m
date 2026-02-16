@@ -13,16 +13,10 @@
 @implementation DTRecallMessage
 
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
-                           source:(DTRealSourceEntity *)source
-                             body:(NSString *)body
-                        atPersons:(NSString *)atPersons
-                         mentions:(nullable NSArray <DTMention *> *)mentions {
+                           source:(DTRealSourceEntity *)source {
     if(self = [super init]){
         self.timestamp = timestamp;
         self.source = source;
-        self.body = body;
-        self.atPersons = atPersons;
-        _mentions = mentions;
     }
     return self;
 }
@@ -65,12 +59,6 @@
     return [NSString stringWithFormat:@"<source.timestamp:%lld, source.sourceDevice:%u, source.source:%@>", self.source.timestamp, self.source.sourceDevice, self.source.source];
 }
 
-- (void)clearOriginContent {
-    self.body = @"";
-    self.atPersons = @"";
-    _mentions = @[];
-}
-
 - (BOOL)isValidRecallMessageWithSource:(NSString *)source {
     if (!DTParamsUtils.validateString(source) ||
         !DTParamsUtils.validateString(self.source.source) ||
@@ -79,5 +67,23 @@
     }
     return true;
 }
+
+- (void)insertRecordWithSource:(NSString *)source
+                  sourceDevice:(uint32_t)sourceDevice
+                     timestamp:(uint64_t)timestamp
+                   transaction:(SDSAnyWriteTransaction *)transaction {
+    if([self checkIntegrity]){
+        DTRealSourceEntity *realSource = self.source;
+        OWSRecall *recall = [[OWSRecall alloc] initWithTimestamp:timestamp
+                                                    sourceDevice:sourceDevice
+                                                          source:source
+                                               originalTimestamp:realSource.timestamp
+                                            originalSourceDevice:realSource.sourceDevice
+                                                  originalSource:realSource.source
+                                                        editable:NO];
+        [recall anyInsertWithTransaction:transaction];
+    }
+}
+
 
 @end

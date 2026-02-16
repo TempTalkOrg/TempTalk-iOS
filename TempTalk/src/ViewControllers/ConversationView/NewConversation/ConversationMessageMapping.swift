@@ -216,17 +216,21 @@ public class ConversationMessageMapping: NSObject {
             Logger.info("ignoring small fetch request: \(unfetchedSet.count) thread=\(thread.uniqueId)")
             return ConversationMessageMappingDiff(addedItemIds: [], removedItemIds: [], updatedItemIds: [])
         }
-        
+
         let oldItemIds = Set(self.loadedUniqueIds)
-        
-        let nsRange: NSRange = NSRange(location: unfetchedSet.min()!, length: unfetchedSet.count)
+
+        guard let minUnfetched = unfetchedSet.min() else {
+            Logger.warn("unfetchedSet is empty")
+            return ConversationMessageMappingDiff(addedItemIds: [], removedItemIds: [], updatedItemIds: [])
+        }
+        let nsRange: NSRange = NSRange(location: minUnfetched, length: unfetchedSet.count)
         Logger.info("------ unfetching set: \(unfetchedSet), nsRange: \(nsRange) thread=\(thread.uniqueId)")
         let newItems = try fetchInteractions(nsRange: nsRange, transaction: transaction)
-        
+
         let isFetchContiguousWithAlreadyLoadedItems = requestSet.union(loadedIndexSet.get()).isContiguous
         if isFetchContiguousWithAlreadyLoadedItems, let minLoaded = loadedIndexSet.get().min() {
             // If fetched items are just before the already loaded ones...
-            if unfetchedSet.max()! < minLoaded {
+            if let maxUnfetched = unfetchedSet.max(), maxUnfetched < minLoaded {
                 self.loadedIndexSet.update { $0.formUnion(requestSet) }
                 let items = (newItems + self.loadedInteractions)
                 let trimmedItems = items.prefix(maxInteractionLimit)

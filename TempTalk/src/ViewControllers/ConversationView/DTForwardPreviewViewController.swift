@@ -19,75 +19,76 @@ let numberOfOneRow = 5
 @objcMembers
 class DTForwardPreviewViewController: OWSViewController {
 
-    private var threads: [TSThread]!
-    var contactsManager: OWSContactsManager!
-    weak var delegate: DTForwardPreviewDelegate!
-        
-    @IBOutlet weak var previewView: UIView!
-    @IBOutlet weak var btnSend: UIButton!
-    @IBOutlet weak var btnCancel: UIButton!
-    @IBOutlet weak var tfLeaveMessage: UITextField!
-    @IBOutlet weak var lbSendTo: UILabel!
-    @IBOutlet weak var lbMessagePreview: UILabel!
-    @IBOutlet weak var avatarGridView: UICollectionView!
-    @IBOutlet var sepLine: [UIView]!
-    
-    @IBOutlet weak var previewOffsetY: NSLayoutConstraint!
-    @IBOutlet weak var collectionViewHeight: NSLayoutConstraint!
+    private var threads: [TSThread]?
+    var contactsManager: OWSContactsManager?
+    weak var delegate: DTForwardPreviewDelegate?
+
+    @IBOutlet weak var previewView: UIView?
+    @IBOutlet weak var btnSend: UIButton?
+    @IBOutlet weak var btnCancel: UIButton?
+    @IBOutlet weak var tfLeaveMessage: UITextField?
+    @IBOutlet weak var lbSendTo: UILabel?
+    @IBOutlet weak var lbMessagePreview: UILabel?
+    @IBOutlet weak var avatarGridView: UICollectionView?
+    @IBOutlet var sepLine: [UIView]?
+
+    @IBOutlet weak var previewOffsetY: NSLayoutConstraint?
+    @IBOutlet weak var collectionViewHeight: NSLayoutConstraint?
 
     deinit {
-        self.avatarGridView.removeObserver(self, forKeyPath: "contentSize")
+        self.avatarGridView?.removeObserver(self, forKeyPath: "contentSize")
         NotificationCenter.default.removeObserver(self)
     }
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+
         owsAssertDebug(delegate != nil)
-        if delegate.responds(to: #selector(DTForwardPreviewDelegate.getThreadsToForwarding)) {
-            threads = delegate?.getThreadsToForwarding()
+        if let delegate = delegate, delegate.responds(to: #selector(DTForwardPreviewDelegate.getThreadsToForwarding)) {
+            threads = delegate.getThreadsToForwarding()
         }
-        owsAssertDebug(threads.count > 0)
-        
+        guard let threads = threads, threads.count > 0 else {
+            owsFailDebug("No threads to forward")
+            return
+        }
+
         let basePointSize = UIFont.ows_dynamicTypeBody.pointSize;
-        self.lbMessagePreview.font = .ows_regularFont(withSize: basePointSize - 3)
-        self.lbMessagePreview.adjustsFontForContentSizeCategory = true
-        self.tfLeaveMessage.font = .ows_regularFont(withSize: basePointSize - 3)
-        self.tfLeaveMessage.adjustsFontForContentSizeCategory = true
+        self.lbMessagePreview?.font = .ows_regularFont(withSize: basePointSize - 3)
+        self.tfLeaveMessage?.font = .ows_regularFont(withSize: basePointSize - 3)
         let highlightedBackgroundImage = UIImage(color: UIColor(white: 0, alpha: 0.1))
-        btnCancel.setTitle(Localized("TXT_CANCEL_TITLE", comment: ""), for: .normal)
-        btnCancel.setBackgroundImage(highlightedBackgroundImage, for: .highlighted)
+        btnCancel?.setTitle(Localized("TXT_CANCEL_TITLE", comment: ""), for: .normal)
+        btnCancel?.setBackgroundImage(highlightedBackgroundImage, for: .highlighted)
         var btnSentTitle = Localized("SEND_BUTTON_TITLE", comment: "")
         if threads.count > 1 {
             btnSentTitle = btnSentTitle + "(\(threads.count))"
         }
-        btnSend.setTitle(btnSentTitle, for: .normal)
-        btnSend.setBackgroundImage(highlightedBackgroundImage, for: .highlighted)
-        
-        self.tfLeaveMessage.placeholder = Localized("FORWARD_MESSAGE_LEAVE_MESSAGE", comment: "")
+        btnSend?.setTitle(btnSentTitle, for: .normal)
+        btnSend?.setBackgroundImage(highlightedBackgroundImage, for: .highlighted)
+
+        self.tfLeaveMessage?.placeholder = Localized("FORWARD_MESSAGE_LEAVE_MESSAGE", comment: "")
         let leftView = UIView(frame: CGRect(x: 0, y: 0, width: 15, height: 34))
-        self.tfLeaveMessage.leftViewMode = .always
-        self.tfLeaveMessage.rightViewMode = .always
-        self.tfLeaveMessage.leftView = leftView
-        self.tfLeaveMessage.rightView = leftView
-                      
+        self.tfLeaveMessage?.leftViewMode = .always
+        self.tfLeaveMessage?.rightViewMode = .always
+        self.tfLeaveMessage?.leftView = leftView
+        self.tfLeaveMessage?.rightView = leftView
+
         let avatarWidth = Int((avatarGridViewWidth - avatarMargin * (numberOfOneRow - 1)) / numberOfOneRow)
         let layout = UICollectionViewFlowLayout()
         if threads.count > 1 {
-            self.lbSendTo.text = Localized("FORWARD_MESSAGE_SEND_TO_MULTI", comment: "")
+            self.lbSendTo?.text = Localized("FORWARD_MESSAGE_SEND_TO_MULTI", comment: "")
             layout.itemSize = CGSize(width: avatarWidth, height: avatarWidth)
             layout.minimumLineSpacing = 8
             layout.minimumInteritemSpacing = 8
-            self.avatarGridView.collectionViewLayout = layout
-            self.avatarGridView.register(DTForwardPreviewMultiCell.self, forCellWithReuseIdentifier: DTForwardPreviewMultiCell.reuseId())
+            self.avatarGridView?.collectionViewLayout = layout
+            self.avatarGridView?.register(DTForwardPreviewMultiCell.self, forCellWithReuseIdentifier: DTForwardPreviewMultiCell.reuseId())
         } else {
-            self.lbSendTo.text = Localized("FORWARD_MESSAGE_SEND_TO_SINGLE", comment: "")
+            self.lbSendTo?.text = Localized("FORWARD_MESSAGE_SEND_TO_SINGLE", comment: "")
             layout.itemSize = CGSize(width: avatarGridViewWidth, height: avatarWidth)
             layout.sectionInset = .zero
-            self.avatarGridView.collectionViewLayout = layout
-            self.avatarGridView.register(DTForwardPreviewSingleCell.self, forCellWithReuseIdentifier: DTForwardPreviewSingleCell.reuseId())
+            self.avatarGridView?.collectionViewLayout = layout
+            self.avatarGridView?.register(DTForwardPreviewSingleCell.self, forCellWithReuseIdentifier: DTForwardPreviewSingleCell.reuseId())
         }
-        self.avatarGridView.addObserver(self, forKeyPath: "contentSize", options: .new, context: nil)
+        self.avatarGridView?.addObserver(self, forKeyPath: "contentSize", options: .new, context: nil)
         
         guard let delegate = self.delegate else {
             self.dismiss(animated: false)
@@ -95,9 +96,9 @@ class DTForwardPreviewViewController: OWSViewController {
         }
         
         if delegate.responds(to: #selector(DTForwardPreviewDelegate.overviewOfMessage(for:))) {
-            self.lbMessagePreview.text = delegate.overviewOfMessage(for: self)
+            self.lbMessagePreview?.text = delegate.overviewOfMessage(for: self)
         } else {
-            self.lbMessagePreview.text = "[message]"
+            self.lbMessagePreview?.text = "[message]"
         }
         
         self.autoPinPreviewViewToKeyboard()
@@ -115,26 +116,26 @@ class DTForwardPreviewViewController: OWSViewController {
     }
     
     override func applyTheme() {
-        
-        lbSendTo.textColor = Theme.primaryTextColor
-        previewView.backgroundColor = Theme.secondaryBackgroundColor
-        btnCancel.setTitleColor(Theme.primaryTextColor, for: .normal)
-        tfLeaveMessage.backgroundColor = Theme.toolbarBackgroundColor;
-        tfLeaveMessage.keyboardAppearance = Theme.keyboardAppearance
-        sepLine.forEach { line in
-            line.backgroundColor = Theme.cellSeparatorColor
+
+        lbSendTo?.textColor = Theme.tprimaryColor
+        previewView?.backgroundColor = Theme.bg2Color
+        btnCancel?.setTitleColor(Theme.tprimaryColor, for: .normal)
+        tfLeaveMessage?.backgroundColor = Theme.bg1Color;
+        tfLeaveMessage?.keyboardAppearance = Theme.keyboardAppearance
+        sepLine?.forEach { line in
+            line.backgroundColor = Theme.lineColor
         }
-        
-        avatarGridView.reloadData()
+
+        avatarGridView?.reloadData()
     }
     
     override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-        
+
         if keyPath == "contentSize" {
             guard let sizeValue = change?[.newKey] as? NSValue else { return }
-            self.collectionViewHeight.constant = sizeValue.cgSizeValue.height
-            
-            self.previewOffsetY.constant = (screenHeight - self.previewView.height) / 2
+            self.collectionViewHeight?.constant = sizeValue.cgSizeValue.height
+            let screenHeight = UIScreen.main.bounds.height
+            self.previewOffsetY?.constant = (screenHeight - (self.previewView?.height ?? 0)) / 2
         }
     }
     
@@ -157,27 +158,27 @@ class DTForwardPreviewViewController: OWSViewController {
         }
         
         if delegate.responds(to: #selector(DTForwardPreviewDelegate.previewView(_:sendLeaveMessage:))) {
-            delegate.previewView(self, sendLeaveMessage: self.tfLeaveMessage.text)
+            delegate.previewView(self, sendLeaveMessage: self.tfLeaveMessage?.text)
         }
     }
     
     @IBAction func btnCancelAction(_ sender: Any) {
-        
-        self.tfLeaveMessage.resignFirstResponder()
+
+        self.tfLeaveMessage?.resignFirstResponder()
         UIView.animate(withDuration: 0.25) {
             self.view.backgroundColor = UIColor(white: 0, alpha: 0)
-            self.previewView.alpha = 0
+            self.previewView?.alpha = 0
         } completion: {_ in
             self.dismiss(animated: false, completion: nil)
         }
     }
     
     @IBAction func tapGestureAction(_ sender: UITapGestureRecognizer) {
-        
-        if self.previewView.frame.contains(sender.location(in: self.view)) {
+
+        if let previewView = self.previewView, previewView.frame.contains(sender.location(in: self.view)) {
             return
         }
-        self.tfLeaveMessage.resignFirstResponder()
+        self.tfLeaveMessage?.resignFirstResponder()
     }
 }
 
@@ -194,21 +195,25 @@ class DTForwardPreviewViewController: OWSViewController {
 extension DTForwardPreviewViewController: UICollectionViewDelegate, UICollectionViewDataSource {
    
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        self.threads.count
+        self.threads?.count ?? 0
     }
-    
+
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-            
-        if (self.threads.count > 1) {
+
+        guard let threads = self.threads else {
+            return UICollectionViewCell()
+        }
+
+        if (threads.count > 1) {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: DTForwardPreviewMultiCell.reuseId(), for: indexPath) as! DTForwardPreviewMultiCell
-            cell.setAvatarImage(thread: self.threads[indexPath.item])
-            
+            cell.setAvatarImage(thread: threads[indexPath.item])
+
             return cell
         }
-        
+
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: DTForwardPreviewSingleCell.reuseId(), for: indexPath) as! DTForwardPreviewSingleCell
-        cell.setAvatarImage(thread: self.threads[indexPath.item])
-        
+        cell.setAvatarImage(thread: threads[indexPath.item])
+
         return cell
     }
 }
@@ -230,12 +235,12 @@ extension DTForwardPreviewViewController {
         guard let keyboardEndFrameValue = noti.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue else { return }
         let keyboardEndFrame = keyboardEndFrameValue.cgRectValue
 
-        if screenHeight - keyboardEndFrame.origin.y > (screenHeight - self.previewView.height) / 2 {
-            self.previewOffsetY.constant = keyboardEndFrame.size.height + 20
+        if screenHeight - keyboardEndFrame.origin.y > (screenHeight - (self.previewView?.height ?? 0)) / 2 {
+            self.previewOffsetY?.constant = keyboardEndFrame.size.height + 20
         } else {
-            self.previewOffsetY.constant = (screenHeight - self.previewView.height) / 2
+            self.previewOffsetY?.constant = (screenHeight - (self.previewView?.height ?? 0)) / 2
         }
-        
+
         self.view.layoutIfNeeded()
     }
 }
@@ -265,8 +270,12 @@ class DTForwardPreviewMultiCell: UICollectionViewCell {
                 self.avatarView.setImageWithRecipientId(thread.contactIdentifier())
             }
         } else {
+            guard let groupThread = thread as? TSGroupThread else {
+                owsFailDebug("Expected TSGroupThread but got different type")
+                return
+            }
             let avatarWidth = Int((avatarGridViewWidth - avatarMargin * (numberOfOneRow - 1)) / numberOfOneRow)
-            self.avatarView.setImageWith(thread as! TSGroupThread , diameter: UInt(avatarWidth), contactsManager: contactsManager)
+            self.avatarView.setImageWith(groupThread, diameter: UInt(avatarWidth), contactsManager: contactsManager)
         }
     }
     
@@ -294,8 +303,7 @@ class DTForwardPreviewSingleCell: UICollectionViewCell {
         self.lbName = UILabel()
         self.lbName.font = .ows_dynamicTypeBody2
         self.lbName.lineBreakMode = .byTruncatingMiddle
-        self.lbName.adjustsFontForContentSizeCategory = true
-        self.lbName.textColor = Theme.primaryTextColor
+        self.lbName.textColor = Theme.tprimaryColor
         self.contentView.addSubview(self.lbName)
         
         self.lbName.autoPinEdge(.leading, to: .trailing, of: self.avatarView, withOffset: 10)
@@ -341,7 +349,7 @@ class DTForwardPreviewSingleCell: UICollectionViewCell {
     
     override func prepareForReuse() {
         super.prepareForReuse()
-        self.lbName.textColor = Theme.primaryTextColor
+        self.lbName.textColor = Theme.tprimaryColor
     }
 }
 

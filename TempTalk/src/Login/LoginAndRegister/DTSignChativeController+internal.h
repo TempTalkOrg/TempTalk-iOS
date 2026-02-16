@@ -9,7 +9,7 @@
 #import <TTServiceKit/TSAccountManager.h>
 #import <TTServiceKit/OWSRequestFactory.h>
 #import <TTServiceKit/UIButton+DTExtend.h>
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import "DTTextField.h"
 #import <TTServiceKit/DTPatternHelper.h>
 #import <TTServiceKit/DTToastHelper.h>

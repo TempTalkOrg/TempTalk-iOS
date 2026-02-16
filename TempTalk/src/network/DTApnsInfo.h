@@ -20,6 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
 //MARK: critical alert专用
 @property (nonatomic, copy, nullable) NSString *interruptionLevel;
 @property (nonatomic, copy, nullable) NSString *msg;
+@property (nonatomic, copy, nullable) NSString *roomId;
 
 @end
 

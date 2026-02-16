@@ -46,8 +46,8 @@ class DTSettingSwitchCell : DTDefaultBaseStyleCell {
     override func applyTheme()  {
         super.applyTheme()
         
-        backgroundColor = Theme.defaultBackgroundColor
-        contentView.backgroundColor = Theme.defaultTableCellBackgroundColor
+        backgroundColor = Theme.bgpageSecondaryColor
+        contentView.backgroundColor = Theme.bg1Color
     }
     
     

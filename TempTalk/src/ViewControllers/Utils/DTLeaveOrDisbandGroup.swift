@@ -50,7 +50,6 @@ public class DTLeaveOrDisbandGroup: NSObject {
         if (serverThreadId.isEmpty) { return }
         
         func next() {
-            DTPinnedDataSource.shared().removeAllPinnedMessage(serverThreadId)
             self.databaseStorage.write { transaction in
                 
                 groupThread.anyRemove(transaction: transaction)
@@ -61,8 +60,6 @@ public class DTLeaveOrDisbandGroup: NSObject {
                 DTToastHelper.show(withInfo: "Leave group failure, try again!")
                 return
             }
-            //MARK: 退群通知server处理预约会议
-            DTCalendarManager.shared.groupChange(gid: groupThread.serverThreadId, actionCode: 2, target: [localNumber])
 
             let channelName = DTCallManager.generateGroupChannelName(by: groupThread)
             DTCallManager.sharedInstance().putMeetingGroupMemberLeaveBychannelName(channelName) { responseBodyJson in
@@ -111,16 +108,11 @@ public class DTLeaveOrDisbandGroup: NSObject {
         let serverThreadId = groupThread.serverThreadId
         if (serverThreadId.isEmpty) { return }
         
-        func next() {
-            DTPinnedDataSource.shared().removeAllPinnedMessage(serverThreadId)
-            
+        func next() {            
             self.databaseStorage.write { transaction in
                 groupThread.anyRemove(transaction: transaction)
                 DTGroupUtils.removeGroupBaseInfo(withGid: serverThreadId, transaction: transaction)
             }
-            
-            //MARK: 解散群通知server处理预约会议
-            DTCalendarManager.shared.groupChange(gid: groupThread.serverThreadId, actionCode: 5)
             
             guard let completion = completion else {
                 return

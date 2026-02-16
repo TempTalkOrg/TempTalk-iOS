@@ -7,6 +7,8 @@
 //
 
 import Foundation
+import TTMessaging
+
 class DTSettingPlanTextCell: UITableViewCell {
     var inset: CGFloat = 16.5
     public lazy var planTextLabel: UILabel = {
@@ -14,7 +16,7 @@ class DTSettingPlanTextCell: UITableViewCell {
         planTextLabel.text = "Passkeys enables you to securely and smoothly sign in to your account with Touch ID, Face ID, or hardware security key. To change the passkey, turn it off and turn it on again."
         planTextLabel.numberOfLines = 0
         planTextLabel.textAlignment = .left
-        planTextLabel.font = UIFont.systemFont(ofSize: 12)
+        planTextLabel.font = UIFont.ows_regularFont(withSize: 12)
         return planTextLabel
     }()
     
@@ -28,6 +30,26 @@ class DTSettingPlanTextCell: UITableViewCell {
         contentView.autoresizingMask = []
         self.prepareUI()
         self.prepareUILayout()
+
+        // 监听字体大小变化通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(textSizeDidChange),
+            name: .textSizeDidChange,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func textSizeDidChange() {
+        updateFonts()
+    }
+
+    func updateFonts() {
+        planTextLabel.font = UIFont.ows_regularFont(withSize: 12)
     }
     
     required init?(coder: NSCoder) {
@@ -35,8 +57,8 @@ class DTSettingPlanTextCell: UITableViewCell {
     }
     
     func applyTheme()  {
-        backgroundColor = Theme.defaultBackgroundColor
-        contentView.backgroundColor = Theme.defaultBackgroundColor
+        backgroundColor = Theme.bgpageSecondaryColor
+        contentView.backgroundColor = Theme.bgpageSecondaryColor
         planTextLabel.textColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0xB7BDC6) : UIColor.color(rgbHex: 0x848E9C)
     }
     

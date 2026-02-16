@@ -90,12 +90,6 @@ extern NSString *const DTGroupCriticalAlertChangedNotification;
 + (void)postGroupBaseInfoChangeWith:(DTGroupBaseInfoEntity *)baseInfo
                              remove:(BOOL)remove;
 
-+ (void)sendPinSystemMessageWithSource:(NSString *)source
-                       serverTimestamp:(uint64_t)serverTimestamp
-                                thread:(TSThread *)thread
-                         pinnedMessage:(DTPinnedMessage *)pinnedMessage
-                           transaction:(SDSAnyWriteTransaction *)transaction;
-
 + (void)sendGroupReminderMessageWithSource:(NSString *)source
                            serverTimestamp:(uint64_t)serverTimestamp
                                  isChanged:(BOOL)isChanged

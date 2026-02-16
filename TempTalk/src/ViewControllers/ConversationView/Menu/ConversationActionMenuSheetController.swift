@@ -145,9 +145,9 @@ private class ActionView: UIView {
     }
     
     func applyTheme() {
-        backgroundColor = Theme.backgroundColor
-        iconImageView.tintColor = Theme.tabbarTitleNormalColor
-        titleLabel.textColor = Theme.primaryTextColor
+        backgroundColor = Theme.bg1Color
+        iconImageView.tintColor = Theme.tsecondaryColor
+        titleLabel.textColor = Theme.tprimaryColor
         
         if action.title == Localized("MESSAGE_ACTION_RECALL", comment: "") {
             // 撤回

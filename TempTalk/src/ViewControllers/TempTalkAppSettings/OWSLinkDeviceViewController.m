@@ -36,10 +36,10 @@ NS_ASSUME_NONNULL_BEGIN
 {
     [super viewDidLoad];
     
-    self.view.backgroundColor = Theme.backgroundColor;
-    self.instructionsView.backgroundColor = Theme.secondaryBackgroundColor;
-    self.topSpacerView.backgroundColor = Theme.secondaryBackgroundColor;
-    self.bottomSpacerView.backgroundColor = Theme.secondaryBackgroundColor;
+    self.view.backgroundColor = Theme.bg1Color;
+    self.instructionsView.backgroundColor = Theme.bg2Color;
+    self.topSpacerView.backgroundColor = Theme.bg2Color;
+    self.bottomSpacerView.backgroundColor = Theme.bg2Color;
 
     // HACK to get full width preview layer
     CGRect oldFrame = self.qrScanningView.frame;
@@ -47,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
         oldFrame.origin.x, oldFrame.origin.y, self.view.frame.size.width, self.view.frame.size.height / 2.0f - 32.0f);
     // END HACK to get full width preview layer
 
-    self.scanningInstructionsLabel.textColor = Theme.primaryTextColor;
+    self.scanningInstructionsLabel.textColor = Theme.tprimaryColor;
     self.scanningInstructionsLabel.text = Localized(@"LINK_DEVICE_SCANNING_INSTRUCTIONS",
         @"QR Scanning screen instructions, placed alongside a camera view for scanning QR Codes");
     self.title

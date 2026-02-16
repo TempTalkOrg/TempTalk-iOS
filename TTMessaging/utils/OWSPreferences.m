@@ -34,8 +34,9 @@ NSString *const OWSPreferencesKeyIOSUpgradeNagDate = @"iOSUpgradeNagDate";
 NSString *const OWSPreferencesKey_IsReadyForAppExtensions = @"isReadyForAppExtensions_5";
 NSString *const OWSPreferencesKeySystemCallLogEnabled = @"OWSPreferencesKeySystemCallLogEnabled";
 NSString *const OWSPreferencesKeySystemEndCallKey = @"kNotificationEndCall";
+NSString *const OWSPreferencesKeyCurrentActiveRoomId = @"kCurrentActiveRoomId";
+NSString *const OWSPreferencesKeyActiveRoomIds = @"kActiveRoomIds";
 NSString *const OWSPreferencesKeyCriticalAlertEnabled = @"OWSPreferencesKeyCriticalAlertEnabled";
-NSString *const OWSPreferencesKeyHasShownCriticalAlertPopup = @"OWSPreferencesKeyHasShownCriticalAlertPopup";
 NSString *const OWSPreferencesKeyCriticalAlertHighlights = @"OWSPreferencesKeyCriticalAlertHighlights";
 
 NSString *const DTCriticalAlertHighlightDidChangeNotification = @"DTCriticalAlertHighlightDidChangeNotification";
@@ -427,8 +428,8 @@ NSString *const DTCriticalAlertHighlightDidChangeNotification = @"DTCriticalAler
 
 // 关闭callkit类
 - (void)endCallKitCallWithRoomId:(NSString *)roomId {
-    OWSLogInfo(@"%@ background mode receive end call message", self.logTag);
-    
+    OWSLogInfo(@"%@ [NSE][darwin] receive end call message, roomId: %@", self.logTag, roomId);
+
     [[NSUserDefaults appUserDefaults] setObject:roomId
                                          forKey:OWSPreferencesKeySystemEndCallKey];
     [[NSUserDefaults appUserDefaults] synchronize];
@@ -487,21 +488,6 @@ NSString *const DTCriticalAlertHighlightDidChangeNotification = @"DTCriticalAler
 - (void)setCriticalAlertEnabled:(BOOL)enabled
 {
     [self setValueForKey:OWSPreferencesKeyCriticalAlertEnabled toValue:@(enabled)];
-}
-
-- (BOOL)hasShownCriticalAlertPopup
-{
-    NSNumber *preference = [self tryGetValueForKey:OWSPreferencesKeyHasShownCriticalAlertPopup];
-    if (preference) {
-        return [preference boolValue];
-    } else {
-        return NO;
-    }
-}
-
-- (void)setHasShownCriticalAlertPopup:(BOOL)shown
-{
-    [self setValueForKey:OWSPreferencesKeyHasShownCriticalAlertPopup toValue:@(shown)];
 }
 @end
 

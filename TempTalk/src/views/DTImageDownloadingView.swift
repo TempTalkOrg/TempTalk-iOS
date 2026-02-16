@@ -172,10 +172,10 @@ class DTImageDownloadingView: UIView {
     }
     
     private func applyTheme() {
-        backgroundColor = Theme.conversationInputBackgroundColor
+        backgroundColor = Theme.bg3Color
         actionContainerView.backgroundColor = UIColor(rgbHex: 0x181A20).withAlphaComponent(0.4)
-        expiredIcon.tintColor = Theme.thirdTextAndIconColor
-        expiredLabel.textColor = Theme.thirdTextAndIconColor
+        expiredIcon.tintColor = Theme.tdisableColor
+        expiredLabel.textColor = Theme.tdisableColor
     }
 }
 
@@ -208,9 +208,9 @@ private class CircularProcessView: UIView {
     // MARK: - Setup
     private func setupLayers() {
         layer.addSublayer(progressLayer)
-        
+
         progressLayer.lineWidth = 2
-        progressLayer.strokeColor = UIColor.white.cgColor
+        progressLayer.strokeColor = Theme.lineColor.cgColor
         progressLayer.fillColor = UIColor.clear.cgColor
         progressLayer.lineCap = .round
         progressLayer.strokeEnd = 0

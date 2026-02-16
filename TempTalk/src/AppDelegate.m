@@ -37,22 +37,21 @@
 #import "DTServerConfigManager.h"
 #import <TTServiceKit/DTServerConfigManager.h>
 #import <TTServiceKit/DTServerUrlManager.h>
-#import <TTServiceKit/DTWatermarkHelper.h>
 #import "AppDelegate+UpLoadTimeZone.h"
 #import "AppDelegate+ReportBackgroundStatus.h"
-#import "DTRecallMessagesJob.h"
 #import "DTConversationsJob.h"
 #import "UITabBar+BadgeCount.h"
 #import <TTServiceKit/DTConversationSettingHelper.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import "UIWindow+OWS.h"
-#import "DTHomeViewController.h"
+#import "HomeViewController.h"
 #import "DTContactsViewController.h"
 #import "DTDBKeyManager.h"
 #import <FTS5SimpleTokenizer/FTS5SimpleTokenizer.h>
 #import "DTSignChativeController.h"
 #import "SMLagMonitor.h"
 #import "SMCallTrace.h"
+#import "Pastelog.h"
 
 @import FirebaseCrashlytics;
 @import FirebaseCore;
@@ -225,13 +224,19 @@ static NSTimeInterval launchStartedAt;
     OWSLogInfo(@"%@ application: didFinishLaunchingWithOptions completed.", self.logTag);
 
     [OWSAnalytics appLaunchDidBegin];
-    
+
     [CurrentAppContext() setColdStart:YES];
-    
+
     AppReadinessRunNowOrWhenAppDidBecomeReadyAsync(^{
         if([TSAccountManager sharedInstance].isRegistered){
             [[DTCallManager sharedInstance] requestForConfigMeetingversion];
         }
+        // 冷启动时启动归档定时器、执行历史数据修复和清理空会话
+        [[OWSArchivedMessageJob sharedJob] startIfNecessary];
+        [[OWSArchivedMessageJob sharedJob] fixThreadsWithZeroExpiresInSecondsOnce];
+        [[OWSArchivedMessageJob sharedJob] cleanupEmptyThreadsIfNeeded];
+        // 渐进式回填历史同步消息的 readPosition（每次启动处理 500 条，直到完成）
+        [[TSMessageReadPositionMigrator shared] performMigrationIfNeeded];
     });
     
     [self addLocalNotificationDelegate];
@@ -309,7 +314,10 @@ static NSTimeInterval launchStartedAt;
     [controller addAction:[UIAlertAction actionWithTitle:Localized(@"SETTINGS_ADVANCED_SUBMIT_DEBUGLOG", nil)
                                                    style:UIAlertActionStyleDefault
                                                  handler:^(UIAlertAction *_Nonnull action) {
-        [DTToastHelper toastWithText:@"Not supported and will exit." durationTime:3 completion:^{
+        [Pastelog submitLogsWithCompletion:^{
+            OWSLogInfo(
+                @"%@ exiting after sharing debug logs.", self.logTag);
+            [DDLog flushLog];
             exit(0);
         }];
     }]];
@@ -417,6 +425,10 @@ static NSTimeInterval launchStartedAt;
     AppReadinessRunNowOrWhenAppDidBecomeReadyAsync(^{
         [self handleActivation];
         [DTMeetingManager.shared syncServerCalls];
+        // 热启动时重置时间戳，允许定时器启动
+        [[OWSArchivedMessageJob sharedJob] resetLastTimeStampAsync];
+        [[OWSArchivedMessageJob sharedJob] startIfNecessary];
+        [[OWSArchivedMessageJob sharedJob] cleanupEmptyThreadsIfNeeded];
     });
 
     // Clear all notifications whenever we become active.
@@ -466,7 +478,6 @@ extern bool bScreenLockDone;
                 // Clean up any messages that expired since last launch immediately
                 // and continue cleaning in the background.
                 [[OWSArchivedMessageJob sharedJob] startIfNecessary];
-                [[DTRecallMessagesJob sharedJob] startIfNecessary];
                 [[DTConversationsJob sharedJob] startIfNecessary];
 
                 [self enableBackgroundRefreshIfNecessary];
@@ -485,9 +496,10 @@ extern bool bScreenLockDone;
                     [[FailedMessagesJob new] runSync];
                 });
                 [self.notificationsManager syncApnSoundIfNeeded];
-                
+
                 [self initializeMeetingManager];
-                
+                [self initializeGrayReleaseManager];
+
                 // 非关键网络操作 - 延迟执行避免阻塞app激活
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
                     // 更新一次网络本地配置
@@ -497,12 +509,6 @@ extern bool bScreenLockDone;
                     // 开始测速
                     [[DTMeetingManager shared] startSpeedTest];
                 });
-                
-                // 卡顿检测 - 调试功能，可以立即执行
-#if DEBUG_TEST || RELEASE_TEST || RELEASE_CHATIVETEST
-                [SMCallTrace start];
-                [[SMLagMonitor shareInstance] beginMonitor];
-#endif
             });
             
             [self addUpLoadTimeZonObserver];
@@ -646,7 +652,10 @@ extern bool bScreenLockDone;
     if ([userActivity.activityType isEqualToString:NSUserActivityTypeBrowsingWeb]) {
         
         NSURLComponents *component = [[NSURLComponents alloc] initWithURL:userActivity.webpageURL resolvingAgainstBaseURL:YES];
-        
+        if (!component.URL) {
+            OWSLogError(@"External URL is empty.");
+            return NO;
+        }
         if([self handleUniversalLinkWithUrl:component.URL]){
             return YES;
         }
@@ -888,7 +897,6 @@ extern bool bScreenLockDone;
         // Start running the disappearing messages job in case the newly registered user
         // enables this feature
         [[OWSArchivedMessageJob sharedJob] startIfNecessary];
-        [[DTRecallMessagesJob sharedJob] startIfNecessary];
         [[DTConversationsJob sharedJob] startIfNecessary];
         [[OWSProfileManager sharedManager] ensureLocalProfileCached];
 
@@ -967,7 +975,7 @@ extern bool bScreenLockDone;
 
 - (void)switchToTabbarVCFromRegistration:(BOOL)isFromRegistration {
     // 首页
-    DTHomeViewController *homeVC = [DTHomeViewController new];
+    HomeViewController *homeVC = [HomeViewController new];
     homeVC.isFromRegistration = isFromRegistration;
     homeVC.tabBarItem = [[UITabBarItem alloc] initWithTitle:Localized(@"TABBAR_HOME", @"Title for Tab Home") image:[UIImage imageNamed:@"tabbar_message"] selectedImage:[UIImage imageNamed:@"tabbar_message_selected"]];
     OWSNavigationController *homeNavController =
@@ -1000,7 +1008,7 @@ extern bool bScreenLockDone;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [Environment.shared.contactsManager userRequestedSystemContactsRefreshWithIsUserRequested:YES completion:^(NSError * _Nullable error) {
             }];
-            
+
             [DTGroupUtils syncMyGroupsBaseInfoSuccess:^{
                 OWSLogInfo(@"syncMyGroupsBaseInfoSuccess!");
             } failure:^(NSError * _Nonnull error) {

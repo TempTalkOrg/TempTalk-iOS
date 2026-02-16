@@ -29,6 +29,7 @@ class DTSettingMeItem: DTSettingItem , DTSettingItemProtocol {
         case language = 7
         case feedback = 8
         case about = 9
+        case textSize = 10  // 新增：文字大小
     }
 
     /// 关联协议中的 SettingType属性 并重写 type的 get 函数 为type赋值 

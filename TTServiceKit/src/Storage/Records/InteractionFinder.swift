@@ -7,6 +7,7 @@ import GRDB
 
 protocol InteractionFinderAdapter {
     associatedtype ReadTransaction
+    associatedtype WriteTransaction
 
     // MARK: - static methods
 
@@ -63,6 +64,7 @@ protocol InteractionFinderAdapter {
     func lastestIncomingInteraction(transaction: ReadTransaction) -> TSIncomingMessage?
     func existsOutgoingMessage(transaction: ReadTransaction) -> Bool
     func outgoingMessageCount(transaction: ReadTransaction) -> UInt
+    func existsArchiveMessage(transaction: ReadTransaction) -> Bool
 
     func interaction(at index: UInt, transaction: ReadTransaction) throws -> TSInteraction?
     
@@ -71,6 +73,8 @@ protocol InteractionFinderAdapter {
     static func enumerateCardRelatedInteractions(cardUniqueId: String, transaction: ReadTransaction, block: @escaping (TSInteraction, UnsafeMutablePointer<ObjCBool>) -> Void) throws
     
     static func findThreadsWithOnlyArchiveMessages(transaction: ReadTransaction) -> [String]
+
+    static func deleteAllRecallInfoMessages(transaction: WriteTransaction) -> Int
 
     #if DEBUG
     func enumerateUnstartedExpiringMessages(transaction: ReadTransaction, block: @escaping (TSMessage, UnsafeMutablePointer<ObjCBool>) -> Void)
@@ -81,6 +85,9 @@ protocol InteractionFinderAdapter {
 
 @objc
 public class InteractionFinder: NSObject, InteractionFinderAdapter {
+    
+    typealias ReadTransaction = SDSAnyReadTransaction
+    typealias WriteTransaction = SDSAnyWriteTransaction
     
 
     let grdbAdapter: GRDBInteractionFinderAdapter
@@ -470,6 +477,14 @@ public class InteractionFinder: NSObject, InteractionFinderAdapter {
         }
     }
 
+    @objc
+    public func existsArchiveMessage(transaction: SDSAnyReadTransaction) -> Bool {
+        switch transaction.readTransaction {
+        case .grdbRead(let grdbRead):
+            return grdbAdapter.existsArchiveMessage(transaction: grdbRead)
+        }
+    }
+
     #if DEBUG
     @objc
     public func enumerateUnstartedExpiringMessages(transaction: SDSAnyReadTransaction, block: @escaping (TSMessage, UnsafeMutablePointer<ObjCBool>) -> Void) {
@@ -511,6 +526,14 @@ public class InteractionFinder: NSObject, InteractionFinderAdapter {
             return GRDBInteractionFinderAdapter.findThreadsWithOnlyArchiveMessages(transaction: grdbRead)
         }
     }
+
+    @objc
+    public class func deleteAllRecallInfoMessages(transaction: SDSAnyWriteTransaction) -> Int {
+        switch transaction.writeTransaction {
+        case .grdbWrite(let grdbWrite):
+            return GRDBInteractionFinderAdapter.deleteAllRecallInfoMessages(transaction: grdbWrite)
+        }
+    }
 }
 
 // MARK: -
@@ -518,6 +541,7 @@ public class InteractionFinder: NSObject, InteractionFinderAdapter {
 struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
 
     typealias ReadTransaction = GRDBReadTransaction
+    typealias WriteTransaction = GRDBWriteTransaction
 
     let threadUniqueId: String
         
@@ -1276,7 +1300,23 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
         )
         """
         let arguments: StatementArguments = [threadUniqueId, SDSRecordType.outgoingMessage.rawValue]
-    
+
+        return try! Bool.fetchOne(transaction.database, sql: sql, arguments: arguments) ?? false
+    }
+
+    func existsArchiveMessage(transaction: GRDBReadTransaction) -> Bool {
+        let sql = """
+        SELECT EXISTS(
+            SELECT 1
+            FROM \(InteractionRecord.databaseTableName)
+            \(sqlThreadUniqueIdCondition())
+            AND \(interactionColumn: .recordType) = ?
+            AND \(interactionColumn: .messageType) = ?
+            LIMIT 1
+        )
+        """
+        let arguments: StatementArguments = [threadUniqueId, SDSRecordType.infoMessage.rawValue, TSInfoMessageType.archiveMessage.rawValue]
+
         return try! Bool.fetchOne(transaction.database, sql: sql, arguments: arguments) ?? false
     }
 
@@ -1398,42 +1438,77 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
     }
 
     static func findThreadsWithOnlyArchiveMessages(transaction: GRDBReadTransaction) -> [String] {
+        // 查找应该被清理的空thread
         let sql = """
         SELECT DISTINCT t.uniqueId
         FROM \(ThreadRecord.databaseTableName) t
-        WHERE t.uniqueId != ?
+        WHERE t.uniqueId != ?  -- 排除备忘录
         AND \(threadColumn: .shouldBeVisible) = 1
-        AND EXISTS (
-            SELECT 1 
-            FROM \(InteractionRecord.databaseTableName) i 
-            WHERE i.\(interactionColumn: .threadUniqueId) = t.uniqueId 
-            AND i.\(interactionColumn: .recordType) = ? 
-            AND i.\(interactionColumn: .messageType) = ?
-        )
-        AND NOT EXISTS (
-            SELECT 1 
-            FROM \(InteractionRecord.databaseTableName) i2 
-            WHERE i2.\(interactionColumn: .threadUniqueId) = t.uniqueId 
-            AND (
-                i2.\(interactionColumn: .recordType) != ? 
-                OR i2.\(interactionColumn: .messageType) != ?
+        AND (
+            -- 情况1: 完全没有消息
+            (
+                SELECT COUNT(*)
+                FROM \(InteractionRecord.databaseTableName) i
+                WHERE i.\(interactionColumn: .threadUniqueId) = t.uniqueId
+            ) = 0
+            OR
+            -- 情况2: 只有一条TSInfoMessageArchiveMessage系统消息
+            (
+                (
+                    SELECT COUNT(*)
+                    FROM \(InteractionRecord.databaseTableName) i
+                    WHERE i.\(interactionColumn: .threadUniqueId) = t.uniqueId
+                ) = 1
+                AND EXISTS (
+                    SELECT 1
+                    FROM \(InteractionRecord.databaseTableName) i2
+                    WHERE i2.\(interactionColumn: .threadUniqueId) = t.uniqueId
+                    AND i2.\(interactionColumn: .recordType) = ?
+                    AND i2.\(interactionColumn: .messageType) = ?
+                )
             )
         )
         """
+
         let threadUniqueId = TSContactThread.threadId(fromContactId: TSAccountManager.localNumber() ?? "")
         let arguments: StatementArguments = [
             threadUniqueId,
             SDSRecordType.infoMessage.rawValue,
-            TSInfoMessageType.archiveMessage.rawValue,
-            SDSRecordType.infoMessage.rawValue,
             TSInfoMessageType.archiveMessage.rawValue
         ]
-        
+
         do {
-            return try String.fetchAll(transaction.database, sql: sql, arguments: arguments)
+            let threadIds = try String.fetchAll(transaction.database, sql: sql, arguments: arguments)
+            if !threadIds.isEmpty {
+                Logger.info("[Archive] Found \(threadIds.count) threads to cleanup: empty or only archive messages")
+            }
+            return threadIds
         } catch {
             owsFailDebug("Failed to find threads with only archive messages: \(error)")
             return []
+        }
+    }
+
+    static func deleteAllRecallInfoMessages(transaction: GRDBWriteTransaction) -> Int {
+        let sql = """
+        DELETE FROM \(InteractionRecord.databaseTableName)
+        WHERE \(interactionColumn: .recordType) = ?
+        AND \(interactionColumn: .messageType) = ?
+        """
+
+        let arguments: StatementArguments = [
+            SDSRecordType.infoMessage.rawValue,
+            TSInfoMessageType.recallMessage.rawValue
+        ]
+
+        do {
+            try transaction.database.execute(sql: sql, arguments: arguments)
+            let changes = transaction.database.changesCount
+            Logger.info("Deleted \(changes) recall info messages")
+            return changes
+        } catch {
+            owsFailDebug("Failed to delete recall info messages: \(error)")
+            return 0
         }
     }
 

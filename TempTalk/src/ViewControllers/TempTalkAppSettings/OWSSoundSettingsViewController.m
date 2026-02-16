@@ -7,10 +7,11 @@
 #import <TTMessaging/OWSAudioPlayer.h>
 #import <TTMessaging/OWSSounds.h>
 #import <TTServiceKit/Localize_Swift.h>
+#import <TTMessaging/TTMessaging.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface OWSSoundSettingsViewController ()
+@interface OWSSoundSettingsViewController () <OWSNavigationChildController>
 
 @property (nonatomic) BOOL isDirty;
 
@@ -27,6 +28,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
 
     [self setTitle:Localized(@"SETTINGS_ITEM_NOTIFICATION_SOUND",
                        @"Label for settings view that allows user to change the notification sound.")];
@@ -40,6 +43,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)viewDidAppear:(BOOL)animated
 {
     [self updateTableContents];
+}
+
+- (void)applyTheme {
+    [super applyTheme];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
 }
 
 - (void)updateNavigationItems
@@ -143,6 +152,28 @@ NS_ASSUME_NONNULL_BEGIN
 
     [self.audioPlayer stop];
     [self.navigationController popViewControllerAnimated:YES];
+}
+
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return false;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpageSecondaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
 }
 
 @end

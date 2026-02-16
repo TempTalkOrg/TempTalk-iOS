@@ -4,7 +4,7 @@
 
 #import "UIColor+OWS.h"
 #import "UIView+SignalUI.h"
-#import "Theme.h"
+#import <TTMessaging/TTMessaging-Swift.h>
 #import "UIViewController+OWS.h"
 #import <TTServiceKit/AppContext.h>
 
@@ -80,7 +80,7 @@ NS_ASSUME_NONNULL_BEGIN
     UIImage *backImage = [[UIImage imageNamed:(isRTL ? @"NavBarBackRTL" : @"NavBarBackNew")] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
     OWSAssertDebug(backImage);
     [backButton setImage:backImage forState:UIControlStateNormal];
-    backButton.tintColor = Theme.primaryIconColor;
+    backButton.tintColor = Theme.iconColor;
 
     backButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
 

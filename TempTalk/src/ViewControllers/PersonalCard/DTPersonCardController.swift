@@ -36,13 +36,14 @@ class DTPersonalCardController: OWSTableViewController,
     var contactThread: TSContactThread?
     var viewDidAppear: Bool
     @objc var isFromSameThread: Bool = false
+    @objc var isFromContacts: Bool = false  // 标记是否从通讯录进入
     var targetThreads: [TSThread]?
     var signatureLabel: UILabel?
     var isShortFormEnabled = true
     
     private lazy var backBtn: UIButton = {
         let button = UIButton()
-        button.setTitleColor(Theme.primaryTextColor, for: .normal)
+        button.setTitleColor(Theme.tprimaryColor, for: .normal)
         button.setBackgroundImage(UIImage(named: "NavBarBackNew"), for: .normal)
         button.addTarget(self, action: #selector(backBtnClick), for: .touchUpInside)
         return button
@@ -56,7 +57,7 @@ class DTPersonalCardController: OWSTableViewController,
     
     override func loadView() {
         super.loadView()
-        self.view.backgroundColor = Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0x181A20) : UIColor(rgbHex: 0xFAFAFA)
+        self.view.backgroundColor = Theme.bgpageSecondaryColor
         self.createViews()
         self.avatarViewHelper.delegate = self
     }
@@ -124,12 +125,13 @@ class DTPersonalCardController: OWSTableViewController,
         self.tableView.rowHeight = UITableView.automaticDimension
         self.tableView.estimatedRowHeight = 60
         self.tableView.separatorStyle = .none
-        self.tableView.backgroundColor = Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0x1E2329) : UIColor(rgbHex: 0xFFFFFF)
+        self.tableView.backgroundColor = Theme.bg1Color
+        self.tableView.isScrollEnabled = false
     }
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+
         if let recipientId {
             let thread = TSContactThread.getOrCreateThread(contactId: recipientId)
             self.contactThread = thread
@@ -139,16 +141,16 @@ class DTPersonalCardController: OWSTableViewController,
             })
             self.commonGroupContext?.fetchInCommonGroupsData()
         }
-        
+
         addCloseBarItem()
         updateTableContents()
         requestUserMessage()
         NotificationCenter.default.addObserver(self, selector: #selector(signalAccountsDidChange), name: NSNotification.Name.OWSContactsManagerSignalAccountsDidChange, object: nil)
     }
-    
+
     func addCloseBarItem() {
         if isPresented() {
-            navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .stop, target: self, action: #selector(backBtnClick))
+            navigationItem.leftBarButtonItem = UIBarButtonItem(image: UIImage(named: "nav_bar_close"), style: .plain, target: self, action: #selector(backBtnClick))
         }
     }
     
@@ -173,22 +175,22 @@ class DTPersonalCardController: OWSTableViewController,
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        self.viewDidAppear = true;
+        self.viewDidAppear = true
     }
-    
+
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         self.viewDidAppear = false;
     }
-    
+
     override func applyTheme() {
-        
+
         super.applyTheme()
         updateTableContents()
-        
-        view.backgroundColor = Theme.defaultBackgroundColor
-        tableView.backgroundColor = Theme.defaultBackgroundColor
-        
+
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        tableView.backgroundColor = Theme.bg1Color
+
     }
     
     @objc func signalAccountsDidChange(notify: Notification) {
@@ -239,11 +241,12 @@ class DTPersonalCardController: OWSTableViewController,
             guard let self else { return UITableViewCell()}
             return self.sectionHeaderCell(title: Localized("CONTACT_PROFILE_BUSINESS_CONTACT_INFO"))
         }, customRowHeight: 40, actionBlock: {}))
-        
+
         contactsSection.add(OWSTableItem(customCellBlock: { [weak self] in
             guard let self else { return UITableViewCell()}
-            let base58RecipientId = NSString.base58EncodedNumber(recipientId)
-            return self.personCardForOther(withTitle: Localized("PERSON_CARD_ID"), detailText: base58RecipientId, longPressSel: #selector(self.longPressIDClick(_:)), accessoryType: .none)
+            let customUid = account.contact?.customUid
+            let displayId = NSString.displayUserId(withCustomUid: customUid, recipientId: recipientId)
+            return self.personCardForOther(withTitle: Localized("PERSON_CARD_ID"), detailText: displayId, longPressSel: #selector(self.longPressIDClick(_:)), accessoryType: .none)
         }, customRowHeight: 36, actionBlock: {}))
         
         let isMe = recipientId == TSAccountManager.shared.localNumber()
@@ -301,7 +304,7 @@ class DTPersonalCardController: OWSTableViewController,
         
         contents.addSection(topSection)
         contents.addSection(contactsSection)
-        
+
         self.contents = contents
     }
     
@@ -390,10 +393,25 @@ class DTPersonalCardController: OWSTableViewController,
         guard let contactThread else {
             return
         }
+
         let settingsVC = OWSConversationSettingsViewController()
         settingsVC.configure(with: contactThread)
         settingsVC.showVerificationOnAppear = false
-        self.navigationController?.pushViewController(settingsVC, animated: true)
+
+        if let presentingVC = self.presentingViewController {
+            presentingVC.dismiss(animated: true) {
+                // dismiss 完成后，找到底层的 ViewController 并 push settingsVC
+                if let conversationVC = self.findConversationViewController(from: presentingVC) {
+                    conversationVC.navigationController?.pushViewController(settingsVC, animated: true)
+                } else if let navController = presentingVC as? UINavigationController {
+                    navController.pushViewController(settingsVC, animated: true)
+                } else if let navController = presentingVC.navigationController {
+                    navController.pushViewController(settingsVC, animated: true)
+                }
+            }
+        } else {
+            self.navigationController?.pushViewController(settingsVC, animated: true)
+        }
     }
     
     func showDetailAlertViewController(withTitle title: String, detail contentString: String, type: DTCardAlertViewType, maxLength: UInt, tag: Int) {
@@ -401,7 +419,7 @@ class DTPersonalCardController: OWSTableViewController,
     }
     
     func getAttributedString(content: String, image: UIImage, font: UIFont) -> NSAttributedString {
-        let contentAtt = NSMutableAttributedString(string: "\(content) ", attributes: [.font: UIFont(name: "PingFangSC-Medium", size: 20)!, .foregroundColor: Theme.primaryTextColor])
+        let contentAtt = NSMutableAttributedString(string: "\(content) ", attributes: [.font: UIFont(name: "PingFangSC-Medium", size: 20)!, .foregroundColor: Theme.tprimaryColor])
         let imageMent = NSTextAttachment()
         imageMent.image = image
         let paddingTop = font.lineHeight - font.pointSize - 2
@@ -422,8 +440,8 @@ class DTPersonalCardController: OWSTableViewController,
         cell.contentView.preservesSuperviewLayoutMargins = true
         cell.separatorInset = UIEdgeInsets(top: 0, left: UIScreen.main.bounds.size.width, bottom: 0, right: 0)
         cell.selectionStyle = .none
-        cell.backgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
-        cell.contentView.backgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
+        cell.backgroundColor = Theme.bgpageSecondaryColor
+        cell.contentView.backgroundColor = Theme.bgpageSecondaryColor
         
         let containStackView = UIStackView()
         containStackView.axis = .vertical
@@ -451,7 +469,7 @@ class DTPersonalCardController: OWSTableViewController,
         
         let nameLabel = UILabel()
         nameLabel.font = UIFont(name: "PingFangSC-Medium", size: 20)
-        nameLabel.textColor = Theme.primaryTextColor
+        nameLabel.textColor = Theme.tprimaryColor
         nameLabel.numberOfLines = 2
         nameLabel.isUserInteractionEnabled = true
         let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(longPressNameClick))
@@ -460,6 +478,13 @@ class DTPersonalCardController: OWSTableViewController,
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(tapNameClick))
         nameLabel.addGestureRecognizer(tapGesture)
         let displayName = Environment.shared.contactsManager?.displayName(forPhoneIdentifier: recipientId) ?? ""
+        // For avatar generation, use nickname only (not remark name)
+        let nicknameForAvatar: String = {
+            if let name = Environment.shared.contactsManager?.rawDisplayName(forPhoneIdentifier: recipientId ?? "") {
+                return name
+            }
+            return recipientId ?? ""
+        }()
         if type == .other {
             let displayNameAttributed = generateNameAttributedString(displayName.ows_stripped(), image: UIImage.init(named: "setting_edit"), font: UIFont(name: "PingFangSC-Medium", size: 12))
             nameLabel.attributedText = displayNameAttributed
@@ -470,7 +495,7 @@ class DTPersonalCardController: OWSTableViewController,
         
         if self.type != .selfCanEdit {
             let nameLabel = UILabel()
-            nameLabel.textColor = Theme.secondaryTextAndIconColor;
+            nameLabel.textColor = Theme.tsecondaryColor;
             nameLabel.font = UIFont.ows_regularFont(withSize: 14)
             nameLabel.textAlignment = .left
             if let contact = account.contact, let remark = contact.remark, !remark.isEmpty {
@@ -483,7 +508,7 @@ class DTPersonalCardController: OWSTableViewController,
         iconImage = DTAvatarImageView()
         guard let iconImage = iconImage else { return OWSTableItem.newCell()}
         iconImage.imageForSelfType = .original
-        iconImage.stateBackgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
+        iconImage.stateBackgroundColor = Theme.bg1Color
         let tapAvatarRecognizer = UITapGestureRecognizer(target: self, action: #selector(changeUserAvatarImage))
         iconImage.isUserInteractionEnabled = true
         iconImage.addGestureRecognizer(tapAvatarRecognizer)
@@ -492,7 +517,7 @@ class DTPersonalCardController: OWSTableViewController,
         iconImage.autoPinEdgesToSuperviewEdges()
         avatarContentView.autoSetDimension(.height, toSize: 75)
         avatarContentView.autoSetDimension(.width, toSize: 75)
-        iconImage.setImage(avatar: account.contact?.avatar as? [String : Any], recipientId: recipientId, displayName: displayName, completion: nil)
+        iconImage.setImage(avatar: account.contact?.avatar as? [String : Any], recipientId: recipientId, displayName: nicknameForAvatar, completion: nil)
         
         topContentRow.addArrangedSubview(avatarContentView)
         topContentRow.addArrangedSubview(topRightContentView)
@@ -565,10 +590,11 @@ class DTPersonalCardController: OWSTableViewController,
             return NSAttributedString(string: content)
         }
         let textFont = UIFont(name: "PingFangSC-Medium", size: 20) ?? UIFont.systemFont(ofSize: 20)
-        let contentAtt = NSMutableAttributedString(string: content, attributes: [.font: textFont, .foregroundColor: Theme.primaryTextColor])
+        let contentAtt = NSMutableAttributedString(string: content, attributes: [.font: textFont, .foregroundColor: Theme.tprimaryColor])
         let imageMent = NSTextAttachment()
         imageMent.image = image
         let imageAtt = NSAttributedString(attachment: imageMent)
+        contentAtt.append(NSAttributedString(string: " ", attributes: [.font: font]))
         contentAtt.append(imageAtt)
         return contentAtt
     }
@@ -592,9 +618,6 @@ class DTPersonalCardController: OWSTableViewController,
     
     
     func signatureInfoCell(signature: String) -> UITableViewCell {
-        let lightBgColor = UIColor(rgbHex: 0xFAFAFA)
-        let darkBgColor = UIColor(rgbHex: 0x181A20)
-        
         let cell = UITableViewCell(style: .default, reuseIdentifier: "UITableViewCellStyleSignatureInfo")
         cell.selectionStyle = .none
         signatureLabel = UILabel()
@@ -603,8 +626,8 @@ class DTPersonalCardController: OWSTableViewController,
         }
         cell.contentView.addSubview(signatureLabel)
         
-        cell.backgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
-        cell.contentView.backgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
+        cell.backgroundColor = Theme.bg1Color
+        cell.contentView.backgroundColor = Theme.bg1Color
         
         let sigAttString = createAttributedString(from: signature, with: 14)
         signatureLabel.attributedText = sigAttString
@@ -644,10 +667,8 @@ class DTPersonalCardController: OWSTableViewController,
     func quickActionCell() -> DTQuickActionCell {
         let cell = DTQuickActionCell(style: .default, reuseIdentifier: "UITableViewCellStyleQuickActionCell")
         cell.cellDelegate = self
-        let lightBgColor = UIColor(rgbHex: 0xFAFAFA)
-        let darkBgColor = UIColor(rgbHex: 0x181A20)
-        cell.backgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
-        cell.contentView.backgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
+        cell.backgroundColor = Theme.bgpageSecondaryColor
+        cell.contentView.backgroundColor = Theme.bgpageSecondaryColor
         
         cell.haveCall = canCall()
         cell.isFriend = account.isFriend
@@ -670,7 +691,7 @@ class DTPersonalCardController: OWSTableViewController,
     func cornerRadiusCell() -> UITableViewCell {
         let cell = UITableViewCell(style: .default, reuseIdentifier: "UITableViewCellSectionRadiusStyleIdentifier")
         cell.backgroundColor = .clear
-        cell.contentView.backgroundColor = Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0x181A20) : UIColor(rgbHex: 0xFAFAFA)
+        cell.contentView.backgroundColor = Theme.bg1Color
         return cell
     }
     
@@ -685,49 +706,45 @@ class DTPersonalCardController: OWSTableViewController,
         titleLabel.text = title
         titleLabel.font = UIFont(name: "PingFangSC-Medium", size: 16)
         sectionHeaderCell.selectionStyle = .none
-        let lightBgColor = UIColor(rgbHex: 0xFFFFFF)
-        let darkBgColor = UIColor(rgbHex: 0x1E2329)
-        sectionHeaderCell.backgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
-        sectionHeaderCell.contentView.backgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
+        sectionHeaderCell.backgroundColor = Theme.bg1Color
+        sectionHeaderCell.contentView.backgroundColor = Theme.bg1Color
         return sectionHeaderCell
     }
     
     func personCardForOther(withTitle title: String, detailText detail: String, longPressSel seletor: Selector?, accessoryType: UITableViewCell.AccessoryType) -> UITableViewCell {
         let cell = UITableViewCell(style: .value1, reuseIdentifier: "UITableViewCellStyleValue1")
         cell.textLabel?.text = title
-        cell.textLabel?.font = UIFont.ows_regularFont(withSize: 14)
-        cell.textLabel?.textColor = Theme.primaryTextColor
-        
-        let lightBgColor = UIColor(rgbHex: 0xFFFFFF)
-        let darkBgColor = UIColor(rgbHex: 0x1E2329)
-        cell.backgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
-        cell.contentView.backgroundColor = Theme.isDarkThemeEnabled ? darkBgColor : lightBgColor
+        cell.textLabel?.font = UIFont.ows_regularFont(withSize: 14, scaled: false)
+        cell.textLabel?.textColor = Theme.tprimaryColor
+
+        cell.backgroundColor = Theme.bg1Color
+        cell.contentView.backgroundColor = Theme.bg1Color
         cell.selectionStyle = .none
-        
+
         let detailTextLabel = UILabel()
         detailTextLabel.font = UIFont.systemFont(ofSize: 14)
-        detailTextLabel.textColor = Theme.secondaryTextAndIconColor
+        detailTextLabel.textColor = Theme.tsecondaryColor
         detailTextLabel.text = detail
         detailTextLabel.textAlignment = .left
         cell.contentView.addSubview(detailTextLabel)
         detailTextLabel.autoPinEdge(toSuperviewEdge: .left, withInset: 120)
         detailTextLabel.autoPinEdge(toSuperviewEdge: .right, withInset: 25)
         detailTextLabel.autoVCenterInSuperview()
-        
+
         if let selector = seletor {
             let longPress = UILongPressGestureRecognizer(target: self, action: selector)
             longPress.minimumPressDuration = 1
             cell.contentView.addGestureRecognizer(longPress)
         }
-        
-        cell.detailTextLabel?.textColor = Theme.secondaryTextAndIconColor
-        
+
+        cell.detailTextLabel?.textColor = Theme.tsecondaryColor
+
         if accessoryType == .disclosureIndicator {
             cell.accessoryView = self.accessoryArrow
         } else {
             cell.accessoryType = accessoryType
         }
-        
+
         return cell
     }
     
@@ -752,8 +769,9 @@ class DTPersonalCardController: OWSTableViewController,
     
     @objc func longPressIDClick(_ longPressGesture: UILongPressGestureRecognizer) {
         if let recipientId {
-            let base58RecipientId = NSString.base58EncodedNumber(recipientId)
-            copyUserInfo(text: base58RecipientId)
+            let customUid = account.contact?.customUid
+            let displayId = NSString.displayUserId(withCustomUid: customUid, recipientId: recipientId)
+            copyUserInfo(text: displayId)
         }
     }
     
@@ -761,7 +779,7 @@ class DTPersonalCardController: OWSTableViewController,
         guard !text.isEmpty else {
             return
         }
-        UIPasteboard.general.string = text
+        DTSecurePasteboard.setString(text)
         DTToastHelper.toast(withText: Localized("COPYID", "copy to pastboard"), durationTime: 2)
     }
     
@@ -801,17 +819,6 @@ class DTPersonalCardController: OWSTableViewController,
                 thread: thread,
                 displayLoading: true
             )
-        }
-    }
-    
-    func contactWeabot() {
-        
-        let weaBotThread = TSContactThread.getOrCreateThread(contactId: TSConstants.officialBotId)
-        let viewController = ConversationViewController(thread: weaBotThread, action: .none)
-        if let navigationController = self.navigationController as? OWSNavigationController {
-            navigationController.pushViewController(viewController, animated: true) {
-                navigationController.remove(toViewController: "DTHomeViewController")
-            }
         }
     }
     
@@ -1005,53 +1012,186 @@ extension DTPersonalCardController : AvatarViewHelperDelegate {
 extension DTPersonalCardController : DTQuickActionCellDelegate {
     func quickActionCell(_ cell: DTQuickActionCell, button sender: DTLayoutButton, actionType type: DTQuickActionType) {
         
-        if let nav = self.navigationController as? DTPanModalNavController,
-           nav.isPanModalPresented {
-            
-            nav.panModalTransition(to: PanModalPresentationController.PresentationState.longForm)
-            handleQuickAction(type)
-            
-        } else {
-            handleQuickAction(type)
+        handleQuickAction(type)
+    }
+    
+    func topViewController() -> UIViewController? {
+        guard
+            let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+            let window = windowScene.windows.first,
+            let rootVC = window.rootViewController
+        else { return nil }
+
+        var topVC = rootVC
+        while let presented = topVC.presentedViewController {
+            topVC = presented
         }
+        return topVC
+    }
+    
+    func dismissIfNeeded(_ completion: @escaping () -> Void) {
+        if let presenting = presentingViewController {
+            presenting.dismiss(animated: true, completion: completion)
+        } else {
+            completion()
+        }
+    }
+    
+    func pushConversation(thread: TSThread) {
+        let conversationVC = ConversationViewController(thread: thread, action: .none)
+
+        // 优先使用当前的 navigationController（处理从通讯录push进来的情况）
+        if let nav = self.navigationController {
+            nav.pushViewController(conversationVC, animated: true)
+            return
+        }
+
+        // 如果没有 navigationController，使用 topViewController（处理modal present的情况）
+        guard let topVC = topViewController() else { return }
+
+        if let nav = topVC as? UINavigationController {
+            nav.pushViewController(conversationVC, animated: true)
+        } else if let nav = topVC.navigationController {
+            nav.pushViewController(conversationVC, animated: true)
+        }
+    }
+    
+    func showFloatingConversation(thread: TSThread, config: FloatingConversationConfiguration) {
+        topViewController()?.showFloatingConversation(
+            with: thread,
+            configuration: config
+        )
     }
     
     func handleQuickAction(_ type: DTQuickActionType) {
         switch type {
+
         case DTQuickActionTypeShare:
-            if account.isFriend {
-                showSelectThreadController()
-            } else {
-                requestAddFriend()
-            }
-            
+            account.isFriend ? showSelectThreadController() : requestAddFriend()
+
         case DTQuickActionTypeCall:
             if canCall() {
                 liveKitCall()
             }
-            
+
         case DTQuickActionTypeMessage:
-            DispatchQueue.main.async {
-                
-                if self.isFromSameThread && self.presentingViewController != nil {
-                    self.navigationController?.dismiss(animated: true, completion: nil)
-                    return
-                }
-                
-                if let recipientId = self.recipientId {
-                    let thread = TSContactThread.getOrCreateThread(contactId: recipientId)
-                    self.contactThread = thread
-                    let viewController = ConversationViewController(thread: thread, action: .none)
-                    if let navigationController = self.navigationController as? OWSNavigationController {
-                        navigationController.pushViewController(viewController, animated: true) {
-                            navigationController.remove(toViewController: "DTHomeViewController")
-                        }
-                    }
-                }
-                
-            }
+            handleMessageAction()
+
         default:
             break
+        }
+    }
+    
+    private func handleMessageAction() {
+        DispatchQueue.main.async {
+
+            // 同 thread 且是 modal 进来的，直接 dismiss 并弹出键盘
+            if self.isFromSameThread, self.presentingViewController != nil {
+                // 在 dismiss 之前保存 presentingViewController 的引用
+                let presentingVC = self.presentingViewController
+
+                self.navigationController?.dismiss(animated: true) { [weak self] in
+                    // Dismiss 完成后，找到底层的 ConversationViewController 并弹出键盘
+                    self?.showKeyboardInUnderlyingConversation(presentingVC: presentingVC)
+                }
+                return
+            }
+
+            guard let recipientId = self.recipientId else { return }
+
+            let thread = TSContactThread.getOrCreateThread(contactId: recipientId)
+            self.contactThread = thread
+
+            if self.isFromContacts {
+                self.handleContactConversation(thread: thread)
+            } else {
+                self.handleFloatingConversation(thread: thread)
+            }
+        }
+    }
+
+    private func showKeyboardInUnderlyingConversation(presentingVC: UIViewController?) {
+        // 使用传入的 presentingViewController
+        guard let presentingVC = presentingVC else { return }
+
+        // 递归查找 ConversationViewController
+        if let conversationVC = findConversationViewController(from: presentingVC) {
+            // 延迟一下确保 dismiss 动画完成
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                conversationVC.popKeyBoard()
+            }
+        }
+    }
+
+    private func findConversationViewController(from viewController: UIViewController) -> ConversationViewController? {
+        // 如果当前就是 ConversationViewController，直接返回
+        if let conversationVC = viewController as? ConversationViewController {
+            return conversationVC
+        }
+
+        // 如果是 UINavigationController，查找其 topViewController
+        if let navController = viewController as? UINavigationController {
+            return findConversationViewController(from: navController.topViewController ?? navController)
+        }
+
+        // 如果是 UITabBarController，查找其 selectedViewController
+        if let tabBarController = viewController as? UITabBarController,
+           let selectedVC = tabBarController.selectedViewController {
+            return findConversationViewController(from: selectedVC)
+        }
+
+        // 如果有 presentedViewController，也尝试查找
+        if let presentedVC = viewController.presentedViewController {
+            if let result = findConversationViewController(from: presentedVC) {
+                return result
+            }
+        }
+
+        // 遍历 childViewControllers
+        for child in viewController.children {
+            if let result = findConversationViewController(from: child) {
+                return result
+            }
+        }
+
+        return nil
+    }
+    
+    private func handleContactConversation(thread: TSThread) {
+        dismissIfNeeded {
+            self.pushConversation(thread: thread)
+        }
+    }
+    
+    private func handleFloatingConversation(thread: TSThread) {
+
+        let config = FloatingConversationConfiguration(
+            compactHeightRatio: 0.55,
+            expandedHeightRatio: 0.9,
+            transitionStyle: .present,
+            showDragIndicator: true,
+            dimViewAlpha: 0.7,
+            dismissOnDimViewTap: true,
+            enablePullToDismiss: true,
+            pullToDismissThreshold: 0.3,
+            cornerRadius: 16,
+            heightAnimationDuration: 0.3,
+            showFullscreenButton: true
+        )
+
+        let isFromLongMessage = presentingViewController is LongMessageViewController
+
+        if isFromLongMessage,
+           let longMessagePresenting = presentingViewController?.presentingViewController {
+
+            longMessagePresenting.dismiss(animated: true) {
+                self.showFloatingConversation(thread: thread, config: config)
+            }
+            return
+        }
+
+        dismissIfNeeded {
+            self.showFloatingConversation(thread: thread, config: config)
         }
     }
     
@@ -1073,7 +1213,7 @@ extension DTPersonalCardController : PanModalPresentable {
 
 extension DTPersonalCardController : OWSNavigationChildController {
     
-    public var navbarBackgroundColorOverride: UIColor? { Theme.defaultBackgroundColor }
+    public var navbarBackgroundColorOverride: UIColor? { Theme.bgpageSecondaryColor }
 
     public var childForOWSNavigationConfiguration: OWSNavigationChildController? { nil }
 

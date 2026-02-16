@@ -21,6 +21,7 @@
 @property (nonatomic, strong) JXCategoryTitleView *titleView;
 @property (nonatomic, strong) JXCategoryIndicatorLineView *indicator;
 @property (nonatomic, strong) UIView *separator;
+@property (nonatomic, strong) UIButton *addContactButton;
 
 @property (nonatomic, strong) NewContactThreadViewController *contactsVC;
 @property (nonatomic, strong) DTGroupsViewController *groupsVC;
@@ -62,13 +63,13 @@
     
     if (!_titleView) {
         _titleView = [[JXCategoryTitleView alloc] initWithFrame:CGRectMake(0, 0, kScreenWidth, 36)];
-        _titleView.backgroundColor = Theme.bg1Color;
+        _titleView.backgroundColor = Theme.bgpagePrimaryColor;
         _titleView.delegate = self;
         _titleView.titleDataSource = self;
         _titleView.titleFont = [UIFont systemFontOfSize:15];
 //        _titleView.titleSelectedFont = [UIFont systemFontOfSize:16].ows_semibold;
-        _titleView.titleColor = Theme.ternaryTextColor;
-        _titleView.titleSelectedColor = Theme.alertCancelColor;
+        _titleView.titleColor = Theme.tthirdColor;
+        _titleView.titleSelectedColor = Theme.tprimaryColor;
         _titleView.titleColorGradientEnabled = YES;
         _titleView.averageCellSpacingEnabled = NO;
         _titleView.cellWidthIncrement = 10;
@@ -78,11 +79,11 @@
         _indicator = [JXCategoryIndicatorLineView new];
         _indicator.lineStyle = JXCategoryIndicatorLineStyle_Normal;
         _indicator.indicatorHeight = 2.0;
-        _indicator.indicatorColor = Theme.alertCancelColor;
+        _indicator.indicatorColor = Theme.tprimaryColor;
         _titleView.indicators = @[_indicator];
         
         _separator = [UIView new];
-        _separator.backgroundColor = Theme.hairlineColor;
+        _separator.backgroundColor = Theme.lineColor;
         [_titleView addSubview:_separator];
         [_separator autoPinEdgeToSuperviewEdge:ALEdgeLeading];
         [_separator autoPinEdgeToSuperviewEdge:ALEdgeTrailing];
@@ -97,8 +98,8 @@
     
     if (!_pagerView) {
         _pagerView = [[JXPagerListRefreshView alloc] initWithDelegate:self];
-        _pagerView.mainTableView.backgroundColor = Theme.bgelevateColor;
-        _pagerView.listContainerView.listCellBackgroundColor = Theme.bgelevateColor;
+        _pagerView.mainTableView.backgroundColor = Theme.bgpagePrimaryColor;
+        _pagerView.listContainerView.listCellBackgroundColor = Theme.bgpagePrimaryColor;
     }
     return _pagerView;;
 }
@@ -132,12 +133,32 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.leftTitle = Localized(@"MESSAGE_COMPOSEVIEW_TITLE", @"");
-    
+
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(signalAccountsDidChange:)
                                                  name:OWSContactsManagerSignalAccountsDidChangeNotification
                                                object:nil];
     [self.contactsVC requestContactsAtFirstTime];
+
+    // 添加右上角的添加联系人按钮
+    [self setupAddContactButton];
+}
+
+- (void)setupAddContactButton {
+    self.addContactButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    UIImage *image = [[UIImage imageNamed:@"add_contacts"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    [self.addContactButton setImage:image forState:UIControlStateNormal];
+    [self.addContactButton addTarget:self action:@selector(addContactButtonTapped) forControlEvents:UIControlEventTouchUpInside];
+    [self.addContactButton setFrame:CGRectMake(0, 0, 48, 48)];
+
+    UIBarButtonItem *addContactBarItem = [[UIBarButtonItem alloc] initWithCustomView:self.addContactButton];
+    self.navigationItem.rightBarButtonItem = addContactBarItem;
+}
+
+- (void)addContactButtonTapped {
+    // 打开邀请码输入页面
+    EnterCodeViewController *enterCodeVC = [EnterCodeViewController new];
+    [self.navigationController pushViewController:enterCodeVC animated:YES];
 }
 
 - (BOOL)hidesBottomBarWhenPushed {
@@ -147,11 +168,12 @@
 - (void)applyTheme {
     [super applyTheme];
 
-    self.pagerView.listContainerView.listCellBackgroundColor = Theme.bgelevateColor;
-    self.titleView.backgroundColor = Theme.bg1Color;
-    self.titleView.titleSelectedColor = Theme.alertCancelColor;
-    self.indicator.indicatorColor = Theme.alertCancelColor;
-    self.separator.backgroundColor = Theme.hairlineColor;
+    self.pagerView.listContainerView.listCellBackgroundColor = Theme.bgpagePrimaryColor;
+    self.titleView.backgroundColor = Theme.bgpagePrimaryColor;
+    self.titleView.titleSelectedColor = Theme.tprimaryColor;
+    self.indicator.indicatorColor = Theme.tprimaryColor;
+    self.separator.backgroundColor = Theme.lineColor;
+    self.addContactButton.tintColor = Theme.iconColor;
     [self.titleView reloadData];
 }
 

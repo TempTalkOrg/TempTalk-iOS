@@ -269,15 +269,26 @@ class ThreadMapping: NSObject {
             archiveCount = threadFinder.visibleThreadCount(isArchived: true, transaction: transaction)
             var newThreads: [TSThread] = []
             var newThreadsMap: [String: TSThread] = [:]
+
             try threadFinder.enumerateVisibleThreads(isArchived: isArchived, transaction: transaction) {
-        
+
                 if self.currentFolder == nil,  DTChatFolderManager.shared().excludeVegaFromAll, let grouThread = $0 as? TSGroupThread, grouThread.businessFromVega(){
                     return
                 }
+
+                // Skip threads where user has been kicked from group
+                // These will be cleaned up by cleanupEmptyThreadsIfNeeded
+                if let groupThread = $0 as? TSGroupThread {
+                    if !groupThread.isLocalUserInGroup(with: transaction) {
+                        return
+                    }
+                }
+
                 newThreads.append($0)
                 newThreadsMap[$0.uniqueId] = $0
-                
+
             }
+
             Logger.info("##### \(newThreads.count)")
             if isCalculate {
                 threads = newThreads

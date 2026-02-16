@@ -188,7 +188,7 @@
     
     NSString *combinedForwardingTitle = [self combinedForwardingMessageTitleWithIsGroupThread:isGroupThread combinedMessage:combinedMessage];
     ConversationStyle *style = [[ConversationStyle alloc] initWithThread:nil];
-    NSMutableAttributedString *attributeBodyText = [[NSMutableAttributedString alloc] initWithString:combinedForwardingTitle attributes:@{NSForegroundColorAttributeName : [style bubbleTextColorWithMessage:combinedMessage], NSFontAttributeName : UIFont.ows_dynamicTypeBodyFont}];
+    NSMutableAttributedString *attributeBodyText = [[NSMutableAttributedString alloc] initWithString:combinedForwardingTitle attributes:@{NSForegroundColorAttributeName : [style bubbleTextColorWithMessage:combinedMessage], NSFontAttributeName : UIFont.ows_dynamicTypeBodyFontUnscaled}];
     __block NSString *overviewBodyText = @"\n";
     [subForwardingMessages enumerateObjectsUsingBlock:^(DTCombinedForwardingMessage * _Nonnull subMessage, NSUInteger idx, BOOL * _Nonnull stop) {
         NSString *authorName = subMessage.authorName;
@@ -217,7 +217,7 @@
         }
     }];
     BOOL isIncoming = [combinedMessage isKindOfClass:[TSIncomingMessage class]];
-    NSAttributedString *subAttributeText = [[NSAttributedString alloc] initWithString:overviewBodyText attributes:@{NSForegroundColorAttributeName : [style bubbleSecondaryTextColorWithIsIncoming:isIncoming], NSFontAttributeName : UIFont.ows_dynamicTypeFootnoteFont}];
+    NSAttributedString *subAttributeText = [[NSAttributedString alloc] initWithString:overviewBodyText attributes:@{NSForegroundColorAttributeName : [style bubbleSecondaryTextColorWithIsIncoming:isIncoming], NSFontAttributeName : UIFont.ows_dynamicTypeFootnoteFontUnscaled}];
     [attributeBodyText appendAttributedString:subAttributeText];
 
     return attributeBodyText;

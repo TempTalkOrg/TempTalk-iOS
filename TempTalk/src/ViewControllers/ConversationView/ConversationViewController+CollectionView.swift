@@ -15,7 +15,7 @@ extension ConversationViewController {
     func setupCollectionView() {
         layout.delegate = self
         conversationStyle.viewWidth = floor(view.width)
-        
+
         collectionView.layoutDelegate = self
         collectionView.delegate = self
         collectionView.showsVerticalScrollIndicator = false
@@ -26,16 +26,31 @@ extension ConversationViewController {
         collectionView.allowsSelection = false
         collectionView.isPrefetchingEnabled = false
         collectionView.alwaysBounceVertical = true
-        
+
         view.addSubview(collectionView)
         collectionView.autoPinEdge(toSuperviewSafeArea: .top)
         collectionView.autoPinEdge(toSuperviewEdge: .bottom)
         collectionView.autoPinEdge(toSuperviewSafeArea: .leading)
         collectionView.autoPinEdge(toSuperviewSafeArea: .trailing)
-        
+
+        if showWarningHeader {
+            let headerHeight = warningHeaderView.intrinsicContentSize.height
+            collectionView.addSubview(warningHeaderView)
+            warningHeaderView.frame = CGRect(x: 0, y: -headerHeight, width: collectionView.bounds.width, height: headerHeight)
+            warningHeaderView.autoresizingMask = [.flexibleWidth]
+
+            var currentInset = collectionView.contentInset
+            currentInset.top += headerHeight
+            collectionView.contentInset = currentInset
+
+            var scrollInset = collectionView.scrollIndicatorInsets
+            scrollInset.top += headerHeight
+            collectionView.scrollIndicatorInsets = scrollInset
+        }
+
         collectionView.applyInsetsFix()
         collectionView.accessibilityIdentifier = "collectionView"
-        
+
         collectionView.addGestureRecognizer(tapGestureRecognizer)
         
         collectionView.register(
@@ -149,9 +164,6 @@ extension ConversationViewController {
                 messageCell.isMultiSelectMode = isMultiSelectMode
                 messageCell.isCellSelected = isSelectedViewItemInMultiSelectMode(messageRenderItem.viewItem)
                 messageCell.refreshTheme()
-                
-                Logger.info("audio message byesize \(String(describing: messageRenderItem.messageBubbleRenderItem?.bodyMediaRenderItem?.viewItem.attachmentStream()?.byteCount))")
-                Logger.info("audio message isUploaded \(String(describing: messageRenderItem.messageBubbleRenderItem?.bodyMediaRenderItem?.viewItem.attachmentStream()?.isUploaded))")
                 
             case (let systemCell as ConversationSystemMessageCell, let systemRenderItem as ConversationSystemRenderItem):
                 systemCell.delegate = self
@@ -312,6 +324,14 @@ extension ConversationViewController: UICollectionViewDelegate {
     ) {
         if let conversationCell = cell as? ConversationCell {
             conversationCell.isCellVisible = true
+        }
+
+        guard indexPath.row >= 0, indexPath.row < renderItems.count else { return }
+        let renderItem = renderItems[indexPath.row]
+
+        if let infoMessage = renderItem.interaction as? TSInfoMessage,
+           infoMessage.messageType == .confidentialViewed {
+            addViewedPlaceholder(infoMessage.uniqueId)
         }
     }
     

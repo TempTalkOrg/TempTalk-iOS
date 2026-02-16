@@ -136,7 +136,7 @@ class NotificationService: UNNotificationServiceExtension {
                 mutablePlainAttemptContent.body = body
             }
             
-            Logger.info("processPlainNotification title: \(title).\n\(body)")
+            Logger.info("processPlainNotification received")
             
             plainAttemptContents[contentHandlerObject.identifier] = mutablePlainAttemptContent
         }
@@ -166,7 +166,6 @@ class NotificationService: UNNotificationServiceExtension {
         }
     }
 
-    var isUpdating = false
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         let attemptContent = request.content
         
@@ -231,19 +230,6 @@ class NotificationService: UNNotificationServiceExtension {
                 // 处理明文通知
                 let notiType = Environment.preferences().notificationPreviewType()
                 self.handleNotificationEnvelop(notiType: notiType, attemptContent: attemptContent)
-                
-                let scheduleResult = scheduleUpdateNotification(attemptContent: attemptContent)
-                Logger.debug("calendar event update: \(scheduleResult.0), version:\(scheduleResult.1 ?? -1)")
-                if scheduleResult.0 == true, let serverVersion = scheduleResult.1 {
-                    Logger.info("\(logTag) calendar update")
-                    isUpdating = true
-                    DTCalendarManager.shared.updateLocalNotification(serverVersion: serverVersion, completion: { [weak self] in
-                        guard let self else { return }
-                        isUpdating = false
-                    })
-                    
-                    return
-                }
 
                 guard !mainAppHandledReceipt else {
                     Logger.info("Received notification handled by main application, memoryUsage: \(LocalDevice.memoryUsageString).")
@@ -251,7 +237,6 @@ class NotificationService: UNNotificationServiceExtension {
                     return
                 }
 
-                guard !isUpdating else { return }
                 Logger.info("Processing received notification, memoryUsage: \(LocalDevice.memoryUsageString).")
 
                 self.fetchAndProcessMessages()
@@ -447,37 +432,6 @@ class NotificationService: UNNotificationServiceExtension {
         }
     }
     
-    func scheduleUpdateNotification(attemptContent :UNNotificationContent) -> (Bool, Int?) {
-        
-        let userInfo = attemptContent.userInfo
-        guard let aps = userInfo["aps"] as? Dictionary<String, Any> else {
-            return (false, nil)
-        }
-        
-        guard let alert = aps["alert"] as? Dictionary<String, Any>, let locKey = alert["loc-key"] as? String else {
-            return (false, nil)
-        }
-        
-        guard locKey == "CALENDAR_FULL_UPDATE" else {
-            return (false, nil)
-        }
-        
-        if let json = aps["passthrough"] as? String, let jsonData = json.data(using: .utf8) {
-            do {
-                guard let passthrough = try JSONSerialization.jsonObject(with: jsonData, options: []) as? Dictionary<String, Any>, let version = passthrough["version"] as? Int else {
-                    return (true, nil)
-                }
-                return (true, version)
-            } catch {
-                Logger.error("parse JSON error: \(error.localizedDescription)")
-                return (true, nil)
-            }
-        } else {
-            return (true, nil)
-        }
-        
-    }
-    
     func handleNotificationEnvelop(notiType: NotificationType, attemptContent :UNNotificationContent) {
         
         let userInfo = attemptContent.userInfo
@@ -544,15 +498,15 @@ class NotificationService: UNNotificationServiceExtension {
             
             if let callMessage = content.callMessage {
                 if let hangup = callMessage.hangup, let roomID = hangup.roomID { // 挂断 call
-                    Logger.debug("\(logTag) NSE receive hangup")
+                    Logger.debug("\(logTag) NSE receive hangup, roomID: \(roomID)")
                     Environment.preferences().endCallKitCall(withRoomId: roomID)
                     configWithNameAndPreview(title: "Yelling", body: "The call has ended")
                 } else if let reject = callMessage.reject, let roomID = reject.roomID {
-                    Logger.debug("\(logTag) NSE receive reject")
+                    Logger.debug("\(logTag) NSE receive reject, roomID: \(roomID)")
                     Environment.preferences().endCallKitCall(withRoomId: roomID)
                     configWithNameAndPreview(title: "Yelling", body: "The call has been rejected")
                 } else if let cancel = callMessage.cancel, let roomID = cancel.roomID {
-                    Logger.debug("\(logTag) NSE receive cancel")
+                    Logger.debug("\(logTag) NSE receive cancel, roomID: \(roomID)")
                     Environment.preferences().endCallKitCall(withRoomId: roomID)
                     configWithNameAndPreview(title: "Yelling", body: "The call has been canceled")
                 }
@@ -562,7 +516,7 @@ class NotificationService: UNNotificationServiceExtension {
                 return
             }
             
-            Logger.info("Msg.timestamp = \(envelope.timestamp), \(envelope.source ?? "nil").\(envelope.sourceDevice)")
+            Logger.info("Msg.timestamp = \(envelope.timestamp), source device: \(envelope.sourceDevice)")
             var displayName = ""
             if let source = envelope.source {
                 databaseStorage.read { transaction in

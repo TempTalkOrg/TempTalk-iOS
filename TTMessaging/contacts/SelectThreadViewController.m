@@ -77,7 +77,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                       action:@selector(dismissPressed:)];
     self.navigationItem.rightBarButtonItem =
     [[UIBarButtonItem alloc] initWithTitle:Localized(@"FORWARD_MESSAGE_SELECT_MULTI", @"") style:UIBarButtonItemStylePlain target:self action:@selector(multipleSelectPressed:)];
-    self.view.backgroundColor = Theme.backgroundColor;
+    self.view.backgroundColor = Theme.bg1Color;
 
     _contactsViewHelper = [[ContactsViewHelper alloc] initWithDelegate:self];
     _fullTextSearcher = ConversationSearcher.shared;
@@ -148,7 +148,7 @@ NS_ASSUME_NONNULL_BEGIN
         _btnSelectDone.layer.cornerRadius = 15;
         _btnSelectDone.clipsToBounds = YES;
         _btnSelectDone.titleLabel.font = [UIFont ows_regularFontWithSize:15.0];
-        [_btnSelectDone setBackgroundImage:[UIImage imageWithColor:Theme.buttonDisableColor] forState:UIControlStateDisabled];
+        [_btnSelectDone setBackgroundImage:[UIImage imageWithColor:Theme.bgdisableColor] forState:UIControlStateDisabled];
         [_btnSelectDone setTitleColor:[UIColor ows_whiteColor] forState:UIControlStateNormal];
         [_btnSelectDone setBackgroundImage:[UIImage imageWithColor:[UIColor ows_materialBlueColor]] forState:UIControlStateNormal];
 

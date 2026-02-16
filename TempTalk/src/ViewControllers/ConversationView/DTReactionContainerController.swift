@@ -11,33 +11,37 @@ import JXCategoryView
 
 @objcMembers
 class DTReactionContainerController: OWSViewController {
-    
-    var targetMessage: TSMessage!
-    var emojiTitles: [String]!
-    var selectedEmoji: String!
-    
+
+    var targetMessage: TSMessage?
+    var emojiTitles: [String]?
+    var selectedEmoji: String?
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+
         navigationItem.title = "Emoji Reaction"//emojiTitleView
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .stop, target: self, action: #selector(cancelItemAction))
-        
+
+        guard let targetMessage = targetMessage else { return }
         self.databaseStorage.read { [self] transaction in
             if let tmpTitles = DTReactionHelper.emojiTitlesForMessage(targetMessage, transaction: transaction) {
                 self.emojiTitles = tmpTitles
                 self.layoutSubviews()
-                self.emojiTitleView.titles = self.emojiTitles
-                
+                self.emojiTitleView.titles = tmpTitles
+
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
                     self.emojiTitleView.selectItem(at: self.defaultSelectedIndex())
                 }
-                
+
             }
         }
-        
+
     }
-    
+
     private func defaultSelectedIndex() -> Int {
+        guard let emojiTitles = emojiTitles, let selectedEmoji = selectedEmoji else {
+            return 0
+        }
         var existEmojis = [String]()
         for title in emojiTitles {
             guard let emoji = title.components(separatedBy: ["("]).first else {
@@ -46,7 +50,7 @@ class DTReactionContainerController: OWSViewController {
             existEmojis.append(emoji)
         }
         if existEmojis.contains(selectedEmoji) {
-            return existEmojis.firstIndex(of: selectedEmoji)!
+            return existEmojis.firstIndex(of: selectedEmoji) ?? 0
         }
         return 0
     }
@@ -54,12 +58,12 @@ class DTReactionContainerController: OWSViewController {
     override func applyTheme() {
         super.applyTheme()
         
-        emojiTitleView.titleColor = Theme.primaryTextColor
-        emojiTitleView.backgroundColor = Theme.backgroundColor
-        separator.backgroundColor = Theme.hairlineColor
-        separator1.backgroundColor = Theme.hairlineColor
+        emojiTitleView.titleColor = Theme.tprimaryColor
+        emojiTitleView.backgroundColor = Theme.bg1Color
+        separator.backgroundColor = Theme.lineColor
+        separator1.backgroundColor = Theme.lineColor
         emojiTitleView.reloadData()
-        containerView.listCellBackgroundColor = Theme.backgroundColor
+        containerView.listCellBackgroundColor = Theme.bg1Color
     }
     
     func layoutSubviews() {
@@ -127,7 +131,7 @@ class DTReactionContainerController: OWSViewController {
     
     lazy var containerView: JXCategoryListContainerView = {
         let containerView = JXCategoryListContainerView(type: .collectionView, delegate: self)!
-        containerView.listCellBackgroundColor = Theme.backgroundColor
+        containerView.listCellBackgroundColor = Theme.bg1Color
         
         return containerView
     }()
@@ -144,23 +148,25 @@ extension DTReactionContainerController: JXCategoryViewDelegate, JXCategoryTitle
 
 extension DTReactionContainerController: JXCategoryListContainerViewDelegate {
     func number(ofListsInlistContainerView listContainerView: JXCategoryListContainerView!) -> Int {
-        self.emojiTitles.count
+        self.emojiTitles?.count ?? 0
     }
-    
+
     func listContainerView(_ listContainerView: JXCategoryListContainerView!, initListFor index: Int) -> JXCategoryListContentViewDelegate! {
-        
-        guard let currentEmoji = emojiTitles[index].components(separatedBy: ["("]).first else {
+
+        guard let emojiTitles = emojiTitles, index < emojiTitles.count,
+              let currentEmoji = emojiTitles[index].components(separatedBy: ["("]).first else {
             return nil
         }
-        guard let reactionSources = DTReactionHelper.reactionSources(for: targetMessage, emoji: currentEmoji) else {
+        guard let targetMessage = targetMessage,
+              let reactionSources = DTReactionHelper.reactionSources(for: targetMessage, emoji: currentEmoji) else {
             return nil
         }
-        
+
         let listVC = DTReactionListController()
         listVC.shouldUseTheme = true
         listVC.reactionSources = reactionSources
-        
+
         return listVC
     }
-    
+
 }

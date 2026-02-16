@@ -181,7 +181,7 @@ import MultipeerConnectivity
 
 extension DTTransferReceivingViewController: DeviceTransferServiceObserver {
     func deviceTransferServiceDiscoveredNewDevice(peerId: MCPeerID, discoveryInfo: [String : String]?) {
-        OWSLogger.info("[DeviceTransferModule -> func -> DiscoveredNewDevice] peerId = \(peerId.displayName)")
+        OWSLogger.info("[DeviceTransferModule -> func -> DiscoveredNewDevice] new device discovered")
     }
     
     func deviceTransferServiceDidStartTransfer(progress: Progress) {

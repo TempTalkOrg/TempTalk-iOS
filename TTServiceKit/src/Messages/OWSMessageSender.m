@@ -36,6 +36,8 @@
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import "DTGroupUtils.h"
 #import "DTMessageConfig.h"
+#import "TSMessageReadPosition.h"
+#import "DTReadPositionEntity.h"
 
 NS_ASSUME_NONNULL_BEGIN
 // TODO: fix bad extern define here
@@ -323,13 +325,13 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
             }
             
             desThread = [message threadWithTransaction:writeTransaction];
-            
+
             if (message.shouldBeSaved) {
                 // All outgoing messages should be saved at the time they are enqueued.
                 // When we start a message send, all "failed" recipients should be marked as "sending".
                 [message updateWithMarkingAllUnsentRecipientsAsSendingWithTransaction:writeTransaction];
                 [message anyInsertWithTransaction:writeTransaction];
-                
+
                 // 发送消息成功后, 将已归档的会话解除归档状态
                 if (desThread.isArchived) {
                     [desThread anyUpdateWithTransaction:writeTransaction block:^(TSThread * _Nonnull t) {

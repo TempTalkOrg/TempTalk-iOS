@@ -11,9 +11,11 @@ import SnapKit
 import TTMessaging
 
 class ConversationIncomingMessageCell: ConversationMessageCell {
-    
+
     @objc
     static let reuseIdentifier = "ConversationIncomingMessageCell"
+
+    private var audioControlButton: UIView?
     
     // MARK: - Override
     
@@ -21,10 +23,6 @@ class ConversationIncomingMessageCell: ConversationMessageCell {
         avatarAroundView = avatarView
         messageContainerView.addSubview(avatarView)
         messageContainerView.addSubview(senderNameView)
-        
-        msgMiddleHStackView.addArrangedSubviews([
-            skipToOrigionIcon
-        ])
         
         contentVStackView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
@@ -55,9 +53,10 @@ class ConversationIncomingMessageCell: ConversationMessageCell {
         
         msgVStackView.alignment = .leading
         msgVStackView.snp.makeConstraints { make in
-            make.top.equalTo(avatarView)
-            make.leading.equalToSuperview().offset(52)
-            make.trailing.lessThanOrEqualToSuperview().offset(-8)
+            // Bubble below avatar with 4pt spacing (to match accountViewHeight)
+            make.top.equalTo(avatarView.snp.bottom).offset(4)
+            make.leading.equalToSuperview().offset(ConversationIncomingMessageRenderItem.leadingPadding)
+            make.trailing.lessThanOrEqualToSuperview().offset(-ConversationIncomingMessageRenderItem.trailingPadding)
         }
         
         let maxNameWidth = UIScreen.main.bounds.size.width * 3.0 / 4.0
@@ -80,24 +79,27 @@ class ConversationIncomingMessageCell: ConversationMessageCell {
     
     override func configure(renderItem: ConversationMessageRenderItem) {
         super.configure(renderItem: renderItem)
-        
+
         configureMsgVStackViewMargin(style: renderItem.conversationStyle)
-        
+
         if footerTimeLabel.isHidden {
             footerViewApperanceCommon(isHidden: true)
         } else {
             footerViewApperanceCommon(renderItem: renderItem)
         }
-                
+
         updateViewLayout(renderItem: renderItem)
-        
+
         guard let incomingRenderItem = renderItem as? ConversationIncomingMessageRenderItem else {
             return
         }
         configureAvatarView(viewItem: incomingRenderItem.viewItem)
         configureSenderNameView(renderItem: incomingRenderItem)
-        configureSkipToOrigionIcon(renderItem: incomingRenderItem)
         autoTranslateIfNeeded(renderItem: incomingRenderItem)
+        configureAudioControlButton(renderItem: incomingRenderItem)
+
+        // 关联 cell 到 viewItem，以便在音频播放状态改变时更新按钮
+        renderItem.viewItem.associateAudioCell(self)
     }
     
     override func multiSelectModeDidChange() {
@@ -107,17 +109,13 @@ class ConversationIncomingMessageCell: ConversationMessageCell {
             make.leading.equalToSuperview().offset(isMultiSelectMode ? 32 : 0)
             make.trailing.equalToSuperview().offset(isMultiSelectMode ? 32 : 0)
         }
-        
-        if let renderItem, let incomingRenderItem = renderItem as? ConversationIncomingMessageRenderItem {
-            configureSkipToOrigionIcon(renderItem: incomingRenderItem)
-        }
     }
     
     override func refreshTheme() {
         super.refreshTheme()
         
         if !senderNameView.isHidden {
-            senderNameView.nameColor = Theme.ternaryTextColor
+            senderNameView.nameColor = Theme.tthirdColor
         }
     }
     
@@ -160,11 +158,6 @@ class ConversationIncomingMessageCell: ConversationMessageCell {
         delegate?.messageCell?(self, didLongPressAvatarWith: authorId, senderName: name)
     }
     
-    @objc private func skipToOrigionIconDidClick() {
-        guard let viewItem = renderItem?.viewItem else { return }
-        delegate?.messageCell?(self, didTapSkipToOrigionWith: viewItem)
-    }
-    
     // MARK: - Lazy Load
     
     private lazy var avatarView: DTAvatarImageView = {
@@ -180,18 +173,7 @@ class ConversationIncomingMessageCell: ConversationMessageCell {
     
     private lazy var senderNameView: DTConversationNameView = {
         let view = DTConversationNameView()
-        view.nameFont = .ows_dynamicTypeCaption2
-        return view
-    }()
-    
-    private lazy var skipToOrigionIcon: DTImageView = {
-        let view = DTImageView()
-        view.alpha = 0
-        view.image = .init(named: "ic_pin_skip")
-        view.tapBlock = { [weak self] _ in
-            guard let self else { return }
-            self.skipToOrigionIconDidClick()
-        }
+        view.nameFont = .ows_dynamicTypeCaption1
         return view
     }()
 }
@@ -236,7 +218,8 @@ extension ConversationIncomingMessageCell {
     
     private func configureMsgVStackViewMargin(style: ConversationStyle) {
         msgVStackView.snp.remakeConstraints { make in
-            make.top.equalTo(avatarView.snp.bottom)
+            // Bubble below avatar with 4pt spacing (to match accountViewHeight)
+            make.top.equalTo(avatarView.snp.bottom).offset(4)
             make.leading.equalToSuperview().offset(style.gutterLeading)
             make.trailing.lessThanOrEqualToSuperview().offset(-style.gutterTrailing)
         }
@@ -302,16 +285,6 @@ extension ConversationIncomingMessageCell {
         }
     }
     
-    private func configureSkipToOrigionIcon(renderItem: ConversationIncomingMessageRenderItem) {
-        let canShow = renderItem.couldShowSkipToOriginIcon
-        if canShow {
-            skipToOrigionIcon.isHidden = false
-            skipToOrigionIcon.alpha = isMultiSelectMode ? 0 : 1
-        } else {
-            skipToOrigionIcon.isHidden = true
-        }
-    }
-    
     private func autoTranslateIfNeeded(renderItem: ConversationIncomingMessageRenderItem) {
         renderItem.autoTranslateIfNeeded()
     }
@@ -338,3 +311,88 @@ extension ConversationIncomingMessageCell {
         configureAvatarView(viewItem: viewItem)
     }
 }
+
+// MARK: - Audio Control Button
+
+extension ConversationIncomingMessageCell {
+    @objc func refreshAudioControlButton() {
+        guard let renderItem = renderItem as? ConversationIncomingMessageRenderItem else {
+            return
+        }
+        configureAudioControlButton(renderItem: renderItem)
+    }
+
+    private func configureAudioControlButton(renderItem: ConversationIncomingMessageRenderItem) {
+        // 检查是否是音频消息
+        let viewItem = renderItem.viewItem
+        guard viewItem.messageCellType() == .audio else {
+            if let audioControlButton, !audioControlButton.isHidden {
+                audioControlButton.isHidden = true
+            }
+            return
+        }
+
+        // 检查是否正在播放音频
+        let isAudioPlaying = viewItem.audioPlaybackState() == .playing
+
+        let controlButton: UIView = {
+            guard let audioControlButton else {
+                let button = UIView()
+                button.layer.backgroundColor = Theme.bg4Color.cgColor
+                button.layer.cornerRadius = 12
+                button.translatesAutoresizingMaskIntoConstraints = false
+                button.isUserInteractionEnabled = true
+                contentView.addSubview(button)
+
+                // 添加速度标签
+                let label = UILabel()
+                label.font = .systemFont(ofSize: 12, weight: .regular)
+                label.textColor = Theme.tsecondaryColor
+                label.textAlignment = .center
+                label.translatesAutoresizingMaskIntoConstraints = false
+                button.addSubview(label)
+                label.snp.makeConstraints { make in
+                    make.center.equalToSuperview()
+                }
+
+                // 添加点击手势
+                let tapGesture = UITapGestureRecognizer(target: self, action: #selector(audioControlButtonTapped))
+                button.addGestureRecognizer(tapGesture)
+
+                // Incoming: 按钮在音频的右边（气泡右边）
+                button.snp.makeConstraints { make in
+                    make.width.equalTo(36)
+                    make.height.equalTo(24)
+                    make.leading.equalTo(messageBubbleView.snp.trailing).offset(8)
+                    make.centerY.equalTo(messageBubbleView)
+                }
+
+                self.audioControlButton = button
+                return button
+            }
+            return audioControlButton
+        }()
+
+        // 更新速度标签
+        if let label = controlButton.subviews.first as? UILabel {
+            let rate = (delegate as? ConversationViewController)?.audioPlaybackRate ?? 1.0
+            if rate == 1.0 {
+                label.text = "1x"
+            } else if rate == 1.5 {
+                label.text = "1.5x"
+            } else {
+                label.text = "2x"
+            }
+        }
+
+        controlButton.isHidden = !isAudioPlaying
+    }
+
+    @objc private func audioControlButtonTapped() {
+        guard let conversationVC = delegate as? ConversationViewController else {
+            return
+        }
+        conversationVC.toggleAudioPlaybackRate()
+    }
+}
+

@@ -51,6 +51,8 @@ typedef NS_ENUM(NSInteger, AudioPlaybackState) {
 - (void)stop;
 - (void)togglePlayState;
 
+- (void)setPlaybackRate:(float)rate;
+
 @end
 
 NS_ASSUME_NONNULL_END

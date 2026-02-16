@@ -124,7 +124,7 @@ extern  CGFloat const kAvatarSize;
     OWSAssertDebug(self.thread.groupModel);
     OWSAssertDebug(self.thread.groupModel.groupMemberIds);
 
-    self.view.backgroundColor = Theme.backgroundColor;
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
     
     switch (self.mode) {
         case UpdateGroupMode_RemoveGroupMembers:
@@ -150,6 +150,8 @@ extern  CGFloat const kAvatarSize;
     _tableViewController.delegate = self;
     [self.view addSubview:self.tableViewController.view];
     [_tableViewController.view autoPinWidthToSuperview];
+    self.tableViewController.tableView.allowsMultipleSelection = YES;
+    self.tableViewController.tableView.allowsMultipleSelectionDuringEditing = YES;
     if(self.mode == UpdateGroupMode_EditGroupName){
         
         [_tableViewController.view autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:firstSection];
@@ -161,10 +163,12 @@ extern  CGFloat const kAvatarSize;
     }
 //    [self autoPinViewToBottomOfViewControllerOrKeyboard:self.tableViewController.view avoidNotch:false];
     [_tableViewController.view autoPinEdgeToSuperviewEdge:ALEdgeBottom];
-    
+
     if (self.mode == UpdateGroupMode_RemoveGroupMembers){
         firstSection.hidden = YES;
         self.tableViewController.tableView.rowHeight = 70;
+        self.tableViewController.canEditRow = NO;
+        self.tableViewController.tableView.editing = YES;
         [self sortGroupMemberByLastMessageTimestamp];
     } else {
         self.tableViewController.view.hidden = YES;
@@ -236,7 +240,7 @@ extern  CGFloat const kAvatarSize;
     firstSectionHeader.userInteractionEnabled = YES;
     [firstSectionHeader
         addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(headerWasTapped:)]];
-    firstSectionHeader.backgroundColor = Theme.tableCellBackgroundColor;
+    firstSectionHeader.backgroundColor = Theme.bgpageSecondaryColor;
     UIView *threadInfoView = [UIView new];
     [firstSectionHeader addSubview:threadInfoView];
     [threadInfoView autoPinWidthToSuperviewWithMargin:16.f];
@@ -256,7 +260,7 @@ extern  CGFloat const kAvatarSize;
     TTPaddedTextField *groupNameTextField = [[TTPaddedTextField alloc] init];
     _groupNameTextField = groupNameTextField;
     self.groupNameTextField.text = [self.thread.groupModel.groupName ows_stripped];
-    groupNameTextField.textColor = Theme.primaryTextColor;
+    groupNameTextField.textColor = Theme.tprimaryColor;
     groupNameTextField.font = [UIFont ows_dynamicTypeTitle2Font];
     groupNameTextField.borderStyle = UITextBorderStyleNone;
     groupNameTextField.layer.borderWidth = 1.0;
@@ -318,19 +322,16 @@ extern  CGFloat const kAvatarSize;
     OWSTableContents *contents = [OWSTableContents new];
     ContactsViewHelper *contactsViewHelper = self.contactsViewHelper;
 
-    // Group Members
-
     OWSTableSection *section = [OWSTableSection new];
     section.headerTitle = Localized(
         @"EDIT_GROUP_MEMBERS_SECTION_TITLE", @"a title for the members section of the 'new/update group' view.");
     section.customFooterHeight = @20;
-    //memberRecipientIds use to show，self.memberRecipientIds use to calculate
+
     NSMutableArray <NSString *> *memberRecipientIds = [self.sortedMemberRecipientIds mutableCopy];
     NSString *localNumber = [TSAccountManager localNumber];
     if (DTParamsUtils.validateString(localNumber)){
         [memberRecipientIds removeObject:self.thread.groupModel.groupOwner];
         [memberRecipientIds removeObject:localNumber];
-        /// 如果不是群主就不可以移除群协调人
         if (![localNumber isEqualToString:self.thread.groupModel.groupOwner]) {
             for (NSString *memberId in self.thread.groupModel.groupAdmin) {
                 if ([memberRecipientIds containsObject:memberId]) {
@@ -339,10 +340,10 @@ extern  CGFloat const kAvatarSize;
             }
         }
     }
-        
+
     @weakify(self)
-    NSSet <NSString *> *newMemberIds = [NSSet setWithArray:self.sortedMemberRecipientIds];
-    self.hasUnsavedChanges = ![newMemberIds isEqualToSet:self.handledMemberRecipientIds];
+    self.hasUnsavedChanges = (self.handledMemberRecipientIds.count > 0);
+
     for (NSString *recipientId in memberRecipientIds) {
         [section
             addItem:[OWSTableItem
@@ -350,7 +351,7 @@ extern  CGFloat const kAvatarSize;
                             @strongify(self)
                             ContactTableViewCell *cell = [ContactTableViewCell new];
                             if(self.mode == UpdateGroupMode_RemoveGroupMembers){
-                                if(![self.handledMemberRecipientIds containsObject:recipientId]) {
+                                if([self.handledMemberRecipientIds containsObject:recipientId]) {
                                     cell.selectionStatus = ContactCellSelectionStatusSelected;
                                 }else{
                                     cell.selectionStatus = ContactCellSelectionStatusUnselected;
@@ -367,11 +368,6 @@ extern  CGFloat const kAvatarSize;
                                     cell.selectionStyle = UITableViewCellSelectionStyleNone;
                                 }
                             } else {
-                                // In the "members" section, we label "new" members as such when editing an existing
-                                // group.
-                                //
-                                // The only way a "new" member could be blocked is if we blocked them on a linked device
-                                // while in this dialog.  We don't need to worry about that edge case.
                                 cell.accessoryMessage = Localized(@"EDIT_GROUP_NEW_MEMBER_LABEL",
                                     @"An indicator that a user is a new member of the group.");
                             }
@@ -393,7 +389,6 @@ extern  CGFloat const kAvatarSize;
                             BOOL isPreviousMember = [self.sortedMemberRecipientIds containsObject:recipientId];
                             BOOL isBlocked = [contactsViewHelper isRecipientIdBlocked:recipientId];
                             if (isPreviousMember) {
-                                
                                 if(self.mode == UpdateGroupMode_RemoveGroupMembers){
                                     if (isBlocked) {
                                         if (signalAccount) {
@@ -402,16 +397,34 @@ extern  CGFloat const kAvatarSize;
                                             [self showUnblockAlertForRecipientId:recipientId];
                                         }
                                     } else {
-                                        if([self.handledMemberRecipientIds containsObject:recipientId]){
-                                            [self removeRecipientId:recipientId];
-                                        }else{
+                                        if(![self.handledMemberRecipientIds containsObject:recipientId]){
                                             [self addRecipientId:recipientId];
                                         }
                                     }
                                 }
-                                
                             } else {
                                 [self removeRecipientId:recipientId];
+                            }
+                        }
+                        deselectActionBlock:^{
+                            @strongify(self)
+                            if(self.mode == UpdateGroupMode_RemoveGroupMembers){
+                                if([self.handledMemberRecipientIds containsObject:recipientId]){
+                                    [self removeRecipientId:recipientId];
+
+                                    dispatch_async(dispatch_get_main_queue(), ^{
+                                        NSArray *visibleCells = self.tableViewController.tableView.visibleCells;
+                                        for (UITableViewCell *cell in visibleCells) {
+                                            if ([cell isKindOfClass:ContactTableViewCell.class]) {
+                                                ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
+                                                if ([contactCell.signalAccount.recipientId isEqualToString:recipientId]) {
+                                                    contactCell.selectionStatus = ContactCellSelectionStatusUnselected;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
                             }
                         }]];
     }
@@ -457,7 +470,7 @@ extern  CGFloat const kAvatarSize;
     OWSAssertDebug(recipientId.length > 0);
 
     [self.handledMemberRecipientIds removeObject:recipientId];
-    [self updateTableContents];
+    self.hasUnsavedChanges = (self.handledMemberRecipientIds.count > 0);
 }
 
 - (void)addRecipientId:(NSString *)recipientId
@@ -465,7 +478,7 @@ extern  CGFloat const kAvatarSize;
     OWSAssertDebug(recipientId.length > 0);
 
     [self.handledMemberRecipientIds addObject:recipientId];
-    [self updateTableContents];
+    self.hasUnsavedChanges = (self.handledMemberRecipientIds.count > 0);
 }
 
 #pragma mark - Methods
@@ -543,21 +556,23 @@ extern  CGFloat const kAvatarSize;
             }];
         }
     } else if (self.mode == UpdateGroupMode_RemoveGroupMembers){
-        if(newMembers.count < oldMembers.count){
-            
+        if(self.handledMemberRecipientIds.count > 0){
+
             if (!groupModel.isSelfGroupOwner && !groupModel.isSelfGroupModerator && !groupModel.anyoneRemove) {
                 [DTToastHelper showWithInfo:@"No permission, please contact the group moderators"];
                 return;
             }
-            
+
             [SVProgressHUD show];
-            
-            NSMutableSet <NSString *> *membersWhoRemoved = [NSMutableSet setWithSet:oldMembers];
-            [membersWhoRemoved minusSet:newMembers];
-            
+
+            NSMutableSet <NSString *> *membersWhoRemoved = [self.handledMemberRecipientIds mutableCopy];
+            NSMutableSet <NSString *> *remainingMembers = [NSMutableSet setWithArray:groupModel.groupMemberIds];
+            [remainingMembers minusSet:membersWhoRemoved];
+
             void(^successBlock)(void) = ^{
                 TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:groupModel];
-                newGroupModel.groupMemberIds = self.handledMemberRecipientIds.allObjects;
+                // 新的成员列表 = 剩余的成员（移除后的）
+                newGroupModel.groupMemberIds = remainingMembers.allObjects;
                 NSMutableArray <NSString *> *groupAdmin = [newGroupModel.groupAdmin mutableCopy];
                 [membersWhoRemoved enumerateObjectsUsingBlock:^(NSString * _Nonnull obj, BOOL * _Nonnull stop) {
                     if ([groupAdmin containsObject:obj]) {
@@ -575,11 +590,6 @@ extern  CGFloat const kAvatarSize;
                 
                 [DTGroupUtils postRapidRoleChangeNotificationWithGroupModel:newGroupModel
                                                                  targedMemberIds:membersWhoRemoved.allObjects];
-                
-                //MARK: 移除成员预约会议相关逻辑
-                [DTCalendarManager.shared groupChangeWithGid:self.thread.serverThreadId
-                                                  actionCode:4
-                                                      target:membersWhoRemoved.allObjects];
                 
                 NSString *channelName = [DTCallManager generateGroupChannelNameBy:self.thread];
                 [[DTCallManager sharedInstance] putMeetingGroupMemberKickBychannelName:channelName users:membersWhoRemoved.allObjects success:^(id _Nonnull responseObject) {
@@ -814,7 +824,7 @@ extern  CGFloat const kAvatarSize;
 }
 
 - (UIColor * _Nullable)navbarBackgroundColorOverride {
-    return nil;
+    return Theme.bgpageSecondaryColor;;
 }
 
 - (BOOL)prefersNavigationBarHidden {
@@ -905,10 +915,21 @@ extern  CGFloat const kAvatarSize;
         [tmpSortedMemberRecipientIds addObjectsFromArray:noMessageMemberIds];
         [tmpSortedMemberRecipientIds addObjectsFromArray:messageMemberIds];
         self.sortedMemberRecipientIds = tmpSortedMemberRecipientIds.copy;
-        self.handledMemberRecipientIds = [NSMutableSet setWithArray:tmpSortedMemberRecipientIds.copy];
+        self.handledMemberRecipientIds = [NSMutableSet set];
 
         [self updateTableContents];
     }];
+}
+
+#pragma mark - OWSTableViewControllerDelegate
+
+- (void)originalTableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+    if ([cell isKindOfClass:ContactTableViewCell.class]) {
+        ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
+        contactCell.selectionStatus = ContactCellSelectionStatusSelected;
+    }
 }
 
 @end

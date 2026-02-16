@@ -30,6 +30,7 @@ extension OWSConversationSettingsViewController {
             } else {
                 profileCardVC = DTPersonalCardController(type: .other, recipientId: recipientId, account: account)
             }
+            profileCardVC.isFromContacts = true
             self.navigationController?.pushViewController(profileCardVC, animated: true)
         }
     }

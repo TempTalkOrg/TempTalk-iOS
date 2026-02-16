@@ -607,11 +607,11 @@ options: NSRegularExpressionCaseInsensitive error:nil];
 
 - (UIFont *)quotedAuthorFont
 {
-    return UIFont.ows_dynamicTypeSubheadlineFont.ows_italic;
+    return UIFont.ows_dynamicTypeSubheadlineFontUnscaled.ows_italic;
 }
 - (UIFont *)quotedAuthorFont01
 {
-    return UIFont.ows_dynamicTypeFootnoteFont.ows_semibold;
+    return UIFont.ows_dynamicTypeFootnoteFontUnscaled.ows_semibold;
 }
 
 
@@ -628,7 +628,7 @@ options: NSRegularExpressionCaseInsensitive error:nil];
 
 - (UIFont *)quotedTextFont
 {
-    return [UIFont ows_dynamicTypeBodyFont];
+    return [UIFont ows_dynamicTypeBodyFontUnscaled];
 }
 
 - (UIColor *)fileTypeTextColor

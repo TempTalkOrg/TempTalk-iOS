@@ -50,7 +50,6 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:clearFlag:editable:
                 originalTimestamp:(uint64_t)originalTimestamp
              originalSourceDevice:(uint32_t)originalSourceDevice
                    originalSource:(NSString *)originalSource
-                 originalUniqueId:(NSString *)originalUniqueId
                          editable:(BOOL)editable;
 
 @end

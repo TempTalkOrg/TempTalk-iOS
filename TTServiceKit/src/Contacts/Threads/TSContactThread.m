@@ -153,6 +153,14 @@ NS_ASSUME_NONNULL_BEGIN
 
     if (!thread) {
         thread = [[TSContactThread alloc] initWithContactId:contactId];
+
+        // 设置默认过期时间
+        if (thread.expiresInSeconds == 0) {
+            uint32_t defaultExpiry = [thread messageExpiresInSecondsWithTransaction:transaction];
+            thread.expiresInSeconds = defaultExpiry;
+            OWSLogInfo(@"[Thread] set default expiresInSeconds=%u for new contact thread: %@", defaultExpiry, thread.uniqueId);
+        }
+
         [thread anyInsertWithTransaction:transaction];
     }
 

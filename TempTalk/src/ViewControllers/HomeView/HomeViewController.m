@@ -5,33 +5,27 @@
 #import "HomeViewController.h"
 #import "AppDelegate.h"
 #import "HomeViewCell.h"
-
 #import "PushManager.h"
 #import "RegistrationUtils.h"
 #import "SignalApp.h"
 #import "TSAccountManager.h"
-//
 #import "TSGroupThread.h"
 #import "ViewControllerUtils.h"
 #import <TTMessaging/OWSContactsManager.h>
 #import <TTMessaging/OWSWindowManager.h>
 #import <TTMessaging/UIUtil.h>
-
 #import <TTServiceKit/OWSBlockingManager.h>
 #import <TTServiceKit/OWSMessageUtils.h>
 #import <TTServiceKit/TSAccountManager.h>
 #import <TTServiceKit/TSOutgoingMessage.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
-
 #import <SignalCoreKit/Threading.h>
 #import <SignalCoreKit/NSDate+OWS.h>
-
 #import "DTRemoveMembersOfAGroupAPI.h"
 #import "OWSLinkDeviceViewController.h"
 #import "HomeEmptyBoxView.h"
 #import "DTPatternHelper.h"
 #import "DTConversationsJob.h"
-#import "HomeViewController+ChatFolder.h"
 #import <JXCategoryView/JXCategoryView.h>
 #import "DTThreadHelper.h"
 #import "DTHomeVirtualCell.h"
@@ -40,59 +34,55 @@
 #import <TTMessaging/TTMessaging-Swift.h>
 #import "DTInviteRequestHandler.h"
 #import <TTMessaging/OWSPreferences.h>
+#import "DTCallInviteMemberVC.h"
+#import "NewGroupViewController.h"
+#import <TTMessaging/TTMessaging-Swift.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-// The bulk of the content in this view is driven by a YapDB view/mapping.
-// However, we also want to optionally include ReminderView's at the top
-// and an "Archived Conversations" button at the bottom. Rather than introduce
-// index-offsets into the Mapping calculation, we introduce two pseudo groups
-// to add a top and bottom section to the content, and create cells for those
-// sections without consulting the YapMapping.
-// This is a bit of a hack, but it consolidates the hacks into the Reminder/Archive section
-// and allows us to leaves the bulk of the content logic on the happy path.
 NSString *const kReminderViewPseudoGroup = @"kReminderViewPseudoGroup";
 NSString *const kArchiveButtonPseudoGroup = @"kArchiveButtonPseudoGroup";
-
 NSString *const kArchivedConversationsReuseIdentifier = @"kArchivedConversationsReuseIdentifier";
 
 static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
+static CGFloat const kSearchBarHeight = 44.0;
+static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
 
+@interface HomeViewController () <OWSQRScannerDelegate, DatabaseChangeDelegate, ActionFloatViewDelegate, OWSNavigationChildController>
 
-@interface HomeViewController () <OWSQRScannerDelegate, DatabaseChangeDelegate>
+// UI Components
+@property (nonatomic, strong) HomeEmptyBoxView *emptyBoxView;
+@property (nonatomic, strong) HomeReminderViewCell *reminderViewCell;
+@property (nonatomic, strong) UIView *searchBarContainer;
+@property (nonatomic, strong) OWSSearchBar *searchBar;
+@property (nonatomic, strong, nullable) DTMessageActionFloatView *actionFloatView;
+@property (nonatomic, strong) UIImageView *avatarStateImageView;
 
-@property (nonatomic) HomeEmptyBoxView *emptyBoxView;
+// State
+@property (nonatomic, assign) BOOL isViewVisible;
+@property (nonatomic, assign) BOOL shouldObserveDBModifications;
+@property (nonatomic, assign) BOOL hasBeenPresented;
+@property (nonatomic, assign) BOOL viewDidAppear;
 
+// Data
 @property (nonatomic, strong) NSSet<NSString *> *blockedPhoneNumberSet;
 @property (nonatomic, strong) NSCache<NSString *, ThreadViewModel *> *threadViewModelCache;
-@property (nonatomic) BOOL isViewVisible;
-@property (nonatomic) BOOL shouldObserveDBModifications;
-@property (nonatomic) BOOL hasBeenPresented;
-
-@property (nonatomic,assign) BOOL viewDidAppear;//view是否已经渲染完成
-
-// Dependencies
-
-@property (nonatomic, readonly) AccountManager *accountManager;
-@property (nonatomic, readonly) OWSBlockingManager *blockingManager;
-
-// Views
-@property (nonatomic, strong) HomeReminderViewCell *reminderViewCell;
-@property (nonatomic, readonly) UIView *missingContactsPermissionView;
-
-@property (nonatomic, strong) DTRemoveMembersOfAGroupAPI *removeMembersOfAGroupAPI;
-@property (nonatomic, strong) NSIndexPath *updateIndexPath;
-@property (nonatomic, strong) NSIndexPath *preLastThreadIndexPath;
-@property (nonatomic, strong) UIImageView *avatarStateImageView;//个人头像的状态
-
-@property (nonatomic, copy) void(^scrollCallback)(UIScrollView *scrollView);
-
-@property (nonatomic, nullable) NSTimer *refreshUITimer;
+@property (nonatomic, strong, nullable) NSIndexPath *updateIndexPath;
+@property (nonatomic, strong, nullable) NSIndexPath *preLastThreadIndexPath;
 @property (nonatomic, strong, nullable) NSSet<NSString *> *needUpdatedItemIds;
-/// 增量刷新异步计算，用来保证刷新的有效间隔
 @property (nonatomic, assign) BOOL processingUpdatedItems;
 
+// Timer
+@property (nonatomic, nullable) NSTimer *refreshUITimer;
+
+// APIs
+@property (nonatomic, strong) DTRemoveMembersOfAGroupAPI *removeMembersOfAGroupAPI;
 @property (nonatomic, strong) DTDismissAGroupAPI *dismissAGroupAPI;
+
+// Dependencies (readonly)
+@property (nonatomic, readonly) AccountManager *accountManager;
+@property (nonatomic, readonly) OWSBlockingManager *blockingManager;
+@property (nonatomic, readonly) UIView *missingContactsPermissionView;
 
 @end
 
@@ -106,34 +96,434 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
 
 #pragma mark - Init
 
-- (instancetype)init
-{
+- (instancetype)init {
     self = [super init];
     if (!self) {
         return self;
     }
-    _viewDidAppear = false;
+    
+    _viewDidAppear = NO;
     _homeViewMode = HomeViewMode_Inbox;
     [self commonInit];
-
+    
     return self;
 }
 
-- (void)commonInit
-{
+- (void)commonInit {
     _blockedPhoneNumberSet = [NSSet setWithArray:[self.blockingManager blockedPhoneNumbers]];
     _threadViewModelCache = [NSCache new];
     _preLastThreadIndexPath = nil;
 }
 
--(BOOL)hidesBottomBarWhenPushed
-{
-    return self.homeViewMode != HomeViewMode_Inbox;
+- (void)dealloc {
+    [self stopRefreshUITimer];
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
-- (void)dealloc
-{
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
+#pragma mark - View Life Cycle
+
+- (void)loadView {
+    [super loadView];
+    
+    [self setupReminderCell];
+    [self setupSearchBarContainer];
+    [self setupTableView];
+    [self setupEmptyBoxView];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    [self setupNavigationTitle];
+    [self setupTableViewFooter];
+    [self addNotificationObserver];
+    [self updateBarButtonItems];
+    [self socketStateDidChange];
+    [self updateViewState];
+    [self updateReminderViews];
+    [self applyTheme];
+    [self stickNoteToSelfIfNeeded];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    
+    self.isViewVisible = YES;
+    
+    OWSLogInfo(@"[homevc] home vc viewWillAppear");
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    
+    _viewDidAppear = YES;
+    
+    if (!CurrentAppContext().isMainAppAndActive) {
+        OWSLogWarn(@"viewDidAppear: app not active");
+        __weak typeof(self) weakSelf = self;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (strongSelf && CurrentAppContext().isMainAppAndActive) {
+                [strongSelf handleRemoteNotify:[PushManager sharedManager].apnsInfo];
+            }
+        });
+        return;
+    }
+    
+    [self handleRemoteNotify:[PushManager sharedManager].apnsInfo];
+    [self checkIfNeedShowScreenLockAlert];
+    
+    OWSLogInfo(@"[homevc] home vc viewDidAppear");
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    
+    [self.actionFloatView hide:YES];
+    self.isViewVisible = NO;
+    _viewDidAppear = NO;
+}
+
+#pragma mark - Properties (Lazy Load)
+
+- (UITableView *)tableView {
+    if (!_tableView) {
+        _tableView = [self createTableView];
+        _tableView.bounces = YES;
+        _tableView.showsVerticalScrollIndicator = NO;
+    }
+    return _tableView;
+}
+
+- (ThreadMapping *)threadMapping {
+    if (!_threadMapping) {
+        _threadMapping = [ThreadMapping new];
+    }
+    return _threadMapping;
+}
+
+- (UIView *)searchBarContainer {
+    if (!_searchBarContainer) {
+        _searchBarContainer = [UIView new];
+        _searchBarContainer.backgroundColor = Theme.bgpagePrimaryColor;
+    }
+    return _searchBarContainer;
+}
+
+- (OWSSearchBar *)searchBar {
+    if (!_searchBar) {
+        _searchBar = [OWSSearchBar new];
+        _searchBar.customPlaceholder = Localized(@"HOME_VIEW_CONVERSATION_SEARCHBAR_PLACEHOLDER",
+                                                 @"Placeholder text for search bar which filters conversations.");
+        [_searchBar sizeToFit];
+        
+        UIButton *btnSearch = [UIButton buttonWithType:UIButtonTypeSystem];
+        btnSearch.userInteractionEnabled = YES;
+        [btnSearch addTarget:self action:@selector(showSeachViewController) forControlEvents:UIControlEventTouchUpInside];
+        [_searchBar addSubview:btnSearch];
+        [btnSearch autoPinEdgesToSuperviewEdges];
+    }
+    return _searchBar;
+}
+
+- (AccountManager *)accountManager {
+    return SignalApp.sharedApp.accountManager;
+}
+
+- (OWSContactsManager *)contactsManager {
+    return Environment.shared.contactsManager;
+}
+
+- (OWSBlockingManager *)blockingManager {
+    return [OWSBlockingManager sharedManager];
+}
+
+- (DTRemoveMembersOfAGroupAPI *)removeMembersOfAGroupAPI {
+    if (!_removeMembersOfAGroupAPI) {
+        _removeMembersOfAGroupAPI = [DTRemoveMembersOfAGroupAPI new];
+    }
+    return _removeMembersOfAGroupAPI;
+}
+
+- (DTDismissAGroupAPI *)dismissAGroupAPI {
+    if (!_dismissAGroupAPI) {
+        _dismissAGroupAPI = [DTDismissAGroupAPI new];
+    }
+    return _dismissAGroupAPI;
+}
+
+#pragma mark - Layout Setup
+
+- (void)setupReminderCell {
+    self.reminderViewCell = [self createReminderCell];
+}
+
+- (void)setupSearchBarContainer {
+    [self.view addSubview:self.searchBarContainer];
+    [self.searchBarContainer autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
+    [self.searchBarContainer autoPinEdgeToSuperviewEdge:ALEdgeLeading];
+    [self.searchBarContainer autoPinEdgeToSuperviewEdge:ALEdgeTrailing];
+    [self.searchBarContainer autoSetDimension:ALDimensionHeight toSize:kSearchBarContainerHeight];
+    
+    [self.searchBarContainer addSubview:self.searchBar];
+    [self.searchBar autoPinEdgesToSuperviewEdges];
+}
+
+- (void)setupTableView {
+    [self.view addSubview:self.tableView];
+    [self.tableView autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.searchBarContainer];
+    [self.tableView autoPinEdgeToSuperviewSafeArea:ALEdgeBottom];
+    [self.tableView autoPinEdgeToSuperviewEdge:ALEdgeLeading];
+    [self.tableView autoPinEdgeToSuperviewEdge:ALEdgeTrailing];
+    
+    self.tableView.tableHeaderView = nil;
+}
+
+- (void)setupEmptyBoxView {
+    HomeEmptyBoxView *emptyBoxView = [HomeEmptyBoxView new];
+    _emptyBoxView = emptyBoxView;
+    self.tableView.backgroundView = emptyBoxView;
+}
+
+- (void)setupNavigationTitle {
+    if ([TSAccountManager sharedInstance].isNewRegister) {
+        OWSLogInfo(@"is newRegister");
+    } else {
+        OWSLogInfo(@"not newRegister");
+        self.leftTitle = [NSString stringWithFormat:@"%@...", Localized(@"NETWORK_STATUS_CONNECTING", @"")];
+    }
+    
+    if (self.homeViewMode == HomeViewMode_Archive) {
+        self.navigationItem.title = Localized(@"HOME_VIEW_TITLE_ARCHIVE", @"");
+    }
+}
+
+- (void)setupTableViewFooter {
+    self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
+}
+
+#pragma mark - Navigation Bar
+
+- (void)updateBarButtonItems {
+    if (self.homeViewMode != HomeViewMode_Inbox) {
+        return;
+    }
+    
+    UIImage *barAddImage = [UIImage imageNamed:@"barbuttonicon_add"];
+    OWSAssertDebug(barAddImage);
+    UIBarButtonItem *barAddButton = [[UIBarButtonItem alloc] initWithImage:barAddImage
+                                                                     style:UIBarButtonItemStylePlain
+                                                                    target:self
+                                                                    action:@selector(showActionFloatView:)];
+    barAddButton.accessibilityLabel = Localized(@"CREATE_NEW_GROUP", @"Accessibility label for the create group new group button");
+    self.navigationItem.rightBarButtonItem = barAddButton;
+}
+
+- (void)settingsButtonPressed:(id)sender {
+    OWSNavigationController *navigationController = [AppSettingsViewController inModalNavigationController];
+    [self presentViewController:navigationController animated:YES completion:nil];
+}
+
+#pragma mark - SearchBar
+
+- (void)showSeachViewController {
+    ConversationSearchViewController *searchResultsController = [ConversationSearchViewController new];
+    searchResultsController.hidesBottomBarWhenPushed = YES;
+    [self.navigationController pushViewController:searchResultsController animated:YES];
+}
+
+#pragma mark - Action Float View
+
+- (void)setupActionFloatView {
+    // 先移除旧的
+    if (_actionFloatView) {
+        [_actionFloatView removeFromSuperview];
+        _actionFloatView = nil;
+    }
+    
+    DTMessageActionFloatView *actionFloatView = [DTMessageActionFloatView new];
+    actionFloatView.delegate = self;
+    [actionFloatView layoutSubContent];
+    _actionFloatView = actionFloatView;
+    
+    [self.view addSubview:_actionFloatView];
+    [actionFloatView autoPinEdgesToSuperviewEdgesWithInsets:UIEdgeInsetsZero excludingEdge:ALEdgeTop];
+    [actionFloatView autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
+}
+
+- (void)showActionFloatView:(id)sender {
+    if (self.actionFloatView && !self.actionFloatView.hidden) {
+        [self.actionFloatView hide:YES];
+        return;
+    }
+    
+    [self setupActionFloatView];
+    self.actionFloatView.hidden = NO;
+}
+
+- (void)showNewGroupView {
+    SignalApp.sharedApp.homeViewController = self;
+    NewGroupViewController *newGroupViewController = [NewGroupViewController new];
+    [self.navigationController pushViewController:newGroupViewController animated:YES];
+}
+
+#pragma mark - ActionFloatViewDelegate
+
+- (void)floatViewTapItemIndex:(enum ActionFloatViewItemType)type {
+    if (self.isUserDeregistered) return;
+    
+    switch (type) {
+        case ActionFloatViewItemTypeCreateGroup:
+            [self showNewGroupView];
+            break;
+            
+        case ActionFloatViewItemTypeScan: {
+            DTScanQRCodeController *scanQRCodeController = [DTScanQRCodeController new];
+            @weakify(self);
+            scanQRCodeController.didReceiveHandler = ^(NSURL *url) {
+                @strongify(self);
+                [self showDeviceTransfer:url];
+            };
+            [self.navigationController pushViewController:scanQRCodeController animated:YES];
+            break;
+        }
+            
+        case ActionFloatViewItemTypeAddContacts: {
+            EnterCodeViewController *enterCodeVc = [EnterCodeViewController new];
+            [self.navigationController pushViewController:enterCodeVc animated:YES completion:nil];
+            break;
+        }
+            
+        case ActionFloatViewItemTypeMyCode: {
+            DTInviteCodeViewController *inviteCodeViewController = [DTInviteCodeViewController new];
+            OWSNavigationController *navController = [[OWSNavigationController alloc] initWithRootViewController:inviteCodeViewController];
+            [self.navigationController presentViewController:navController animated:YES completion:nil];
+            break;
+        }
+            
+        default:
+            break;
+    }
+}
+
+- (void)floatViewDidRemoveFromSuperView {
+    self.actionFloatView = nil;
+}
+
+- (void)showDeviceTransfer:(NSURL *_Nonnull)url {
+    NSError *error;
+    DeviceTransferURLComponent *urlComponent = [[DeviceTransferService shared] parseTransferURL:url error:&error];
+    if (error || urlComponent == nil) return;
+    
+    UIAlertController *alertController = [UIAlertController
+                                          alertControllerWithTitle:Localized(@"Transfer Data", @"")
+                                          message:[NSString stringWithFormat:Localized(@"Are you sure to transfer all your data to this device: %1$@?", @""), urlComponent.peerId.displayName]
+                                          preferredStyle:UIAlertControllerStyleAlert];
+    
+    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:Localized(@"Cancel", @"")
+                                                           style:UIAlertActionStyleCancel
+                                                         handler:NULL];
+    
+    UIAlertAction *confimAction = [UIAlertAction actionWithTitle:Localized(@"Yes", @"")
+                                                           style:UIAlertActionStyleDefault
+                                                         handler:^(UIAlertAction * _Nonnull action) {
+        if ([DeviceTransferService.shared launchCleanup]) {
+            [self beginTransferData:urlComponent];
+        } else {
+            OWSLogInfo(@"launchCleanup failed");
+        }
+    }];
+    
+    [alertController addAction:cancelAction];
+    [alertController addAction:confimAction];
+    [self.navigationController presentViewController:alertController animated:YES completion:NULL];
+}
+
+- (void)beginTransferData:(DeviceTransferURLComponent *)urlComponent {
+    DTTransferringDataViewController *transferringController = [[DTTransferringDataViewController alloc] initWithLogintoken:nil urlComponent:urlComponent oldDevice:YES];
+    DTTransferNavgationController *navgationController = [[DTTransferNavgationController alloc] initWithRootViewController:transferringController];
+    [navgationController setModalPresentationStyle:UIModalPresentationFullScreen];
+    [self.navigationController presentViewController:navgationController animated:YES completion:NULL];
+}
+
+#pragma mark - Socket State
+
+- (void)socketStateDidChange {
+    if (TSAccountManager.sharedInstance.isDeregistered) {
+        self.leftTitle = Localized(@"NETWORK_STATUS_DEREGISTERED", @"");
+        return;
+    }
+    
+    if (![Reachability reachabilityForInternetConnection].isReachable) {
+        self.leftTitle = Localized(@"NETWORK_STATUS_OFFLINE", @"");
+        return;
+    }
+    
+    OWSWebSocketState socketState = self.socketManager.socketState;
+    switch (socketState) {
+        case OWSWebSocketStateClosed:
+            self.leftTitle = Localized(@"NETWORK_STATUS_OFFLINE", @"");
+            break;
+        case OWSWebSocketStateConnecting:
+            self.leftTitle = [NSString stringWithFormat:@"%@...", Localized(@"NETWORK_STATUS_CONNECTING", @"")];
+            break;
+        case OWSWebSocketStateOpen:
+            self.leftTitle = Localized(@"TABBAR_HOME", @"Title for the home view's default mode.");
+            break;
+    }
+}
+
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return YES;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpagePrimaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
+}
+
+#pragma mark - View State
+
+- (void)setIsViewVisible:(BOOL)isViewVisible {
+    _isViewVisible = isViewVisible;
+    [self updateShouldObserveDBModifications];
+}
+
+- (void)updateShouldObserveDBModifications {
+    BOOL isAppForegroundAndActive = CurrentAppContext().isAppForegroundAndActive;
+    self.shouldObserveDBModifications = self.isViewVisible && isAppForegroundAndActive;
+}
+
+- (void)setShouldObserveDBModifications:(BOOL)shouldObserveDBModifications {
+    if (_shouldObserveDBModifications == shouldObserveDBModifications) {
+        return;
+    }
+    
+    _shouldObserveDBModifications = shouldObserveDBModifications;
+    
+    if (shouldObserveDBModifications) {
+        [self resetMappings];
+        [self startRefreshUITimerIfNecessary];
+    } else {
+        [self stopRefreshUITimer];
+    }
+}
+
+- (BOOL)hidesBottomBarWhenPushed {
+    return self.homeViewMode != HomeViewMode_Inbox;
 }
 
 - (BOOL)shouldAutorotate {
@@ -144,225 +534,92 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     return UIInterfaceOrientationMaskPortrait;
 }
 
-#pragma mark - View Life Cycle
-
-- (void)loadView
-{
-    [super loadView];
-
-    self.reminderViewCell = [self createReminderCell];
-    [self.view addSubview:self.tableView];
-    [self.tableView autoPinEdgesToSuperviewSafeArea];
-    
-    HomeEmptyBoxView *emptyBoxView = [HomeEmptyBoxView new];
-    _emptyBoxView = emptyBoxView;
-    self.tableView.backgroundView = emptyBoxView;
-}
-
-- (void)viewDidLoad
-{
-    [super viewDidLoad];
-    
-    // Create the database connection.
-    
-    if (self.homeViewMode == HomeViewMode_Archive) {
-        self.navigationItem.title = Localized(@"HOME_VIEW_TITLE_ARCHIVE", @"");
-    }
-
-    [self updateViewState];
-    [self updateReminderViews];
-    // because this uses the table data source, `tableViewSetup` must happen
-    // after mappings have been set up in `showInboxGrouping`
-    self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
-    
-    [self addNotificationObserver];
-
-    [self applyTheme];
-    [self stickNoteToSelfIfNeeded];    
-}
-
-- (void)viewDidAppear:(BOOL)animated
-{
-    if (!CurrentAppContext().isMainAppAndActive) {
-        return;
-    }
-    
-    [super viewDidAppear:animated];
-    
-    _viewDidAppear = true;
-    
-    [self handleRemoteNotify:[PushManager sharedManager].apnsInfo];
-    
-    [self checkIfNeedShowScreenLockAlert];
-    
-    OWSLogInfo(@"viewDidAppear");
-}
-
-- (void)checkIfNeedShowScreenLockAlert{
-    NSString *firstVersion = [AppVersion shared].firstAppVersion;
-    NSString *targetVersion = @"3.1.4";
-
-    BOOL oldLockEnable = [ScreenLock sharedManager].old_isScreenLockEnabled || [OWS2FAManager.sharedManager is2FAEnabled];
-    if(![self screenLockAlertFlag] &&
-       [firstVersion compare:targetVersion options:NSNumericSearch] == NSOrderedAscending &&
-       oldLockEnable){
-        
-        UIAlertController *alertController =
-        [UIAlertController alertControllerWithTitle:[Localize localized:@"SCREENLOCK_UPGRADE_TITLE"]
-                                            message:[NSString stringWithFormat:[Localize localized:@"SCREENLOCK_UPGRADE_TIPS"], TSConstants.appDisplayName]
-                                     preferredStyle:UIAlertControllerStyleAlert];
-        
-        UIAlertAction *ignoreAction = [UIAlertAction actionWithTitle:
-                                       [Localize localized:@"SCREENLOCK_UPGRADE_IGNORE"]
-                                                               style:UIAlertActionStyleCancel
-                                                             handler:^(UIAlertAction *_Nonnull action) {
-            [self markScreenLockAlertFlag];
-        }];
-        UIAlertAction *checkAction = [UIAlertAction actionWithTitle:
-                                      [Localize localized:@"SCREENLOCK_UPGRADE_CHECK"]
-                                                              style:UIAlertActionStyleDefault
-                                                            handler:^(UIAlertAction *_Nonnull action) {
-            [self markScreenLockAlertFlag];
-            DTSecurityAndPrivacyViewController *privacyVc = [DTSecurityAndPrivacyViewController new];
-            [self.navigationController pushViewController:privacyVc animated:YES];
-        }];
-        [alertController addAction:ignoreAction];
-        [alertController addAction:checkAction];
-        
-        [self presentViewController:alertController animated:YES completion:nil];
-    }
-}
-
-- (NSInteger)screenLockAlertFlag{
-    return [CurrentAppContext().appUserDefaults boolForKey:kDTShowScreenLockAlertKey];
-}
-
-- (void)markScreenLockAlertFlag{
-    [CurrentAppContext().appUserDefaults setBool:YES forKey:kDTShowScreenLockAlertKey];
-    [CurrentAppContext().appUserDefaults synchronize];
-}
-
-- (void)viewWillAppear:(BOOL)animated
-{
-    if (!CurrentAppContext().isMainAppAndActive) {
-        return;
-    }
-    [super viewWillAppear:animated];
-    self.isViewVisible = YES;
-    
-    OWSLogInfo(@"viewWillAppear");
-}
-
-- (void)viewWillDisappear:(BOOL)animated
-{
-    [super viewWillDisappear:animated];
-    self.isViewVisible = NO;
-    
-    _viewDidAppear = false;
-}
-
-- (void)setIsViewVisible:(BOOL)isViewVisible
-{
-    _isViewVisible = isViewVisible;
-
-    [self updateShouldObserveDBModifications];
-}
-
-- (void)updateShouldObserveDBModifications
-{
-    BOOL isAppForegroundAndActive = CurrentAppContext().isAppForegroundAndActive;
-    self.shouldObserveDBModifications = self.isViewVisible && isAppForegroundAndActive;
-}
-
-- (void)setShouldObserveDBModifications:(BOOL)shouldObserveDBModifications
-{
-    if (_shouldObserveDBModifications == shouldObserveDBModifications) {
-        return;
-    }
-
-    _shouldObserveDBModifications = shouldObserveDBModifications;
-
-    if (self.shouldObserveDBModifications) {
-        [self updateFiltering];
-        [self startRefreshUITimerIfNecessary];
-    }else{
-        [self stopRefreshUITimer];
-    }
-}
-
-#pragma mark - Actions
-
-- (void)settingsButtonPressed:(id)sender
-{
-    OWSNavigationController *navigationController = [AppSettingsViewController inModalNavigationController];
-    [self presentViewController:navigationController animated:YES completion:nil];
-}
-
 #pragma mark - Notifications
 
 - (void)addNotificationObserver {
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(signalAccountsDidChange:)
-                                                 name:OWSContactsManagerSignalAccountsDidChangeNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(applicationWillEnterForeground:)
-                                                 name:OWSApplicationWillEnterForegroundNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(applicationDidBecomeActive:)
-                                                 name:OWSApplicationDidBecomeActiveNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(applicationWillResignActive:)
-                                                 name:OWSApplicationWillResignActiveNotification
-                                               object:nil];
-
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    
+    [center addObserver:self
+               selector:@selector(signalAccountsDidChange:)
+                   name:OWSContactsManagerSignalAccountsDidChangeNotification
+                 object:nil];
+    
+    [center addObserver:self
+               selector:@selector(applicationWillEnterForeground:)
+                   name:OWSApplicationWillEnterForegroundNotification
+                 object:nil];
+    
+    [center addObserver:self
+               selector:@selector(applicationDidBecomeActive:)
+                   name:OWSApplicationDidBecomeActiveNotification
+                 object:nil];
+    
+    [center addObserver:self
+               selector:@selector(applicationWillResignActive:)
+                   name:OWSApplicationWillResignActiveNotification
+                 object:nil];
+    
     [self.databaseStorage appendDatabaseChangeDelegate:self];
-
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(deregistrationStateDidChange:)
-                                                 name:NSNotificationNameDeregistrationStateDidChange
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(outageStateDidChange:)
-                                                 name:OutageDetection.outageStateDidChange
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(didReceiveRemoteNotification:)
-                                                 name:kDTDidReceiveRemoteNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(didReceiveGroupPeriodicRemindNotification:)
-                                                 name:DTGroupPeriodicRemindNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(didReceiveMarkAsUnreadNotification:)
-                                                 name:DTMarkAsUnreadNotification
-                                               object:nil];
     
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(externalInvite:)
-                                                 name:AppLinkNotificationHandler.externalInviteNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(criticalAlertHighlightDidChange:)
-                                                 name:DTCriticalAlertHighlightDidChangeNotification
-                                               object:nil];
+    [center addObserver:self
+               selector:@selector(deregistrationStateDidChange:)
+                   name:NSNotificationNameDeregistrationStateDidChange
+                 object:nil];
     
+    [center addObserver:self
+               selector:@selector(outageStateDidChange:)
+                   name:OutageDetection.outageStateDidChange
+                 object:nil];
+    
+    [center addObserver:self
+               selector:@selector(didReceiveRemoteNotification:)
+                   name:kDTDidReceiveRemoteNotification
+                 object:nil];
+    
+    [center addObserver:self
+               selector:@selector(didReceiveGroupPeriodicRemindNotification:)
+                   name:DTGroupPeriodicRemindNotification
+                 object:nil];
+    
+    [center addObserver:self
+               selector:@selector(didReceiveMarkAsUnreadNotification:)
+                   name:DTMarkAsUnreadNotification
+                 object:nil];
+    
+    [center addObserver:self
+               selector:@selector(externalInvite:)
+                   name:AppLinkNotificationHandler.externalInviteNotification
+                 object:nil];
+    
+    [center addObserver:self
+               selector:@selector(criticalAlertHighlightDidChange:)
+                   name:DTCriticalAlertHighlightDidChangeNotification
+                 object:nil];
+    
+    [center addObserver:self
+               selector:@selector(socketStateDidChange)
+                   name:OWSWebSocket.webSocketStateDidChange
+                 object:nil];
+    
+    [center addObserver:self
+               selector:@selector(tabBarItemDoubleClickNotification:)
+                   name:kTabBarItemDoubleClickNotification
+                 object:nil];
 }
 
-- (void)signalAccountsDidChange:(id)notification
-{
+- (void)signalAccountsDidChange:(id)notification {
     OWSAssertIsOnMainThread();
+
+    // When contact information (like remark name) changes, we need to refresh the visible cells
+    // to update the display names and avatars
+    [self.threadViewModelCache removeAllObjects];
+    [self.tableView reloadData];
 }
 
-- (void)deregistrationStateDidChange:(id)notification
-{
+- (void)deregistrationStateDidChange:(id)notification {
     OWSAssertIsOnMainThread();
     
     OWSLogInfo(@"deregistrationStateDidChange.");
-
     [self updateReminderViews];
     
     [OWSDevicesService checkIfKickedOffComplete:^(BOOL kickedOff) {
@@ -372,36 +629,27 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     }];
 }
 
-- (void)outageStateDidChange:(id)notification
-{
+- (void)outageStateDidChange:(id)notification {
     OWSAssertIsOnMainThread();
-
     [self updateReminderViews];
 }
 
-- (void)applicationWillEnterForeground:(NSNotification *)notification
-{
+- (void)applicationWillEnterForeground:(NSNotification *)notification {
     [self updateViewState];
 }
 
-- (void)applicationDidBecomeActive:(NSNotification *)notification
-{
+- (void)applicationDidBecomeActive:(NSNotification *)notification {
     [self updateShouldObserveDBModifications];
-
-    // It's possible a thread was created while we where in the background. But since we don't honor contact
-    // requests unless the app is in the foregrond, we must check again here upon becoming active.
+    
     __block BOOL hasAnyMessages;
     [self.databaseStorage uiReadWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
         hasAnyMessages = [self hasAnyMessagesWithTransaction:transaction];
     }];
     
     if (hasAnyMessages) {
-// changed: forbid to read system contacts
-//        [self.contactsManager requestSystemContactsOnceWithCompletion:^(NSError *_Nullable error) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self updateReminderViews];
-            });
-//        }];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self updateReminderViews];
+        });
     }
     
     if ([TSAccountManager isRegistered]) {
@@ -409,22 +657,15 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     }
 }
 
-- (BOOL)hasAnyMessagesWithTransaction:(SDSAnyReadTransaction *)transaction
-{
-    return [TSThread anyCountWithTransaction:transaction] > 0;
-}
-
-- (void)applicationWillResignActive:(NSNotification *)notification
-{
+- (void)applicationWillResignActive:(NSNotification *)notification {
     [self updateShouldObserveDBModifications];
 }
 
-- (void)didReceiveRemoteNotification:(NSNotification *)notify{
+- (void)didReceiveRemoteNotification:(NSNotification *)notify {
     [self handleRemoteNotify:notify.userInfo[@"apnsInfo"]];
 }
 
 - (void)didReceiveGroupPeriodicRemindNotification:(NSNotification *)noti {
-  
     if (!noti.object) return;
     
     BOOL isChanged = [noti.userInfo[@"isChanged"] boolValue];
@@ -432,16 +673,18 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     
     TSThread *targetThread = (TSThread *)noti.object;
     __block BOOL hasUnread = NO;
-    NSArray <NSString *> *allUnreadThreadIds = [DTThreadHelper sharedManager].unreadThreadCache.allKeys;
-    [allUnreadThreadIds enumerateObjectsUsingBlock:^(NSString * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+    NSArray<NSString *> *allUnreadThreadIds = [DTThreadHelper sharedManager].unreadThreadCache.allKeys;
+    
+    for (NSString *obj in allUnreadThreadIds) {
         if ([obj hasPrefix:@"+"]) {
-            return;
+            continue;
         }
         if ([obj isEqualToString:targetThread.serverThreadId]) {
             hasUnread = YES;
-            *stop = YES;
+            break;
         }
-    }];
+    }
+    
     if (hasUnread) return;
     
     if ([self.navigationController.topViewController isKindOfClass:[ConversationViewController class]]) {
@@ -450,13 +693,13 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
             return;
         }
     }
+    
     [self markAsUnreadWithThread:targetThread];
 }
 
 - (void)didReceiveMarkAsUnreadNotification:(NSNotification *)noti {
-    if (!noti.object) {
-        return;
-    }
+    if (!noti.object) return;
+    
     TSThread *targetThread = (TSThread *)noti.object;
     if ([self.navigationController.topViewController isKindOfClass:[ConversationViewController class]]) {
         ConversationViewController *conversationVC = (ConversationViewController *)self.navigationController.topViewController;
@@ -468,10 +711,35 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     }
 }
 
+- (void)externalInvite:(NSNotification *)notify {
+    OWSLogInfo(@"添加好友 addContactsFromNotify userInfo = %@", notify.userInfo);
+    NSDictionary *userInfo = notify.userInfo;
+    NSString *inviteCode = userInfo[AppLinkNotificationHandler.inviteCodeKey];
+    DTInviteRequestHandler *inviteRequestHandler = [[DTInviteRequestHandler alloc] initWithSourceVc:self];
+    [inviteRequestHandler queryUserAccountByInviteCode:inviteCode];
+}
+
+- (void)criticalAlertHighlightDidChange:(NSNotification *)notification {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.tableView reloadData];
+    });
+}
+
+- (void)tabBarItemDoubleClickNotification:(NSNotification *)notify {
+    NSDictionary *userInfo = notify.userInfo;
+    NSNumber *numberSelectedIndex = userInfo[@"selectedIndex"];
+    NSUInteger selectedIndex = numberSelectedIndex.unsignedIntegerValue;
+    
+    if (selectedIndex != 0) return;
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self scrollToNextUnreadConversation];
+    });
+}
+
 #pragma mark - APNs
 
-- (void)handleRemoteNotify:(DTApnsInfo *)apnsInfo{
-    
+- (void)handleRemoteNotify:(DTApnsInfo *)apnsInfo {
     if (!apnsInfo) {
         OWSLogInfo(@"apnsInfo is nil, do nothing");
         return;
@@ -484,57 +752,65 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
         [self handleScheduleMeetingPopupsNotify:apnsInfo];
         return;
     }
-
+    
     [[DTMeetingManager shared] handleRemoteCallNotifyWithApnsInfo:apnsInfo];
     
     NSString *conversationId = apnsInfo.conversationId;
-    
     if (!conversationId.length) {
         OWSLogInfo(@"conversationId is nil, no need to open conversation");
         return;
     }
-
+    
     [self sendCriticalReadSyncMessageWithApnsInfo:apnsInfo];
     
     __block TSThread *thread = nil;
     [self.databaseStorage uiReadWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
-        thread = [TSContactThread getThreadWithContactId:conversationId
-                                               transaction:transaction];
-        if(!thread){
+        thread = [TSContactThread getThreadWithContactId:conversationId transaction:transaction];
+        if (!thread) {
             NSData *groupId = [NSData dataFromBase64String:conversationId];
-            if(groupId.length){
+            if (groupId && groupId.length > 0) {
                 thread = [TSGroupThread threadWithGroupId:groupId transaction:transaction];
             }
         }
     }];
-    
+
+    // Check if thread was found
+    if (!thread) {
+        OWSLogError(@"Could not find thread for conversationId: %@", conversationId);
+        return;
+    }
+
     id cvc = self.navigationController.viewControllers.lastObject;
     if ([cvc isKindOfClass:ConversationViewController.class]) {
-        ConversationViewController *cconversationVC = (ConversationViewController *)cvc;
-        TSThread *openedThread = cconversationVC.thread;
-        if ([openedThread.uniqueId isEqualToString:thread.uniqueId]) {
+        ConversationViewController *conversationVC = (ConversationViewController *)cvc;
+        TSThread *openedThread = conversationVC.thread;
+        if (openedThread && [openedThread.uniqueId isEqualToString:thread.uniqueId]) {
             OWSLogInfo(@"topvc is same conversationvc, no need to reopen");
-            [cconversationVC resetContentAndLayoutWithSneakyTransaction];
+            [conversationVC resetContentAndLayoutWithSneakyTransaction];
             return;
         }
     }
     
     if (self.tabBarController.selectedIndex != 0) {
-        UINavigationController *selectedNav = (UINavigationController *)self.tabBarController.selectedViewController;
-        [selectedNav popToRootViewControllerAnimated:NO];
+        UIViewController *selectedVC = self.tabBarController.selectedViewController;
+        if ([selectedVC isKindOfClass:[UINavigationController class]]) {
+            UINavigationController *selectedNav = (UINavigationController *)selectedVC;
+            if (selectedNav.viewControllers.count > 0) {
+                [selectedNav popToRootViewControllerAnimated:NO];
+            }
+        }
         self.tabBarController.selectedIndex = 0;
     }
-    
-    if(thread){
+
+    if (thread) {
         [self presentThread:thread action:ConversationViewActionNone];
     }
 }
 
-- (void)sendCriticalReadSyncMessageWithApnsInfo:(DTApnsInfo *)apnsInfo  {
+- (void)sendCriticalReadSyncMessageWithApnsInfo:(DTApnsInfo *)apnsInfo {
+    NSString *_Nullable interruptionLevel = apnsInfo.interruptionLevel;
+    NSString *_Nullable msg = apnsInfo.msg;
     
-    NSString  * _Nullable interruptionLevel = apnsInfo.interruptionLevel;
-    NSString  * _Nullable msg = apnsInfo.msg;
-
     if (!DTParamsUtils.validateString(interruptionLevel) || !DTParamsUtils.validateString(msg)) {
         return;
     }
@@ -542,7 +818,7 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     if (![interruptionLevel isEqualToString:@"critical"]) {
         return;
     }
-        
+    
     NSString *signalKey = [TSAccountManager signalingKey];
     if (!DTParamsUtils.validateString(signalKey)) {
         return;
@@ -571,24 +847,26 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     }
     uint64_t timestamp = envelope.timestamp;
     
-    OWSLinkedDeviceReadReceipt *criticalReadReceipt = [[OWSLinkedDeviceReadReceipt alloc] initWithSenderId:senderId messageIdTimestamp:timestamp readTimestamp:0];
-    OWSCriticalReadReceiptsMessage *readSyncMessage =
-        [[OWSCriticalReadReceiptsMessage alloc] initWithReadReceipts:@[criticalReadReceipt]];
-
+    OWSLinkedDeviceReadReceipt *criticalReadReceipt = [[OWSLinkedDeviceReadReceipt alloc] initWithSenderId:senderId
+                                                                                       messageIdTimestamp:timestamp
+                                                                                            readTimestamp:0];
+    OWSCriticalReadReceiptsMessage *readSyncMessage = [[OWSCriticalReadReceiptsMessage alloc] initWithReadReceipts:@[criticalReadReceipt]];
+    
     OWSLogInfo(@"%@ will send linked critical read receipt", self.logTag);
     
+    __weak typeof(self) weakSelf = self;
     [self.messageSender enqueueMessage:readSyncMessage
-        success:^{
-        OWSLogInfo(@"%@ Successfully sent linked critical read receipt", self.logTag);
+                               success:^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        OWSLogInfo(@"%@ Successfully sent linked critical read receipt", strongSelf.logTag);
     }
                                failure:^(NSError *error) {
-        OWSLogError(@"%@ Failed to send critical read receipt to linked devices with error: %@", self.logTag, error);
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        OWSLogError(@"%@ Failed to send critical read receipt to linked devices with error: %@", strongSelf.logTag, error);
     }];
-
 }
 
 - (void)handleScheduleMeetingPopupsNotify:(DTApnsInfo *)apnsInfo {
-    
     NSDictionary *passthroughInfo = apnsInfo.passthroughInfo;
     
     BOOL isLiveStream = NO;
@@ -596,26 +874,74 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     if (DTParamsUtils.validateNumber(number_isLiveStream)) {
         isLiveStream = number_isLiveStream.boolValue;
     }
-    NSString *eid = passthroughInfo[@"eid"];
-    
-    NSString *emk = passthroughInfo[@"emk"];
-    NSNumber *meetingVersion = passthroughInfo[@"meetingVersion"];
-    NSString *meetingId = passthroughInfo[@"meetingId"];
-
-    // TODO: 处理预约会议的方法 DTAlertCallTypeSchedule
 }
 
-#pragma mark - Table View Data Source
+#pragma mark - Screen Lock Alert
 
-- (TSThread *)threadForIndexPath:(NSIndexPath *)indexPath
-{
+- (void)checkIfNeedShowScreenLockAlert {
+    NSString *firstVersion = [AppVersion shared].firstAppVersion;
+    NSString *targetVersion = @"3.1.4";
+    
+    BOOL oldLockEnable = [ScreenLock sharedManager].old_isScreenLockEnabled || [OWS2FAManager.sharedManager is2FAEnabled];
+    
+    if (![self screenLockAlertFlag] &&
+        [firstVersion compare:targetVersion options:NSNumericSearch] == NSOrderedAscending &&
+        oldLockEnable) {
+        
+        UIAlertController *alertController = [UIAlertController
+                                              alertControllerWithTitle:[Localize localized:@"SCREENLOCK_UPGRADE_TITLE"]
+                                              message:[NSString stringWithFormat:[Localize localized:@"SCREENLOCK_UPGRADE_TIPS"], TSConstants.appDisplayName]
+                                              preferredStyle:UIAlertControllerStyleAlert];
+        
+        UIAlertAction *ignoreAction = [UIAlertAction actionWithTitle:[Localize localized:@"SCREENLOCK_UPGRADE_IGNORE"]
+                                                               style:UIAlertActionStyleCancel
+                                                             handler:^(UIAlertAction *_Nonnull action) {
+            [self markScreenLockAlertFlag];
+        }];
+        
+        UIAlertAction *checkAction = [UIAlertAction actionWithTitle:[Localize localized:@"SCREENLOCK_UPGRADE_CHECK"]
+                                                              style:UIAlertActionStyleDefault
+                                                            handler:^(UIAlertAction *_Nonnull action) {
+            [self markScreenLockAlertFlag];
+            DTSecurityAndPrivacyViewController *privacyVc = [DTSecurityAndPrivacyViewController new];
+            [self.navigationController pushViewController:privacyVc animated:YES];
+        }];
+        
+        [alertController addAction:ignoreAction];
+        [alertController addAction:checkAction];
+        
+        [self presentViewController:alertController animated:YES completion:nil];
+    }
+}
+
+- (BOOL)screenLockAlertFlag {
+    return [CurrentAppContext().appUserDefaults boolForKey:kDTShowScreenLockAlertKey];
+}
+
+- (void)markScreenLockAlertFlag {
+    [CurrentAppContext().appUserDefaults setBool:YES forKey:kDTShowScreenLockAlertKey];
+    [CurrentAppContext().appUserDefaults synchronize];
+}
+
+#pragma mark - UITableViewDataSource
+
+- (TSThread *)threadForIndexPath:(NSIndexPath *)indexPath {
     return [self.threadMapping threadForIndexPath:indexPath];
+}
+
+- (BOOL)hasAnyMessagesWithTransaction:(SDSAnyReadTransaction *)transaction {
+    return [TSThread anyCountWithTransaction:transaction] > 0;
+}
+
+#pragma mark - UIScrollViewDelegate
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    // bounces 和 showsVerticalScrollIndicator 已在 tableView getter 中设置
 }
 
 #pragma mark - Present Thread
 
-- (void)presentThread:(TSThread *)thread action:(ConversationViewAction)action
-{
+- (void)presentThread:(TSThread *)thread action:(ConversationViewAction)action {
     [BenchManager startEventWithTitle:@"Presenting Conversation"
                               eventId:[NSString stringWithFormat:@"presenting-conversation-%@", thread.uniqueId]];
     [self presentThread:thread action:action focusMessageId:nil];
@@ -623,142 +949,51 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
 
 - (void)presentThread:(TSThread *)thread
                action:(ConversationViewAction)action
-       focusMessageId:(nullable NSString *)focusMessageId
-{
+       focusMessageId:(nullable NSString *)focusMessageId {
     if (thread == nil) {
         OWSFailDebug(@"Thread unexpectedly nil");
         return;
     }
 
-    // We do this synchronously if we're already on the main thread.
     DispatchMainThreadSafe(^{
-        
-        DTHomeViewController *homeVC = (DTHomeViewController *)self.navigationController.viewControllers.firstObject;
-        OWSLogInfo(@"============ 点击 cell ============");
-        UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
-
-        OWSLogInfo(@"[window] keyWindow = %@", keyWindow);
-        OWSLogInfo(@"[window] self.view.window = %@", self.view.window);
-        OWSLogInfo(@"[window] nav = %@", self.navigationController);
-        OWSLogInfo(@"[window] keyWindow.root = %@", keyWindow.rootViewController);
-        
-        if ([homeVC isKindOfClass:DTHomeViewController.class]) {
-            [homeVC logWindowHierarchyWithTag:@"presentThread tap cell"];
+        if (!self.isViewLoaded) {
+            OWSLogWarn(@"View not loaded, loading now");
+            [self loadViewIfNeeded];
         }
-        
-        [self prepareForConversationPresentation];
-        
-        OWSLogInfo(@"============ pushTopLevelViewController ============");
 
-        OWSLogInfo(@"[window] keyWindow = %@", keyWindow);
-        OWSLogInfo(@"[window] self.view.window = %@", self.view.window);
-        OWSLogInfo(@"[window] nav = %@", self.navigationController);
-        OWSLogInfo(@"[window] keyWindow.root = %@", keyWindow.rootViewController);
-        
-        if ([homeVC isKindOfClass:DTHomeViewController.class]) {
-            [homeVC logWindowHierarchyWithTag:@"presentThread pushTopLevelViewController"];
+        if (!self.navigationController) {
+            OWSLogError(@"NavigationController is nil, cannot present thread");
+            return;
+        }
+
+        if (!self.isViewVisible && CurrentAppContext().isMainAppAndActive) {
+            OWSLogWarn(@"Forcing isViewVisible = YES before presentation");
+            self.isViewVisible = YES;
         }
 
         ConversationViewController *viewController = [[ConversationViewController alloc] initWithThread:thread
                                                                                                  action:action
                                                                                          focusMessageId:focusMessageId
                                                                                             botViewItem:nil
-                                                                                               viewMode:ConversationViewMode_Main];
+                                                                                               viewMode:ConversationViewMode_Main isFromPersonalCard:false];
         self.lastViewedThread = thread;
-        OWSLogInfo(@"[Conversation] tap cell present viewController %@", viewController);
-        [self pushTopLevelViewController:viewController animateDismissal:NO animatePresentation:YES];
+        
+        OWSLogInfo(@"[Conversation] Before push: nav class=%@", NSStringFromClass(self.navigationController.class));
+        
+        if (self.presentedViewController) {
+            [self.presentedViewController dismissViewControllerAnimated:NO completion:^{
+                [self.navigationController pushViewController:viewController animated:YES];
+            }];
+        } else {
+            [self.navigationController pushViewController:viewController animated:YES];
+        }
     });
 }
 
-- (void)prepareForConversationPresentation
-{
-    OWSWindowManager *windowManager = [OWSWindowManager sharedManager];
-    if (windowManager.shouldShowCallView) {
-        OWSLogInfo(@"[window] leaveCallView");
-        [windowManager leaveCallView];
-    }
-
-    if (![windowManager.rootWindow isKeyWindow]) {
-        OWSLogInfo(@"[window] isKeyWindow");
-        [windowManager ensureRootWindowShown];
-    } else if (windowManager.rootWindow.hidden) {
-        OWSLogInfo(@"[window] rootWindow hidden");
-        [windowManager ensureRootWindowShown];
-    }
-}
-
-- (void)pushTopLevelViewController:(UIViewController *)viewController
-                  animateDismissal:(BOOL)animateDismissal
-               animatePresentation:(BOOL)animatePresentation
-{
-    OWSAssertIsOnMainThread();
-    OWSAssertDebug(viewController);
-
-    [self presentViewControllerWithBlock:^{
-        [self.navigationController pushViewController:viewController animated:animatePresentation];
-    }
-                        animateDismissal:animateDismissal];
-}
-
-- (void)presentViewControllerWithBlock:(void (^)(void))presentationBlock animateDismissal:(BOOL)animateDismissal
-{
-    OWSAssertIsOnMainThread();
-    OWSAssertDebug(presentationBlock);
-
-    // Presenting a "top level" view controller has three steps:
-    //
-    // First, dismiss any presented modal.
-    // Second, pop to the root view controller if necessary.
-    // Third present the new view controller using presentationBlock.
-
-    // Define a block to perform the second step.
-    void (^dismissNavigationBlock)(void) = ^{
-        if (![self.navigationController.viewControllers.lastObject isKindOfClass:NSClassFromString(@"DTHomeViewController")]) {
-              [CATransaction begin];
-              [CATransaction setCompletionBlock:^{
-                  presentationBlock();
-              }];
-  
-             [self.navigationController popToRootViewControllerAnimated:animateDismissal];
-
-              [CATransaction commit];
-          } else {
-            presentationBlock();
-        }
-    };
-
-    // Perform the first step.
-    if (self.presentedViewController) {
-        // NOTE: 修复在展示 PanModalPresentable 弹窗后，退至后台，通过 push 进入其他会话页时，整个 app 布局错乱问题
-        BOOL animated = animateDismissal;
-        if (self.presentedViewController.isPanModalPresentable) {
-            animated = YES;
-        }
-        
-        // 修复：在横屏状态下dismiss PanModal弹窗时，确保视图布局正确
-        if (self.presentedViewController.isPanModalPresentable) {
-            CGSize screenSize = [UIScreen mainScreen].bounds.size;
-            BOOL isLandscape = screenSize.width > screenSize.height;
-            
-            if (isLandscape) {
-                OWSLogInfo(@"[HomeVC] layout Landscape");
-                // Force layout update before dismissal in landscape
-                [self.presentedViewController.view setNeedsLayout];
-                [self.presentedViewController.view layoutIfNeeded];
-            }
-        }
-        
-        [self.presentedViewController dismissViewControllerAnimated:animated completion:dismissNavigationBlock];
-    } else {
-        dismissNavigationBlock();
-    }
-}
-
-#pragma mark - Reload Data (全量更新)
+#pragma mark - Data Update (Full Reload)
 
 - (void)resetMappings {
     OWSLogInfo(@"-------resetMappings----");
-    
     [BenchManager startEventWithTitle:@"resetMappings" eventId:@"resetMappings"];
     [self fullUpdateData];
 }
@@ -768,7 +1003,7 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
         [self.threadMapping updateSwallowingErrorsWithIsArchived:self.isViewingArchive
                                                      isCalculate:YES
                                                      transaction:transaction];
-    } completion:^{
+    } completionQueue:dispatch_get_main_queue() completion:^{
         [self fullUpdateUI];
     }];
 }
@@ -780,7 +1015,6 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
 }
 
 - (void)reloadTableViewData {
-    // PERF: come up with a more nuanced cache clearing scheme
     [self.threadViewModelCache removeAllObjects];
     
     @weakify(self)
@@ -795,166 +1029,22 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     return self.homeViewMode == HomeViewMode_Archive;
 }
 
-#pragma mark - Empty View
-
-- (void)updateViewState
-{
-//    NSUInteger inboxCount = self.threadMapping.inboxCount;
-    NSInteger inboxCount = [self.threadMapping numberOfItemsInSection:HomeViewControllerSectionConversations];
-    NSUInteger archiveCount = self.threadMapping.archiveCount;
-
-    if (self.homeViewMode == HomeViewMode_Inbox && inboxCount == 0) {
-        [self updateEmptyBoxText];
-        if (self.isSelectedFolder) {
-            [_emptyBoxView setHidden:NO];
-        } else {
-            [_emptyBoxView setHidden:(archiveCount != 0)];
-        }
-    } else if (self.homeViewMode == HomeViewMode_Archive && archiveCount == 0) {
-        [self updateEmptyBoxText];
-        [_emptyBoxView setHidden:NO];
-    } else {
-        [_emptyBoxView setHidden:YES];
-    }
-}
-
-- (void)updateEmptyBoxText
-{
-    NSString *firstLine = @"";
-    if (self.homeViewMode == HomeViewMode_Inbox) {
-        if ([Environment.preferences getHasSentAMessage]) {
-            //  FIXME: This doesn't appear to ever show up as the defaults flag is never set (setHasSentAMessage: is never called).
-            firstLine = Localized(@"EMPTY_INBOX_FIRST_TITLE", @"");
-        } else {
-            //  FIXME: Misleading localizable string key name.
-            if (self.isSelectedFolder) {
-                firstLine = Localized(@"CHAT_FOLDER_EMPTY_MESSAGE_TIP", @"");
-            } else {
-                firstLine = [NSString stringWithFormat:Localized(@"EMPTY_ARCHIVE_FIRST_TITLE", @"First (bolded) part of the label that shows up when there are neither active nor archived conversations"), TSConstants.appDisplayName];
-            }
-        }
-    } else {
-        if ([Environment.preferences getHasArchivedAMessage]) {
-            //  FIXME: Shows up after the archival tab is cleared up completely by the user, the localizable string key is misleading.
-            firstLine = Localized(@"EMPTY_INBOX_TITLE", @"");
-        } else {
-            firstLine = Localized(@"EMPTY_ARCHIVE_TITLE", @"");
-        }
-    }
-    _emptyBoxView.emptyText = firstLine;
-}
-
-#pragma mark - Database Update
-
-- (void)databaseChangesDidUpdateWithDatabaseChanges:(id<DatabaseChanges>)databaseChanges{
-    
-    OWSAssertIsOnMainThread();
-    
-    if (!self.shouldObserveDBModifications) {
-        return;
-    }
-    
-    if(!databaseChanges.threadUniqueIds.count){
-//        [self.databaseStorage uiReadWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
-//            [self.threadMapping updateSwallowingErrorsWithIsArchived:self.isViewingArchive
-//                                                         isCalculate:NO
-//                                                         transaction:transaction];
-//        }];
-//        [self updateViewState];
-        return;
-    }
-    
-    [self anyUIDBDidUpdateWithUpdatedThreadIds:databaseChanges.threadUniqueIds deletedUniqueIds:databaseChanges.interactionDeletedUniqueIds];
-    
-}
-
-- (void)databaseChangesDidUpdateExternally {
-    
-    OWSAssertIsOnMainThread();
-    
-    [self anyUIDBDidUpdateExternally];
-}
-
-- (void)databaseChangesDidReset {
-    
-    OWSAssertIsOnMainThread();
-    
-    [self anyUIDBDidUpdateExternally];
-    
-}
-
-- (void)anyUIDBDidUpdateWithUpdatedThreadIds:(NSSet<NSString *> *)updatedItemIds deletedUniqueIds:(NSSet<NSString *> *)deletedUniqueIds{
-    OWSAssertIsOnMainThread();
-
-    if (updatedItemIds.count < 1) {
-        // Ignoring irrelevant update.
-        [self updateViewState];
-        return;
-    }
-    
-    NSMutableSet<NSString *> *needCheckIds = updatedItemIds.mutableCopy;
-    NSMutableSet<NSString *> *needUpdatedItemIds = updatedItemIds.mutableCopy;
-    if(deletedUniqueIds.count){
-        [needCheckIds minusSet:deletedUniqueIds];
-    }
-    
-    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
-        [needCheckIds.allObjects enumerateObjectsUsingBlock:^(NSString * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-            ThreadViewModel *_Nullable cachedThreadViewModel = [self.threadViewModelCache objectForKey:obj];
-            TSThread *cachedThread = cachedThreadViewModel.threadRecord;
-            if(cachedThread){
-                TSThread *newThread = [TSThread anyFetchWithUniqueId:obj transaction:transaction];
-                if([newThread previewEqualTo:cachedThread]){
-                    [needUpdatedItemIds removeObject:obj];
-                }
-            }
-        }];
-    }];
-    
-    if (needUpdatedItemIds.count < 1) {
-        return;
-    }
-    
-    if(!self.needUpdatedItemIds.count){
-        self.needUpdatedItemIds = needUpdatedItemIds.copy;
-    }else{
-        NSMutableSet *finalSet = self.needUpdatedItemIds.mutableCopy;
-        [finalSet unionSet:needUpdatedItemIds];
-        self.needUpdatedItemIds = finalSet.copy;
-    }
-    
-}
-
-- (void)anyUIDBDidUpdateExternally
-{
-    OWSAssertIsOnMainThread();
-
-    if (self.shouldObserveDBModifications) {
-        // External database modifications can't be converted into incremental updates,
-        // so rebuild everything.  This is expensive and usually isn't necessary, but
-        // there's no alternative.
-        //
-        // We don't need to do this if we're not observing db modifications since we'll
-        // do it when we resume.
-        [self updateFiltering];
-    }
-}
-
-#pragma mark - refresh UI timer (增量更新)
+#pragma mark - Data Update (Incremental)
 
 - (void)startRefreshUITimerIfNecessary {
-    if (CurrentAppContext().isMainApp) {
-        [self stopRefreshUITimer];
-        NSUInteger inboxCount = [self.threadMapping inboxCount];
-        double timeFactor = MAX(inboxCount / 500.0, 1.0);
-        NSTimeInterval timeInterval = 0.5 * timeFactor;
-        self.refreshUITimer = [NSTimer weakScheduledTimerWithTimeInterval:timeInterval
-                                                                  target:self
-                                                                selector:@selector(refreshUI)
-                                                                userInfo:nil
-                                                                 repeats:YES];
-    }
+    if (!CurrentAppContext().isMainApp) return;
     
+    [self stopRefreshUITimer];
+    
+    NSUInteger inboxCount = [self.threadMapping inboxCount];
+    double timeFactor = MAX(inboxCount / 500.0, 1.0);
+    NSTimeInterval timeInterval = 0.5 * timeFactor;
+    
+    self.refreshUITimer = [NSTimer weakScheduledTimerWithTimeInterval:timeInterval
+                                                               target:self
+                                                             selector:@selector(refreshUI)
+                                                             userInfo:nil
+                                                              repeats:YES];
 }
 
 - (void)stopRefreshUITimer {
@@ -963,7 +1053,7 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
 }
 
 - (void)refreshUI {
-    if (self.needUpdatedItemIds.count > 0 && !self.processingUpdatedItems){
+    if (self.needUpdatedItemIds.count > 0 && !self.processingUpdatedItems) {
         [self incrementRefresh];
     }
 }
@@ -975,12 +1065,10 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     NSSet<NSString *> *updatedItemIds = self.needUpdatedItemIds.copy;
     self.needUpdatedItemIds = nil;
     
-    // 删除缓存，触发重新构建 threadViewModel
     for (NSString *key in updatedItemIds) {
         [self.threadViewModelCache removeObjectForKey:key];
     }
     
-    // 异步更新 mapping，刷新快照
     [self.databaseStorage asyncReadWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
         [self.threadMapping updateSwallowingErrorsWithIsArchived:self.isViewingArchive
                                                      isCalculate:YES
@@ -995,105 +1083,156 @@ static NSString *const kDTShowScreenLockAlertKey = @"showScreenLockAlertKey";
     }];
 }
 
-#pragma mark - UIScrollViewDelegate
+#pragma mark - DatabaseChangeDelegate
 
-- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
-    scrollView.bounces = YES;
-    scrollView.showsVerticalScrollIndicator = NO;
-    !self.scrollCallback ?: self.scrollCallback(scrollView);
+- (void)databaseChangesDidUpdateWithDatabaseChanges:(id<DatabaseChanges>)databaseChanges {
+    OWSAssertIsOnMainThread();
+    
+    if (!self.shouldObserveDBModifications) {
+        return;
+    }
+
+    // Early return if there are no thread changes (neither updates nor deletes)
+    BOOL hasThreadUpdates = databaseChanges.threadUniqueIds.count > 0;
+    BOOL hasThreadDeletes = databaseChanges.threadDeletedUniqueIds.count > 0;
+
+    if (!hasThreadUpdates && !hasThreadDeletes) {
+        return;
+    }
+
+    [self anyUIDBDidUpdateWithUpdatedThreadIds:databaseChanges.threadUniqueIds
+                       threadDeletedUniqueIds:databaseChanges.threadDeletedUniqueIds
+                      interactionDeletedUniqueIds:databaseChanges.interactionDeletedUniqueIds];
 }
 
-#pragma mark - JXPagingViewListViewDelegate
-
-- (UIView *)listView {
-    return self.view;
+- (void)databaseChangesDidUpdateExternally {
+    OWSAssertIsOnMainThread();
+    [self anyUIDBDidUpdateExternally];
 }
 
-- (UIScrollView *)listScrollView {
-    return self.tableView;
+- (void)databaseChangesDidReset {
+    OWSAssertIsOnMainThread();
+    [self anyUIDBDidUpdateExternally];
 }
 
-- (void)listViewDidScrollCallback:(void (^)(UIScrollView *))callback {
-    self.scrollCallback = callback;
+- (void)anyUIDBDidUpdateWithUpdatedThreadIds:(NSSet<NSString *> *)updatedItemIds
+                       threadDeletedUniqueIds:(NSSet<NSString *> *)threadDeletedUniqueIds
+                      interactionDeletedUniqueIds:(NSSet<NSString *> *)interactionDeletedUniqueIds {
+    OWSAssertIsOnMainThread();
+
+    // If threads were deleted, we need to reload the entire list
+    if (threadDeletedUniqueIds.count > 0) {
+        OWSLogInfo(@"Threads deleted: %lu, reloading data", (unsigned long)threadDeletedUniqueIds.count);
+        [self resetMappings];
+        return;
+    }
+
+    if (updatedItemIds.count < 1) {
+        [self updateViewState];
+        return;
+    }
+
+    NSMutableSet<NSString *> *needCheckIds = updatedItemIds.mutableCopy;
+    NSMutableSet<NSString *> *needUpdatedItemIds = updatedItemIds.mutableCopy;
+
+    if (interactionDeletedUniqueIds.count) {
+        [needCheckIds minusSet:interactionDeletedUniqueIds];
+    }
+
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+        for (NSString *obj in needCheckIds.allObjects) {
+            ThreadViewModel *_Nullable cachedThreadViewModel = [self.threadViewModelCache objectForKey:obj];
+            TSThread *cachedThread = cachedThreadViewModel.threadRecord;
+            if (cachedThread) {
+                TSThread *newThread = [TSThread anyFetchWithUniqueId:obj transaction:transaction];
+                if ([newThread previewEqualTo:cachedThread]) {
+                    [needUpdatedItemIds removeObject:obj];
+                }
+            }
+        }
+    }];
+
+    if (needUpdatedItemIds.count < 1) {
+        // 即使没有需要更新的项目，也应该检查是否需要更新视图状态
+        // 例如：interactions 被删除后，可能影响 thread 预览，需要更新视图状态
+        if (interactionDeletedUniqueIds.count > 0) {
+            [self updateViewState];
+        }
+        return;
+    }
+
+    if (!self.needUpdatedItemIds.count) {
+        self.needUpdatedItemIds = needUpdatedItemIds.copy;
+    } else {
+        NSMutableSet *finalSet = self.needUpdatedItemIds.mutableCopy;
+        [finalSet unionSet:needUpdatedItemIds];
+        self.needUpdatedItemIds = finalSet.copy;
+    }
+}
+
+- (void)anyUIDBDidUpdateExternally {
+    OWSAssertIsOnMainThread();
+}
+
+#pragma mark - Empty View
+
+- (void)updateViewState {
+    NSInteger inboxCount = [self.threadMapping numberOfItemsInSection:HomeViewControllerSectionConversations];
+    NSUInteger archiveCount = self.threadMapping.archiveCount;
+    
+    if (self.homeViewMode == HomeViewMode_Inbox && inboxCount == 0) {
+        [self updateEmptyBoxText];
+        [_emptyBoxView setHidden:(archiveCount != 0)];
+    } else if (self.homeViewMode == HomeViewMode_Archive && archiveCount == 0) {
+        [self updateEmptyBoxText];
+        [_emptyBoxView setHidden:NO];
+    } else {
+        [_emptyBoxView setHidden:YES];
+    }
+}
+
+- (void)updateEmptyBoxText {
+    NSString *firstLine = @"";
+    
+    if (self.homeViewMode == HomeViewMode_Inbox) {
+        if ([Environment.preferences getHasSentAMessage]) {
+            firstLine = Localized(@"EMPTY_INBOX_FIRST_TITLE", @"");
+        } else {
+            firstLine = [NSString stringWithFormat:Localized(@"EMPTY_ARCHIVE_FIRST_TITLE", @""), TSConstants.appDisplayName];
+        }
+    } else {
+        if ([Environment.preferences getHasArchivedAMessage]) {
+            firstLine = Localized(@"EMPTY_INBOX_TITLE", @"");
+        } else {
+            firstLine = Localized(@"EMPTY_ARCHIVE_TITLE", @"");
+        }
+    }
+    
+    _emptyBoxView.emptyText = firstLine;
 }
 
 #pragma mark - Theme
 
-- (void)applyTheme
-{
+- (void)applyTheme {
     OWSAssertIsOnMainThread();
     [super applyTheme];
-    [self.tableView reloadData];
-
-    self.tableView.backgroundColor = Theme.backgroundColor;
-    self.tableView.separatorColor = [Theme.cellSeparatorColor colorWithAlphaComponent:0.2];
-    [self.emptyBoxView applyTheme];
     
+    self.tableView.backgroundColor = Theme.bgpagePrimaryColor;
+    self.tableView.separatorColor = [Theme.dividerColor colorWithAlphaComponent:0.2];
+    self.searchBarContainer.backgroundColor = Theme.bgpagePrimaryColor;
+    self.searchBar.backgroundColor = Theme.bgpagePrimaryColor;
+    
+    [self.emptyBoxView applyTheme];
     [self.reminderViewCell applyTheme];
+    [self.tableView reloadData];
 }
 
 - (void)applyLanguage {
     [super applyLanguage];
+    
+    [self socketStateDidChange];
+    [self setupActionFloatView];
     [self.tableView reloadData];
-}
-
-#pragma mark - addContacts notification
-
-//添加好友
-- (void)externalInvite:(NSNotification *)notify {
-    OWSLogInfo(@"添加好友 addContactsFromNotify userInfo = %@", notify.userInfo);
-    NSDictionary *userInfo = notify.userInfo;
-    NSString *inviteCode = userInfo[AppLinkNotificationHandler.inviteCodeKey];
-    DTInviteRequestHandler *inviteRequestHandler = [[DTInviteRequestHandler alloc] initWithSourceVc:self];
-    [inviteRequestHandler queryUserAccountByInviteCode:inviteCode];
-}
-
-- (void)criticalAlertHighlightDidChange:(NSNotification *)notification {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self.tableView reloadData];
-    });
-}
-
-#pragma mark - Lazy Load
-
-- (UITableView *)tableView {
-    if (!_tableView) {
-        _tableView = [self createTableView];
-    }
-    return _tableView;
-}
-
-- (ThreadMapping *)threadMapping {
-    if (!_threadMapping) {
-        _threadMapping = [ThreadMapping new];
-    }
-    return _threadMapping;
-}
-
-- (AccountManager *)accountManager {
-    return SignalApp.sharedApp.accountManager;
-}
-
-- (OWSContactsManager *)contactsManager {
-    return Environment.shared.contactsManager;
-}
-
-- (OWSBlockingManager *)blockingManager {
-    return [OWSBlockingManager sharedManager];
-}
-
-- (DTRemoveMembersOfAGroupAPI *)removeMembersOfAGroupAPI{
-    if(!_removeMembersOfAGroupAPI){
-        _removeMembersOfAGroupAPI = [DTRemoveMembersOfAGroupAPI new];
-    }
-    return _removeMembersOfAGroupAPI;
-}
-
-- (DTDismissAGroupAPI *)dismissAGroupAPI{
-    if(!_dismissAGroupAPI){
-        _dismissAGroupAPI = [DTDismissAGroupAPI new];
-    }
-    return _dismissAGroupAPI;
 }
 
 @end

@@ -39,8 +39,9 @@ struct MultiMeetingView: UIViewRepresentable {
         for participant in sortedParticipants.compactMap({ $0 }) {
             // 检查该用户是否有正在共享的屏幕视频流
             let chatModel = DTMultiChatItemModel()
+            chatModel.account = participant.identity?.stringValue.components(separatedBy: ".").first
             chatModel.recipientId = participant.identity?.stringValue
-            chatModel.displayName = TextSecureKitEnv.shared().contactsManager.displayName(forPhoneIdentifier: chatModel.recipientId?.components(separatedBy: ".").first)
+            chatModel.displayName = TextSecureKitEnv.shared().contactsManager.displayName(forPhoneIdentifier: chatModel.account)
             if participant.videoTracks.contains(where: { $0.source == .screenShareVideo }) {
                 chatModel.isSharing = true
             } else {

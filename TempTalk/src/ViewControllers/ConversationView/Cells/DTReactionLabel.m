@@ -20,8 +20,8 @@
     if (self = [super initWithFrame:frame]) {
         self.userInteractionEnabled = YES;
         self.textAlignment = NSTextAlignmentCenter;
-        self.textColor = Theme.ternaryTextColor;
-        self.backgroundColor = Theme.secondaryBackgroundColor;
+        self.textColor = Theme.tthirdColor;
+        self.backgroundColor = Theme.bg2Color;
         self.font = [DTReactionLabel emojiLabelFont];
         self.clipsToBounds = YES;
         self.layer.cornerRadius = [DTReactionLabel lbHeight] / 2;

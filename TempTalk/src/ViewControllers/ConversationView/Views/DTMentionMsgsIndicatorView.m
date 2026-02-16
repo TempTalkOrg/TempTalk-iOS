@@ -10,7 +10,7 @@
 #import <PureLayout/PureLayout.h>
 #import "UIColor+OWS.h"
 #import "UIView+SignalUI.h"
-#import "Theme.h"
+#import <TTMessaging/TTMessaging-Swift.h>
 
 @interface DTMentionMsgsIndicatorView ()
 
@@ -41,7 +41,7 @@
         _badgeLabel.textAlignment = NSTextAlignmentCenter;
         _badgeLabel.font = [UIFont systemFontOfSize:10.0];
         _badgeLabel.layer.masksToBounds = YES;
-        _badgeLabel.backgroundColor = Theme.redBgroundColor;
+        _badgeLabel.backgroundColor = Theme.errorColor;
     }
     return _badgeLabel;
 }

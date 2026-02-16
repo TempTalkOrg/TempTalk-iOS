@@ -53,6 +53,16 @@ NS_ASSUME_NONNULL_BEGIN
                                   inThread:(TSThread *)thread
                           quotedReplyModel:(nullable DTReplyModel *)replyModel
                              messageSender:(OWSMessageSender *)messageSender
+                           forceNormalMode:(BOOL)forceNormalMode
+                                   success:(void (^)(void))successHandler
+                                   failure:(void (^)(NSError *error))failureHandler;
+
++ (TSOutgoingMessage *)sendMessageWithText:(NSString *)text
+                                 atPersons:(nullable NSString *)atPersons
+                                  mentions:(nullable NSArray <DTMention *> *)mentions
+                                  inThread:(TSThread *)thread
+                          quotedReplyModel:(nullable DTReplyModel *)replyModel
+                             messageSender:(OWSMessageSender *)messageSender
                                    success:(void (^)(void))successHandler
                                    failure:(void (^)(NSError *error))failureHandler;
 
@@ -107,6 +117,7 @@ NS_ASSUME_NONNULL_BEGIN
                                     success:(void (^)(void))successHandler
                                     failure:(void (^)(NSError *error))failureHandler;
 
+#pragma mark - ReadPosition
 
 // This method will create and/or remove any offers and indicators
 // necessary for this thread.  This includes:
@@ -139,8 +150,6 @@ NS_ASSUME_NONNULL_BEGIN
 #pragma mark - Delete Content
 
 + (void)deleteAllContent;
-
-+ (void)archiveInactiveConversations;
 
 #pragma mark - Find Content
 

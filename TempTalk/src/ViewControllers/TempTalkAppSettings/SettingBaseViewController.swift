@@ -9,13 +9,13 @@
 import Foundation
 
 public class SettingBaseViewController: OWSViewController, OWSNavigationChildController {
-    
-    public var navbarBackgroundColorOverride: UIColor? { Theme.defaultBackgroundColor }
-    
+
+    public var navbarBackgroundColorOverride: UIColor? { Theme.bgpageSecondaryColor }
+
     public var childForOWSNavigationConfiguration: OWSNavigationChildController? { nil }
-    
+
     public var preferredNavigationBarStyle: OWSNavigationBarStyle { .solid }
-    
+
     public var navbarTintColorOverride: UIColor? { nil }
 
     public var prefersNavigationBarHidden: Bool {
@@ -24,7 +24,7 @@ public class SettingBaseViewController: OWSViewController, OWSNavigationChildCon
         }
         return false
     }
-    
+
     public var shouldCancelNavigationBack: Bool { false }
-    
+
 }

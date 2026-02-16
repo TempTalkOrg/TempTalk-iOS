@@ -427,7 +427,11 @@ private var URLSessionTaskProxiedContentAssetSegment: UInt8 = 0
 extension URLSessionTask {
     var assetRequest: ProxiedContentAssetRequest {
         get {
-            return objc_getAssociatedObject(self, &URLSessionTaskProxiedContentAssetRequest) as! ProxiedContentAssetRequest
+            guard let request = objc_getAssociatedObject(self, &URLSessionTaskProxiedContentAssetRequest) as? ProxiedContentAssetRequest else {
+                owsFailDebug("assetRequest accessed before being set")
+                preconditionFailure("assetRequest must be set before accessing URLSessionTask.assetRequest")
+            }
+            return request
         }
         set {
             objc_setAssociatedObject(self, &URLSessionTaskProxiedContentAssetRequest, newValue, objc_AssociationPolicy.OBJC_ASSOCIATION_RETAIN_NONATOMIC)
@@ -435,7 +439,11 @@ extension URLSessionTask {
     }
     var assetSegment: ProxiedContentAssetSegment {
         get {
-            return objc_getAssociatedObject(self, &URLSessionTaskProxiedContentAssetSegment) as! ProxiedContentAssetSegment
+            guard let segment = objc_getAssociatedObject(self, &URLSessionTaskProxiedContentAssetSegment) as? ProxiedContentAssetSegment else {
+                owsFailDebug("assetSegment accessed before being set")
+                preconditionFailure("assetSegment must be set before accessing URLSessionTask.assetSegment")
+            }
+            return segment
         }
         set {
             objc_setAssociatedObject(self, &URLSessionTaskProxiedContentAssetSegment, newValue, objc_AssociationPolicy.OBJC_ASSOCIATION_RETAIN_NONATOMIC)

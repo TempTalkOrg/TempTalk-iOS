@@ -29,7 +29,8 @@ NSString *const DTConversationSharingConfigurationChangeNotification = @"kDTconv
                            conversationNotifyEntity:(DTConversationNotifyEntity *)conversationNotifyEntity
                                         transaction:(SDSAnyWriteTransaction *)transaction {
     //主要用于跨设备的mute状态同步  mac操作->同步给其他设备会通过socket通道的通知触达
-    if (conversationNotifyEntity && [conversationNotifyEntity.source isEqualToString:[TSAccountManager sharedInstance].localNumber]) {
+    NSString *localNumber = [[TSAccountManager sharedInstance] localNumberWithTransaction:transaction];
+    if (conversationNotifyEntity && [conversationNotifyEntity.source isEqualToString:localNumber]) {
         if (conversationNotifyEntity.sourceDeviceId  == [OWSDevice currentDeviceId]) {
             return;
         }
@@ -52,7 +53,7 @@ NSString *const DTConversationSharingConfigurationChangeNotification = @"kDTconv
             [self saveConversationSettingForThread:thread changeType:conversationNotifyEntity.changeType conversationEntity:conversationEntity trasation:transaction];
         }
     } else {
-        OWSLogInfo(@"[DTConversationUpdateMessageProcessor class] ---> conversationNotifyEntity: %@, conversationNotifyEntity.source: %@, localNumber:%@",conversationNotifyEntity, conversationNotifyEntity.source, [TSAccountManager sharedInstance].localNumber);
+        OWSLogInfo(@"[DTConversationUpdateMessageProcessor class] ---> conversationNotifyEntity: %@, conversationNotifyEntity.source: %@, localNumber:%@",conversationNotifyEntity, conversationNotifyEntity.source, localNumber);
     }
 }
 
@@ -78,9 +79,10 @@ NSString *const DTConversationSharingConfigurationChangeNotification = @"kDTconv
             if(!account){ OWSLogInfo(@"[DTConversationUpdateMessageProcessor class] account = nil");}
             Contact *contact = account.contact;
             if(!DTParamsUtils.validateString(conversationEntity.remark)){return;}
-            NSString *remark = [[DTConversationSettingHelper sharedInstance] decryptRemarkString:contact.remark receptid:contactThread.contactIdentifier];
-            if(![contact.remark isEqualToString:remark]){
-                contact.remark = remark;
+            // Decrypt the new remark from conversationEntity, not from the old contact.remark
+            NSString *newRemark = [[DTConversationSettingHelper sharedInstance] decryptRemarkString:conversationEntity.remark receptid:contactThread.contactIdentifier];
+            if(![contact.remark isEqualToString:newRemark]){
+                contact.remark = newRemark;
                 account.contact = contact;
                 id<ContactsManagerProtocol> contactsManager = [TextSecureKitEnv sharedEnv].contactsManager;
                 [contactsManager updateSignalAccountWithRecipientId:account.recipientId withNewSignalAccount:account withTransaction:writeTransaction];

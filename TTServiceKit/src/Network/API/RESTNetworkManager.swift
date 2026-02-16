@@ -65,7 +65,7 @@ public class RESTSessionManager: NSObject {
 
         // We should only use the RESTSessionManager for requests to the Signal main service.
         var urlSession = self.urlSession
-        
+
         var urlStr = TSConstants.mainServiceURL
         if request.serverType == .fileSharing {
             urlStr = TSConstants.fileShareServiceURL
@@ -77,6 +77,8 @@ public class RESTSessionManager: NSObject {
             urlStr = TSConstants.speechToTextServerURL
         } else if request.serverType == .avatar {
             urlStr = TSConstants.avatarStorageServerURL
+        } else if request.serverType == .root {
+            urlStr = TSConstants.rootServiceURL
         }
          
         if let url = URL(string: urlStr), urlSession.unfrontedBaseUrl != url {

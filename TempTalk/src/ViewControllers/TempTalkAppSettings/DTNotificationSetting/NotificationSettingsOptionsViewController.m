@@ -6,13 +6,27 @@
 #import "Yelling-Swift.h"
 #import "SignalApp.h"
 #import <TTMessaging/Environment.h>
+#import <TTMessaging/TTMessaging.h>
 #import <TTServiceKit/Localize_Swift.h>
+
+@interface NotificationSettingsOptionsViewController () <OWSNavigationChildController>
+
+@end
 
 @implementation NotificationSettingsOptionsViewController
 
 - (void)viewDidLoad
 {
+    [super viewDidLoad];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     [self updateTableContents];
+}
+
+- (void)applyTheme {
+    [super applyTheme];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
 }
 
 #pragma mark - Table Contents
@@ -59,4 +73,25 @@
     [self.navigationController popViewControllerAnimated:YES];
 }
 
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return false;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpageSecondaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
+}
 @end

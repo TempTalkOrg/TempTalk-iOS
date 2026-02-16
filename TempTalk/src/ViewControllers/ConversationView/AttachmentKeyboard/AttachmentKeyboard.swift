@@ -51,7 +51,7 @@ class AttachmentKeyboard: CustomKeyboard {
         
         super.init()
 
-        backgroundColor = Theme.backgroundColor
+        backgroundColor = Theme.bg1Color
 
         let stackView = UIStackView(arrangedSubviews: [ moreAttachmentCollectionView ])
         stackView.axis = .vertical

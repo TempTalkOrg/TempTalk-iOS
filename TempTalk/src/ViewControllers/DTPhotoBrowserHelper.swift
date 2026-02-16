@@ -59,35 +59,37 @@ public class DTPhotoBrowserHelper: NSObject {
     }
     
     public func showLibrary() {
-        
-        guard let vc = viewController else {
-            OWSLogger.error("no viewcontroller avaliable")
-            return
-        }
-        
-        let previewSheet = ZLPhotoPreviewSheet(selectedAssets: [])
-        previewSheet.selectImageBlock = { [weak self] resultModels, isFullImage in
-            
-            guard let strongSelf = self else {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let vc = self.viewController else {
+                OWSLogger.error("no viewcontroller avaliable")
                 return
             }
-            guard let finiskBlock = strongSelf.selectImageBlock else {
-                owsFailDebug("selectImageBlock was unexpectedly nil")
-                return
+
+            let previewSheet = ZLPhotoPreviewSheet(selectedAssets: [])
+            previewSheet.selectImageBlock = { [weak self] resultModels, isFullImage in
+                
+                guard let strongSelf = self else {
+                    return
+                }
+                guard let finiskBlock = strongSelf.selectImageBlock else {
+                    owsFailDebug("selectImageBlock was unexpectedly nil")
+                    return
+                }
+                let assets = resultModels.map { $0.asset }
+                finiskBlock(assets, isFullImage)
             }
-            let assets = resultModels.map { $0.asset }
-            finiskBlock(assets, isFullImage)
+            previewSheet.cancelBlock = {
+                Logger.debug("cancel select")
+            }
+            previewSheet.selectImageRequestErrorBlock = { (errorAssets, errorIndexs) in
+                OWSLogger.debug("fetch error assets: \(errorAssets), error indexs: \(errorIndexs)")
+            }
+
+            OWSWindowManager.shared().setIsPhotoLibraryAuth(true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                OWSWindowManager.shared().setIsPhotoLibraryAuth(false)
+            }
+            previewSheet.showPhotoLibrary(sender: vc)
         }
-        previewSheet.cancelBlock = {
-            Logger.debug("cancel select")
-        }
-        previewSheet.selectImageRequestErrorBlock = { (errorAssets, errorIndexs) in
-            OWSLogger.debug("fetch error assets: \(errorAssets), error indexs: \(errorIndexs)")
-        }
-        OWSWindowManager.shared().setIsPhotoLibraryAuth(true)
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) {
-            OWSWindowManager.shared().setIsPhotoLibraryAuth(false)
-        }
-        previewSheet.showPhotoLibrary(sender: vc)
     }
 }

@@ -40,7 +40,7 @@
             NSString *recipientId = [account transforUserAccountToCallNumber];
             _recipientId = recipientId;
             OWSContactsManager *contactManager = Environment.shared.contactsManager;
-            _displayName = [contactManager displayNameForPhoneIdentifier:recipientId];
+            _displayName = [contactManager rawDisplayNameForPhoneIdentifier:recipientId];
             if ([_displayName isEqualToString:recipientId]) {
                 [[DTCallManager sharedInstance] getMeetingUserNameByUid:recipientId success:^(NSString * _Nonnull name) {
                     self->_displayName = name;

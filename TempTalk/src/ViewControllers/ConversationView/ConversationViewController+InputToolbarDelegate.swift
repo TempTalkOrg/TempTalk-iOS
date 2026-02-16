@@ -179,16 +179,40 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
     }
     
     func confideButtonPressed() {
-        var confidentialMode = 0
-        var inputToolbarState = InputToolbarState.normal
+        let isEnabling: Bool
+        let confidentialMode: Int
+        let inputToolbarState: InputToolbarState
+
         if let conversationEntity = self.thread.conversationEntity, conversationEntity.confidentialMode == .confidential {
             confidentialMode = 0
-            inputToolbarState = InputToolbarState.normal
+            inputToolbarState = .normal
+            isEnabling = false
         } else {
             confidentialMode = 1
-            inputToolbarState = InputToolbarState.confidential
+            inputToolbarState = .confidential
+            isEnabling = true
         }
-        
+
+        // Show alert when first time enabling confidential mode
+        if isEnabling {
+            var shouldShowAlert = false
+            databaseStorage.read { transaction in
+                shouldShowAlert = !SSKPreferences.hasShownConfidentialMessageAlert(transaction: transaction)
+            }
+
+            if shouldShowAlert {
+                DTConfidentialMessageAlertController.present(from: self) {
+                    self.performConfidentialModeToggle(confidentialMode: confidentialMode, inputToolbarState: inputToolbarState)
+                }
+            } else {
+                performConfidentialModeToggle(confidentialMode: confidentialMode, inputToolbarState: inputToolbarState)
+            }
+        } else {
+            performConfidentialModeToggle(confidentialMode: confidentialMode, inputToolbarState: inputToolbarState)
+        }
+    }
+
+    private func performConfidentialModeToggle(confidentialMode: Int, inputToolbarState: InputToolbarState) {
         let configApi = DTSetConversationApi()
         configApi.requestConfigConfidentialMode(withConversationID: self.thread.serverThreadId,
                                                 confidentialMode: confidentialMode) { conversationEntity in
@@ -245,17 +269,24 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
         if !self.inputToolbar.isInputViewFirstResponder, viewHasEverAppeared {
             updateContentInsets(animated: false)
         }
-        
-        // Additional check: Ensure the bottom bar position is immediately synchronized when the input box height changes.
-        if viewHasEverAppeared {
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.updateBottomBarPosition()
-            }
-        }
     }
     
     public func beginInput() {
+        // 检查是否从搜索跳转且用户还未操作
+        // 如果是，保护焦点消息不被清除（焦点会在键盘显示后自动清除）
+        let hasFocusMessage = conversationViewModel.viewState.focusItemIndex != nil
+        let justCompletedInitialScroll = viewState.hasCompletedInitialScroll && !viewState.userHasScrolled
+
+        if hasFocusMessage && justCompletedInitialScroll {
+            return
+        }
+
+        // 正常情况：清除焦点并滚动到底部
+        if conversationViewModel.focusMessageIdOnOpen != nil {
+            conversationViewModel.focusMessageIdOnOpen = nil
+            conversationViewModel.clearFocusMessageIndex()
+        }
+
         scrollToBottom(animated: true)
     }
     
@@ -373,7 +404,7 @@ extension ConversationViewController {
                 messageSender: self.messageSender
             )
         }
-        
+
         self.conversationViewModel.clearUnreadMessagesIndicator()
         self.conversationViewModel.appendUnsavedOutgoingTextMessage(message)
         messageWasSent(message)

@@ -15,7 +15,9 @@ import TTServiceKit
 extension ConversationViewController {
     /// 展示个人信息卡片
     func showPersonalInfoCard(recipientId: String) {
-        self.showProfileCardInfo(with: recipientId)
+        // 判断是否是同一个 thread（1v1 会话）
+        let isFromSameThread = !thread.isGroupThread() && thread.contactIdentifier() == recipientId
+        self.showProfileCardInfo(with: recipientId, isFromSameThread: isFromSameThread)
     }
 }
 
@@ -73,7 +75,7 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
     
     func messageBubbleView(_ bubbleView: ConversationMessageBubbleView, didTapContactShareViewWith viewItem: any ConversationViewItem) {
         AssertIsOnMainThread()
-        
+
         guard let shareContractId = viewItem.contactShare?.phoneNumbers.first?.phoneNumber else {
             DTToastHelper.toast(
                 withText: Localized("SHOW_PERSONAL_CARD_FAILED"),
@@ -81,9 +83,11 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
             )
             return
         }
-        
+
         if viewItem.isConfidentialMessage {
-            messageActionsShowDetailsForItem(viewItem)
+            handleConfidentialMessageTap(viewItem: viewItem) { [weak self] in
+                self?.messageActionsShowDetailsForItem(viewItem)
+            }
         } else {
             showPersonalInfoCard(recipientId: shareContractId)
         }
@@ -99,11 +103,18 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
         imageView: UIView
     ) {
         AssertIsOnMainThread()
-        dismissKeyBoard()
-        
+        dismissKeyBoard(byUserAction: true)
+
         guard let message = viewItem.interaction as? TSMessage else {
             return
         }
+
+        handleConfidentialMessageTap(viewItem: viewItem) { [weak self] in
+            self?.openMediaGallery(message: message, imageView: imageView)
+        }
+    }
+
+    private func openMediaGallery(message: TSMessage, imageView: UIView) {
         let mediaVC = MediaGalleryViewController(
             thread: self.thread,
             options: [.sliderEnabled, .showAllMediaButton]
@@ -114,7 +125,7 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
             replacingView: imageView
         )
     }
-    
+
     /// 点击视频
     func messageBubbleView(
         _ bubbleView: ConversationMessageBubbleView,
@@ -123,20 +134,15 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
         imageView: UIView
     ) {
         AssertIsOnMainThread()
-        dismissKeyBoard()
-        
+        dismissKeyBoard(byUserAction: true)
+
         guard let message = viewItem.interaction as? TSMessage else {
             return
         }
-        let mediaVC = MediaGalleryViewController(
-            thread: self.thread,
-            options: [.sliderEnabled, .showAllMediaButton]
-        )
-        mediaVC.presentDetailView(
-            fromViewController: self,
-            mediaMessage: message,
-            replacingView: imageView
-        )
+
+        handleConfidentialMessageTap(viewItem: viewItem) { [weak self] in
+            self?.openMediaGallery(message: message, imageView: imageView)
+        }
     }
     
     /// 点击语音，播放或暂停
@@ -162,8 +168,10 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
         attachmentStream: TSAttachmentStream
     ) {
         AssertIsOnMainThread()
-        
-        previewAttachment(attachmentStream: attachmentStream, viewItem: viewItem)
+
+        handleConfidentialMessageTap(viewItem: viewItem) { [weak self] in
+            self?.previewAttachment(attachmentStream: attachmentStream, viewItem: viewItem)
+        }
     }
     
     /// 点击 incoming message 中加载失败的附件
@@ -217,9 +225,11 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
         didTapReadMoreMessageWith viewItem: any ConversationViewItem
     ) {
         AssertIsOnMainThread()
-        
+
         let longMessageVC = LongMessageViewController(viewItem: viewItem)
-        navigationController?.pushViewController(longMessageVC, animated: true)
+        longMessageVC.modalPresentationStyle = .overFullScreen
+        longMessageVC.modalTransitionStyle = .crossDissolve
+        present(longMessageVC, animated: true)
     }
     
     /// 点击引用消息，滑动到被引用消息位置
@@ -254,18 +264,48 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
         guard let message = viewItem.interaction as? TSMessage else {
             return
         }
-        
-        let confideMessageVC = DTConfideMessageController.init(message)
-        let nav = OWSNavigationController.init(rootViewController: confideMessageVC)
-        nav.modalPresentationStyle = .fullScreen
-        self.navigationController?.presentFormSheet(nav, animated: true)
+
+        // Skip alert for outgoing messages
+        if message is TSOutgoingMessage {
+            showConfidentialMessageDetail(message: message, viewItem: viewItem)
+            return
+        }
+
+        // Check if should show alert first
+        var shouldShowAlert = false
+        databaseStorage.read { transaction in
+            shouldShowAlert = !SSKPreferences.hasShownConfidentialMessageAlert(transaction: transaction)
+        }
+
+        // Show alert before presenting detail view
+        if shouldShowAlert {
+            DTConfidentialMessageAlertController.present(from: self) { [weak self] in
+                self?.showConfidentialMessageDetail(message: message, viewItem: viewItem)
+            }
+        } else {
+            showConfidentialMessageDetail(message: message, viewItem: viewItem)
+        }
     }
-    
-    func messageBubbleView(
-        _ bubbleView: ConversationMessageBubbleView,
-        didTapConfidentialSingleForward viewItem: ConversationViewItem
-    ) {
-        messageActionDeleteItem(viewItem)
+
+    private func showConfidentialMessageDetail(message: TSMessage, viewItem: ConversationViewItem) {
+        // Check if it's a voice message
+        if viewItem.messageCellType() == .audio,
+           let attachmentStream = viewItem.attachmentStream() {
+            // Show confidential voice message controller
+            let voiceMessageVC = DTConfidentialVoiceMessageController(
+                message: message,
+                viewItem: viewItem
+            )
+            let nav = OWSNavigationController(rootViewController: voiceMessageVC)
+            nav.modalPresentationStyle = .fullScreen
+            navigationController?.presentFormSheet(nav, animated: true)
+        } else {
+            // Show confidential text message controller
+            let confideMessageVC = DTConfideMessageController(message)
+            let nav = OWSNavigationController(rootViewController: confideMessageVC)
+            nav.modalPresentationStyle = .fullScreen
+            navigationController?.presentFormSheet(nav, animated: true)
+        }
     }
     
     /// 点击合并转发消息
@@ -288,7 +328,13 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
             combinedMessage: message,
             isGroupChat: combinedForwardingMessage.isFromGroup
         )
-        navigationController?.pushViewController(combinedMessageVC, animated: true)
+
+        // 使用 PanModal 方式展示
+        let navController = DTPanModalNavController(
+            rootViewController: combinedMessageVC,
+            defaultHeight: UIScreen.main.bounds.height * 0.75
+        )
+        presentPanModal(navController)
     }
     
     // MARK: Link
@@ -304,6 +350,35 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
 // MARK: - Private
 
 private extension ConversationViewController {
+    /// 处理机密消息点击，如果需要则显示提示弹窗
+    func handleConfidentialMessageTap(
+        viewItem: ConversationViewItem,
+        action: @escaping () -> Void
+    ) {
+        if viewItem.isConfidentialMessage {
+            // Skip alert for outgoing messages
+            if viewItem.interaction is TSOutgoingMessage {
+                action()
+                return
+            }
+
+            var shouldShowAlert = false
+            databaseStorage.read { transaction in
+                shouldShowAlert = !SSKPreferences.hasShownConfidentialMessageAlert(transaction: transaction)
+            }
+
+            if shouldShowAlert {
+                DTConfidentialMessageAlertController.present(from: self) {
+                    action()
+                }
+            } else {
+                action()
+            }
+        } else {
+            action()
+        }
+    }
+
     /// 展示未找到被引用的消息的提示弹窗
     func presentRemotelySourcedQuotedReplyToast() {
         let toastText = Localized("QUOTED_REPLY_ORIGINAL_MESSAGE_REMOTELY_SOURCED")

@@ -64,7 +64,7 @@ import Foundation
 
         let actionTitle = proceedTitle ?? Localized("OK", comment: "")
         let okAction = UIAlertAction(title: actionTitle, style: .default, handler: proceedAction)
-        okAction.setValue(Theme.alertConfirmColor, forKey: "_titleTextColor")
+        okAction.setValue(Theme.tinfoColor, forKey: "_titleTextColor")
         alert.addAction(okAction)
 
         CurrentAppContext().frontmostViewController()?.present(alert, animated: true, completion: nil)
@@ -81,7 +81,7 @@ import Foundation
             Logger.debug("Cancel item")
             // Do nothing.
         }
-        action.setValue(Theme.alertCancelColor, forKey: "_titleTextColor")
+        action.setValue(Theme.tprimaryColor, forKey: "_titleTextColor")
         return action
     }
     

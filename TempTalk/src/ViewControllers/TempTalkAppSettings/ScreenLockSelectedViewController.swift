@@ -122,7 +122,7 @@ class ScreenLockSelectedViewController: SettingBaseViewController {
     }
     
     private func setupSettingsInterface() {
-        self.view.backgroundColor = Theme.defaultBackgroundColor
+        self.view.backgroundColor = Theme.bgpageSecondaryColor
         
         prepareView()
         prepareLayout()
@@ -135,15 +135,15 @@ class ScreenLockSelectedViewController: SettingBaseViewController {
     
     override func applyTheme() {
         super.applyTheme()
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
-        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
+        self.mainTableView.tableHeaderView?.backgroundColor = Theme.bgpageSecondaryColor
         self.mainTableView.reloadData()
     }
     
     func prepareTheme() {
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
     func prepareView() {

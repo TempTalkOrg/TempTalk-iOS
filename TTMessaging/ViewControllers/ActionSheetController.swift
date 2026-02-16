@@ -12,9 +12,9 @@ public class ActionSheetController: OWSViewController {
     public var isDarkThemeOnly = false {
         willSet {
             
-            stackHeader?.backgroundColor = newValue ? Theme.darkThemeBackgroundColor : Theme.backgroundColor
+            stackHeader?.backgroundColor = newValue ? Theme.dark.bg1Color : Theme.bg1Color
             
-            let textColor = newValue ? Theme.darkThemePrimaryColor : Theme.primaryTextColor
+            let textColor = newValue ? Theme.dark.tprimaryColor : Theme.tprimaryColor
             lbtitle?.textColor = textColor
             lbMessage?.textColor = textColor
         }
@@ -173,7 +173,7 @@ public class ActionSheetController: OWSViewController {
             contentView.autoMatch(.height, to: .height, of: scrollView, withOffset: -topMargin)
         }
         
-        let color = isDarkThemeOnly ? UIColor(rgbHex: 0x474D57) : Theme.hairlineColor
+        let color = isDarkThemeOnly ? UIColor(rgbHex: 0x474D57) : Theme.lineColor
         stackView.addBackgroundView(withBackgroundColor: color)
         stackView.axis = .vertical
         stackView.spacing = CGHairlineWidth()
@@ -227,7 +227,7 @@ public class ActionSheetController: OWSViewController {
     }
     
     func backgroundColor() -> UIColor {
-        return isDarkThemeOnly ? Theme.darkThemeBackgroundColor : Theme.backgroundColor
+        return isDarkThemeOnly ? Theme.dark.bg1Color : Theme.bg1Color
     }
 
     @objc func didTapBackdrop(_ sender: UITapGestureRecognizer) {
@@ -263,7 +263,7 @@ public class ActionSheetController: OWSViewController {
             topSpacer.autoSetDimension(.height, toSize: 0)
         }
         
-        let textColor = isDarkThemeOnly ? Theme.darkThemePrimaryColor : Theme.primaryTextColor
+        let textColor = isDarkThemeOnly ? Theme.dark.tprimaryColor : Theme.tprimaryColor
 
         // Title
         if let title = title {
@@ -322,7 +322,7 @@ public class ActionSheetAction: NSObject {
             button.accessibilityIdentifier = accessibilityIdentifier
         }
     }
-    
+
     var isDarkThemeOnly = false
 
     @objc
@@ -406,7 +406,7 @@ public class ActionSheetAction: NSObject {
                 if let trailingIcon = trailingIcon {
                     trailingIconView.setTemplateImage(
                         Theme.iconImage(trailingIcon),
-                        tintColor: Theme.primaryTextColor
+                        tintColor: Theme.tprimaryColor
                     )
                 }
 
@@ -421,7 +421,7 @@ public class ActionSheetAction: NSObject {
                 if let leadingIcon = leadingIcon {
                     leadingIconView.setTemplateImage(
                         Theme.iconImage(leadingIcon),
-                        tintColor: Theme.primaryTextColor
+                        tintColor: Theme.tprimaryColor
                     )
                 }
 
@@ -452,8 +452,8 @@ public class ActionSheetAction: NSObject {
 
             isDarkThemeOnly = action.isDarkThemeOnly
 
-            let normalColor = isDarkThemeOnly ? Theme.darkThemeBackgroundColor : Theme.backgroundColor
-            let highlightedColor = isDarkThemeOnly ? UIColor(white: 0.2, alpha: 1) : Theme.cellSelectedColor
+            let normalColor = isDarkThemeOnly ? Theme.dark.bg1Color : Theme.bg1Color
+            let highlightedColor = isDarkThemeOnly ? UIColor(white: 0.2, alpha: 1) : Theme.bg3Color
             setBackgroundImage(UIImage(color: normalColor), for: .init())
             setBackgroundImage(UIImage(color: highlightedColor), for: .highlighted)
 
@@ -472,7 +472,7 @@ public class ActionSheetAction: NSObject {
 
             setTitle(action.title, for: .init())
 
-            let primaryTextColor = isDarkThemeOnly ? Theme.darkThemePrimaryColor : Theme.primaryTextColor
+            let primaryTextColor = isDarkThemeOnly ? Theme.dark.tprimaryColor : Theme.tprimaryColor
 
             switch action.style {
             case .default:
@@ -518,7 +518,7 @@ private class ActionSheetPresentationController: UIPresentationController {
 
     override init(presentedViewController: UIViewController, presenting presentingViewController: UIViewController?) {
         super.init(presentedViewController: presentedViewController, presenting: presentingViewController)
-        backdropView.backgroundColor = Theme.backdropColor
+        backdropView.backgroundColor = UIColor(white: 0, alpha: 0.40)
     }
 
     override func presentationTransitionWillBegin() {

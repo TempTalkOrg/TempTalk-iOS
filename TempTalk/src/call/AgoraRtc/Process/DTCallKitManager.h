@@ -82,9 +82,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)connectedOutgoingCall:(NSString *)callerId;
 
 /****结束通话 (app 同步到 callkit) ****/
-- (void)endCallAction:(NSString *)callerId;
+- (void)endCallAction:(NSString *)callerId onlyForCallKit:(BOOL)onlyForCallKit;
 
-- (void)endCallActionWithCallerId:(NSString *)callerId;
+- (void)endCallActionWithCallerId:(NSString *)callerId onlyForCallKit:(BOOL)onlyForCallKit;
 
 /****静音按钮事件 (app 同步到 callkit) ****/
 - (void)muteCurrentCall:(BOOL)isMute callerId:(NSString *)callerId;

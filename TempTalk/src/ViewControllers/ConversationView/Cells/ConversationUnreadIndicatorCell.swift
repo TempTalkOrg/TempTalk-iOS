@@ -48,8 +48,8 @@ class ConversationUnreadIndicatorCell: ConversationCell {
     }
     
     override func refreshTheme() {
-        titleLabel.textColor = Theme.indicatorLineColor
-        lineView.backgroundColor = Theme.indicatorLineColor
+        titleLabel.textColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x82C1FC) : UIColor.color(rgbHex: 0x056FFA)
+        lineView.backgroundColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x82C1FC) : UIColor.color(rgbHex: 0x056FFA)
     }
     
     // MARK: - Lazy Load

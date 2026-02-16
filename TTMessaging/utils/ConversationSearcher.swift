@@ -579,7 +579,7 @@ public class SearchResultSet {
                 guard let account = self.contactsManager.signalAccount(forRecipientId: memberId, transaction: transaction), let contact = account.contact else {
                     continue
                 }
-                let append = ((contact.fullName) + " " + (account.remarkName ?? "") + " " + (contact.email ?? "") + " " + (account.recipientId)).lowercased()
+                let append = ((contact.fullName) + " " + (account.remarkName ?? "") + " " + (contact.email ?? "")).lowercased()
                 guard append.contains(lowercasedSearchText) else { continue }
                 members.append(account)
                 break
@@ -711,9 +711,9 @@ public class SearchResultSet {
         let filterResult = signalAccounts.filter { signalAccount in
             self.signalAccountSearcher([.name, .email]).matchesEmailCharacters(item: signalAccount, query: searchText, transaction: transaction)
         }.sorted { account1, account2 in
-            return DTSearchResultSortHelpter.sortGroupMember(account1: account1, account2: account2, searchText: searchText)
+            return DTSearchResultSortHelpter.sortGroupMember(account1: account1, account2: account2, searchText: searchText, transaction: transaction)
         }
-        
+
         searchResultClosure?(searchText, filterResult)
     }
     
@@ -787,37 +787,50 @@ public class SearchResultSet {
     }
     
     private func contactProfileIndexingString(recipientId: String, transaction: SDSAnyReadTransaction) -> String {
-        var recipientDetail = recipientId
-        
+        var recipientDetail = ""
+
+        // Add remarkName for searching
+        if let signalAccount = contactsManager.signalAccount(forRecipientId: recipientId, transaction: transaction),
+           let remarkName = signalAccount.remarkName, !remarkName.isEmpty {
+            recipientDetail = recipientDetail.appending(" \(remarkName)")
+        }
+
         if let signature = contactsManager.signature(forPhoneIdentifier: recipientId, transaction:transaction) {
             recipientDetail = recipientDetail.appending(" \(signature)")
         }
-        
+
         if let email = contactsManager.email(forPhoneIdentifier: recipientId, transaction:transaction) {
             recipientDetail = recipientDetail.appending(" \(email)")
         }
-        
+
         return recipientDetail.lowercased()
     }
     
     public let noteSearchKey = "备忘录 note"
     private func indexingString(recipientId: String, conditions: UserSearchCondition = .all, transaction: SDSAnyReadTransaction) -> String {
-        var recipientDetail = recipientId
-        
+        var recipientDetail = ""
+
         if (conditions.contains(.name) || conditions.contains(.all)) {
             let contactName = contactsManager.displayName(forPhoneIdentifier: recipientId, transaction: transaction)
             recipientDetail = recipientDetail.appending(contactName)
-                        
+
             if recipientId == tsAccountManager.localNumber(with: transaction) {
                 recipientDetail = recipientDetail.appending(" \(noteSearchKey)")
             }
         }
+
+        // Add remarkName for searching
+        if let signalAccount = contactsManager.signalAccount(forRecipientId: recipientId, transaction: transaction),
+           let remarkName = signalAccount.remarkName, !remarkName.isEmpty {
+            recipientDetail = recipientDetail.appending(" \(remarkName)")
+        }
+
         if (conditions.contains(.signature) || conditions.contains(.all)) {
             if let signature = contactsManager.signature(forPhoneIdentifier: recipientId, transaction: transaction) {
                 recipientDetail = recipientDetail.appending(" \(signature)")
             }
         }
-        
+
         if let email = contactsManager.email(forPhoneIdentifier: recipientId, transaction: transaction) ,
            conditions.contains(.email) || conditions.contains(.all) {
             recipientDetail = recipientDetail.appending(" \(email)")
@@ -827,19 +840,25 @@ public class SearchResultSet {
     }
     
     private func groupIndexingString(recipientId: String, transaction: SDSAnyReadTransaction) -> String {
-        var recipientDetail = recipientId
-        
+        var recipientDetail = ""
+
         let contactName = contactsManager.displayName(forPhoneIdentifier: recipientId, transaction: transaction)
         recipientDetail = recipientDetail.appending(contactName)
-        
+
+        // Add remarkName for searching
+        if let signalAccount = contactsManager.signalAccount(forRecipientId: recipientId, transaction: transaction),
+           let remarkName = signalAccount.remarkName, !remarkName.isEmpty {
+            recipientDetail = recipientDetail.appending(" \(remarkName)")
+        }
+
         if let profileName = contactsManager.profileName(forRecipientId: recipientId, transaction: transaction) {
             recipientDetail = recipientDetail.appending(" \(profileName)")
         }
-        
+
         if let email = contactsManager.email(forPhoneIdentifier: recipientId, transaction: transaction) {
             recipientDetail = recipientDetail.appending(" \(email)")
         }
-        
+
         return recipientDetail.lowercased()
     }
 }

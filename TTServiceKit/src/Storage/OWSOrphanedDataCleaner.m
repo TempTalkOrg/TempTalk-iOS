@@ -13,7 +13,6 @@
 #import "TSThread.h"
 //
 #import "DTCombinedForwardingMessage.h"
-#import "DTPinnedMessage.h"
 #import <TTServiceKit/TTServiceKit-Swift.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -157,19 +156,6 @@ NS_ASSUME_NONNULL_BEGIN
                  [contactShareAvatarAttachmentIds
                      addObject:contactShare.avatarAttachmentId];
              }
-        }];
-    }];
-
-    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
-        [DTPinnedMessage anyEnumerateWithTransaction:transaction
-                                             batched:YES
-                                               block:^(DTPinnedMessage * pinnedMessage, BOOL * stop) {
-            if (![pinnedMessage isKindOfClass:[DTPinnedMessage class]]) {
-                return;
-            }
-            
-            TSMessage *message = (TSMessage *)pinnedMessage.contentMessage;
-            getAttachmentHandler(message);
         }];
     }];
     

@@ -562,6 +562,13 @@
 "CONVERSATION_SETTINGS_ARCHIVE_DAY" = "天";
 "CONVERSATION_SETTINGS_ARCHIVE_DEFAULT" = "默认";
 
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM" = "保存到相册";
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_DEFAULT_OFF" = "默认 (关闭)";
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_DEFAULT_ON" = "默认 (开启)";
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_ALWAYS" = "总是";
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_NEVER" = "从不";
+"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_TIP" = "自动将收到的照片和视频保存到「照片」应用；在保密模式下，内容不会被保存。";
+
 "CONVERSATION_SETTINGS_SEARCH_HISTORY" = "查找聊天内容";
 
 "CONVERSATION_SETTINGS_GROUP_IN_COMMON" = "共同群组";
@@ -1349,6 +1356,9 @@
 /* Action sheet button title */
 "MESSAGE_ACTION_FORWARD_TO_NOTE" = "保存";
 
+/* Action sheet button title for saving image to self */
+"MESSAGE_ACTION_FORWARD_TO_NOTE_IMAGE" = "收藏";
+
 /* Action sheet button title */
 "MESSAGE_ACTION_MULTI_SELECT" = "多选";
 
@@ -1356,6 +1366,9 @@
 
 /* Action sheet button title */
 "MESSAGE_ACTION_SAVE_MEDIA" = "下载";
+
+/* Action sheet button title for saving image */
+"MESSAGE_ACTION_SAVE_MEDIA_IMAGE" = "保存到相册";
 
 /* Action sheet button title */
 "MESSAGE_ACTION_CREATE_TASK" = "添加任务";
@@ -2099,7 +2112,7 @@
 "INVITE_REGENERATE" = "刷新";
 "INVITE_SCAN" = "扫一扫";
 "INVITE_SHARE" = "分享";
-"INVITE_ENTER_CODE" = "输入邀请码";
+"INVITE_ENTER_CODE" = "添加联系人";
 "INVITE_DESC" = "在 Yelling 上跟我聊天";
 "INVITE_CANCEL" = "取消";
 "INVITE_REGENERATE_ACTION" = "重新生成";
@@ -2109,10 +2122,25 @@
 "Regenerate Invite Code" = "重新生成邀请码";
 "The old invite code will expire. Are you sure to continue?" = "旧邀请码会失效，您确定继续吗？";
 
-"ENTER_CODE_TITLE" = "添加新朋友";
+"ENTER_CODE_TITLE" = "添加联系人";
 "ENTER_CODE_TIPS" = "输入邀请码添加新朋友";
+"ENTER_CODE_PLACEHOLDER" = "输入 4 位邀请码或联系人 ID";
+"ENTER_CODE_ADD_BUTTON" = "添加";
 "ENTER_CODE_ERRORTIPS" = "邀请码不正确，请再试一次";
+"ENTER_CODE_CONTACT_NAME_ERROR" = "联系人 ID不正确，请再试一次";
 "ENTER_CODE_MYCODE" = "我的邀请码";
+
+/* Edit Contact Name */
+"EDIT_CONTACT_NAME_TITLE" = "编辑联系人ID";
+"EDIT_CONTACT_NAME_PLACEHOLDER" = "输入你的联系人ID";
+"EDIT_CONTACT_NAME_RULES" = "长度为 6–20 个字符。\n须以字母或下划线开头。\n仅可使用字母、数字、下划线或减号。\n每 3 个月可修改一次。";
+"EDIT_CONTACT_NAME_ERROR" = "联系人ID不正确，请再试一次";
+"EDIT_CONTACT_NAME_ERROR_START" = "必须以字母或\"_\"开头。请换一个再试。";
+"EDIT_CONTACT_NAME_ERROR_CONTENT" = "仅支持字母、数字、\"_\"或\"-\"。请换一个再试。";
+"EDIT_CONTACT_NAME_ERROR_LENGTH" = "长度需为 6–20 个字符。请换一个再试。";
+"EDIT_CONTACT_NAME_TAKEN" = "该ID已被占用，请尝试其他，或使用 ";
+"EDIT_CONTACT_NAME_CHANGE_LIMIT" = "该ID每 3 个月只能修改一次。";
+"EDIT_CONTACT_NAME_SAVE_BUTTON" = "保存";
 
 /* Indicates a delay of zero seconds, and that 'screen lock activity' will timeout immediately. */
 "SCREEN_LOCK_ACTIVITY_TIMEOUT_NONE" = "立即";
@@ -2142,7 +2170,7 @@
 "SCREEN_LOCK_UNLOCK_FAILED" = "认证失败";
 
 /* Label for button on lock screen that lets users unlock Chative. */
-"SCREEN_LOCK_UNLOCK_SIGNAL" = "解锁 Chative";
+"SCREEN_LOCK_UNLOCK_SIGNAL" = "解锁 Yelling";
 
 /* No comment provided by engineer. */
 "SEARCH_BYNAMEORNUMBER_PLACEHOLDER_TEXT" = "搜索姓名或号码";
@@ -2253,6 +2281,15 @@
 /* Format string for the default 'Note' sound. Embeds the system {{sound name}}. */
 "SETTINGS_AUDIO_DEFAULT_TONE_LABEL_FORMAT" = "%@（默认）";
 
+
+/* 文字大小设置 */
+"SETTINGS_TEXT_SIZE_TITLE" = "字体大小";
+"TEXT_SIZE_DEFAULT" = "默认";
+"TEXT_SIZE_LARGER" = "大字体";
+
+/* 文字大小设置 */
+"SETTINGS_TEXT_SIZE_TITLE" = "字体大小";
+
 /* Label for the backup view in app settings. */
 "SETTINGS_BACKUP" = "备份";
 
@@ -2343,7 +2380,8 @@
 "SETTINGS_ITEM_GROUP_REMINDER" = "周期性提醒";
 
 "SETTINGS_ITEM_ACCOUNT" = "账户";
-"SETTINGS_ITEM_ACCOUNT_ID" = "ID";
+"SETTINGS_ITEM_ACCOUNT_ID" = "联系人ID";
+"SETTINGS_ITEM_ALLOW_SEARCH" = "允许被搜索";
 "SETTINGS_ITEM_ACCOUNT_EMAIL" = "邮箱";
 "SETTINGS_ITEM_ACCOUNT_PHONE" = "手机号";
 "SETTINGS_ITEM_LOGOUT" = "退出登录";
@@ -2943,10 +2981,7 @@
 
 "LOCAL_ACCOUNT_DISPLAYNAME" = "收藏";
 
-"RECALL_INFO_MESSAGE" = "%@撤回了一条消息";
-"RECALL_INFO_MESSAGE_WITH_EDIT" = "%@撤回了一条消息 ";
 "RECALL_MESSAGE_PREVIEW" = "撤回了一条消息";
-"RE-EDIT_MESSAGE" = "重新编辑";
 "RECALL_CONFIRM_TITLE" = "是否撤回该条消息？";
 "RECALL_PASSED_TIME" = "该消息超过%@，不能被撤回。";
 "RECALL_CONTAINS_BOT" = "会话中包含Bot，暂不支持撤回";
@@ -3043,7 +3078,7 @@
 "FLOATVIEW_ACTION_CHAT_FOLDER" = "会话分组";
 "FLOATVIEW_ACTION_INSTANT_MEETING" = "即时会议";
 "FLOATVIEW_ACTION_SCAN" = "扫一扫";
-"FLOATVIEW_ACTION_ADD_CONTACTS" = "邀请好友";
+"FLOATVIEW_ACTION_ADD_CONTACTS" = "添加联系人";
 
 "SCREENPROTECTION_TITLE" = "截屏警告";
 "SCREENPROTECTION_DESC" = "为了用户的安全和隐私，Chative禁止截屏。";
@@ -3575,6 +3610,9 @@
 "UNBLOCK" = "解除屏蔽";
 "IGNORE" = "忽略";
 "ACCEPT" = "接受";
+"REQUEST_BAR_WARNING" = "⚠️ 请勿轻信陌生人。";
+"REQUEST_BAR_WARNING_BOLD" = "请勿";
+"CONVERSATION_WARNING_HEADER" = "🔒 隐私优先 · 全程匿名 · 端到端消息加密。请勿轻信陌生人。";
 "BLOCK&REPORT" = "屏蔽 & 上报";
 "BLOCK_REPORT_TITLE" = "你确定你要这么做吗?";
 
@@ -3676,15 +3714,18 @@
 /* accessibility label for the button which open confidential mode */
 "INPUT_TOOLBAR_CONFIDE_BUTTON_ACCESSIBILITY_LABEL" = "机密消息";
 
-/* accessibility label for the button which open confidential mode */
-"INPUT_TOOLBAR_CONFIDE_BUTTON_ACCESSIBILITY_LABEL" = "机密消息";
+/* Alert title for confidential message (first time enable or view) */
+"CONFIDENTIAL_MESSAGE_VIEW_ALERT_TITLE" = "机密消息";
 
-
+/* Alert message for confidential message (first time enable or view) */
+"CONFIDENTIAL_MESSAGE_VIEW_ALERT_MESSAGE" = "查看后，消息将消失。";
 
 "IMAGE_PREVIEW_ADD_MESSAGE" = "添加消息";
 "CONFIRM_DISBAND_GROUP_DESCRIPTION" = "此群组的数据将被删除，群组中的所有成员也将同时被移除。";
 "MESSAGE_ACTION_COMBINE_FORWARD" = "合并转发";
 "MESSAGE_ACTION_SAVE" = "保存";
+"MESSAGE_ACTION_BATCH_RECALL" = "撤回";
+"BATCH_RECALL_CONFIRM_TITLE" = "是否撤回选中的 %d 条消息？";
 
 "DEVICE_INACTIVE_POPVIEW_TITLE" = "激活设备";
 "DEVICE_INACTIVE_POPVIEW_CONTENT" = "由于您的设备长时间未使用，为确保账户安全，已暂时禁用并清除未接收的消息。请激活设备恢复使用。";
@@ -3734,6 +3775,9 @@
 
 "SETTINGS_CHAT_SAVE_PHOTOS" = "保存到相册";
 "SETTINGS_CHAT_SAVE_PHOTOS_DESCRIPTION" = "自动将收到的照片和视频保存到照片中；在机密模式下不会保存项目。";
+
+"SETTINGS_CHAT_VOICE_PLAYBACK_SPEED" = "语音播放速度";
+"SETTINGS_CHAT_VOICE_PLAYBACK_SPEED_DESCRIPTION" = "设置语音消息的默认播放速度。";
 
 "MEETING_NAVAGATION_RECONNECTING_FAILURE" = "重连失败";
 "MEETING_NAVAGATION_CONNECTING" = "连接中...";
@@ -3858,20 +3902,22 @@
 
 "ATTACHMENT_DOWNLOADING_STATUS_EXPIRED" = "文件已过期。";
 
-"CALL_MORE_CRITICAL_ALERT" = "重要提醒";
+"CALL_MORE_CRITICAL_ALERT" = "紧急联络";
 "MEETING_NAVAGATION_CALLING" = "呼叫中";
-"MEETING_CRITICAL_ALERT_DANMU" = "发送了一条重要提醒";
-"MEETING_CRITICAL_ALERT_TIPS" = "无人应答？发送重要提醒";
-"MEETING_CRITICAL_ALERT_ERROR_TIPS" = "发送重要提醒失败，请重试";
+"MEETING_CRITICAL_ALERT_DANMU" = "发起紧急联络成功";
+"MEETING_CRITICAL_ALERT_TIPS" = "无人应答？发起紧急联络";
+"MEETING_CRITICAL_ALERT_NO_ANSWER" = "无人应答？";
+"MEETING_CRITICAL_ALERT_SEND" = "发起紧急联络";
+"MEETING_CRITICAL_ALERT_ERROR_TIPS" = "发起紧急联络失败，请重试";
 
-"NOTIFICATIONS_CRITICAL_ALERT" = "重要提醒";
+"NOTIFICATIONS_CRITICAL_ALERT" = "紧急联络";
 "NOTIFICATIONS_CRITICAL_SWITCH_ON" = "开启";
 "NOTIFICATIONS_CRITICAL_SWITCH_OFF" = "关闭";
-"NOTIFICATIONS_CRITICAL_DESCRIPTION" = "转到设置-通知-Yelling-重要提醒，然后将其打开";
-"NOTIFICATIONS_CRITICAL_ALERT_TITLE_ON" = "开启重要提醒";
-"NOTIFICATIONS_CRITICAL_ALERT_TITLE_OFF" = "关闭重要提醒";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "前往 设置 → 通知 → Yelling →重要提醒，并开启重要提醒。";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "前往 设置 → 通知 → Yelling →重要提醒，并关闭重要提醒。";
+"NOTIFICATIONS_CRITICAL_DESCRIPTION" = "前往「设置」→「通知」→「Yelling」→「重要提醒」，并将其开启。开启后，紧急联络可突破静音和勿扰模式。";
+"NOTIFICATIONS_CRITICAL_ALERT_TITLE_ON" = "开启紧急联络";
+"NOTIFICATIONS_CRITICAL_ALERT_TITLE_OFF" = "关闭紧急联络";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "前往 设置 → 通知 → Yelling →紧急联络，并开启紧急联络。";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "前往 设置 → 通知 → Yelling →紧急联络，并关闭紧急联络。";
 "NOTIFICATIONS_CRITICAL_ALERT_CANCEL" = "取消";
 "NOTIFICATIONS_CRITICAL_ALERT_SETTING" = "设置";
 "NOTIFICATIONS_CRITICAL_EXTENSION_TITLE" = "%@的未接呼叫";
@@ -3884,5 +3930,29 @@
 
 "CONVERSATION_TOOLBAR_BYTE_LIMIT" = "超出10MB大小限制";
 
-"CONVERSATION_MESSAGE_CRITICAL_ALERT" = "🚨发送一条重要提醒";
-"SOMEONE_CRITICAL_ALERT_ALL_TEXT" = "[🚨重要提醒] ";
+"CONVERSATION_MESSAGE_CRITICAL_ALERT" = "🚨 紧急联络";
+"SOMEONE_CRITICAL_ALERT_ALL_TEXT" = "[🚨紧急联络] ";
+
+"ROOM_CONNECT_FAILED" = "连接失败";
+
+"CALL_NO_CONNECT_ENDED" = "会议已经结束";
+
+"CONVERSATION_PANMODEL_TRANSLATE_TO_CHINESE" = "翻译成中文";
+"CONVERSATION_PANMODEL_TRANSLATE_TO_ENGLISH" = "翻译成英文";
+
+"CRITICAL_ALERT_CONFIRM_TITLE" = "紧急联络";
+"CRITICAL_ALERT_CANCEL" = "取消";
+"CRITICAL_ALERT_SEND" = "发送";
+"CRITICAL_ALERT_CONFIRM_TIPS_MESSAGE" = "可突破静音和勿扰模式，仅用于紧急情况。";
+
+/* Instant 通话描述 */
+"CRITICAL_ALERT_CONFIRM_DESC_INSTANT_EMPTY" = "发送给邀请的人";
+"CRITICAL_ALERT_CONFIRM_DESC_INSTANT" = "发送给 %@";
+"CRITICAL_ALERT_CONFIRM_DESC_INSTANT_WITH_MORE" = "发送给 %@ 和其他 %d 人";
+
+/* Group 通话描述 */
+"CRITICAL_ALERT_CONFIRM_DESC_GROUP" = "发送给未入会的群成员";
+"CRITICAL_ALERT_CONFIRM_DESC_GROUP_WITH_INVITED" = "发送给未入会的群成员和邀请的人（%@）";
+"CRITICAL_ALERT_CONFIRM_DESC_GROUP_WITH_INVITED_MORE" = "发送给未入会的群成员和邀请的人（%@ 和其他 %d 人）";
+
+"CONVERSATION_CONFIDENTIAL_INFO_MESSAGE" = "机密消息已被查看";

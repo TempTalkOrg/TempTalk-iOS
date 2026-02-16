@@ -62,6 +62,11 @@ extension AppDelegate  {
     public func initializeMeetingManager() {
         let _ = DTMeetingManager.shared
     }
+
+    @objc
+    public func initializeGrayReleaseManager() {
+        GrayReleaseManager.shared.initialize()
+    }
 }
 
 extension AppDelegate {
@@ -202,17 +207,17 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 }
 
 
-//AppLink
 extension AppDelegate  {
-    
+
     @objc
     func handleUniversalLink(url: URL) -> Bool {
         return AppLinkManager.handle(url: url, fromExternal: true)
     }
-    
+
     @objc
     func handleCustomSchemes(url: URL) -> Bool {
         return AppLinkManager.handle(url: url, fromExternal: true)
     }
-    
+
 }
+

@@ -29,7 +29,8 @@
         @"detailMessageType":@"detailMessageType",
         @"timestamp":@"timestamp",
         @"silent":@"silent",
-        @"recipients":@"recipients"
+        @"recipients":@"recipients",
+        @"syncContent":@"syncContent"
     };
 }
 

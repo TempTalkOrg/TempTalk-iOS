@@ -92,15 +92,15 @@
         }
         
         OWSContactsManager *contactsManager = Environment.shared.contactsManager;
-        
+
         SignalAccount *account1 = [contactsManager signalAccountForRecipientId:obj1 transaction:transaction];
         SignalAccount *account2 = [contactsManager signalAccountForRecipientId:obj2 transaction:transaction];
         if ([groupModel.groupAdmin containsObject:obj1] &&
             [groupModel.groupAdmin containsObject:obj2]) {
-            return [contactsManager compareSignalAccount:account1 withSignalAccount:account2];
+            return [contactsManager compareSignalAccount:account1 withSignalAccount:account2 transaction:transaction];
         }
-        
-        return [contactsManager compareSignalAccount:account1 withSignalAccount:account2];
+
+        return [contactsManager compareSignalAccount:account1 withSignalAccount:account2 transaction:transaction];
     }];
 }
 

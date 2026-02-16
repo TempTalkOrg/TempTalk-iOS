@@ -158,6 +158,23 @@ class DTNotificationSettingsController : SettingBaseViewController {
         }
     }
     
+    
+    func checkCriticalAlertNotSupportedPermission(completion: @escaping (Bool) -> Void) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            switch settings.criticalAlertSetting {
+            case .enabled:
+                completion(false)
+            case .disabled:
+                completion(false)
+            case .notSupported:
+                completion(true)
+            @unknown default:
+                completion(false)
+            }
+        }
+    }
+    
     func updateCriticalAlertStatus() {
         checkCriticalAlertPermission { [weak self] isEnabled in
             DispatchQueue.main.async {
@@ -224,9 +241,9 @@ class DTNotificationSettingsController : SettingBaseViewController {
     
     override func applyTheme() {
         super.applyTheme()
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
-        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
+        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultColor
         self.mainTableView.reloadData()
     }
     
@@ -238,8 +255,8 @@ class DTNotificationSettingsController : SettingBaseViewController {
     }
     
     func prepareTheme() {
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
     func prepareUIData() {
@@ -283,6 +300,8 @@ extension DTNotificationSettingsController : UITableViewDelegate,UITableViewData
         let settingMeItem = self.dataSource[indexPath.section][indexPath.row]
         if settingMeItem.cellStyle == .blank{
             return 26
+        } else if settingMeItem.cellStyle == .plainTextType {
+            return UITableView.automaticDimension
         } else {
             return 52
         }
@@ -370,12 +389,18 @@ extension DTNotificationSettingsController : UITableViewDelegate,UITableViewData
     }
     
     private func handleCriticalAlertTap() {
-        let hasShownCriticalAlertPopup = Environment.preferences().hasShownCriticalAlertPopup()
-        if !hasShownCriticalAlertPopup, !self.criticalEnabed {
-            self.requestCriticalAlertPermission()
-            Environment.preferences().setHasShownCriticalAlertPopup(true)
-        } else {
-            showCriticalAlertSettingsRedirect()
+        // 先检查系统设置中 Critical Alert 的状态
+        checkCriticalAlertNotSupportedPermission { [weak self] notSupported in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                // 如果系统设置中已经有 Critical Alert 开关（无论开启或关闭），说明用户已经授权过
+                if !notSupported {
+                    self.showCriticalAlertSettingsRedirect()
+                } else {
+                    // 如果系统设置中没有 Critical Alert 开关，说明从未授权过
+                    self.requestCriticalAlertPermission()
+                }
+            }
         }
     }
 }

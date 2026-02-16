@@ -37,9 +37,9 @@ class DTSettingCheckBoxCell : DTDefaultBaseStyleCell {
     
     override func applyTheme()  {
         super.applyTheme()
-        backgroundColor = Theme.defaultBackgroundColor
-        contentView.backgroundColor = Theme.defaultTableCellBackgroundColor
-        titleLable.textColor = Theme.primaryTextColor
+        backgroundColor = Theme.bgpageSecondaryColor
+        contentView.backgroundColor = Theme.bg1Color
+        titleLable.textColor = Theme.tprimaryColor
     }
     
     
@@ -60,9 +60,9 @@ class DTSettingCheckBoxCell : DTDefaultBaseStyleCell {
     override func reloadCell<T: DTSettingItem>(model: T) {
         super.reloadCell(model: model)
         ///目前这个地方没有能够与与业务层解耦合，待调整
-        if let model_t = model as? DTThemeSettingItem , Theme.getOrFetchCurrentTheme() == model_t.themeMode {
+        if let model_t = model as? DTThemeSettingItem , Theme.getOrFetchCurrentMode() == model_t.themeMode {
             checkBoxImageView.isHidden = false
-            
+
         } else if let model_t = model as? DTLanguageSettingItem  {
             let userPreferenceLanguage = Localize.userPreferenceLanguage()
             if let languageType = model_t.languageType?.rawValue as? String {
@@ -74,8 +74,21 @@ class DTSettingCheckBoxCell : DTDefaultBaseStyleCell {
             }else {
                 checkBoxImageView.isHidden = true
             }
+        } else if let model_t = model as? VoiceSpeedSettingItem {
+            // 语音播放速度选择
+            let currentSpeed = MediaSavePolicyManager.shared.getPlaybackSpeed()
+            if model_t.speed == currentSpeed {
+                checkBoxImageView.isHidden = false
+            } else {
+                checkBoxImageView.isHidden = true
+            }
+        } else if let model_t = model as? DTTextSizeSettingItem,
+                  let textSizeLevel = model_t.textSizeLevel,
+                  TextSizeManager.getCurrentLevel() == textSizeLevel {
+            // 文字大小选择
+            checkBoxImageView.isHidden = false
         } else {
-            
+
             checkBoxImageView.isHidden = true
         }
         applyTheme()

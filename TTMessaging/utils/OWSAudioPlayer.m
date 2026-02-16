@@ -36,6 +36,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, nullable) AVAudioPlayer *audioPlayer;
 @property (nonatomic, nullable) NSTimer *audioPlayerPoller;
 @property (nonatomic, readonly) OWSAudioActivity *audioActivity;
+@property (nonatomic, assign) float playbackRate; // 播放速度
 
 @end
 
@@ -60,6 +61,7 @@ NS_ASSUME_NONNULL_BEGIN
 
     _delegate = delegate;
     _mediaUrl = mediaUrl;
+    _playbackRate = 1.0; // 默认播放速度
 
     NSString *audioActivityDescription = [NSString stringWithFormat:@"%@ %@", self.logTag, self.mediaUrl];
     _audioActivity = [[OWSAudioActivity alloc] initWithAudioDescription:audioActivityDescription];
@@ -146,6 +148,9 @@ NS_ASSUME_NONNULL_BEGIN
         if (self.isLooping) {
             self.audioPlayer.numberOfLoops = -1;
         }
+        // 应用播放速度
+        self.audioPlayer.enableRate = YES;
+        self.audioPlayer.rate = self.playbackRate;
     }
 
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -155,7 +160,8 @@ NS_ASSUME_NONNULL_BEGIN
     OWSLogDebug(@"%@ [audio] play", self.logTag);
 
     [self.audioPlayerPoller invalidate];
-    self.audioPlayerPoller = [NSTimer weakScheduledTimerWithTimeInterval:.05f
+    // Use 30ms interval for smoother progress updates, especially for short audio messages
+    self.audioPlayerPoller = [NSTimer weakScheduledTimerWithTimeInterval:0.03f
                                                                   target:self
                                                                 selector:@selector(audioPlayerUpdated:)
                                                                 userInfo:nil
@@ -230,9 +236,23 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 - (void)setVolume:(float)volume {
-    
+
     if (!self.audioPlayer) return;
     self.audioPlayer.volume = volume;
+}
+
+- (void)setPlaybackRate:(float)rate {
+    OWSAssertIsOnMainThread();
+
+    _playbackRate = rate;  // 直接访问实例变量，避免死循环
+
+    if (!self.audioPlayer) return;
+
+    // 启用播放速率调整
+    self.audioPlayer.enableRate = YES;
+    self.audioPlayer.rate = rate;
+
+    OWSLogDebug(@"[audio] set playback rate to: %f", rate);
 }
 
 @end

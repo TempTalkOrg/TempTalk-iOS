@@ -120,6 +120,13 @@ extension ConversationViewController {
             name: .DTRefreshJoinBarStatusChange,
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(textSizeDidChange),
+            name: .textSizeDidChange,
+            object: nil
+        )
     }
 }
 
@@ -144,6 +151,38 @@ private extension ConversationViewController {
         // Ethan: fix 1on1 call crash after hangup
         Logger.info("[Conversation] call window isCallWindowHidden is \(isCallWindowHidden)")
         viewState.isViewVisible = isCallWindowHidden
+
+        // Mark that we're returning from call window to prevent auto-scroll in layoutDidUpdateWhenViewWillAppear
+        if isCallWindowHidden {
+            isReturningFromCallWindow = true
+        }
+
+        // Fix keyboard layout issue when returning from call window
+        // The keyboard frame may have changed during orientation changes in call view
+        // and InputAccessoryViewPlaceholder may not have received proper keyboard notifications
+        if isCallWindowHidden && viewHasEverAppeared {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+
+                // Sync keyboard state first
+                self.inputAccessoryPlaceholder.syncKeyboardState()
+
+                // Force update the keyboard layout
+                self.updateInputAccessoryPlaceholderHeight()
+                self.updateBottomBarPosition()
+                self.updateContentInsets(animated: false, allowAutoScroll: false)
+
+                // If keyboard is visible, ensure proper positioning
+                if self.inputToolbar.isInputViewFirstResponder {
+                    // Small delay to ensure keyboard frame is stable after window transition
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                        guard let self = self else { return }
+                        self.updateBottomBarPosition()
+                        self.updateContentInsets(animated: false, allowAutoScroll: false)
+                    }
+                }
+            }
+        }
     }
     
     func identityStateDidChange(_ notification: Notification) {
@@ -243,6 +282,10 @@ private extension ConversationViewController {
                 self.inputToolbar.inputToolbarState = .normal
             }
             self.reloadBottomBar()
+
+            // Check and update confidential message availability when conversation settings change
+            // This handles group member changes (join/leave)
+            self.checkAndUpdateConfidentialMessageAvailability()
         }
     }
     
@@ -259,28 +302,76 @@ private extension ConversationViewController {
     }
     
     func signalAccountsDidChanged(_ notification: Notification) {
-        
         databaseStorage.asyncRead { transaction in
             self.thread.anyReload(transaction: transaction)
         } completion: {
             self.updateNavigationTitle()
             self.updateBarButtonItems()
+
             if !self.isGroupConversation {
                 self.updateNavigationBarSubtitleLabel()
                 self.recreateInputToolbar()
                 self.reloadBottomBar()
             }
+
+            // Reload all cells to update sender names in messages
+            // This is needed for both group and 1-on-1 conversations
+            // because messages may contain forwarded content or quoted messages
+            // that display contact names
+            self.resetContentAndLayoutWithSneakyTransaction()
         }
     }
     
     func userTakeScreenshot(_ notification: NSNotification) {
-        ThreadUtil.sendScreenShotMessage(in: thread) {} failure: {_ in }
+        // Don't send screenshot message if screen lock is showing
+        guard !OWSScreenLockUI.sharedManager().isShowingScreenLockUI else {
+            Logger.info("[Conversation] Screenshot taken while screen lock is showing, ignoring")
+            return
+        }
+
+        var targetThread = thread
+        let currentCall = DTMeetingManager.shared.currentCall
+
+        // 检查是否有会议且会议不是小窗模式（即全屏模式）
+        // 如果会议是全屏模式，截屏消息应该发送到会议对应的会话
+        if DTMeetingManager.shared.hasMeeting,
+           !DTMeetingManager.shared.isMinimize,  // ✅ 添加小窗模式检查
+           let conversationId = currentCall.conversationId,
+           !conversationId.isEmpty {
+
+            if currentCall.callType == .private || currentCall.callType == .group {
+                Logger.info("[Conversation] Active call in full screen (not minimized) detected, redirecting screenshot to call conversation")
+
+                databaseStorage.write { transaction in
+                    if currentCall.callType == .private {
+                        if let contactThread = TSContactThread.getThread(contactId: conversationId, transaction: transaction) {
+                            targetThread = contactThread
+                            Logger.info("[Conversation] Redirecting screenshot to private call thread: \(conversationId)")
+                        }
+                    } else if currentCall.callType == .group {
+                        if let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId),
+                           let groupThread = TSGroupThread.getWithGroupId(localGroupId, transaction: transaction) {
+                            targetThread = groupThread
+                            Logger.info("[Conversation] Redirecting screenshot to group call thread: \(conversationId)")
+                        }
+                    }
+                }
+            }
+        } else if DTMeetingManager.shared.hasMeeting && DTMeetingManager.shared.isMinimize {
+            Logger.info("[Conversation] Call is minimized, screenshot will be sent to current conversation: \(thread.uniqueId)")
+        }
+
+        ThreadUtil.sendScreenShotMessage(in: targetThread) {} failure: {_ in }
     }
     
     func didChangeContentSizeCategory(_ notification: NSNotification) {
         reloadData()
     }
-    
+
+    func textSizeDidChange(_ notification: NSNotification) {
+        reloadData()
+    }
+
 }
 
 // MARK: - Private
@@ -299,16 +390,22 @@ private extension ConversationViewController {
 
 extension Notification.Name {
     public static let DTIdentityStateDidChange = Notification.Name(kNSNotificationName_IdentityStateDidChange)
-    
+
     public static let DTOtherUsersProfileDidChange = Notification.Name(kNSNotificationName_OtherUsersProfileDidChange)
-    
+
     public static let DTConversationDidChange = Notification.Name("kConversationDidChangeNotification")
-    
+
     public static let DTConversationUpdateFromSocketMessage = Notification.Name("kConversationUpdateFromSocketMessageNotification")
-    
+
     public static let DTSaveDraftSucess = Notification.Name("DTSaveDraftSucessNotification")
-    
+
     public static let DTRefreshJoinBarStatusChange = Notification.Name("DTRefreshJoinBarStatusChangeNotification")
+
+    // 会话共享配置变更通知（消息过期时间等）
+    public static let DTConversationSharingConfigurationChange = Notification.Name("kDTconversationSharingConfigurationChangeNotification")
+
+    // 群组消息过期配置变更通知
+    public static let DTGroupMessageExpiryConfigChanged = Notification.Name("kDTGroupMessageExpiryConfigChangedNotification")
 }
 
 @objc

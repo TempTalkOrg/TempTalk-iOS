@@ -27,9 +27,9 @@ import Foundation
     }
     
     override func applyTheme() {
-        view.backgroundColor = Theme.backgroundColor
+        view.backgroundColor = Theme.bg1Color
         
-        loginTipLabel.textColor = Theme.secondaryTextColor
+        loginTipLabel.textColor = Theme.tsecondaryColor
     }
     
     // MARK: action
@@ -111,7 +111,7 @@ import Foundation
     private lazy var loginTipLabel: UILabel = {
         let loginTipLabel = UILabel()
         loginTipLabel.font = .systemFont(ofSize: 14)
-        loginTipLabel.textColor = Theme.secondaryTextColor
+        loginTipLabel.textColor = Theme.tsecondaryColor
         loginTipLabel.text = "Already have an account?"
         return loginTipLabel
     }()

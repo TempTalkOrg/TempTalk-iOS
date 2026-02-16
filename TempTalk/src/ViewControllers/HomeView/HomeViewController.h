@@ -5,7 +5,6 @@
 #import "ConversationItemMacro.h"
 #import <TTMessaging/OWSViewController.h>
 #import <UIKit/UIKit.h>
-#import <JXPagingView/JXPagerView.h>
 
 @class ThreadMapping;
 @class OWSSearchBar;
@@ -22,7 +21,7 @@ typedef NS_ENUM(NSInteger, HomeViewMode) {
 
 @class TSThread;
 
-@interface HomeViewController : OWSViewController<JXPagerViewListViewDelegate>
+@interface HomeViewController : OWSViewController
 
 @property (nonatomic) HomeViewMode homeViewMode;
 @property (nonatomic, assign) BOOL isFromRegistration;

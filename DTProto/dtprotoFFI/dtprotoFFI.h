@@ -8,43 +8,52 @@
 
 // The following structs are used to implement the lowest level
 // of the FFI, and thus useful to multiple uniffied crates.
-// We ensure they are declared exactly once, with a header guard, UNIFFI_SHARED_H.
-#ifdef UNIFFI_SHARED_H
+// We ensure they are declared exactly once, with a header guard, DTPROTO_UNIFFI_SHARED_H.
+#ifdef DTPROTO_UNIFFI_SHARED_H
     // We also try to prevent mixing versions of shared uniffi header structs.
-    // If you add anything to the #else block, you must increment the version suffix in UNIFFI_SHARED_HEADER_V4
-    #ifndef UNIFFI_SHARED_HEADER_V4
+    // If you add anything to the #else block, you must increment the version suffix in DTPROTO_UNIFFI_SHARED_HEADER_V4
+    #ifndef DTPROTO_UNIFFI_SHARED_HEADER_V4
         #error Combining helper code from multiple versions of uniffi is not supported
-    #endif // ndef UNIFFI_SHARED_HEADER_V4
+    #endif // ndef DTPROTO_UNIFFI_SHARED_HEADER_V4
 #else
-#define UNIFFI_SHARED_H
-#define UNIFFI_SHARED_HEADER_V4
-// ⚠️ Attention: If you change this #else block (ending in `#endif // def UNIFFI_SHARED_H`) you *must* ⚠️
-// ⚠️ increment the version suffix in all instances of UNIFFI_SHARED_HEADER_V4 in this file.           ⚠️
+#define DTPROTO_UNIFFI_SHARED_H
+#define DTPROTO_UNIFFI_SHARED_HEADER_V4
+// ⚠️ Attention: If you change this #else block (ending in `#endif // def DTPROTO_UNIFFI_SHARED_H`) you *must* ⚠️
+// ⚠️ increment the version suffix in all instances of DTPROTO_UNIFFI_SHARED_HEADER_V4 in this file.           ⚠️
 
-typedef struct RustBuffer
+typedef struct DTProtoRustBuffer
 {
     int32_t capacity;
     int32_t len;
     uint8_t *_Nullable data;
-} RustBuffer;
+} DTProtoRustBuffer;
 
-typedef int32_t (*ForeignCallback)(uint64_t, int32_t, RustBuffer, RustBuffer *_Nonnull);
+// Alias for backward compatibility within this module
+typedef DTProtoRustBuffer RustBuffer;
 
-typedef struct ForeignBytes
+typedef int32_t (*ForeignCallback)(uint64_t, int32_t, DTProtoRustBuffer, DTProtoRustBuffer *_Nonnull);
+
+typedef struct DTProtoForeignBytes
 {
     int32_t len;
     const uint8_t *_Nullable data;
-} ForeignBytes;
+} DTProtoForeignBytes;
+
+// Alias for backward compatibility within this module
+typedef DTProtoForeignBytes ForeignBytes;
 
 // Error definitions
-typedef struct RustCallStatus {
+typedef struct DTProtoRustCallStatus {
     int8_t code;
-    RustBuffer errorBuf;
-} RustCallStatus;
+    DTProtoRustBuffer errorBuf;
+} DTProtoRustCallStatus;
 
-// ⚠️ Attention: If you change this #else block (ending in `#endif // def UNIFFI_SHARED_H`) you *must* ⚠️
-// ⚠️ increment the version suffix in all instances of UNIFFI_SHARED_HEADER_V4 in this file.           ⚠️
-#endif // def UNIFFI_SHARED_H
+// Alias for backward compatibility within this module
+typedef DTProtoRustCallStatus RustCallStatus;
+
+// ⚠️ Attention: If you change this #else block (ending in `#endif // def DTPROTO_UNIFFI_SHARED_H`) you *must* ⚠️
+// ⚠️ increment the version suffix in all instances of DTPROTO_UNIFFI_SHARED_HEADER_V4 in this file.           ⚠️
+#endif // def DTPROTO_UNIFFI_SHARED_H
 
 void ffi_dtproto_d2a4_DTProto_object_free(
       void*_Nonnull ptr,

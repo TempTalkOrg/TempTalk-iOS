@@ -37,7 +37,7 @@ public extension OWSTableItem {
 
         let rowLabel = UILabel()
         rowLabel.text = name
-        rowLabel.textColor = Theme.primaryTextColor
+        rowLabel.textColor = Theme.tprimaryColor
         rowLabel.font = OWSTableItem.primaryLabelFont
         rowLabel.lineBreakMode = .byTruncatingTail
 
@@ -55,7 +55,7 @@ public extension OWSTableItem {
                           iconSize: CGFloat = iconSize) -> UIImageView {
         let iconImage = Theme.iconImage(icon)
         let iconView = imageView(forImage: iconImage)
-        iconView.tintColor = tintColor ?? Theme.primaryIconColor
+        iconView.tintColor = tintColor ?? Theme.iconColor
         return iconView
     }
 
@@ -309,10 +309,9 @@ public extension OWSTableItem {
         if let textColor = textColor {
             nameLabel.textColor = textColor
         } else {
-            nameLabel.textColor = Theme.primaryTextColor
+            nameLabel.textColor = Theme.tprimaryColor
         }
         nameLabel.font = OWSTableItem.primaryLabelFont
-        nameLabel.adjustsFontForContentSizeCategory = true
 
         // Having two side-by-side multi-line labels makes
         // autolayout *really* confused because it doesn't
@@ -361,7 +360,6 @@ public extension OWSTableItem {
             accessoryLabel.text = accessoryText
             accessoryLabel.textColor = accessoryTextColor ?? accessoryGray()
             accessoryLabel.font = OWSTableItem.accessoryLabelFont
-            accessoryLabel.adjustsFontForContentSizeCategory = true
 
             if itemName.count >= accessoryText.count {
                 accessoryLabel.numberOfLines = 1
@@ -429,7 +427,7 @@ public extension OWSTableItem {
             accessibilityIdentifier: accessibilityIdentifier,
             actionBlock: {
                 if let pasteboardValue = pasteboardValue {
-                    UIPasteboard.general.string = pasteboardValue
+                    DTSecurePasteboard.setString(pasteboardValue)
                 }
 
                 guard let _ = CurrentAppContext().frontmostViewController() else {

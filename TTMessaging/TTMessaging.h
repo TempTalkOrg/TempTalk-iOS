@@ -48,7 +48,6 @@ FOUNDATION_EXPORT const unsigned char TTMessagingVersionString[];
 #import <TTMessaging/ViewControllerUtils.h>
 #import <TTServiceKit/UIImage+OWS.h>
 #import <TTMessaging/UIImageView+ContactAvatar.h>
-#import <TTMessaging/Theme.h>
 #import <TTMessaging/OWSSearchBar.h>
 #import <TTMessaging/OWSUnreadIndicator.h>
 #import <TTMessaging/DateUtil.h>

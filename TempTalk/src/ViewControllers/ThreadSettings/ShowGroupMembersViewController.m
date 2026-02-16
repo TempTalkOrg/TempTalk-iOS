@@ -88,13 +88,20 @@ OWSTableViewControllerDelegate>
 {
     [super viewDidLoad];
     OWSAssertDebug([self.navigationController isKindOfClass:[OWSNavigationController class]]);
-
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     self.title = Localized(@"LIST_GROUP_MEMBERS_ACTION", @"title for show group members view");
 
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 45;
 
     [self updateTableContents];
+}
+
+- (void)applyTheme {
+    [super applyTheme];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
 }
 
 #pragma mark - Table Contents
@@ -179,14 +186,14 @@ OWSTableViewControllerDelegate>
     __weak ShowGroupMembersViewController *weakSelf = self;
     ContactsViewHelper *helper = self.contactsViewHelper;
     // Sort the group members using contacts manager.
-    
+
     __block NSArray<NSString *> *sortedRecipientIds = nil;
     [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
-        
+
         sortedRecipientIds = [recipientIds sortedArrayUsingComparator:^NSComparisonResult(id  _Nonnull recipientIdA, id  _Nonnull recipientIdB) {
             SignalAccount *signalAccountA = [helper.contactsManager signalAccountForRecipientId:recipientIdA transaction:readTransaction];
             SignalAccount *signalAccountB = [helper.contactsManager signalAccountForRecipientId:recipientIdB transaction:readTransaction];
-            return [helper.contactsManager compareSignalAccount:signalAccountA withSignalAccount:signalAccountB];
+            return [helper.contactsManager compareSignalAccount:signalAccountA withSignalAccount:signalAccountB transaction:readTransaction];
         }];
     }];
     
@@ -415,7 +422,7 @@ OWSTableViewControllerDelegate>
 
 - (void)showContactInfoViewForRecipientId:(NSString *)recipientId
 {
-    [self showProfileCardInfoWith:recipientId isFromSameThread:false isPresent:true];
+    [self showProfileCardInfoWith:recipientId isFromSameThread:false isPresent:false isFromContacts:true];
 }
 
 - (void)showConversationViewForRecipientId:(NSString *)recipientId

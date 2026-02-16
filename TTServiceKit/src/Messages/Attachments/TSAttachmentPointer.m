@@ -146,6 +146,8 @@ NS_ASSUME_NONNULL_BEGIN
                                                                   attachmentType:attachmentType
                                                                   albumMessageId:albumMessageId
                                                                          albumId:albumId];
+    pointer.width = attachmentProto.width;
+    pointer.height = attachmentProto.height;
     return pointer;
 }
 
@@ -201,6 +203,12 @@ NS_ASSUME_NONNULL_BEGIN
     builder.key = self.encryptionKey;
     builder.digest = self.digest;
     builder.flags = self.isVoiceMessage ? DSKProtoAttachmentPointerFlagsVoiceMessage : 0;
+    if (self.width > 0) {
+        [builder setWidth:self.width];
+    }
+    if (self.height > 0) {
+        [builder setHeight:self.height];
+    }
 
     return [builder buildAndReturnError:nil];
 }

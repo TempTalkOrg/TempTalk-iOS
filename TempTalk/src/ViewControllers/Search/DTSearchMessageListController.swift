@@ -41,9 +41,9 @@ class DTSearchMessageListController: UITableViewController {
         searchBar.delegate = self
         return searchBar
     }()
-    
+
     var subheadlineSize: CGFloat {
-        return UIFont.preferredFont(forTextStyle: .subheadline).pointSize
+        return UIFont.preferredFont(forTextStyle: .subheadline).scaled().pointSize
     }
 
     // MARK: View Lifecycle
@@ -63,7 +63,7 @@ class DTSearchMessageListController: UITableViewController {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(applyTheme),
-            name: NSNotification.Name.ThemeDidChange,
+            name: .themeDidChange,
             object: nil
         )
     }
@@ -94,7 +94,7 @@ class DTSearchMessageListController: UITableViewController {
     
     private func setupUI() {
         tableView.separatorStyle = .singleLine;
-        tableView.separatorColor = Theme.cellSeparatorColor
+        tableView.separatorColor = Theme.dividerColor
         if #available(iOS 15.0, *) {
             tableView.sectionHeaderTopPadding = 0
         }
@@ -107,9 +107,9 @@ class DTSearchMessageListController: UITableViewController {
     }
     
     @objc func applyTheme() {
-        view.backgroundColor = Theme.backgroundColor
-        tableView.backgroundColor = Theme.backgroundColor
-        tableView.separatorColor = Theme.cellSeparatorColor
+        view.backgroundColor = Theme.bgpagePrimaryColor
+        tableView.backgroundColor = Theme.bgpagePrimaryColor
+        tableView.separatorColor = Theme.dividerColor
         self.tableView.reloadData()
     }
   
@@ -145,8 +145,8 @@ class DTSearchMessageListController: UITableViewController {
         guard let searchResult = self.searchResultSet.messages[safe: indexPath.row] else {
             let cell = EmptySearchResultCell()
             cell.configure(searchState: searchResultSet.searchText.isEmpty ? DTSearchViewState.defaultState : DTSearchViewState.noResults)
-            cell.backgroundColor = Theme.tableCellBackgroundColor
-            cell.contentView.backgroundColor = Theme.tableCellBackgroundColor
+            cell.backgroundColor = Theme.bgpagePrimaryColor
+            cell.contentView.backgroundColor = Theme.bgpagePrimaryColor
             return cell
         }
         
@@ -213,7 +213,7 @@ class DTSearchMessageListController: UITableViewController {
         view.tintColor = UIColor(red: 0.46, green: 0.46, blue: 0.5, alpha: 0.24)
         
         if let header = view as? UITableViewHeaderFooterView {
-            header.textLabel?.textColor = Theme.secondaryTextAndIconColor
+            header.textLabel?.textColor = Theme.tsecondaryColor
         }
     }
     

@@ -4,9 +4,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+extern NSNotificationName const ScreenLockDidUnlockNotification;
+
 @interface OWSScreenLockUI : NSObject
 
 @property (nonatomic, readonly) UIWindow *screenBlockingWindow;
+@property (nonatomic, readonly) BOOL isShowingScreenLockUI;
 
 - (instancetype)init NS_UNAVAILABLE;
 

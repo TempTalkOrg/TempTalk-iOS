@@ -18,7 +18,7 @@ public class DTPickerViewController: OWSViewController {
 
     lazy var backgroundView: UIView = {
         let backgroundView = UIView()
-        backgroundView.backgroundColor = Theme.backgroundColor
+        backgroundView.backgroundColor = Theme.bg1Color
 //        backgroundView.setCornerRadius([.topLeft, .topRight], 10)
         if #available(iOS 16.2, *) {
             backgroundView.layer.cornerRadius = 10
@@ -55,33 +55,35 @@ public class DTPickerViewController: OWSViewController {
         
         return pickerView
     }()
-    
-    private var bottomConstraint: NSLayoutConstraint!
+
+    private var bottomConstraint: NSLayoutConstraint?
 
     public override func applyTheme() {
-        
+
         let themeBlue = Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0x82C1FC) : UIColor.ows_themeBlue
-        
+
         guard isViewLoaded == true else {
             return
         }
-        backgroundView.backgroundColor = Theme.backgroundColor
+        backgroundView.backgroundColor = Theme.bg1Color
         btnCancel.setTitleColor(themeBlue, for: .normal)
         btnCancel.setTitleColor(themeBlue, for: .highlighted)
         btnDone.setTitleColor(themeBlue, for: .normal)
         btnDone.setTitleColor(themeBlue, for: .highlighted)
     }
-    
+
     public override func loadView() {
         super.loadView()
-        
+
         setupUI()
     }
-    
+
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
-        NSLayoutConstraint.deactivate([bottomConstraint])
+
+        if let bottomConstraint = bottomConstraint {
+            NSLayoutConstraint.deactivate([bottomConstraint])
+        }
         self.bottomConstraint = self.backgroundView.autoPinEdge(toSuperviewEdge: .bottom)
 
         UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 0.9, initialSpringVelocity: 0, options: .curveEaseInOut) {
@@ -151,7 +153,9 @@ public class DTPickerViewController: OWSViewController {
             }
         }
         
-        NSLayoutConstraint.deactivate([bottomConstraint])
+        if let bottomConstraint = bottomConstraint {
+            NSLayoutConstraint.deactivate([bottomConstraint])
+        }
         bottomConstraint = backgroundView.autoPinEdge(toSuperviewEdge: .bottom, withInset: -300)
         UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.9, initialSpringVelocity: 0, options: .curveEaseOut) {
             self.view.backgroundColor = .clear

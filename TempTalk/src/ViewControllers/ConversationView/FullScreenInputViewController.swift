@@ -32,7 +32,7 @@ class FullScreenInputViewController: OWSViewController {
     
     private lazy var collapseButton: UIButton = {
         let button = UIButton(type: .custom)
-        button.tintColor = Theme.primaryIconColor
+        button.tintColor = Theme.iconColor
         button.addTarget(self, action: #selector(collapseButtonPressed), for: .touchUpInside)
         button.setImage(UIImage(named: "input_collapse"), for: .normal)
         return button
@@ -40,7 +40,7 @@ class FullScreenInputViewController: OWSViewController {
     
     private lazy var confideButton: UIButton = {
         let button = UIButton(type: .custom)
-        button.tintColor = Theme.primaryIconColor
+        button.tintColor = Theme.iconColor
         button.addTarget(self, action: #selector(confideButtonPressed), for: .touchUpInside)
         button.setImage(UIImage(named: "input_attachment_confide"), for: .normal)
         button.setImage(UIImage(named: "input_attachment_confide_select"), for: .selected)

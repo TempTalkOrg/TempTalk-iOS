@@ -29,6 +29,15 @@ extension ConversationViewController {
     
     // MARK: - 状态刷新
     func refreshJoinBarView() {
+        // 如果是从 PersonalCard 打开的浮动窗口
+        if isFromPersonalCard {
+            // 只有在全屏模式（100%）才显示 joinbar
+            if !isFullScreenMode {
+                dismissJoinCallView()
+                return
+            }
+        }
+
         // 是否允许显示
         guard !DTMeetingManager.shared.isMinimize,
               !DTMeetingManager.shared.allMeetings.isEmpty,

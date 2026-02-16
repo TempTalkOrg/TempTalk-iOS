@@ -28,6 +28,31 @@ class DTRequestBar : UIView {
         label.textAlignment = .center
         return label
     }()
+
+    private lazy var warningLabel: UILabel = {
+        let label = UILabel()
+        label.textAlignment = .center
+        label.numberOfLines = 0
+
+        let fullText = Localized("REQUEST_BAR_WARNING", comment: "⚠️ DO NOT trust unknown users.")
+        let boldText = Localized("REQUEST_BAR_WARNING_BOLD", comment: "DO NOT")
+
+        let attributedString = NSMutableAttributedString(string: fullText)
+        let regularFont = UIFont.systemFont(ofSize: 14, weight: .regular)
+        let boldFont = UIFont.systemFont(ofSize: 14, weight: .bold)
+
+        // Apply regular font to entire string first
+        attributedString.addAttribute(.font, value: regularFont, range: NSRange(location: 0, length: fullText.count))
+
+        // Find and apply bold font to the bold part
+        if let range = fullText.range(of: boldText) {
+            let nsRange = NSRange(range, in: fullText)
+            attributedString.addAttribute(.font, value: boldFont, range: nsRange)
+        }
+
+        label.attributedText = attributedString
+        return label
+    }()
     
     private lazy var stackView: UIStackView = {
         let stackView = UIStackView()
@@ -68,8 +93,10 @@ class DTRequestBar : UIView {
     
     @objc func applyTheme() {
         self.backgroundColor = Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0x1C1C1C) : UIColor(rgbHex: 0xF5F5F5)
-        
-        ignoreButton.setTitleColor(Theme.primaryTextColor, for: .normal)
+
+        warningLabel.textColor = Theme.tprimaryColor
+
+        ignoreButton.setTitleColor(Theme.tprimaryColor, for: .normal)
         ignoreButton.setBackgroundColor(Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x181A20) : UIColor.color(rgbHex: 0xFFFFFF), for: .normal)
         ignoreButton.layer.borderColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x474D57).cgColor : UIColor.color(rgbHex: 0xEAECEF).cgColor
         
@@ -95,6 +122,7 @@ class DTRequestBar : UIView {
     
     func initCommonUI() {
         addSubview(sourceLabel)
+        addSubview(warningLabel)
         addSubview(stackView)
         stackView.addArrangedSubview(ignoreButton)
         stackView.addArrangedSubview(acceptButton)
@@ -113,14 +141,21 @@ class DTRequestBar : UIView {
                 sourceLabel.trailingAnchor.constraint(equalTo: trailingAnchor)
             ])
         }
-        
-        
+
+        // 设置warningLabel的Auto Layout约束
+        warningLabel.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            warningLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            warningLabel.topAnchor.constraint(equalTo: sourceLabel.bottomAnchor, constant: 10),
+            warningLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16)
+        ])
+
         // 设置StackView的Auto Layout约束
         stackView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             stackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             stackView.heightAnchor.constraint(equalToConstant: 40),
-            stackView.topAnchor.constraint(equalTo: sourceLabel.bottomAnchor, constant: 10),
+            stackView.topAnchor.constraint(equalTo: warningLabel.bottomAnchor, constant: 16),
             stackView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             stackView.bottomAnchor.constraint(equalTo: bottomAnchor,constant: -insets.bottom)
         ])
@@ -142,19 +177,87 @@ class DTRequestBar : UIView {
     // 动态调整控件高度
     override var intrinsicContentSize: CGSize {
         let labelHeight = sourceLabel.intrinsicContentSize.height
+        let warningHeight = warningLabel.intrinsicContentSize.height
         let buttonHeight = 40.0
-        let totalHeight = labelHeight + buttonHeight + 16
-        
+        let totalHeight = labelHeight + warningHeight + buttonHeight + 26
+
         return CGSize(width: UIView.noIntrinsicMetric, height: totalHeight)
     }
     
     @objc private func buttonEvent(ignore sender: UIButton) {
         self.delegate?.didTapConversationRequestBarDelegate(self, ignoreSender: sender)
     }
-    
+
     @objc private func buttonEvent(accept sender: UIButton) {
         self.delegate?.didTapConversationRequestBarDelegate(self, acceptSender: sender)
     }
-    
+
 }
 
+// MARK: - DTConversationWarningHeaderView
+
+class DTConversationWarningHeaderView: UIView {
+
+    private let warningLabel: UILabel = {
+        let label = UILabel()
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupLabel()
+        initCommonUI()
+        configUILayout()
+        applyTheme()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func setupLabel() {
+        let fullText = Localized("CONVERSATION_WARNING_HEADER", comment: "🔒 Privacy first. Fully anonymous and end-to-end encrypted. DO NOT trust unknown users.")
+        let boldText = Localized("REQUEST_BAR_WARNING_BOLD", comment: "DO NOT")
+
+        let attributedString = NSMutableAttributedString(string: fullText)
+        let regularFont = UIFont.systemFont(ofSize: 12, weight: .regular)
+        let boldFont = UIFont.systemFont(ofSize: 12, weight: .bold)
+
+        attributedString.addAttribute(.font, value: regularFont, range: NSRange(location: 0, length: fullText.count))
+
+        if let range = fullText.range(of: boldText) {
+            let nsRange = NSRange(range, in: fullText)
+            attributedString.addAttribute(.font, value: boldFont, range: nsRange)
+        }
+
+        warningLabel.attributedText = attributedString
+    }
+
+    func initCommonUI() {
+        addSubview(warningLabel)
+    }
+
+    func configUILayout() {
+        NSLayoutConstraint.activate([
+            warningLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 50),
+            warningLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            warningLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -50),
+            warningLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
+        ])
+    }
+
+    @objc func applyTheme() {
+        self.backgroundColor = .clear
+        warningLabel.backgroundColor = .clear
+        warningLabel.textColor = Theme.tthirdColor
+    }
+
+    override var intrinsicContentSize: CGSize {
+        let labelHeight = warningLabel.intrinsicContentSize.height
+        let totalHeight = labelHeight + 20 // 10 top + 10 bottom padding
+        return CGSize(width: UIView.noIntrinsicMetric, height: totalHeight)
+    }
+}

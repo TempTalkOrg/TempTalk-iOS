@@ -132,9 +132,9 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
     
     
     public func refreshTheme() {
-        view.backgroundColor = Theme.backgroundColor
-        titleLabel.textColor = Theme.primaryTextColor
-        passcodeField.textColor = Theme.secondaryTextAndIconColor
+        view.backgroundColor = Theme.bg1Color
+        titleLabel.textColor = Theme.tprimaryColor
+        passcodeField.textColor = Theme.tsecondaryColor
         tipsLabel.textColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0xB7BDC6) : UIColor.color(rgbHex: 0x474D57);
         lineView.backgroundColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x474D57) : UIColor.color(rgbHex: 0xEAECEF);
         logoIconImageView.image = Theme.isDarkThemeEnabled ? UIImage(named: "logo_chative_dark") :  UIImage(named: "logo_chative_light")

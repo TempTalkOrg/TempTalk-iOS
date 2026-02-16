@@ -84,7 +84,7 @@ import JSQMessagesViewController
     
     func configUI() {
         guard let nextButton = nextButton else {return}
-        view.backgroundColor = Theme.backgroundColor
+        view.backgroundColor = Theme.bg1Color
         view.addSubview(iconView)
         view.addSubview(nameTextfield)
         view.addSubview(nextButton)
@@ -135,7 +135,7 @@ import JSQMessagesViewController
         nameTextfield.layer.borderColor = UIColor.color(rgbHex: 0xEAECEF).cgColor
         nameTextfield.layer.cornerRadius = 8
         nameTextfield.clearButtonMode = .whileEditing
-        nameTextfield.textColor = Theme.primaryTextColor
+        nameTextfield.textColor = Theme.tprimaryColor
        
         
         guard let nextButton = nextButton else {return}

@@ -86,7 +86,7 @@ public class DTPIPView: UIView {
     
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = Theme.darkThemeNavbarBackgroundColor
+        backgroundColor = UIColor.color(rgbHex: 0x111111)
         layer.cornerRadius = 8
         layer.masksToBounds = true
         isUserInteractionEnabled = true

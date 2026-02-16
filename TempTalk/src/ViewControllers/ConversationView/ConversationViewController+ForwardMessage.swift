@@ -132,10 +132,13 @@ import SignalCoreKit
         } else {
             removeForwardMessage(viewItem)
         }
+
+        let recallableCount = countRecallableMessages()
         forwardToolbar.updateActionItemsSelectedCount(
             UInt(viewState.forwardMessageItems.count),
             maxCount: 50,
-            enableCounts: [1, 2, 1]
+            enableCounts: [1, 2, 1, NSNumber(value: recallableCount > 0 ? 1 : UInt.max)],
+            recallableCount: UInt(recallableCount)
         )
         reloadItems(at: [indexPath])
     }
@@ -148,9 +151,30 @@ import SignalCoreKit
         let newForwardMessages = viewState.forwardMessageItems.filter { !$0.isEqual(to: forwardMessage) }
         viewState.forwardMessageItems = newForwardMessages
     }
-    
+
     func clearAllForwardMessages() {
         viewState.forwardMessageItems.removeAll()
+    }
+
+    func countRecallableMessages() -> Int {
+        let currentTimestamp = NSDate.ows_millisecondTimeStamp()
+        let recallThreshold = DTRecallConfig.fetch().timeoutInterval
+
+        return viewState.forwardMessageItems.filter { viewItem in
+            // Must be outgoing message
+            guard viewItem.interaction is TSOutgoingMessage else {
+                return false
+            }
+
+            // Must be within time window
+            let msgTimestamp = viewItem.interaction.timestamp
+            guard currentTimestamp >= msgTimestamp else {
+                return false
+            }
+
+            let messageDuration = Double(currentTimestamp - msgTimestamp)
+            return messageDuration <= (recallThreshold * 1000)
+        }.count
     }
     
     func applyThemeForForwardToolbar() {
@@ -169,7 +193,12 @@ import SignalCoreKit
 extension ConversationViewController: DTMultiSelectToolbarDelegate {
     func multiSelectToolbar(_: DTMultiSelectToolbar, didSelectIndex index: Int) {
         let forwardType: DTForwardMessageType = .init(rawValue: index) ?? .oneByOne
-        forwardMessages(forwardType: forwardType)
+
+        if forwardType == .batchRecall {
+            batchRecallMessages()
+        } else {
+            forwardMessages(forwardType: forwardType)
+        }
     }
     
     func items(for multiSelectToolBar: DTMultiSelectToolbar) -> [DTMultiSelectToolbarItem] {
@@ -185,6 +214,11 @@ extension ConversationViewController: DTMultiSelectToolbarDelegate {
             .init(
                 imageName: "toolbar-save",
                 title: Localized("MESSAGE_ACTION_SAVE")
+            ),
+            .init(
+                imageName: "toolbar-combine-recalled",
+                title: Localized("MESSAGE_ACTION_BATCH_RECALL"),
+                isRecallButton: true
             )
         ]
     }
@@ -357,7 +391,87 @@ private extension ConversationViewController {
             }
         }
     }
-    
+
+    /// 批量撤回选中的消息
+    func batchRecallMessages() {
+        let recallableMessages = filterRecallableMessages()
+
+        guard !recallableMessages.isEmpty else {
+            return
+        }
+
+        showRecallConfirmationDialog(messageCount: recallableMessages.count) { [weak self] in
+            self?.executeBatchRecall(recallableMessages: recallableMessages)
+        }
+    }
+
+    /// Filter messages that can be recalled
+    private func filterRecallableMessages() -> [ConversationViewItem] {
+        let currentTimestamp = NSDate.ows_millisecondTimeStamp()
+        let recallThreshold = DTRecallConfig.fetch().timeoutInterval
+
+        return viewState.forwardMessageItems.filter { viewItem in
+            guard viewItem.interaction is TSOutgoingMessage else {
+                return false
+            }
+
+            let msgTimestamp = viewItem.interaction.timestamp
+            guard currentTimestamp >= msgTimestamp else {
+                return false
+            }
+
+            let messageDuration = Double(currentTimestamp - msgTimestamp)
+            return messageDuration <= (recallThreshold * 1000)
+        }
+    }
+
+    /// Show confirmation dialog before recall
+    private func showRecallConfirmationDialog(messageCount: Int, onConfirm: @escaping () -> Void) {
+        let title = String(format: Localized("BATCH_RECALL_CONFIRM_TITLE"), messageCount)
+        let actionSheetController = ActionSheetController(title: title)
+        actionSheetController.addAction(OWSActionSheets.cancelAction)
+
+        let recallAction = ActionSheetAction(
+            title: Localized("OK"),
+            style: .destructive
+        ) { _ in
+            onConfirm()
+        }
+        actionSheetController.addAction(recallAction)
+        presentActionSheet(actionSheetController)
+    }
+
+    /// Execute batch recall for validated messages
+    private func executeBatchRecall(recallableMessages: [ConversationViewItem]) {
+        cancelMultiSelectMode()
+        DTToastHelper.show()
+
+        let dispatchGroup = DispatchGroup()
+
+        for viewItem in recallableMessages {
+            guard let outgoingMessage = viewItem.interaction as? TSOutgoingMessage else {
+                continue
+            }
+
+            dispatchGroup.enter()
+
+            DispatchQueue.main.async {
+                ThreadUtil.sendRecallMessage(
+                    withOriginMessage: outgoingMessage,
+                    in: self.thread
+                ) {
+                    dispatchGroup.leave()
+                } failure: { _ in
+                    dispatchGroup.leave()
+                }
+            }
+        }
+
+        dispatchGroup.notify(queue: .main) {
+            DTToastHelper.hide()
+        }
+    }
+
     /// 展示选择会话页面
     func showSelectThreadViewController() {
         let selectThreadVC = SelectThreadViewController()

@@ -27,6 +27,7 @@ enum SettingCellStyle: Int , Codable{
     case onlySwitch = 5
     case checkBox = 6
     case plainTextType = 7
+    case preview = 8  // 新增：预览样式
 }
 
 class DTSettingItem: Decodable {

@@ -10,35 +10,35 @@ import UIKit
 import JXCategoryView
 
 class DTReactionListController: OWSTableViewController {
-    
-    private var tableSources: [DTReactionSource]!
-    
+
+    private var tableSources: [DTReactionSource]?
+
     var reactionSources: [DTReactionSource] {
         get {
-            self.tableSources
+            self.tableSources ?? []
         }
         set {
             tableSources = newValue
             updateTableContents()
         }
     }
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = Theme.backgroundColor
+        view.backgroundColor = Theme.bg1Color
     }
-    
+
     override func applyTheme() {
         super.applyTheme()
-        
+
         updateTableContents()
     }
-    
+
     func updateTableContents() {
-        
+
         let contents = OWSTableContents()
         let section = OWSTableSection()
-        
+
         for reactionSource in reactionSources {
             let item = OWSTableItem(customCellBlock: {
                 let cell = ContactTableViewCell()

@@ -222,7 +222,10 @@ class ConversationMessageCell: ConversationCell {
         
         if let outgoingMessage = viewItem.interaction as? TSOutgoingMessage {
             if outgoingMessage.messageState == .failed {
-                delegate?.messageCell?(self, didTapFailedOutgoingMessage: outgoingMessage)
+                // 对于语音消息，不弹出alert，让它继续传递到 handleTapGesture 进行播放
+                if viewItem.messageCellType() != .audio {
+                    delegate?.messageCell?(self, didTapFailedOutgoingMessage: outgoingMessage)
+                }
             } else if outgoingMessage.messageState == .sending, !outgoingMessage.isPinnedMessage {
                 // Ignore taps on outgoing messages being sent.
                 return
@@ -231,7 +234,36 @@ class ConversationMessageCell: ConversationCell {
         
         messageBubbleView.handleTapGesture(sender)
     }
-    
+
+    @objc private func bubbleViewDidDoubleTap(_ sender: UITapGestureRecognizer) {
+        guard sender.state == .recognized else { return }
+        guard let viewItem = renderItem?.viewItem else {
+            return
+        }
+
+        // 机密消息不支持双击进入长消息模式
+        if viewItem.isConfidentialMessage {
+            return
+        }
+
+        // 支持文本消息、引用消息和合并转发消息的双击进入长消息模式
+        guard let message = viewItem.interaction as? TSMessage else {
+            return
+        }
+
+        // 检查消息类型：文本消息、引用消息或合并转发消息
+        let isTextMessage = message.isTextMessage()
+        let hasQuotedMessage = message.quotedMessage != nil
+        let hasCombinedForwardingMessage = message.combinedForwardingMessage != nil
+
+        guard isTextMessage || hasQuotedMessage || hasCombinedForwardingMessage else {
+            return
+        }
+
+        // 双击进入 LongMessageViewController
+        messageBubbleView.delegate?.messageBubbleView?(messageBubbleView, didTapReadMoreMessageWith: viewItem)
+    }
+
     @objc private func bubbleViewDidLongPress(_ sender: UILongPressGestureRecognizer) {
         guard let viewItem = renderItem?.viewItem else {
             return
@@ -436,20 +468,30 @@ class ConversationMessageCell: ConversationCell {
     lazy var messageBubbleView: ConversationMessageBubbleView = {
         let view = ConversationMessageBubbleView()
         let tap = UITapGestureRecognizer(target: self, action: #selector(bubbleViewDidClick(_:)))
+        tap.delegate = self
         view.addGestureRecognizer(tap)
-        
+
+        // 添加双击手势
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(bubbleViewDidDoubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        doubleTap.delegate = self
+        view.addGestureRecognizer(doubleTap)
+
+        // 单击需要等待双击失败
+        tap.require(toFail: doubleTap)
+
         let longPress = UILongPressGestureRecognizer(target: self, action: #selector(bubbleViewDidLongPress(_:)))
         longPress.delegate = self
         view.addGestureRecognizer(longPress)
-        
+
         view.textViewLongPressLinkHandler = { [weak self] longPress in
             guard let self else { return }
             self.bubbleViewDidLongPress(longPress)
         }
-        
+
         let pan = DTPanGestureRecognizer(target: self, action: #selector(panToQuote(gestureRecognizer:)))
         self.messageContainerView.addGestureRecognizer(pan)
-        
+
         return view
     }()
     
@@ -460,7 +502,6 @@ class ConversationMessageCell: ConversationCell {
     lazy var footerTimeLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.systemFont(ofSize: 12.0)
-        label.adjustsFontForContentSizeCategory = true
         return label
     }()
     
@@ -590,7 +631,7 @@ extension ConversationMessageCell {
     func refreshFooterTheme() {
         if footerView.isHidden {
             if !footerTimeLabel.isHidden {
-                footerTimeLabel.textColor = Theme.ternaryTextColor
+                footerTimeLabel.textColor = Theme.tthirdColor
             }
         } else {
             footerTimeLabel.textColor = UIColor.white

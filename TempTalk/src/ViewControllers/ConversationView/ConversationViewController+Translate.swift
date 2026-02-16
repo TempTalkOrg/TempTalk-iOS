@@ -38,7 +38,7 @@ import TTServiceKit
             self.translateMessage(targetLanguage: .english, conversationViewItem: conversationViewItem)
         }
         actionSheet.addAction(englishAction)
-        
+
         let chineseAction = ActionSheetAction(
             title: Localized("SETTINGS_SECTION_TRANSLATE_LANGUAGE_CHINESE", nil),
             style: .default
@@ -46,8 +46,8 @@ import TTServiceKit
             self.translateMessage(targetLanguage: .chinese, conversationViewItem: conversationViewItem)
         }
         actionSheet.addAction(chineseAction)
-        
-        dismissKeyBoard()
+
+        dismissKeyBoard(byUserAction: true)  // 用户选择翻译语言，标记为用户操作
         presentActionSheet(actionSheet)
     }
     

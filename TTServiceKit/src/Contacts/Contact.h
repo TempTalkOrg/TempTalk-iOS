@@ -81,6 +81,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong) DTThumbsUpEntity *thumbsUp;
 @property (nullable, nonatomic, strong) ContactPublicConfigs *publicConfigs;
 @property (nullable, nonatomic, strong) NSString *sourceDescribe;
+/// 自定义用户ID
+@property (nullable, copy, nonatomic) NSString *customUid;
 
 //MARK: vip客户专用
 /// displayName

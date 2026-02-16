@@ -95,7 +95,7 @@ NS_ASSUME_NONNULL_BEGIN
 {
     [super loadView];
 
-    self.view.backgroundColor = Theme.backgroundColor;
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
     
     self.title = Localized(@"CALL_INVITE_MEMBERS_TITLE", @"The navbar title for the 'invite group' view.");
     
@@ -113,6 +113,7 @@ NS_ASSUME_NONNULL_BEGIN
     _tableViewController = [OWSTableViewController new];
     _tableViewController.delegate = self;
     [self.view addSubview:self.tableViewController.view];
+    _tableViewController.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     [_tableViewController.view autoPinWidthToSuperview];
     if (self.inviteType == CallInviteTypeInstantMeeting) {
         [_tableViewController.view autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:firstSection];
@@ -130,24 +131,23 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)applyTheme {
     [super applyTheme];
     
-    self.firstSection.backgroundColor = Theme.tableSettingCellBackgroundColor;
-    self.instantMeetingNameTextField.textColor = Theme.primaryTextColor;
-    self.lbHeaderTitle.textColor = Theme.primaryTextColor;
+    self.firstSection.backgroundColor = Theme.bgpageSecondaryColor;
+    self.instantMeetingNameTextField.textColor = Theme.tprimaryColor;
+    self.lbHeaderTitle.textColor = Theme.tprimaryColor;
     
-    [self.navigationItem.rightBarButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.themeBlueColor} forState:UIControlStateNormal];
-    [self.navigationItem.rightBarButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.themeBlueColor} forState:UIControlStateHighlighted];
+    [self.navigationItem.rightBarButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tinfoColor} forState:UIControlStateNormal];
+    [self.navigationItem.rightBarButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tinfoColor} forState:UIControlStateHighlighted];
     
     if (self.view.window.windowLevel == UIWindowLevel_CallView()) {
-        [self.navigationController.navigationBar setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.primaryTextColor}];
-        self.navigationController.navigationBar.tintColor = Theme.primaryTextColor;
+        [self.navigationController.navigationBar setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tprimaryColor}];
+        self.navigationController.navigationBar.tintColor = Theme.tprimaryColor;
     }
 }
 
 - (UIView *)firstSectionHeader {
     UIView *firstSectionHeader = [UIView new];
     _firstSection = firstSectionHeader;
-    firstSectionHeader.backgroundColor = Theme.tableSettingCellBackgroundColor;
-//    Theme.tableCellBackgroundColor;
+    firstSectionHeader.backgroundColor = Theme.bgpageSecondaryColor;
     UIView *threadInfoView = [UIView new];
     [firstSectionHeader addSubview:threadInfoView];
     [threadInfoView autoPinWidthToSuperviewWithMargin:16.f];
@@ -155,7 +155,7 @@ NS_ASSUME_NONNULL_BEGIN
 
     UITextField *instantMeetingNameTextField = [UITextField new];
     _instantMeetingNameTextField = instantMeetingNameTextField;
-    instantMeetingNameTextField.textColor = Theme.primaryTextColor;
+    instantMeetingNameTextField.textColor = Theme.tprimaryColor;
     instantMeetingNameTextField.font = [UIFont ows_dynamicTypeTitle2Font];
     instantMeetingNameTextField.placeholder
         = Localized(@"CALL_INVITE_INSTANT_MEETING_NAME_PLACEHOLDER", @"Placeholder text for instant meeting field");
@@ -196,8 +196,8 @@ NS_ASSUME_NONNULL_BEGIN
                                                      style:UIBarButtonItemStylePlain
                                                     target:self
                                                     action:@selector(inviteMeetingBtnPressed)];
-        [rightItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.themeBlueColor} forState:UIControlStateNormal];
-        [rightItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.themeBlueColor} forState:UIControlStateHighlighted];
+        [rightItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tinfoColor} forState:UIControlStateNormal];
+        [rightItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tinfoColor} forState:UIControlStateHighlighted];
     }
     
     self.navigationItem.rightBarButtonItem = rightItem;
@@ -244,7 +244,7 @@ NS_ASSUME_NONNULL_BEGIN
         UILabel *lbHeaderTitle = UILabel.new;
         _lbHeaderTitle = lbHeaderTitle;
         lbHeaderTitle.text = Localized(@"EDIT_GROUP_MEMBERS_SECTION_TITLE", @"a title for the members section of the 'new/update group' view.");
-        lbHeaderTitle.textColor = Theme.primaryTextColor;
+        lbHeaderTitle.textColor = Theme.tprimaryColor;
         lbHeaderTitle.font = [UIFont systemFontOfSize:13];
         [header addSubview:lbHeaderTitle];
         

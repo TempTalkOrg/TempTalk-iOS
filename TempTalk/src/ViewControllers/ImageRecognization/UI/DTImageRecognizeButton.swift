@@ -55,7 +55,7 @@ class DTImageRecognizeButton: UIView {
     @objc func applyTheme() {
         iconImageView.tintColor = .white
         if isSelected {
-            backgroundColor = Theme.themeBlueColor
+            backgroundColor = Theme.tinfoColor
         } else {
             backgroundColor = UIColor(rgbHex: 0x1E2329)
         }

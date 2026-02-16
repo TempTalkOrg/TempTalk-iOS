@@ -101,13 +101,24 @@
     if (encodedString.length == 0) {
         return nil;
     }
-    
+
     if([[encodedString ows_stripped] hasPrefix:@"+"]){
         encodedString = [encodedString stringByReplacingOccurrencesOfString:@"+" withString:@""];
     }
     long long number = [encodedString longLongValue];
     NSString *base58String = [Base58Util encodeNumber:number];
     return base58String;
+}
+
+/// 获取用户ID显示文本，优先使用customUid，次选使用base58编码的uid
++ (NSString *)displayUserIdWithCustomUid:(nullable NSString *)customUid recipientId:(NSString *)recipientId {
+    // 优先使用 customUid
+    if (customUid && customUid.length > 0) {
+        return customUid;
+    }
+
+    // 次选使用 base58 编码的 recipientId
+    return [self base58EncodedNumber:recipientId] ?: recipientId;
 }
 
 //+ (NSString *)decodeBase58Number:(NSString *)base58String {

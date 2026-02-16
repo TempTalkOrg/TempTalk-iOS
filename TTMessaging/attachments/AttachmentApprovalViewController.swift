@@ -34,8 +34,8 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
 
     let attachments: [SignalAttachment]
 
-    private(set) var bottomToolbar: UIView!
-    private(set) var collectionView: UICollectionView!
+    private(set) var bottomToolbar: UIView?
+    private(set) var collectionView: UICollectionView?
     // MARK: Initializers
 
     @available(*, unavailable, message:"use attachment: constructor instead.")
@@ -139,15 +139,17 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
         layout.minimumInteritemSpacing = 0
         
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.backgroundColor = backgroundColor
-        collectionView.dataSource = self
-        collectionView.delegate = self
-        collectionView.showsVerticalScrollIndicator = false
-        collectionView.showsHorizontalScrollIndicator = false
-        collectionView.isPagingEnabled = true
-        self.view.addSubview(collectionView)
-        collectionView.autoPinEdgesToSuperviewEdges()
-        collectionView .register(DFAttachmentApprovalCollectionCell.self, forCellWithReuseIdentifier: DFAttachmentApprovalCollectionCell.reuseIdentifier())
+        collectionView?.backgroundColor = backgroundColor
+        collectionView?.dataSource = self
+        collectionView?.delegate = self
+        collectionView?.showsVerticalScrollIndicator = false
+        collectionView?.showsHorizontalScrollIndicator = false
+        collectionView?.isPagingEnabled = true
+        if let collectionView = collectionView {
+            self.view.addSubview(collectionView)
+            collectionView.autoPinEdgesToSuperviewEdges()
+            collectionView.register(DFAttachmentApprovalCollectionCell.self, forCellWithReuseIdentifier: DFAttachmentApprovalCollectionCell.reuseIdentifier())
+        }
         
 
 //        if isZoomable {
@@ -170,7 +172,7 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
     }
 
     override public var inputAccessoryView: UIView? {
-        self.bottomToolbar.layoutIfNeeded()
+        self.bottomToolbar?.layoutIfNeeded()
         return self.bottomToolbar
     }
 
@@ -251,10 +253,10 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
         // and remains visible momentarily after share extension is dismissed.
         // It's easiest to just hide it at this point since we're done with it.
         shouldAllowAttachmentViewResizing = false
-        bottomToolbar.isUserInteractionEnabled = false
-        bottomToolbar.isHidden = true
+        bottomToolbar?.isUserInteractionEnabled = false
+        bottomToolbar?.isHidden = true
 
-        let lastAttachment: SignalAttachment = attachments.last!
+        guard let lastAttachment = attachments.last else { return }
         lastAttachment.captionText = captionText
         delegate?.attachmentApproval(self, didApproveAttachments: attachments)
     }
@@ -265,32 +267,34 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
 
     private func scaleAttachmentView(_ fit: AttachmentViewScale) {
         guard shouldAllowAttachmentViewResizing else {
-            if self.collectionView.transform != CGAffineTransform.identity {
+            if let collectionView = self.collectionView, collectionView.transform != CGAffineTransform.identity {
                 UIView.animate(withDuration: 0.2) {
-                    self.collectionView.transform = CGAffineTransform.identity
+                    collectionView.transform = CGAffineTransform.identity
                 }
             }
             return
         }
 
+        guard let collectionView = self.collectionView else { return }
+
         switch fit {
         case .fullsize:
             UIView.animate(withDuration: 0.2) {
-                self.collectionView.transform = CGAffineTransform.identity
+                collectionView.transform = CGAffineTransform.identity
             }
         case .compact:
             UIView.animate(withDuration: 0.2) {
                 let kScaleFactor: CGFloat = 0.7
                 let scale = CGAffineTransform(scaleX: kScaleFactor, y: kScaleFactor)
 
-                let originalHeight = self.collectionView.bounds.size.height
+                let originalHeight = collectionView.bounds.size.height
 
                 // Position the new scaled item to be centered with respect
                 // to it's new size.
                 let heightDelta = originalHeight * (1 - kScaleFactor)
                 let translate = CGAffineTransform(translationX: 0, y: -heightDelta / 2)
 
-                self.collectionView.transform = scale.concatenating(translate)
+                collectionView.transform = scale.concatenating(translate)
             }
         }
     }
@@ -316,8 +320,8 @@ class CaptioningToolbar: UIView, UITextViewDelegate {
         // Otherwise we risk obscuring too much of the content.
         return UIDevice.current.orientation.isPortrait ? 160 : 100
     }
-    var textViewHeightConstraint: NSLayoutConstraint!
-    var sendButtonConstraint: NSLayoutConstraint!
+    var textViewHeightConstraint: NSLayoutConstraint?
+    var sendButtonConstraint: NSLayoutConstraint?
     var textViewHeight: CGFloat
     
     private lazy var placeholderLabel: UILabel = {
@@ -535,7 +539,7 @@ class CaptioningToolbar: UIView, UITextViewDelegate {
         let currentSize = textView.frame.size
         let newHeight = clampedTextViewHeight(fixedWidth: currentSize.width)
         if (newHeight > kMinTextViewHeight){
-            sendButtonConstraint.constant = 0
+            sendButtonConstraint?.constant = 0
         }
         if newHeight != self.textViewHeight {
             Logger.debug("\(self.logTag) TextView height changed: \(self.textViewHeight) -> \(newHeight)")
@@ -588,23 +592,26 @@ class DFAttachmentApprovalCollectionCell: UICollectionViewCell {
     
     private var _attachment: SignalAttachment?
     var attachment: SignalAttachment? {
-        
+
         get {
             _attachment
         }
-        
+
         set {
             _attachment = newValue
-            self.mediaMessageView = MediaMessageView(attachment: newValue!, mode: .attachmentApproval)
-            containerView.addSubview(mediaMessageView)
-            mediaMessageView.autoPinEdgesToSuperviewEdges()
-            
+            guard let newValue = newValue else { return }
+            self.mediaMessageView = MediaMessageView(attachment: newValue, mode: .attachmentApproval)
+            if let mediaMessageView = mediaMessageView {
+                containerView?.addSubview(mediaMessageView)
+                mediaMessageView.autoPinEdgesToSuperviewEdges()
+            }
+
             if attachment == nil {
                 return
             }
-            if newValue!.isVideo {
+            if newValue.isVideo {
 
-                guard let videoURL = attachment!.dataUrl else {
+                guard let attachment = attachment, let videoURL = attachment.dataUrl else {
                     owsFailDebug("Missing videoURL")
                     return
                 }
@@ -615,7 +622,7 @@ class DFAttachmentApprovalCollectionCell: UICollectionViewCell {
 
                 let playerView = VideoPlayerView()
                 playerView.player = player.avPlayer
-                self.mediaMessageView.addSubview(playerView)
+                self.mediaMessageView?.addSubview(playerView)
                 playerView.autoPinEdgesToSuperviewEdges()
 
                 let pauseGesture = UITapGestureRecognizer(target: self, action: #selector(didTapPlayerView(_:)))
@@ -634,7 +641,7 @@ class DFAttachmentApprovalCollectionCell: UICollectionViewCell {
                 progressBar.autoPinWidthToSuperview()
                 progressBar.autoSetDimension(.height, toSize: 44)
 
-                self.mediaMessageView.videoPlayButton?.isHidden = true
+                self.mediaMessageView?.videoPlayButton?.isHidden = true
                 let playButton = UIButton()
                 self.playVideoButton = playButton
                 playButton.accessibilityLabel = Localized("PLAY_BUTTON_ACCESSABILITY_LABEL", comment: "Accessibility label for button to start media playback")
@@ -650,55 +657,55 @@ class DFAttachmentApprovalCollectionCell: UICollectionViewCell {
             }
         }
     }
-    
+
     private var videoPlayer: OWSVideoPlayer?
-    
-    private(set) var mediaMessageView: MediaMessageView!
-    private(set) var scrollView: UIScrollView!
-    private(set) var containerView: UIView!
+
+    private(set) var mediaMessageView: MediaMessageView?
+    private(set) var scrollView: UIScrollView?
+    private(set) var containerView: UIView?
     private(set) var playVideoButton: UIView?
-    
+
     override init(frame: CGRect) {
-        
+
         super.init(frame: frame)
 
         // Scroll View - used to zoom/pan on images and video
-        scrollView = UIScrollView()
-        contentView.addSubview(scrollView)
-        scrollView.delegate = self
-        scrollView.isScrollEnabled = false
-        scrollView.showsHorizontalScrollIndicator = false
-        scrollView.showsVerticalScrollIndicator = false
+        let scroll = UIScrollView()
+        scrollView = scroll
+        contentView.addSubview(scroll)
+        scroll.delegate = self
+        scroll.isScrollEnabled = false
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.showsVerticalScrollIndicator = false
         // Panning should stop pretty soon after the user stops scrolling
-        scrollView.decelerationRate = UIScrollView.DecelerationRate.fast
-        scrollView.autoPinEdgesToSuperviewEdges()
-     
+        scroll.decelerationRate = UIScrollView.DecelerationRate.fast
+        scroll.autoPinEdgesToSuperviewEdges()
+
 
         // Create full screen container view so the scrollView
         // can compute an appropriate content size in which to center
         // our media view.
-        containerView = UIView.container()
-        scrollView.addSubview(containerView)
-        containerView.autoPinEdgesToSuperviewEdges()
-        containerView.autoMatch(.height, to: .height, of: contentView)
-        containerView.autoMatch(.width, to: .width, of: contentView)
+        let container = UIView.container()
+        containerView = container
+        scroll.addSubview(container)
+        container.autoPinEdgesToSuperviewEdges()
+        container.autoMatch(.height, to: .height, of: contentView)
+        container.autoMatch(.width, to: .width, of: contentView)
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     class func reuseIdentifier() -> String {
         "DFAttachmentApprovalCollectionCell"
     }
-        
+
     func resetVideo() {
-        
-        if attachment!.isVideo {
-            let scale: CMTimeScale = 100
-            videoPlayer?.stop()
-            videoPlayer?.seek(to: CMTime(value: 0, timescale: scale))
-        }
+        guard let attachment = attachment, attachment.isVideo else { return }
+        let scale: CMTimeScale = 100
+        videoPlayer?.stop()
+        videoPlayer?.seek(to: CMTime(value: 0, timescale: scale))
     }
         
     func resetCellSubviews() {
@@ -709,8 +716,10 @@ class DFAttachmentApprovalCollectionCell: UICollectionViewCell {
             }
         }
         
-        for subview in containerView.subviews {
-            subview.removeFromSuperview()
+        if let containerView = containerView {
+            for subview in containerView.subviews {
+                subview.removeFromSuperview()
+            }
         }
 
     }
@@ -794,15 +803,15 @@ extension DFAttachmentApprovalCollectionCell: UIScrollViewDelegate {
         let scrollViewCenter = self.scrollViewCenter
 
         // if mediaMessageView is smaller than the scrollView visible size - fix the content center accordingly
-        if self.scrollView.contentSize.width < scrollViewSize.width {
+        if self.scrollView?.contentSize.width ?? 0 < scrollViewSize.width {
             contentCenter.x = scrollViewCenter.x
         }
 
-        if self.scrollView.contentSize.height < scrollViewSize.height {
+        if self.scrollView?.contentSize.height ?? 0 < scrollViewSize.height {
             contentCenter.y = scrollViewCenter.y
         }
 
-        self.mediaMessageView.center = contentCenter
+        self.mediaMessageView?.center = contentCenter
     }
 
     // return the scroll view center
@@ -813,6 +822,7 @@ extension DFAttachmentApprovalCollectionCell: UIScrollViewDelegate {
 
     // Return scrollview size without the area overlapping with tab and nav bar.
     private var scrollViewVisibleSize: CGSize {
+        guard let scrollView = scrollView else { return .zero }
         let contentInset = scrollView.contentInset
         let scrollViewSize = scrollView.bounds.standardized.size
         let width = scrollViewSize.width - (contentInset.left + contentInset.right)

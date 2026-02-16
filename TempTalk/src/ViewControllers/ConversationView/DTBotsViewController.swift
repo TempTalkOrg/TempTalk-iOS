@@ -12,16 +12,16 @@ import JXPagingView
 
 @objcMembers
 class DTBotsViewController: OWSViewController {
-    
-    var contactsManager = Environment.shared.contactsManager!
-    
+
+    var contactsManager: OWSContactsManager?
+
     var sortedBots = [SignalAccount]()
-    
-    var scrollCallback: ((UIScrollView?) -> Void)!
-    
+
+    var scrollCallback: ((UIScrollView?) -> Void)?
+
     lazy var tableView: UITableView = {
         let tableView = UITableView(frame: .zero, style: .plain)
-        tableView.backgroundColor = Theme.backgroundColor
+        tableView.backgroundColor = Theme.bg1Color
         tableView.delegate = self
         tableView.dataSource = self
         tableView.estimatedRowHeight = 0
@@ -31,13 +31,15 @@ class DTBotsViewController: OWSViewController {
             tableView.sectionHeaderTopPadding = 0
         }
         tableView.register(ContactTableViewCell.self, forCellReuseIdentifier: ContactTableViewCell.reuseIdentifier())
-        
+
         return tableView
     }()
-    
+
     override func loadView() {
         super.loadView()
-        
+
+        contactsManager = Environment.shared.contactsManager
+
         view.addSubview(tableView)
         tableView.autoPinEdgesToSuperviewSafeArea()
     }
@@ -50,7 +52,7 @@ class DTBotsViewController: OWSViewController {
     
     override func applyTheme() {
         super.applyTheme()
-        tableView.backgroundColor = Theme.backgroundColor
+        tableView.backgroundColor = Theme.bg1Color
         tableView.reloadData()
     }
     
@@ -59,7 +61,7 @@ class DTBotsViewController: OWSViewController {
 //            return
 //        }
 //        self.loadViewIfNeeded()
-        sortedBots = contactsManager.bots
+        sortedBots = contactsManager?.bots ?? []
         tableView.reloadData()
     }
 }
@@ -71,13 +73,20 @@ extension DTBotsViewController: UITableViewDelegate, UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: ContactTableViewCell.reuseIdentifier(), for: indexPath) as! ContactTableViewCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: ContactTableViewCell.reuseIdentifier(), for: indexPath) as? ContactTableViewCell else {
+            owsFailDebug("Failed to dequeue ContactTableViewCell")
+            preconditionFailure("ContactTableViewCell must be registered")
+        }
         guard indexPath.row < sortedBots.count else {
             return cell
         }
         cell.cellView.isBotsUseSignature = true
+        guard let contactsManager = contactsManager else {
+            owsFailDebug("contactsManager is nil")
+            return cell
+        }
         cell.configure(with: sortedBots[indexPath.row], contactsManager: contactsManager)
-        
+
         return cell
     }
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {

@@ -9,7 +9,7 @@
 import Foundation
 
 @objc
-class DTAccountSettingController : SettingBaseViewController , DTDefaultBaseStyleCellLongPressDelegate{
+class DTAccountSettingController : SettingBaseViewController , DTDefaultBaseStyleCellLongPressDelegate, DTSettingSwitchCellDelegate {
     let reuse_identifier_style_blank = "DTDefaultStyleCell_AccountSetting_style_blank"
     let reuse_identifier_style_description = "DTDefaultStyleCell_AccountSetting_style_description"
     let reuse_identifier_style_switch = "DTDefaultStyleCell_AccountSetting_style_switch"
@@ -17,6 +17,7 @@ class DTAccountSettingController : SettingBaseViewController , DTDefaultBaseStyl
     
     var notificationTypeValue : NSNumber = NSNumber(value: -1000)
     var contact : Contact?
+    var searchByCustomUidEnabled: Bool = false
     let logoutApi = DTLogoutApi()
     let profileInfoApi = DTProfileInfoApi()
     
@@ -71,7 +72,6 @@ class DTAccountSettingController : SettingBaseViewController , DTDefaultBaseStyl
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        prepareUIData()
         getProfileInfo()
     }
     
@@ -81,22 +81,22 @@ class DTAccountSettingController : SettingBaseViewController , DTDefaultBaseStyl
     
     override func applyTheme() {
         super.applyTheme()
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
-        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
+        self.mainTableView.tableHeaderView?.backgroundColor = Theme.bgpageSecondaryColor
         self.mainTableView.reloadData()
     }
-    
-    
+
+
     @objc class func inModalNavigationController() -> OWSNavigationController {
         let viewController = AppSettingsViewController()
         let navController = OWSNavigationController.init(rootViewController: viewController)
         return navController
     }
-    
+
     func prepareTheme() {
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
     func prepareUIData() {
@@ -143,9 +143,9 @@ extension DTAccountSettingController : UITableViewDelegate,UITableViewDataSource
             return 52
         }
     }
-    
+
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        
+
         let settingMeItem : DTAccountSettingItem? = self.dataSource[indexPath.section][indexPath.row]
         guard let settingMeItem = settingMeItem else {  return UITableViewCell.init() }
         if(settingMeItem.cellStyle == .blank){
@@ -153,12 +153,12 @@ extension DTAccountSettingController : UITableViewDelegate,UITableViewDataSource
             guard let defaultStyleCell = cell else { return UITableViewCell.init()}
             defaultStyleCell.applyTheme()
             return defaultStyleCell
-            
+
         } else if(settingMeItem.cellStyle == .onlyAccessory ||
                   settingMeItem.cellStyle == .noAccessoryAndNoDescription ||
                   settingMeItem.cellStyle == .onlyDescription ||
                   settingMeItem.cellStyle == .accessoryAndDescription){
-            
+
             let cell = tableView.dequeueReusableCell(withIdentifier: reuse_identifier_style_description, for: indexPath) as? DTSettingDescriptionCell
             guard let defaultStyleCell = cell else { return UITableViewCell.init()}
             if (indexPath.row == 0){
@@ -174,12 +174,12 @@ extension DTAccountSettingController : UITableViewDelegate,UITableViewDataSource
             if(settingMeItem.type == .logout){
                 defaultStyleCell.titleTextColor = UIColor.color(rgbHex: 0xF84135)
             } else {
-                defaultStyleCell.titleTextColor = Theme.primaryTextColor
+                defaultStyleCell.titleTextColor = Theme.tprimaryColor
             }
             return defaultStyleCell
-            
+
         } else if(settingMeItem.cellStyle == .onlySwitch){
-            
+
             let cell = tableView.dequeueReusableCell(withIdentifier: reuse_identifier_style_switch, for: indexPath) as? DTSettingSwitchCell
             guard let defaultStyleCell = cell else { return UITableViewCell.init()}
             if (indexPath.row == 0){
@@ -190,49 +190,119 @@ extension DTAccountSettingController : UITableViewDelegate,UITableViewDataSource
                 defaultStyleCell.borderType = .none
             }
             defaultStyleCell.selectionStyle = .none
+            defaultStyleCell.delegate = self
             defaultStyleCell.reloadCell(model: settingMeItem)
             return defaultStyleCell
-            
+
         } else if(settingMeItem.cellStyle == .plainTextType){
-            
+
             let cell = tableView.dequeueReusableCell(withIdentifier: reuse_identifier_style_plaintext, for: indexPath) as? DTSettingPlanTextCell
             guard let defaultStyleCell = cell else { return UITableViewCell.init()}
             defaultStyleCell.selectionStyle = .none
             defaultStyleCell.reloadCell(model: settingMeItem)
             return defaultStyleCell
-            
+
         } else {
-            
+
             return UITableViewCell.init()
-            
+
         }
     }
-    
+
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         let settingMeItem = self.dataSource[indexPath.section][indexPath.row]
         switch settingMeItem.type {
-        case .some(.blank):return
-        case .some(.id):return
+        case .some(.blank):
+            return
+        case .some(.id):
+            let editContactNameVC = EditContactNameViewController()
+            editContactNameVC.currentContactName = settingMeItem.description ?? ""
+            editContactNameVC.profileInfoApi = self.profileInfoApi
+            editContactNameVC.saveCompletion = { [weak self] newName in
+                // Handle save completion
+                self?.updateContactName(newName)
+            }
+            self.navigationController?.pushViewController(editContactNameVC, animated: true)
+            return
         case .some(.email):
-            let  modifyEmailVC : DTModifyBindedInfoController = DTModifyBindedInfoController()
-            modifyEmailVC.titleString = Localized("SETTINGS_VC_TITLE_CHANGE_EMAIL",comment: "modifyEmailVC title")
+            let modifyEmailVC: DTModifyBindedInfoController = DTModifyBindedInfoController()
+            modifyEmailVC.titleString = Localized("SETTINGS_VC_TITLE_CHANGE_EMAIL", comment: "modifyEmailVC title")
             modifyEmailVC.modifyType = DTModifyTypeChangeEmail
             self.navigationController?.pushViewController(modifyEmailVC, animated: true)
             return
         case .some(.phoneNumber):
-            let  modifyPhoneNumberVC : DTModifyBindedInfoController = DTModifyBindedInfoController()
-            modifyPhoneNumberVC.titleString = Localized("SETTINGS_VC_TITLE_CHANGE_PHONE_NUMBER",comment: "modifyPhoneNumberVC title")
+            let modifyPhoneNumberVC: DTModifyBindedInfoController = DTModifyBindedInfoController()
+            modifyPhoneNumberVC.titleString = Localized("SETTINGS_VC_TITLE_CHANGE_PHONE_NUMBER", comment: "modifyPhoneNumberVC title")
             modifyPhoneNumberVC.modifyType = DTModifyTypeChangePhoneNumber
             self.navigationController?.pushViewController(modifyPhoneNumberVC, animated: true)
             return
         case .some(.logout):
             self.showlogoutAccountUI()
             return
+        case .some(.allowSearch):
+            return
         case .none:
             return
         }
     }
-    
+
+    private func updateContactName(_ newName: String) {
+        // Update local contact data immediately for better UX
+        if let contact = self.contact {
+            contact.customUid = newName
+            self.contact = contact
+
+            // Update the signalAccount's contact as well
+            if let signalAccount = self.signalAccount {
+                let recipientId = signalAccount.recipientId
+                signalAccount.contact = contact
+                self.signalAccount = signalAccount
+
+                // Persist the update to database
+                let contactsManager = Environment.shared.contactsManager
+                databaseStorage.write { transaction in
+                    contactsManager?.updateSignalAccount(withRecipientId: recipientId,
+                                                         withNewSignalAccount: signalAccount,
+                                                         with: transaction)
+                }
+            }
+
+            // Refresh data source and reload table
+            self.dataSource = self.getDataSource()
+            self.mainTableView.reloadData()
+        }
+
+        // Still fetch fresh profile info in background to sync with server
+        self.getProfileInfo()
+    }
+
+    // MARK: - DTSettingSwitchCellDelegate
+
+    @objc func switchValueChanged(isOn: Bool, cell: DTDefaultBaseStyleCell) {
+        self.handleAllowSearchSwitchChange(isOn: isOn)
+    }
+
+    private func handleAllowSearchSwitchChange(isOn: Bool) {
+        let params: [String: Any] = ["searchByCustomUid": isOn ? 1 : 0]
+
+        DTToastHelper.show()
+        profileInfoApi.setProfileInfo(params, sucess: { [weak self] _ in
+            DispatchQueue.main.async {
+                DTToastHelper.hide()
+                // Update memory state only, no reload
+                self?.searchByCustomUidEnabled = isOn
+                DTToastHelper.toast(withText: Localized("SETTINGS_COMMON_TIP_MESSAGE_SUCESS"), durationTime: 2)
+            }
+        }, failure: { [weak self] _ in
+            DispatchQueue.main.async {
+                DTToastHelper.hide()
+                DTToastHelper.toast(withText: Localized("SETTINGS_COMMON_TIP_MESSAGE_FAILE"), durationTime: 2)
+                // Reload to restore switch state on failure
+                self?.mainTableView.reloadData()
+            }
+        })
+    }
+
     func showlogoutAccountUI() {
         // 如果没有绑定手机号和邮箱信息, 给出提示
         let settingItems = dataSource.first { settingItems in
@@ -245,19 +315,19 @@ extension DTAccountSettingController : UITableViewDelegate,UITableViewDataSource
                     return false
                 }
             }
-            
+
             return settingItem != nil
         }
-        
+
         if let _ = settingItems {
             showLogoutAlert()
         } else { // 如果未绑定邮箱或者手机号, 提示用户删除账户
             showDeleteAccountAlert()
         }
     }
-    
+
     private func showDeleteAccountAlert() {
-        
+
         let alertController = UIAlertController(title: nil, message: Localized("ACCOUNT_LOGOUT_NOT_LINK_DESCRIPTION",comment: "alert account not link desc"), preferredStyle: .alert)
         alertController.addAction(OWSAlerts.cancelAction)
         alertController.addAction(UIAlertAction(title: Localized("PROCEED_BUTTON",comment: "proceed button"), style: .destructive,handler: { _ in
@@ -265,9 +335,9 @@ extension DTAccountSettingController : UITableViewDelegate,UITableViewDataSource
         }))
         self.present(alertController, animated: true)
     }
-    
+
     private func showLogoutAlert() {
-        
+
         let alertController = UIAlertController(title: Localized("CONFIRM_ACCOUNT_LOGOUT_TITLE",comment: "alert title logout"), message: Localized("CONFIRM_ACCOUNT_LOGOUT_TIP_MESSAGE",comment: "alert logout desc"), preferredStyle: .alert)
         alertController.addAction(OWSAlerts.cancelAction)
         alertController.addAction(UIAlertAction(title: Localized("CONFIRM_ACCOUNT_ACTION_DELETE_AND_LOGOUT",comment: "Action logout desc"), style: .destructive,handler: { _ in
@@ -275,12 +345,12 @@ extension DTAccountSettingController : UITableViewDelegate,UITableViewDataSource
         }))
         self.present(alertController, animated: true)
     }
-    
+
     func deleteAccount() {
         let deleteAccount = DTDeleteAccountController()
         navigationController?.pushViewController(deleteAccount, animated: true)
     }
-    
+
     func logoutAccount() {
         ModalActivityIndicatorViewController.present(fromViewController: self, canCancel: false) { modalActivityIndicator in
             self.logoutApi.logoutRequest { entity in
@@ -294,7 +364,7 @@ extension DTAccountSettingController : UITableViewDelegate,UITableViewDataSource
             }
         }
     }
-    
+
     func longPressClick(_ cell: DTDefaultBaseStyleCell, longPressGesture: UILongPressGestureRecognizer) {
         if(longPressGesture.state != .began){
             return
@@ -305,24 +375,27 @@ extension DTAccountSettingController : UITableViewDelegate,UITableViewDataSource
             self.copyWith(content: settingMeItem.description)
         }
     }
-    
+
     func copyWith(content: String?) {
         if(!DTParamsUtils.validateString(content).boolValue){
             return
         }
-        let pasteboard = UIPasteboard.general
-        pasteboard.string = content
+        DTSecurePasteboard.setString(content ?? "")
         DTToastHelper.toast(withText: Localized("COPYID",comment: "copy to pastboard"), durationTime: 2)
     }
-    
+
     func getProfileInfo() {
-        self.profileInfoApi.profileInfo(sucess: { _ in
-            self.reloadPage()
-        }) { _ in
-            //            self.mainTableView.reloadData()
-        }
+        profileInfoApi.profileInfo(sucess: { [weak self] entity in
+            if let responseData = entity?.data as? [String: Any],
+               let searchByCustomUid = responseData["searchByCustomUid"] as? Int {
+                self?.searchByCustomUidEnabled = (searchByCustomUid == 1)
+            }
+            // Refresh local contact data before reloading
+            self?.prepareUIData()
+            self?.mainTableView.reloadData()
+        }, failure: nil)
     }
-    
+
     func reloadPage() {
         self.dataSource = self.getDataSource()
         self.mainTableView.reloadData()

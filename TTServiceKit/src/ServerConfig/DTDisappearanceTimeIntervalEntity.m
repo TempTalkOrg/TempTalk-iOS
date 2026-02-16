@@ -20,6 +20,10 @@
         @"conversationMe"     : @"conversation.me",
         @"conversationOthers" : @"conversation.other",
         @"conversationGroup"  : @"conversation.group",
+        @"activeConversationDefault": @"activeConversation.default",
+        @"activeConversationMe"     : @"activeConversation.me",
+        @"activeConversationOthers" : @"activeConversation.other",
+        @"activeConversationGroup"  : @"activeConversation.group",
         @"messageArchivingTimeOptionValues"  : @"messageArchivingTimeOptionValues",
     };
 }
@@ -62,11 +66,39 @@
 
 - (NSNumber *)conversationGroup {
     if (!_conversationGroup) {
-        
+
         return _conversationDefault;
     }
-    
+
     return _conversationGroup;
+}
+
+- (NSNumber *)activeConversationDefault {
+    if (!_activeConversationDefault) {
+        return @(604800); // 默认 7 天
+    }
+    return _activeConversationDefault;
+}
+
+- (NSNumber *)activeConversationMe {
+    if (!_activeConversationMe) {
+        return @(0); // 默认不清理
+    }
+    return _activeConversationMe;
+}
+
+- (NSNumber *)activeConversationOthers {
+    if (!_activeConversationOthers) {
+        return self.activeConversationDefault;
+    }
+    return _activeConversationOthers;
+}
+
+- (NSNumber *)activeConversationGroup {
+    if (!_activeConversationGroup) {
+        return self.activeConversationDefault;
+    }
+    return _activeConversationGroup;
 }
 
 @end

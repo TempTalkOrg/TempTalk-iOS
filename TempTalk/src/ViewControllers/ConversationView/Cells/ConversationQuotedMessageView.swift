@@ -56,21 +56,19 @@ class ConversationQuotedMessageView: UIView, Themeable {
     
     private lazy var authorLabel: UILabel = {
         let label = UILabel()
-        label.font = .ows_dynamicTypeSubheadline.ows_italic()
+        label.font = .ows_dynamicTypeSubheadline(scaled: false).ows_italic()
         label.numberOfLines = 1
         label.lineBreakMode = .byTruncatingTail
         label.setContentHuggingVerticalHigh()
         label.setContentHuggingHorizontalLow()
         label.setCompressionResistanceHorizontalLow()
-        label.adjustsFontForContentSizeCategory = true
         return label
     }()
-    
+
     private lazy var quotedTextLabel: UILabel = {
         let label = UILabel()
         label.setContentHuggingLow()
         label.setCompressionResistanceLow()
-        label.adjustsFontForContentSizeCategory = true
         return label
     }()
     
@@ -270,8 +268,8 @@ class ConversationQuotedMessageView: UIView, Themeable {
     }
     
     func refreshTheme() {
-        stripeView.backgroundColor = Theme.themeBlueColor
-        authorLabel.textColor = renderItem?.authorTextColor
+        stripeView.backgroundColor = Theme.tinfoColor
+        authorLabel.textColor = renderItem?.authorTextColor ?? Theme.tprimaryColor
         backgroundContainerView.backgroundColor = Theme.accentBlueColor.withAlphaComponent(0.1)
     }
     

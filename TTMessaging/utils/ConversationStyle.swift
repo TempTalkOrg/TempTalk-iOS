@@ -149,21 +149,21 @@ public class ConversationStyle: NSObject {
 
     @objc
     public static var defaultBubbleColorIncoming: UIColor {
-        Theme.conversationInputBackgroundColor
+        Theme.bg3Color
     }
     @objc
     public static var defaultTransltateColorIncoming: UIColor {
-        Theme.translateBackgroundColor
+        Theme.bg4Color
     }
 
     @objc
-    public var bubbleColorOutgoingFailed: UIColor { Theme.bubleOutgoingBackgroundColor }
+    public var bubbleColorOutgoingFailed: UIColor { Theme.bgskyColor }
 
     @objc
-    public var bubbleColorOutgoingSending: UIColor { Theme.bubleOutgoingBackgroundColor }
+    public var bubbleColorOutgoingSending: UIColor { Theme.bgskyColor }
 
     @objc
-    public var bubbleColorOutgoingSent: UIColor { Theme.bubleOutgoingBackgroundColor }
+    public var bubbleColorOutgoingSent: UIColor { Theme.bgskyColor }
     
     @objc
     public let bubbleColorOutgoingTranslateSent = UIColor.ows_darkSkyBlueTranslate

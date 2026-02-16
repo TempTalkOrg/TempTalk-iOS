@@ -49,7 +49,6 @@ typedef NS_ENUM(NSUInteger, TSVerificationTransport) { TSVerificationTransportVo
 /// @param uids 用户联系人数组
 + (TSRequest *)getV1ContactMessage:(nullable NSArray *)uids;
 
-+ (TSRequest *)getV1ContactExtId:(nonnull NSString *)uid;
 /// V1版本的
 /// @param params 参数
 + (TSRequest *)putV1ProfileWithParams:(NSDictionary *)params;

@@ -133,7 +133,7 @@ class ToastView: UIView {
         darkThemeBackgroundOverlay.backgroundColor = UIColor.white.withAlphaComponent(0.10)
 
         label.textAlignment = .center
-        label.textColor = Theme.darkThemePrimaryColor
+        label.textColor = Theme.dark.tprimaryColor
         label.font = UIFont.ows_dynamicTypeBody
         label.numberOfLines = 0
         self.addSubview(label)
@@ -145,7 +145,7 @@ class ToastView: UIView {
         let swipeGesture = UISwipeGestureRecognizer(target: self, action: #selector(didSwipe(gesture:)))
         self.addGestureRecognizer(swipeGesture)
 
-        NotificationCenter.default.addObserver(self, selector: #selector(applyTheme), name: .ThemeDidChange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applyTheme), name: .themeDidChange, object: nil)
         applyTheme()
 
     }

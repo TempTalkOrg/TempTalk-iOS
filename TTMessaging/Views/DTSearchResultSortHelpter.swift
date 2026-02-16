@@ -10,9 +10,9 @@ import Foundation
 
 class DTSearchResultSortHelpter: NSObject {
     
-     class func sortGroupMember(account1: SignalAccount,account2: SignalAccount, searchText: String) -> Bool {
-        guard let groupDisplayName1 = self.contactsManager.formattedFullName(forRecipientId: account1.recipientId),
-              let groupDisplayName2 = self.contactsManager.formattedFullName(forRecipientId: account2.recipientId)
+     class func sortGroupMember(account1: SignalAccount,account2: SignalAccount, searchText: String, transaction: SDSAnyReadTransaction) -> Bool {
+        guard let groupDisplayName1 = self.contactsManager.formattedFullName(forRecipientId: account1.recipientId, transaction: transaction),
+              let groupDisplayName2 = self.contactsManager.formattedFullName(forRecipientId: account2.recipientId, transaction: transaction)
         else {
             if let email1 = account1.contact?.email,
                let email2 = account2.contact?.email,
@@ -28,7 +28,7 @@ class DTSearchResultSortHelpter: NSObject {
         if groupDisplayName1_lowercased.hasPrefix(searchText_lowercased) &&
             !groupDisplayName2_lowercased.hasPrefix(searchText_lowercased){
             return true
-            
+
         } else if !groupDisplayName1_lowercased.hasPrefix(searchText_lowercased) &&
                    groupDisplayName2_lowercased.hasPrefix(searchText_lowercased){
             return false
@@ -45,9 +45,9 @@ class DTSearchResultSortHelpter: NSObject {
         }
     }
     
-    class func searchGroupAccountsByDefaultSortMethod(account1: SignalAccount,account2: SignalAccount) -> Bool {
-       guard let groupDisplayName1 = self.contactsManager.formattedFullName(forRecipientId: account1.recipientId),
-             let groupDisplayName2 = self.contactsManager.formattedFullName(forRecipientId: account2.recipientId)
+    class func searchGroupAccountsByDefaultSortMethod(account1: SignalAccount,account2: SignalAccount, transaction: SDSAnyReadTransaction) -> Bool {
+       guard let groupDisplayName1 = self.contactsManager.formattedFullName(forRecipientId: account1.recipientId, transaction: transaction),
+             let groupDisplayName2 = self.contactsManager.formattedFullName(forRecipientId: account2.recipientId, transaction: transaction)
        else {
                return false
        }

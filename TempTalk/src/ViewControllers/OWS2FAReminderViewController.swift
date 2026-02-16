@@ -12,7 +12,7 @@ public class OWS2FAReminderViewController: UIViewController, PinEntryViewDelegat
         return OWS2FAManager.shared()
     }
 
-    var pinEntryView: PinEntryView!
+    var pinEntryView: PinEntryView?
 
     @objc
     public class func wrappedInNavController() -> OWSNavigationController {
@@ -24,7 +24,7 @@ public class OWS2FAReminderViewController: UIViewController, PinEntryViewDelegat
 
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        pinEntryView.makePinTextFieldFirstResponder()
+        pinEntryView?.makePinTextFieldFirstResponder()
     }
 
     override public func loadView() {
@@ -38,24 +38,26 @@ public class OWS2FAReminderViewController: UIViewController, PinEntryViewDelegat
         self.view = view
         view.backgroundColor = .white
 
-        let pinEntryView = PinEntryView()
-        self.pinEntryView = pinEntryView
-        pinEntryView.delegate = self
+        let pinEntry = PinEntryView()
+        self.pinEntryView = pinEntry
+        pinEntry.delegate = self
 
         let instructionsTextHeader = Localized("REMINDER_2FA_BODY_HEADER", comment: "Body header for when user is periodically prompted to enter their registration lock PIN")
         let instructionsTextBody = Localized("REMINDER_2FA_BODY", comment: "Body text for when user is periodically prompted to enter their registration lock PIN")
 
-        let attributes = [NSAttributedString.Key.font: pinEntryView.boldLabelFont]
+        let attributes = [NSAttributedString.Key.font: pinEntry.boldLabelFont]
 
         let attributedInstructionsText = NSAttributedString(string: instructionsTextHeader, attributes: attributes).rtlSafeAppend(" ").rtlSafeAppend(instructionsTextBody)
+        
+        if let pinEntryView = pinEntryView {
+            pinEntryView.attributedInstructionsText = attributedInstructionsText
 
-        pinEntryView.attributedInstructionsText = attributedInstructionsText
+            view.addSubview(pinEntryView)
 
-        view.addSubview(pinEntryView)
-
-        pinEntryView.autoPinWidthToSuperview(withMargin: 20)
-        pinEntryView.autoPinEdge(toSuperviewSafeArea: .top, withInset: ScaleFromIPhone5(16))
-        pinEntryView.autoPinEdge(toSuperviewSafeArea: .bottom)
+            pinEntryView.autoPinWidthToSuperview(withMargin: 20)
+            pinEntryView.autoPinEdge(toSuperviewSafeArea: .top, withInset: ScaleFromIPhone5(16))
+            pinEntryView.autoPinEdge(toSuperviewSafeArea: .bottom)
+        }
     }
 
     // MARK: PinEntryViewDelegate
@@ -113,6 +115,6 @@ public class OWS2FAReminderViewController: UIViewController, PinEntryViewDelegat
         let alertBody = Localized("REMINDER_2FA_WRONG_PIN_ALERT_BODY",
                                           comment: "Alert body after wrong guess for 'two-factor auth pin' reminder activity")
         OWSAlerts.showAlert(title: alertTitle, message: alertBody)
-        self.pinEntryView.clearText()
+        self.pinEntryView?.clearText()
     }
 }

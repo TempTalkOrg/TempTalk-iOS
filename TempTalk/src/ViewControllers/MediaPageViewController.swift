@@ -38,18 +38,20 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
     private weak var mediaGalleryDataSource: MediaGalleryDataSource?
 
     private var cachedPages: [MediaGalleryItem: MediaDetailViewController] = [:]
-    private var initialPage: MediaDetailViewController!
+    private var initialPage: MediaDetailViewController?
 
-    public var currentViewController: MediaDetailViewController {
-        return viewControllers!.first as! MediaDetailViewController
+    public var currentViewController: MediaDetailViewController? {
+        return viewControllers?.first as? MediaDetailViewController
     }
 
-    public var currentItem: MediaGalleryItem! {
+    public var currentItem: MediaGalleryItem? {
         get {
-            return currentViewController.galleryItemBox.value
+            return currentViewController?.galleryItemBox.value
         }
         set {
-            setCurrentItem(newValue, direction: .forward, animated: false)
+            if let newValue = newValue {
+                setCurrentItem(newValue, direction: .forward, animated: false)
+            }
         }
     }
 
@@ -121,17 +123,17 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
         NotificationCenter.default.removeObserver(self)
     }
 
-    var footerBar: UIToolbar!
-    var videoPlayBarButton: UIBarButtonItem!
-    var videoPauseBarButton: UIBarButtonItem!
-    var pagerScrollView: UIScrollView!
-    
+    var footerBar: UIToolbar?
+    var videoPlayBarButton: UIBarButtonItem?
+    var videoPauseBarButton: UIBarButtonItem?
+    var pagerScrollView: UIScrollView?
+
     @objc func applyTheme() {
-        
+
         setNeedsStatusBarAppearanceUpdate()
-        headerNameLabel.textColor = Theme.navbarTitleColor
-        headerDateLabel.textColor = Theme.navbarTitleColor
-        footerBar.barTintColor = Theme.navbarBackgroundColor
+        headerNameLabel.textColor = Theme.tprimaryColor
+        headerDateLabel.textColor = Theme.tprimaryColor
+        footerBar?.barTintColor = Theme.bg1Color
     }
 
     override func viewDidLoad() {
@@ -157,7 +159,7 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
         self.extendedLayoutIncludesOpaqueBars = true
         self.automaticallyAdjustsScrollViewInsets = false
         
-        NotificationCenter.default.addObserver(self, selector: #selector(applyTheme), name: NSNotification.Name.ThemeDidChange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applyTheme), name: .themeDidChange, object: nil)
 
         // Get reference to paged content which lives in a scrollView created by the superclass
         // We show/hide this content during presentation
@@ -170,7 +172,7 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
         // Hack to avoid "page" bouncing when not in gallery view.
         // e.g. when getting to media details via message details screen, there's only
         // one "Page" so the bounce doesn't make sense.
-        pagerScrollView.isScrollEnabled = sliderEnabled
+        pagerScrollView?.isScrollEnabled = sliderEnabled
 
         self.title = Localized("ATTACHMENT_LABEL", comment: "")
         //"Attachment"
@@ -179,7 +181,7 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
 
         let kFooterHeight: CGFloat = 44
 
-        view.backgroundColor = Theme.backgroundColor
+        view.backgroundColor = Theme.bg1Color
 
         let footerBar = UIToolbar()
         self.footerBar = footerBar
@@ -214,7 +216,7 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
     }
 
     public func wasPresented() {
-        let currentViewController = self.currentViewController
+        guard let currentViewController = self.currentViewController else { return }
 
         if currentViewController.galleryItem.isVideo {
             currentViewController.playVideo()
@@ -225,12 +227,13 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
     public func didPressAllMediaButton(sender: Any) {
         Logger.debug("\(logTag) in \(#function)")
 
-        currentViewController.stopAnyVideo()
+        currentViewController?.stopAnyVideo()
 
         guard let mediaGalleryDataSource = self.mediaGalleryDataSource else {
             owsFailDebug("\(logTag) in \(#function) mediaGalleryDataSource was unexpectedly nil")
             return
         }
+        guard let currentItem = currentItem else { return }
         mediaGalleryDataSource.showAllMedia(focusedItem: currentItem)
     }
 
@@ -257,8 +260,8 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
 //            self.view.backgroundColor = shouldHideToolbars ? UIColor.black : UIColor.white
 
             UIView.animate(withDuration: 0.1) {
-                self.currentViewController.setShouldHideToolbars(self.shouldHideToolbars)
-                self.footerBar.isHidden = self.shouldHideToolbars
+                self.currentViewController?.setShouldHideToolbars(self.shouldHideToolbars)
+                self.footerBar?.isHidden = self.shouldHideToolbars
             }
         }
     }
@@ -276,18 +279,21 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
             UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
         ]
 
-        if (self.currentItem.isVideo) {
-            toolbarItems += [
-                isPlayingVideo ? self.videoPauseBarButton : self.videoPlayBarButton,
-                UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-            ]
+        if (self.currentItem?.isVideo == true) {
+            let videoButton = isPlayingVideo ? self.videoPauseBarButton : self.videoPlayBarButton
+            if let videoButton = videoButton {
+                toolbarItems += [
+                    videoButton,
+                    UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+                ]
+            }
         }
 
         toolbarItems.append(UIBarButtonItem(barButtonSystemItem: .trash,
                                             target: self,
                                             action: #selector(didPressDelete)))
 
-        self.footerBar.setItems(toolbarItems, animated: false)
+        self.footerBar?.setItems(toolbarItems, animated: false)
     }
 
     // MARK: Actions
@@ -523,8 +529,8 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
     public func dismissSelf(animated isAnimated: Bool, completion: (() -> Void)? = nil) {
         // Swapping mediaView for presentationView will be perceptible if we're not zoomed out all the way.
         // currentVC
-        currentViewController.zoomOut(animated: true)
-        currentViewController.stopAnyVideo()
+        currentViewController?.zoomOut(animated: true)
+        currentViewController?.stopAnyVideo()
 
         guard let mediaGalleryDataSource = self.mediaGalleryDataSource else {
             owsFailDebug("\(logTag) in \(#function) mediaGalleryDataSource was unexpectedly nil")
@@ -583,7 +589,7 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
     }
     
     func mediaDetailViewController(_ mediaDetailViewController: MediaDetailViewController, didChangeRecognizedViewStatus isShow: Bool) {
-        self.pagerScrollView.isScrollEnabled = !isShow
+        self.pagerScrollView?.isScrollEnabled = !isShow
     }
     
     // MARK: Dynamic Header
@@ -614,7 +620,7 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
 
     lazy private var headerNameLabel: UILabel = {
         let label = UILabel()
-        label.textColor = Theme.navbarTitleColor
+        label.textColor = Theme.tprimaryColor
         label.font = UIFont.ows_regularFont(withSize: 17)
         label.textAlignment = .center
         label.adjustsFontSizeToFitWidth = true
@@ -625,7 +631,7 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
 
     lazy private var headerDateLabel: UILabel = {
         let label = UILabel()
-        label.textColor = Theme.navbarTitleColor
+        label.textColor = Theme.tprimaryColor
         label.font = UIFont.ows_regularFont(withSize: 12)
         label.textAlignment = .center
         label.adjustsFontSizeToFitWidth = true

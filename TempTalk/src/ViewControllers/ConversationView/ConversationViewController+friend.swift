@@ -29,6 +29,8 @@ extension ConversationViewController: DTRequestBarDelegate {
                                           action: nil,
                                           success: {
             DTToastHelper.hide()
+            // Remove warning header when friend request is accepted
+            self.removeWarningHeaderIfNeeded(force: true)
         }) { errorString in
             OWSLogger.error("request accept friend error: \(errorString)!")
             DTToastHelper.hide()
@@ -39,16 +41,26 @@ extension ConversationViewController: DTRequestBarDelegate {
     
     
     var friendReqBar: DTRequestBar {
-        
+
         if let requestBar = viewState.friendReqBar {
             return requestBar
         }
-        
+
         let requestBar = DTRequestBar()
         requestBar.delegate = self
         return requestBar
     }
-    
+
+    var warningHeaderView: DTConversationWarningHeaderView {
+        if let headerView = viewState.warningHeaderView {
+            return headerView
+        }
+
+        let headerView = DTConversationWarningHeaderView()
+        viewState.warningHeaderView = headerView
+        return headerView
+    }
+
     var isFriend: Bool {
         guard let contactThread = self.thread as? TSContactThread else {
             return false
@@ -73,7 +85,62 @@ extension ConversationViewController: DTRequestBarDelegate {
         }
         return contactThread.receivedFriendReq
     }
-    
+
+    var showWarningHeader: Bool {
+        guard let _ = self.thread as? TSContactThread else {
+            return false
+        }
+        return !isFriend
+    }
+
+    func updateWarningHeaderLayout() {
+        if !showWarningHeader {
+            removeWarningHeaderIfNeeded()
+            return
+        }
+
+        guard let headerView = viewState.warningHeaderView else {
+            return
+        }
+
+        let width = collectionView.bounds.width
+        let height = headerView.intrinsicContentSize.height
+
+        headerView.frame = CGRect(x: 0, y: -height, width: width, height: height)
+
+        if collectionView.contentInset.top != height {
+            var currentInset = collectionView.contentInset
+            currentInset.top = height
+            collectionView.contentInset = currentInset
+
+            var scrollInset = collectionView.scrollIndicatorInsets
+            scrollInset.top = height
+            collectionView.scrollIndicatorInsets = scrollInset
+        }
+    }
+
+    func removeWarningHeaderIfNeeded(force: Bool = false) {
+        guard let headerView = viewState.warningHeaderView,
+              headerView.superview != nil else {
+            return
+        }
+
+        guard force || isFriend else {
+            return
+        }
+
+        headerView.removeFromSuperview()
+        viewState.warningHeaderView = nil
+
+        var currentInset = collectionView.contentInset
+        currentInset.top = 0
+        collectionView.contentInset = currentInset
+
+        var scrollInset = collectionView.scrollIndicatorInsets
+        scrollInset.top = 0
+        collectionView.scrollIndicatorInsets = scrollInset
+    }
+
     //send message
     func handleAddFriendRequest(message: TSMessage,
                                 sourceType: DTSourceToPersonalCardType,

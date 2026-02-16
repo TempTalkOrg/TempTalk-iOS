@@ -165,61 +165,63 @@ NS_ASSUME_NONNULL_BEGIN
                 return;
             }
         }
-        
-        if([frontmostVC isKindOfClass:[DFTabbarController class]]){
-            DFTabbarController *tabbarVC = (DFTabbarController *)frontmostVC;
-            UIViewController *selectedVC = tabbarVC.selectedViewController;
-            if ([selectedVC isKindOfClass:[UINavigationController class]]) {
-                UINavigationController *selectedNav = (UINavigationController *)selectedVC;
-                [selectedNav popToRootViewControllerAnimated:NO];
-            }
-            UINavigationController *rootNav = tabbarVC.viewControllers.firstObject;
-            if(![rootNav.viewControllers containsObject:tabbarVC.presentedViewController] && tabbarVC.presentedViewController != nil){
-                [tabbarVC.presentedViewController dismissViewControllerAnimated:false completion:nil];
-            }
-            if(!rootNav){
-                OWSLogError(@"rootNav = nil");
-                return ;}
-            [rootNav popToRootViewControllerAnimated:false];
-            [tabbarVC setSelectedIndex:0];
-            ConversationViewController *targetConversationVC = [[ConversationViewController alloc] initWithThread:thread
-                                                                                                           action:ConversationViewActionNone
-                                                                                                   focusMessageId:nil
-                                                                                                      botViewItem:nil
-                                                                                                         viewMode:ConversationViewMode_Main];
-            DTHomeViewController *homeVC = [rootNav.viewControllers firstObject];
-            [[homeVC conversationVC] presentThread:thread action:ConversationViewActionNone];
+
+        // 查找 DFTabbarController
+        DFTabbarController *tabbarVC = nil;
+        if ([frontmostVC isKindOfClass:[DFTabbarController class]]) {
+            tabbarVC = (DFTabbarController *)frontmostVC;
         } else {
             UIViewController *parentVC = frontmostVC;
             while (parentVC != nil && ![parentVC isKindOfClass:[DFTabbarController class]]) {
                 parentVC = parentVC.parentViewController;
             }
-            // 如果找到了 DFTabbarController，则执行相关跳转操作
             if ([parentVC isKindOfClass:[DFTabbarController class]]) {
-                DFTabbarController *tabbarVC = (DFTabbarController *)parentVC;
+                tabbarVC = (DFTabbarController *)parentVC;
+            }
+        }
+
+        if (!tabbarVC) {
+            OWSLogError(@"DFTabbarController not found");
+            return;
+        }
+
+        UINavigationController *rootNav = tabbarVC.viewControllers.firstObject;
+        if (!rootNav) {
+            OWSLogError(@"rootNav = nil");
+            return;
+        }
+
+        // dismiss presented view controller first, then navigate
+        void (^navigateToConversation)(void) = ^{
+            // 切换到第一个 tab
+            if (tabbarVC.selectedIndex != 0) {
                 UIViewController *selectedVC = tabbarVC.selectedViewController;
                 if ([selectedVC isKindOfClass:[UINavigationController class]]) {
                     UINavigationController *selectedNav = (UINavigationController *)selectedVC;
                     [selectedNav popToRootViewControllerAnimated:NO];
                 }
-                UINavigationController *rootNav = tabbarVC.viewControllers.firstObject;
-                if (![rootNav.viewControllers containsObject:tabbarVC.presentedViewController] && tabbarVC.presentedViewController != nil) {
-                    [tabbarVC.presentedViewController dismissViewControllerAnimated:false completion:nil];
-                }
-                if (!rootNav) {
-                    OWSLogError(@"rootNav = nil");
-                    return;
-                }
-                [rootNav popToRootViewControllerAnimated:false];
                 [tabbarVC setSelectedIndex:0];
-                ConversationViewController *targetConversationVC = [[ConversationViewController alloc] initWithThread:thread
-                                                                                                               action:ConversationViewActionNone
-                                                                                                       focusMessageId:nil
-                                                                                                          botViewItem:nil
-                                                                                                             viewMode:ConversationViewMode_Main];
-                DTHomeViewController *homeVC = [rootNav.viewControllers firstObject];
-                [[homeVC conversationVC] presentThread:thread action:ConversationViewActionNone];
             }
+
+            // pop 到 root，然后 present conversation
+            [rootNav popToRootViewControllerAnimated:NO];
+
+            // 延迟一帧确保 pop 完成后再 push
+            dispatch_async(dispatch_get_main_queue(), ^{
+                HomeViewController *homeVC = [rootNav.viewControllers firstObject];
+                if ([homeVC isKindOfClass:[HomeViewController class]]) {
+                    [homeVC presentThread:thread action:action focusMessageId:focusMessageId];
+                } else {
+                    OWSLogError(@"HomeViewController not found at rootNav root");
+                }
+            });
+        };
+
+        // 先 dismiss 所有 presented view controller
+        if (tabbarVC.presentedViewController != nil) {
+            [tabbarVC.presentedViewController dismissViewControllerAnimated:NO completion:navigateToConversation];
+        } else {
+            navigateToConversation();
         }
     });
 }
@@ -252,8 +254,6 @@ NS_ASSUME_NONNULL_BEGIN
     OWSLogError(@"%@ %s", self.logTag, __PRETTY_FUNCTION__);
     [DDLog flushLog];
     DispatchSyncMainThreadSafe(^{
-        [DTCalendarManager.shared removeLocalMeetings];
-        [DTCalendarManager.shared cancelEventLocalNotification:nil];
         [self.databaseStorage resetAllStorage];
         [[OWSProfileManager sharedManager] resetProfileStorage];
         [Environment.preferences clear];
@@ -265,6 +265,7 @@ NS_ASSUME_NONNULL_BEGIN
         [OWSFileSystem deleteContentsOfDirectory:[OWSFileSystem cachesDirectoryPath]];
         [OWSFileSystem deleteContentsOfDirectory:OWSTemporaryDirectory()];
         [OWSFileSystem deleteContentsOfDirectory:NSTemporaryDirectory()];
+        [[TSMessageReadPositionCache shared] clearAllCache];
     });
 
     [DebugLogger.shared wipeLogsAlwaysWithAppContext:CurrentAppContext()];

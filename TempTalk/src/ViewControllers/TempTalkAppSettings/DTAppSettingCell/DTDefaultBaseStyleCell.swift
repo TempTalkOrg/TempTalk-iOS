@@ -7,8 +7,9 @@
 //
 
 import Foundation
+import TTMessaging
 
-enum TableViewCellBorderType {
+@objc enum TableViewCellBorderType: Int {
     case none
     case all
     case top
@@ -54,7 +55,7 @@ class DTDefaultBaseStyleCell: UITableViewCell {
     let icon: UIImageView = UIImageView()
     let titleLable: UILabel = UILabel()
     let seperateLineView: UIView = UIView()
-    var titleTextColor : UIColor = Theme.primaryTextColor {
+    var titleTextColor : UIColor = Theme.tprimaryColor {
         didSet {
             titleLable.textColor = titleTextColor
         }
@@ -97,6 +98,26 @@ class DTDefaultBaseStyleCell: UITableViewCell {
         self.prepareUILayout()
         let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(longPressClick(_:)))
         self.addGestureRecognizer(longPressRecognizer)
+
+        // 监听字体大小变化通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(textSizeDidChange),
+            name: .textSizeDidChange,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func textSizeDidChange() {
+        updateFonts()
+    }
+
+    func updateFonts() {
+        titleLable.font = UIFont.ows_dynamicTypeBody
     }
     
     func reloadCell<T: DTSettingItem>(model: T) {
@@ -109,10 +130,10 @@ class DTDefaultBaseStyleCell: UITableViewCell {
     }
     
     func applyTheme()  {
-        backgroundColor = Theme.defaultBackgroundColor
-        contentView.backgroundColor = Theme.defaultTableCellBackgroundColor
+        backgroundColor = Theme.bgpageSecondaryColor
+        contentView.backgroundColor = Theme.bg1Color
         titleLable.textColor = titleTextColor
-        seperateLineView.backgroundColor = Theme.defaultBackgroundColor
+        seperateLineView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
     var cornersToRound: UIRectCorner = .allCorners {

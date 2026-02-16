@@ -50,7 +50,7 @@ class MessageReactionPicker: UIStackView {
 //        for emoji in ReactionManager.emojiSet {
 //            let button = OWSFlatButton()
 //            button.autoSetDimensions(to: CGSize(square: reactionHeight))
-//            button.setTitle(title: emoji, font: .systemFont(ofSize: 32), titleColor: Theme.primaryTextColor)
+//            button.setTitle(title: emoji, font: .systemFont(ofSize: 32), titleColor: Theme.tprimaryColor)
 //            button.setPressedBlock { [weak self] in
 //                self?.delegate?.didSelectReaction(reaction: emoji, isRemoving: emoji == self?.selectedEmoji)
 //            }

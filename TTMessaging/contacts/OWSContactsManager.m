@@ -141,6 +141,8 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     
     self.requestingFullContacts = YES;
     
+    [self fetchAndUpdateContactInfoForRecipientId:TSConstants.officialBotId];
+
     [self.systemContactsFetcher userRequestedRefreshWithIsUserRequested:isUserRequested completion:^(NSError * error) {
         self.requestingFullContacts = NO;
         if(completionHandler){
@@ -451,7 +453,7 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
                 NSString *lastContactId = contactIds.lastObject;
                 if (loopBatchIndex == batchSize || lastContactId == nil) {*stop = YES;return;}
                 [self deleteThreads:@[lastContactId] transaction:writeTransaction];
-                OWSLogInfo(@"slowlyDeleteThreads remove thread contactId %@", lastContactId);
+                OWSLogInfo(@"slowlyDeleteThreads remove thread");
                 [contactIds removeObject:lastContactId];
                 loopBatchIndex += 1;
             }];
@@ -676,7 +678,7 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     [BenchManager benchWithTitle:@"checkNeedDeletedAccounts" block:^{
         
         [needRemoveOrUpdateArray enumerateObjectsUsingBlock:^(SignalAccount * _Nonnull lastSignalAccount, NSUInteger idx, BOOL * _Nonnull stop) {
-            BOOL needDelete = ![newSignalAccountIds containsObject:lastSignalAccount.recipientId] && !lastSignalAccount.contact.isExternal;
+            BOOL needDelete = ![newSignalAccountIds containsObject:lastSignalAccount.recipientId] && !lastSignalAccount.contact.isExternal && !lastSignalAccount.isBot;
             if(needDelete){
                 [deletedAccounts addObject:lastSignalAccount];
             }
@@ -929,18 +931,29 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
                                       preferRemarkName:(BOOL)shouldPreferRemarkName
                                            transaction:(SDSAnyReadTransaction *)transaction {
     OWSAssertDebug(recipientId.length > 0);
-    
+
     SignalAccount *_Nullable signalAccount = [self signalAccountForRecipientId:recipientId
                                                                    transaction:transaction];
-    
+
     return [self cachedContactNameForRecipientId:recipientId
                                 preferRemarkName:shouldPreferRemarkName
-                                   signalAccount:signalAccount];
+                                   signalAccount:signalAccount
+                                     transaction:transaction];
 }
 
 - (NSString *_Nullable)cachedContactNameForRecipientId:(NSString *)recipientId
                                       preferRemarkName:(BOOL)shouldPreferRemarkName
                                          signalAccount:(SignalAccount *)signalAccount {
+    return [self cachedContactNameForRecipientId:recipientId
+                                preferRemarkName:shouldPreferRemarkName
+                                   signalAccount:signalAccount
+                                     transaction:nil];
+}
+
+- (NSString *_Nullable)cachedContactNameForRecipientId:(NSString *)recipientId
+                                      preferRemarkName:(BOOL)shouldPreferRemarkName
+                                         signalAccount:(SignalAccount *)signalAccount
+                                           transaction:(SDSAnyReadTransaction *)transaction {
     if (!signalAccount) {
         // search system contacts for no-longer-registered signal users, for which there will be no SignalAccount
         //        OWSLogDebug(@"%@ no signal account", self.logTag);
@@ -959,16 +972,20 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
             return nil;
         }
     }
-    
+
     if ([name isEqualToString:recipientId]) {
-        name = [self suffixFourWithRecipientId:recipientId];
+        if (transaction) {
+            name = [self displayIdWithRecipientId:recipientId transaction:transaction];
+        } else {
+            name = [self displayIdWithRecipientId:recipientId];
+        }
     }
-    
+
     NSString *multipleAccountLabelText = signalAccount.multipleAccountLabelText;
     if (multipleAccountLabelText.length == 0) {
         return name;
     }
-    
+
     return [NSString stringWithFormat:@"%@ (%@)", name, multipleAccountLabelText];
 }
 
@@ -1080,6 +1097,12 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     return [self cachedContactNameForRecipientId:recipientId preferRemarkName:YES];
 }
 
+- (nullable NSString *)nicknameForAvatarWithRecipientId:(NSString *)recipientId
+{
+    // For avatar generation, we always use the contact's nickname (full name) without remark name
+    return [self cachedContactNameForRecipientId:recipientId preferRemarkName:NO];
+}
+
 - (NSString *)commonDisplayNameForPhoneIdentifier:(NSString *)recipientId
                                  preferRemarkName:(BOOL)shouldPreferRemarkName {
     NSString *result = [self commonDisplayNameCoreForRecipientId:recipientId
@@ -1089,7 +1112,7 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     }
     
     // Fall back to just using their recipientId
-    return [self suffixFourWithRecipientId: recipientId];
+    return [self displayIdWithRecipientId: recipientId];
 }
 
 - (NSString *)commonDisplayNameForPhoneIdentifier:(NSString *)recipientId
@@ -1100,7 +1123,8 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     }
 
     NSString *result = [self commonDisplayNameCoreForRecipientId:recipientId
-                                                preferRemarkName:shouldPreferRemarkName];
+                                                preferRemarkName:shouldPreferRemarkName
+                                                     transaction:transaction];
     if (DTParamsUtils.validateString(result)) {
         return result;
     }
@@ -1121,7 +1145,7 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
         return groupDisplayNameInDB;
     }
 
-    return [self suffixFourWithRecipientId:recipientId];
+    return [self displayIdWithRecipientId:recipientId transaction:transaction];
 }
 
 - (NSString *)commonDisplayNameCoreForRecipientId:(NSString *)recipientId
@@ -1134,13 +1158,37 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     NSString *_Nullable cacheName = [self cachedContactNameForRecipientId:recipientId
                                                          preferRemarkName:shouldPreferRemarkName];
     if (DTParamsUtils.validateString(cacheName)) {
-        return [cacheName isEqualToString:recipientId] ? [self suffixFourWithRecipientId:cacheName] : cacheName;
+        return [cacheName isEqualToString:recipientId] ? [self displayIdWithRecipientId:cacheName] : cacheName;
     }
 
     // 其次使用群组显示名
     NSString *groupDisplayName = [self groupDisplayNameForRecipientId:recipientId];
     if (DTParamsUtils.validateString(groupDisplayName)) {
-        return [groupDisplayName isEqualToString:recipientId] ? [self suffixFourWithRecipientId:groupDisplayName] : groupDisplayName;
+        return [groupDisplayName isEqualToString:recipientId] ? [self displayIdWithRecipientId:groupDisplayName] : groupDisplayName;
+    }
+
+    return nil; // 没找到，交给调用方兜底
+}
+
+- (NSString *)commonDisplayNameCoreForRecipientId:(NSString *)recipientId
+                                 preferRemarkName:(BOOL)shouldPreferRemarkName
+                                      transaction:(SDSAnyReadTransaction *)transaction {
+    if (!DTParamsUtils.validateString(recipientId)) {
+        return @"";
+    }
+
+    // 优先使用缓存的名字
+    NSString *_Nullable cacheName = [self cachedContactNameForRecipientId:recipientId
+                                                         preferRemarkName:shouldPreferRemarkName
+                                                              transaction:transaction];
+    if (DTParamsUtils.validateString(cacheName)) {
+        return [cacheName isEqualToString:recipientId] ? [self displayIdWithRecipientId:cacheName transaction:transaction] : cacheName;
+    }
+
+    // 其次使用群组显示名
+    NSString *groupDisplayName = [self groupDisplayNameForRecipientId:recipientId transaction:transaction];
+    if (DTParamsUtils.validateString(groupDisplayName)) {
+        return [groupDisplayName isEqualToString:recipientId] ? [self displayIdWithRecipientId:groupDisplayName transaction:transaction] : groupDisplayName;
     }
 
     return nil; // 没找到，交给调用方兜底
@@ -1166,26 +1214,41 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     return [self commonDisplayNameForPhoneIdentifier:recipientId preferRemarkName:NO transaction:transaction];
 }
 
-- (nullable NSString *)displayNameForPhoneIdentifier:(NSString *_Nullable)recipientId
+- (NSString *)displayNameForPhoneIdentifier:(NSString *_Nullable)recipientId
                                        signalAccount:(SignalAccount *)signalAccount {
+    return [self displayNameForPhoneIdentifier:recipientId
+                                 signalAccount:signalAccount
+                                   transaction:nil];
+}
+
+- (NSString *)displayNameForPhoneIdentifier:(NSString *_Nullable)recipientId
+                                       signalAccount:(SignalAccount *)signalAccount
+                                         transaction:(SDSAnyReadTransaction *)transaction {
     if (!recipientId || !signalAccount) {
         return self.unknownContactName;
     }
-    
+
     NSString *_Nullable cacheName = [self cachedContactNameForRecipientId:recipientId
                                                          preferRemarkName:YES
-                                                            signalAccount:signalAccount];
-    
+                                                            signalAccount:signalAccount
+                                                              transaction:transaction];
+
     if (cacheName && cacheName.length > 0) {
-        return [cacheName isEqualToString:recipientId] ? [self suffixFourWithRecipientId:cacheName] : cacheName;
+        if ([cacheName isEqualToString:recipientId]) {
+            return transaction ? [self displayIdWithRecipientId:cacheName transaction:transaction] : [self displayIdWithRecipientId:cacheName];
+        }
+        return cacheName;
     }
-    
-    NSString *groupDisplayName = signalAccount.contact.groupDisplayName;;
+
+    NSString *groupDisplayName = signalAccount.contact.groupDisplayName;
     if (DTParamsUtils.validateString(groupDisplayName)) {
-        return [groupDisplayName isEqualToString:recipientId] ? [self suffixFourWithRecipientId:groupDisplayName] : groupDisplayName;
+        if ([groupDisplayName isEqualToString:recipientId]) {
+            return transaction ? [self displayIdWithRecipientId:groupDisplayName transaction:transaction] : [self displayIdWithRecipientId:groupDisplayName];
+        }
+        return groupDisplayName;
     }
-    
-    return [self suffixFourWithRecipientId:recipientId];
+
+    return transaction ? [self displayIdWithRecipientId:recipientId transaction:transaction] : [self displayIdWithRecipientId:recipientId];
 }
 
 
@@ -1237,9 +1300,9 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     UIFont *boldFont = [UIFont ows_semiboldFontWithSize:font.pointSize];
 
     NSDictionary<NSString *, id> *boldFontAttributes =
-        @{ NSFontAttributeName : boldFont, NSForegroundColorAttributeName : Theme.primaryTextColor };
+        @{ NSFontAttributeName : boldFont, NSForegroundColorAttributeName : Theme.tprimaryColor };
     NSDictionary<NSString *, id> *normalFontAttributes =
-        @{ NSFontAttributeName : font, NSForegroundColorAttributeName : Theme.primaryTextColor };
+        @{ NSFontAttributeName : font, NSForegroundColorAttributeName : Theme.tprimaryColor };
     NSDictionary<NSString *, id> *firstNameAttributes
         = (self.shouldSortByGivenName ? boldFontAttributes : normalFontAttributes);
 
@@ -1287,8 +1350,21 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     }
 }
 
+- (NSString *_Nullable)formattedFullNameForRecipientId:(NSString *)recipientId transaction:(SDSAnyReadTransaction *)transaction {
+    NSString *displayName = [self formattedFirstNameForRecipientId:recipientId transaction:transaction];
+    if (DTParamsUtils.validateString(displayName)) {
+        return displayName;
+    } else {
+        return recipientId;
+    }
+}
+
 - (NSString * _Nullable)formattedFirstNameForRecipientId:(NSString *)recipientId {
     return [self commonDisplayNameForPhoneIdentifier:recipientId preferRemarkName:YES];
+}
+
+- (NSString * _Nullable)formattedFirstNameForRecipientId:(NSString *)recipientId transaction:(SDSAnyReadTransaction *)transaction {
+    return [self commonDisplayNameForPhoneIdentifier:recipientId preferRemarkName:YES transaction:transaction];
 }
 
 - (NSString *)contactOrProfileNameForPhoneIdentifier:(NSString *)recipientId
@@ -1319,16 +1395,16 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     // Prefer a saved name from system contacts, if available
     NSString *_Nullable savedContactName = [self cachedContactNameForRecipientId:recipientId preferRemarkName:YES transaction:transaction];
     if (savedContactName.length > 0) {
-        return [savedContactName isEqualToString:recipientId] ? [self suffixFourWithRecipientId:savedContactName] : savedContactName;
+        return [savedContactName isEqualToString:recipientId] ? [self displayIdWithRecipientId:savedContactName transaction:transaction] : savedContactName;
     }
-    
+
     NSString *groupDisplayName = [self groupDisplayNameForRecipientId:recipientId transaction:transaction];
     if (DTParamsUtils.validateString(groupDisplayName)) {
-        return [groupDisplayName isEqualToString:recipientId] ? [self suffixFourWithRecipientId:groupDisplayName] : groupDisplayName;
+        return [groupDisplayName isEqualToString:recipientId] ? [self displayIdWithRecipientId:groupDisplayName transaction:transaction] : groupDisplayName;
     }
 
     NSString *_Nullable profileName = [self.profileManager profileNameForRecipientId:recipientId transaction:transaction];
-    
+
     if (profileName.length > 0) {
         NSString *numberAndProfileNameFormat = Localized(@"PROFILE_NAME_AND_PHONE_NUMBER_LABEL_FORMAT",
             @"Label text combining the phone number and profile name separated by a simple demarcation character. "
@@ -1341,7 +1417,7 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     }
 
     // else fall back to recipient id
-    return [self suffixFourWithRecipientId:recipientId];
+    return [self displayIdWithRecipientId:recipientId transaction:transaction];
 }
 
 - (NSAttributedString *)attributedContactOrProfileNameForPhoneIdentifier:(NSString *)recipientId
@@ -1384,18 +1460,18 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     // Prefer a saved name from system contacts, if available
     NSString *_Nullable savedContactName = [self cachedContactNameForRecipientId:recipientId preferRemarkName:YES transaction:transaction];
     if (savedContactName.length > 0) {
-        savedContactName = [savedContactName isEqualToString:recipientId] ? [self suffixFourWithRecipientId:savedContactName] : savedContactName;
+        savedContactName = [savedContactName isEqualToString:recipientId] ? [self displayIdWithRecipientId:savedContactName transaction:transaction] : savedContactName;
         return [[NSAttributedString alloc] initWithString:savedContactName attributes:primaryAttributes];
     }
-    
+
     NSString *groupDisplayName = [self groupDisplayNameForRecipientId:recipientId transaction:transaction];
     if (DTParamsUtils.validateString(groupDisplayName)) {
-        groupDisplayName = [groupDisplayName isEqualToString:recipientId] ? [self suffixFourWithRecipientId:groupDisplayName] : groupDisplayName;
+        groupDisplayName = [groupDisplayName isEqualToString:recipientId] ? [self displayIdWithRecipientId:groupDisplayName transaction:transaction] : groupDisplayName;
         return [[NSAttributedString alloc] initWithString:groupDisplayName attributes:primaryAttributes];;
     }
 
     NSString *_Nullable profileName = [self.profileManager profileNameForRecipientId:recipientId transaction:transaction];
-    
+
     if (profileName.length > 0) {
         NSAttributedString *result =
             [[NSAttributedString alloc] initWithString:recipientId attributes:primaryAttributes];
@@ -1407,7 +1483,7 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     }
 
     // else fall back to recipient id
-    return [[NSAttributedString alloc] initWithString:[self suffixFourWithRecipientId:recipientId] attributes:primaryAttributes];
+    return [[NSAttributedString alloc] initWithString:[self displayIdWithRecipientId:recipientId transaction:transaction] attributes:primaryAttributes];
 }
 
 - (nullable SignalAccount *)signalAccountForRecipientId:(NSString *)recipientId
@@ -1449,7 +1525,20 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
 
 - (NSComparisonResult)compareSignalAccount:(SignalAccount *)left withSignalAccount:(SignalAccount *)right
 {
-    return self.signalAccountComparator(left, right);
+    return [self compareSignalAccount:left withSignalAccount:right transaction:nil];
+}
+
+- (NSComparisonResult)compareSignalAccount:(SignalAccount *)left
+                         withSignalAccount:(SignalAccount *)right
+                               transaction:(SDSAnyReadTransaction *)transaction
+{
+    NSString *leftName = [[self comparableNameForSignalAccount:left transaction:transaction] ows_stripped];
+    NSString *rightName = [[self comparableNameForSignalAccount:right transaction:transaction] ows_stripped];
+    NSComparisonResult nameComparison = [leftName localizedCaseInsensitiveCompare:rightName];
+    if (nameComparison == NSOrderedSame) {
+        return [left.recipientId compare:right.recipientId];
+    }
+    return nameComparison;
 }
 
 - (NSComparisonResult (^)(SignalAccount *left, SignalAccount *right))signalAccountComparator
@@ -1473,6 +1562,12 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
 
 - (NSString *)comparableNameForSignalAccount:(SignalAccount *)signalAccount
 {
+    return [self comparableNameForSignalAccount:signalAccount transaction:nil];
+}
+
+- (NSString *)comparableNameForSignalAccount:(SignalAccount *)signalAccount
+                                 transaction:(SDSAnyReadTransaction *)transaction
+{
     NSString *_Nullable name;
     if (signalAccount.contact) {
         if (self.shouldSortByGivenName) {
@@ -1488,9 +1583,13 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     if (name.length < 1) {
         name = signalAccount.recipientId;
     }
-    
+
     if ([name isEqualToString:signalAccount.recipientId]) {
-        name = [self suffixFourWithRecipientId:name];
+        if (transaction) {
+            name = [self displayIdWithRecipientId:name transaction:transaction];
+        } else {
+            name = [self displayIdWithRecipientId:name];
+        }
     }
 
     return name;
@@ -1556,9 +1655,23 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     [CurrentAppContext().appUserDefaults synchronize];
 }
 
-- (NSString *)suffixFourWithRecipientId:(NSString *)recipientId {
-    NSString *base58 = [NSString base58EncodedNumber:recipientId];
-    return [NSString stringWithFormat:@"TT-%@", base58];
+- (NSString *)displayIdWithRecipientId:(NSString *)recipientId {
+    // 如果没有 transaction，创建一个新的 read transaction
+    __block NSString *result = nil;
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+        result = [self displayIdWithRecipientId:recipientId transaction:transaction];
+    }];
+    return result;
+}
+
+- (NSString *)displayIdWithRecipientId:(NSString *)recipientId transaction:(SDSAnyReadTransaction *)transaction {
+    // 尝试从 Contact 获取 customUid
+    SignalAccount *signalAccount = [SignalAccount signalAccountWithRecipientId:recipientId transaction:transaction];
+    NSString *customUid = signalAccount.contact.customUid;
+
+    // 使用 displayUserIdWithCustomUid 方法，优先使用 customUid
+    NSString *displayId = [NSString displayUserIdWithCustomUid:customUid recipientId:recipientId];
+    return [NSString stringWithFormat:@"TT-%@", displayId];
 }
 
 @end

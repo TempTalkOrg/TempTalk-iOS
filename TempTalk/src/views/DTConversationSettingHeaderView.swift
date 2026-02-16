@@ -15,18 +15,18 @@ class DTConversationSettingHeaderView: UIView {
 
 /*
 class DTConversationSettingMemberCell: UICollectionViewCell {
-    
-    var avatarView: AvatarImageView!
-    var lbName: UILabel!
+
+    var avatarView: AvatarImageView?
+    var lbName: UILabel?
 
     override init(frame: CGRect) {
-        
+
         self.avatarView = AvatarImageView()
         self.contentView.addSubview(self.avatarView)
-        
+
 //        self.avatarView.autoPinEdge
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }

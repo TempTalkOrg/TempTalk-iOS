@@ -37,7 +37,7 @@ public class LoadMoreMessagesView: UICollectionReusableView {
 
     @objc
     public func configureForDisplay() {
-        label.textColor = Theme.secondaryTextAndIconColor
+        label.textColor = Theme.tsecondaryColor
         label.font = UIFont.ows_semiboldFont(withSize: 16)
     }
 }

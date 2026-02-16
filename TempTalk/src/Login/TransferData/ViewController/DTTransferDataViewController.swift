@@ -97,8 +97,8 @@ extension String {
 //        continueLabel.textColor = textColor
         continueButton.setBackgroundColor(UIColor(rgbHex: 0x056FFA), for: .normal)
         continueButton.setTitleColor(UIColor(rgbHex: 0xFFFFFF), for: .normal)
-        withoutButton.setTitleColor(Theme.primaryTextColor, for: .normal)
-        withoutButton.setBackgroundColor(Theme.backgroundColor, for: .normal)
+        withoutButton.setTitleColor(Theme.tprimaryColor, for: .normal)
+        withoutButton.setBackgroundColor(Theme.bg1Color, for: .normal)
         withoutButton.layer.borderColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x474D57).cgColor : UIColor.color(rgbHex: 0xEAECEF).cgColor
         view.backgroundColor = UIColor(rgbHex: Theme.isDarkThemeEnabled ? 0x181A20 : 0xFFFFFF)
     }
@@ -187,20 +187,24 @@ extension String {
     }
     
     func saveEmailInKeyChain() {
-        if(DTParamsUtils.validateString(self.email).boolValue == true){
-            TSAccountManager.shared.storeUserEmail(self.email!)
+        if DTParamsUtils.validateString(self.email).boolValue == true, let email = self.email {
+            TSAccountManager.shared.storeUserEmail(email)
         }
     }
-    
+
     func savePhoneInKeyChain() {
         guard DTParamsUtils.validateString(self.phoneNumber).boolValue == true else {return}
-        let plusPhoneNumber = DTPatternHelper.verificationTextInputNumer(withPlus: self.phoneNumber!)
-        if(DTParamsUtils.validateString(self.phoneNumber).boolValue == true && DTParamsUtils.validateString(self.dialingCode).boolValue == true && DTParamsUtils.validateString(plusPhoneNumber).boolValue != true){
-            let phoneNumber = self.dialingCode! + self.phoneNumber!
-            TSAccountManager.shared.storeUserPhone(phoneNumber)
+        guard let phoneNumber = self.phoneNumber else { return }
+        let plusPhoneNumber = DTPatternHelper.verificationTextInputNumer(withPlus: phoneNumber)
+        if DTParamsUtils.validateString(self.phoneNumber).boolValue == true &&
+           DTParamsUtils.validateString(self.dialingCode).boolValue == true &&
+           DTParamsUtils.validateString(plusPhoneNumber).boolValue != true,
+           let dialingCode = self.dialingCode {
+            let fullPhoneNumber = dialingCode + phoneNumber
+            TSAccountManager.shared.storeUserPhone(fullPhoneNumber)
             return
         }
-        TSAccountManager.shared.storeUserPhone(self.phoneNumber!)
+        TSAccountManager.shared.storeUserPhone(phoneNumber)
         return
     }
     

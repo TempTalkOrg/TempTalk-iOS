@@ -62,7 +62,7 @@ open class OSLogger: LivekitLogger, @unchecked Sendable {
         rtcLogger?.severity = minLevel.rtcSeverity
         rtcLogger?.start { message, severity in
             let cleanMessage = message.trimmingCharacters(in: .newlines)
-            Logger.log("[LiveKit/WebRTC] \(cleanMessage)", flag: severity.ddLogFlag, file: "", function: "", line: 0)
+            Logger.log("[WebRTC] \(cleanMessage)", flag: severity.ddLogFlag, file: "", function: "", line: 0)
         }
     }
     

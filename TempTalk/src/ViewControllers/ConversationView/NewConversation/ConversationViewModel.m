@@ -446,6 +446,15 @@ NS_ASSUME_NONNULL_BEGIN
     self.hasClearedUnreadMessagesIndicator = YES;
 }
 
+- (void)clearFocusMessageIndex
+{
+    OWSAssertIsOnMainThread();
+    
+    _viewState = [[ConversationViewState alloc] initWithViewItems:self.viewState.viewItems
+                                                   needRefreshIds:self.viewState.needRefreshIds
+                                                   focusMessageId:nil];
+}
+
 - (void)resetClearedUnreadMessagesIndicator
 {
     OWSAssertIsOnMainThread();
@@ -486,13 +495,6 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     OWSLogDebug(@"------> collectionView databaseChanges.threadUniqueIds:%@ \n interactionUniqueIds:%@", databaseChanges.threadUniqueIds, databaseChanges.interactionUniqueIds);
-    
-    // NOTE: 解决由于 pin message 的表格没有关联 thread 表，当用户离线数据只有 pin 消息内容变更时，databaseChanges 中无对应会话的 threadUniqueId，会被下面的条件过滤掉
-    if (self.thread.isGroupThread && [databaseChanges.tableNames containsObject:@"model_DTPinnedMessage"]) {
-        if (self.delegate && [self.delegate respondsToSelector:@selector(conversationViewModelUpdatePin)]) {
-            [self.delegate conversationViewModelUpdatePin];
-        }
-    }
     
     if (![databaseChanges.threadUniqueIds containsObject:self.thread.uniqueId]) {
         // Ignoring irrelevant update.
@@ -1090,11 +1092,11 @@ NS_ASSUME_NONNULL_BEGIN
                 continue;
             }
         }
-        [interactions addObject:interaction];
         if ([interactionIds containsObject:interaction.uniqueId]) {
             OWSFailDebug(@"Duplicate interaction: %@", interaction.uniqueId);
             continue;
         }
+        [interactions addObject:interaction];
         [interactionIds addObject:interaction.uniqueId];
     }
 
@@ -1376,11 +1378,6 @@ NS_ASSUME_NONNULL_BEGIN
     NSString *interactionUniqueId = freshInteraction.uniqueId;
     if (!DTParamsUtils.validateString(interactionUniqueId)) {
         OWSLogError(@"error: interaction.uniqueId = nil.");
-        return completion(nil, NO, NO);
-    }
-    
-    if ([freshInteraction isKindOfClass:[TSInfoMessage class]] &&
-        ((TSInfoMessage *)freshInteraction).isRecalMessage) {
         return completion(nil, NO, NO);
     }
     

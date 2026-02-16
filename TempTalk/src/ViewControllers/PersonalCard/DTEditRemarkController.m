@@ -59,7 +59,7 @@ NSUInteger const kMaxNameLength = 30;
 - (void)setupUI {
     _tableViewController = [OWSTableViewController new];
     _tableViewController.delegate = self;
-    _tableViewController.view.backgroundColor = Theme.backgroundColor;
+    _tableViewController.view.backgroundColor = Theme.bg1Color;
     [self.view addSubview:self.tableViewController.view];
 }
 
@@ -71,7 +71,7 @@ NSUInteger const kMaxNameLength = 30;
     self.tableViewController.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableViewController.tableView.estimatedRowHeight = 60;
     self.tableViewController.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
-    self.tableViewController.tableView.backgroundColor = Theme.backgroundColor;
+    self.tableViewController.tableView.backgroundColor = Theme.bg1Color;
 }
 
 - (void)updateTableContents {
@@ -152,13 +152,13 @@ NSUInteger const kMaxNameLength = 30;
     cell.contentView.preservesSuperviewLayoutMargins = YES;
     cell.separatorInset = UIEdgeInsetsMake(0, UIScreen.mainScreen.bounds.size.width, 0, 0);
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    cell.backgroundColor = Theme.backgroundColor;
-    cell.contentView.backgroundColor = Theme.backgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
+    cell.contentView.backgroundColor = Theme.bg1Color;
    
     UILabel *titleLabel = [UILabel new];
     titleLabel.text = Localized([self isCurrentAccount] ? @"CONTACT_SET_NAME" : @"CONTACT_EDIT_REMARK", @"");
     titleLabel.font = [UIFont systemFontOfSize:20 weight:UIFontWeightBold];
-    titleLabel.textColor = Theme.primaryTextColor;
+    titleLabel.textColor = Theme.tprimaryColor;
     titleLabel.textAlignment = NSTextAlignmentCenter;
     
     [cell.contentView addSubview:titleLabel];
@@ -174,12 +174,12 @@ NSUInteger const kMaxNameLength = 30;
     cell.contentView.preservesSuperviewLayoutMargins = YES;
     cell.separatorInset = UIEdgeInsetsMake(0, UIScreen.mainScreen.bounds.size.width, 0, 0);
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    cell.backgroundColor = Theme.backgroundColor;
-    cell.contentView.backgroundColor = Theme.backgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
+    cell.contentView.backgroundColor = Theme.bg1Color;
    
     DTTextField *remarkNameTextField = [DTTextField new];
     remarkNameTextField.font = [UIFont fontWithName:@"PingFangSC-Medium" size:20];
-    remarkNameTextField.textColor = Theme.primaryTextColor;
+    remarkNameTextField.textColor = Theme.tprimaryColor;
     NSString *remark = [[DTConversationSettingHelper sharedInstance] decryptRemarkString:self.contact.remark receptid:self.recipientId];
     remarkNameTextField.text = DTParamsUtils.validateString(remark) ? remark : self.contact.fullName;
     [remarkNameTextField autoSetDimension:ALDimensionHeight toSize:44];
@@ -190,7 +190,7 @@ NSUInteger const kMaxNameLength = 30;
     [cell.contentView addSubview:remarkNameTextField];
     
     [remarkNameTextField autoPinEdgesToSuperviewMargins];
-    remarkNameTextField.backgroundColor = Theme.searchFieldBackgroundColor;
+    remarkNameTextField.backgroundColor = Theme.bg2Color;
     remarkNameTextField.layer.cornerRadius = 5;
     
     return cell;

@@ -23,8 +23,8 @@ extension ConversationViewController {
             in: .import
         )
         pickerController.delegate = self
-        
-        dismissKeyBoard()
+
+        dismissKeyBoard(byUserAction: true)  // 用户打开文档选择器，标记为用户操作
         presentFormSheet(pickerController, animated: true)
     }
 }

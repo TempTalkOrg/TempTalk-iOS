@@ -32,7 +32,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
     var messageBubbleViewWidthLayoutConstraint: NSLayoutConstraint?
     var messageBubbleViewHeightLayoutConstraint: NSLayoutConstraint?
 
-    var scrollView: UIScrollView!
+    var scrollView: UIScrollView?
     var contentView: UIView?
     var footer: UIToolbar?
 
@@ -100,30 +100,11 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
 
         createViews()
         self.view.layoutIfNeeded()
-//        NotificationCenter.default.addObserver(self,
-//            selector: #selector(yapDatabaseModified),
-//            name: NSNotification.Name.YapDatabaseModified,
-//            object: OWSPrimaryStorage.shared.dbNotificationObject)
 
         let doubleTapGesture = UITapGestureRecognizer(target: self, action: #selector(doubleClickView))
         doubleTapGesture.numberOfTapsRequired = 2
         doubleTapGesture.numberOfTouchesRequired = 1
         self.view.addGestureRecognizer(doubleTapGesture)
-        
-        if let message = self.message as? TSIncomingMessage, message.messageModeType == .confidential {
-            OWSReadReceiptManager.shared().confidentialMessageWasReadLocally(message)
-        }
-        
-    }
-    
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        guard let message = self.message as? TSIncomingMessage, message.messageModeType == .confidential else {
-            return
-        }
-        self.databaseStorage.asyncWrite { wTransaction in
-            message.anyRemove(transaction: wTransaction)
-        }
     }
     
     override public func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -140,7 +121,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
         updateMessageBubbleViewLayout()
 
         if mode == .focusOnMetadata {
-            if let bubbleView = self.bubbleView {
+            if let bubbleView = self.bubbleView, let scrollView = scrollView {
                 // Force layout.
                 view.setNeedsLayout()
                 view.layoutIfNeeded()
@@ -154,7 +135,11 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
 
                 // We want to include at least a little portion of the message, but scroll no farther than necessary.
                 let showAtLeast: CGFloat = 50
-                let bubbleViewBottom = bubbleView.superview!.convert(bubbleView.frame, to: scrollView).maxY
+                guard let bubbleSuperview = bubbleView.superview else {
+                    owsFailDebug("bubbleView.superview is nil")
+                    return
+                }
+                let bubbleViewBottom = bubbleSuperview.convert(bubbleView.frame, to: scrollView).maxY
                 let maxOffset =  bubbleViewBottom - showAtLeast
                 let lastPage = contentHeight - scrollViewHeight
 
@@ -166,6 +151,18 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         self.isViewDidAppeare = true
+
+        // 机密名片阅后即焚：查看时立即删除消息
+        guard let incomingMessage = message as? TSIncomingMessage,
+              incomingMessage.messageModeType == .confidential,
+              viewItem.contactShare != nil else {
+            return
+        }
+
+        OWSReadReceiptManager.shared().confidentialMessageWasReadLocally(incomingMessage)
+        databaseStorage.asyncWrite { wTransaction in
+            incomingMessage.anyRemove(transaction: wTransaction)
+        }
     }
 
     @objc
@@ -177,7 +174,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
     // MARK: - Create Views
 
     private func createViews() {
-        view.backgroundColor = Theme.backgroundColor
+        view.backgroundColor = Theme.bg1Color
 
         let scrollView = UIScrollView()
         self.scrollView = scrollView
@@ -211,17 +208,20 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
     }
     
     private func addFooter() {
-        
+
         if footer != nil {
             return
         }
-        footer = UIToolbar()
-        view.addSubview(footer!)
-        footer!.autoPinWidthToSuperview(withMargin: 0)
-        footer!.autoPinEdge(.top, to: .bottom, of: scrollView)
-        footer!.autoPinEdge(toSuperviewSafeArea: .bottom)
+        let newFooter = UIToolbar()
+        footer = newFooter
+        view.addSubview(newFooter)
+        newFooter.autoPinWidthToSuperview(withMargin: 0)
+        if let scrollView = scrollView {
+            newFooter.autoPinEdge(.top, to: .bottom, of: scrollView)
+        }
+        newFooter.autoPinEdge(toSuperviewSafeArea: .bottom)
 
-        footer!.items = [
+        newFooter.items = [
             UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
             UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(shareButtonPressed)),
             UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
@@ -278,7 +278,10 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
         }
 
         var rows = [UIView]()
-        let contactsManager = Environment.shared.contactsManager!
+        guard let contactsManager = Environment.shared.contactsManager else {
+            owsFailDebug("\(logTag) contactsManager was unexpectedly nil")
+            return
+        }
 
         // Content
         rows += contentRows()
@@ -320,7 +323,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
                     // TODO: It'd be nice to inset these dividers from the edge of the screen.
                     let addDivider = {
                         let divider = UIView()
-                        divider.backgroundColor = UIColor(white: 0.9, alpha: 1.0)
+                        divider.backgroundColor = Theme.lineColor
                         divider.autoSetDimension(.height, toSize: 0.5)
                         groupRows.append(divider)
                     }
@@ -358,7 +361,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
                         // Table view cells don't layout properly outside the
                         // context of a table view.
                         let cellView = ContactCellView()
-                        cellView.backgroundColor = Theme.backgroundColor
+                        cellView.backgroundColor = Theme.bg1Color
                         // We use the "short" status message to avoid being redundant with the section title.
                         cellView.accessoryMessage = shortStatusMessage
                         cellView.configure(withRecipientId: recipientId, contactsManager: self.contactsManager)
@@ -397,7 +400,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
                     // TODO: It'd be nice to inset these dividers from the edge of the screen.
                     let addDivider = {
                         let divider = UIView()
-                        divider.backgroundColor = UIColor(white: 0.9, alpha: 1.0)
+                        divider.backgroundColor = Theme.lineColor
                         divider.autoSetDimension(.height, toSize: 0.5)
                         groupRows.append(divider)
                     }
@@ -429,7 +432,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
                         // Table view cells don't layout properly outside the
                         // context of a table view.
                         let cellView = ContactCellView()
-                        cellView.backgroundColor = Theme.backgroundColor
+                        cellView.backgroundColor = Theme.bg1Color
                         // We use the "short" status message to avoid being redundant with the section title.
                         cellView.accessoryMessage = shortStatusMessage
                         cellView.configure(withRecipientId: recipientId, contactsManager: self.contactsManager)
@@ -636,7 +639,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
 
     private func nameLabel(text: String) -> UILabel {
         let label = UILabel()
-        label.textColor = Theme.primaryTextColor
+        label.textColor = Theme.tprimaryColor
         label.font = UIFont.ows_semiboldFont(withSize: 14)
         label.text = text
         label.setContentHuggingHorizontalHigh()
@@ -645,7 +648,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
 
     private func valueLabel(text: String) -> UILabel {
         let label = UILabel()
-        label.textColor = Theme.secondaryTextAndIconColor
+        label.textColor = Theme.tsecondaryColor
         label.font = UIFont.ows_regularFont(withSize: 14)
         label.text = text
         label.setContentHuggingHorizontalLow()
@@ -671,7 +674,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
 
         if subtitle.count > 0 {
             let subtitleLabel = self.valueLabel(text: subtitle)
-            subtitleLabel.textColor = Theme.ternaryTextColor
+            subtitleLabel.textColor = Theme.tthirdColor
             row.addSubview(subtitleLabel)
             subtitleLabel.autoPinTrailingToSuperviewMargin()
             subtitleLabel.autoPinLeading(toTrailingEdgeOf: nameLabel, offset: 10)

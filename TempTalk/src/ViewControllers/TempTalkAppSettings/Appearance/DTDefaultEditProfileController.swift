@@ -20,7 +20,16 @@ import BlockiesSwift
 
 //APP内部编辑用户个人信息的页面 和 登录完成编辑用户的个人信息页面不是同一个页面
 @objc
-class DTSettingEditProfileController: OWSViewController {
+class DTSettingEditProfileController: OWSViewController, OWSNavigationChildController {
+
+    // MARK: - OWSNavigationChildController
+    var navbarBackgroundColorOverride: UIColor? { Theme.bgpageSecondaryColor }
+    var childForOWSNavigationConfiguration: OWSNavigationChildController? { nil }
+    var preferredNavigationBarStyle: OWSNavigationBarStyle { .solid }
+    var navbarTintColorOverride: UIColor? { nil }
+    var prefersNavigationBarHidden: Bool { false }
+    var shouldCancelNavigationBack: Bool { false }
+
     private let margin : CGFloat = 16
     
     var defaultUserName: String? {
@@ -55,7 +64,7 @@ class DTSettingEditProfileController: OWSViewController {
     private lazy var nameTipLabel: UILabel = {
         let nameLabel = UILabel.init()
         nameLabel.font = UIFont.systemFont(ofSize: 14)
-        nameLabel.textColor = Theme.primaryTextColor
+        nameLabel.textColor = Theme.tprimaryColor
         let attributeText = NSMutableAttributedString(string: "*", attributes: [.foregroundColor : UIColor(rgbHex: 0xF84135)])
         attributeText.append(Localized("PROFILE_NAME_TIP",comment: "Profile name tip"))
         nameLabel.attributedText = attributeText
@@ -73,7 +82,7 @@ class DTSettingEditProfileController: OWSViewController {
         nameTextfield.layer.borderWidth = 1
         nameTextfield.layer.cornerRadius = 8
         nameTextfield.clearButtonMode = .whileEditing
-        nameTextfield.textColor = Theme.primaryTextColor
+        nameTextfield.textColor = Theme.tprimaryColor
         nameTextfield.keyboardType = .default
         return nameTextfield
     }()
@@ -173,7 +182,7 @@ class DTSettingEditProfileController: OWSViewController {
     }
     
     private func configTheme() {
-        view.backgroundColor = Theme.backgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
         nameTextfield.layer.borderColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x474D57).cgColor : UIColor.color(rgbHex: 0xEAECEF).cgColor
         nextButton.setTitleColor(UIColor.color(rgbHex: 0xFFFFFF), for: .selected)
         nextButton.setTitleColor(Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x5E6673) : UIColor.color(rgbHex: 0xB7BDC6), for: .normal)

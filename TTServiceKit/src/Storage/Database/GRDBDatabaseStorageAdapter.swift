@@ -146,7 +146,6 @@ public class GRDBDatabaseStorageAdapter: NSObject {
             DTChatFolderEntity.table,
             OWSRecall.table,
             TSAttachment.table,
-            DTPinnedMessage.table,
             SignalAccountSecondary.table,
             TSGroupThreadSecondary.table,
             TSMessageSecondary.table,

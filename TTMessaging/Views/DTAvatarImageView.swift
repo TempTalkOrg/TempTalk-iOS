@@ -30,7 +30,7 @@ public enum DTAvatarImageForSelfType: Int {
     @objc public func resetForReuse() {
         self.recipientId = nil
         self.stateView.isHidden = true
-        self.stateView.backgroundColor = Theme.backgroundColor
+        self.stateView.backgroundColor = Theme.bg1Color
         self.userStateImageView.image = nil
     }
     
@@ -107,7 +107,7 @@ public enum DTAvatarImageForSelfType: Int {
         addSubview(avatarImageView)
     
         stateView.isHidden = true
-        stateView.backgroundColor = Theme.backgroundColor
+        stateView.backgroundColor = Theme.bg1Color
         stateView.layer.masksToBounds = true
         addSubview(stateView)
         stateView.addSubview(userStateImageView)

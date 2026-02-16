@@ -33,11 +33,17 @@ class RoomDataManager: NSObject, ObservableObject {
     @Published var handsData: [String] = []
     @Published var hasRaiseHands: Bool = false
     @Published var localRaiseHand: Bool = false
+
+    // 气泡消息相关
+    @Published var bubbleMessage: String = ""
+    @Published var bubbleParticipantId: String = ""
+    @Published var bubbleText: String = ""  // 格式化后的文本 "发送名: 文本"
+    @Published var bubbleEmoji: String = ""  // 单独的 emoji
      
     // 会议消息
     var messageMeetingPublisher = PassthroughSubject<String, Never>()
     var onMeetingUpdate: (() -> Void)?
-    
+
     // pip发布器
     var messagePipPublisher = PassthroughSubject<String, Never>()
     var onPipUpdate: (() -> Void)?
@@ -45,7 +51,11 @@ class RoomDataManager: NSObject, ObservableObject {
     // 弹幕发布器
     var bulletMessagePublisher = PassthroughSubject<String, Never>()
     var onBulletMessageUpdate: (() -> Void)?
-    
+
+    // 气泡消息发布器
+    var bubbleMessagePublisher = PassthroughSubject<String, Never>()
+    var onBubbleMessageUpdate: (() -> Void)?
+
     // 举手发布器
     var raiseHandsPublisher = PassthroughSubject<String, Never>()
     var onRaiseHandsUpdate: (() -> Void)?
@@ -59,7 +69,11 @@ class RoomDataManager: NSObject, ObservableObject {
         self.handsData = []
         self.hasRaiseHands = false
         self.localRaiseHand = false
-        
+        self.bubbleMessage = ""
+        self.bubbleParticipantId = ""
+        self.bubbleText = ""
+        self.bubbleEmoji = ""
+
         super.init()
 
         defer {
@@ -71,6 +85,9 @@ class RoomDataManager: NSObject, ObservableObject {
             }
             self.onBulletMessageUpdate = {
                 self.bulletMessagePublisher.send("Message")
+            }
+            self.onBubbleMessageUpdate = {
+                self.bubbleMessagePublisher.send("Message")
             }
             self.onRaiseHandsUpdate = {
                 self.raiseHandsPublisher.send("Message")
@@ -139,13 +156,35 @@ class RoomDataManager: NSObject, ObservableObject {
     }
     
     func sendRTMBarrageMessage(pid: String, message: String) {
-        //添加弹幕
         DispatchMainThreadSafe {
             self.bulletType = .RTMBarrage
             self.message = message
             self.isMuted = false
             self.participantId = pid
+            Logger.info("[BulletChat] RoomDataManager sendRTMBarrageMessage - pid: \(pid), message: \(message)")
             self.onBulletMessageUpdate?()
+        }
+    }
+
+    func sendBubbleMessage(pid: String, message: String) {
+        DispatchMainThreadSafe {
+            self.bubbleMessage = message
+            self.bubbleParticipantId = pid
+            self.bubbleText = ""
+            self.bubbleEmoji = ""
+            Logger.info("[BulletChat] RoomDataManager sendBubbleMessage - pid: \(pid), message: \(message)")
+            self.onBubbleMessageUpdate?()
+        }
+    }
+
+    func sendBubbleMessage(pid: String, text: String, emoji: String) {
+        DispatchMainThreadSafe {
+            self.bubbleMessage = ""
+            self.bubbleParticipantId = pid
+            self.bubbleText = text
+            self.bubbleEmoji = emoji
+            Logger.info("[BulletChat] RoomDataManager sendBubbleMessage - pid: \(pid), text: \(text), emoji: \(emoji)")
+            self.onBubbleMessageUpdate?()
         }
     }
     

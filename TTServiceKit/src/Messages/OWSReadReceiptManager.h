@@ -47,15 +47,6 @@ extern NSString *const kIncomingMessageMarkedAsReadNotification;
 + (instancetype)sharedManager;
 
 #pragma mark - Sender/Recipient Read Receipts
-
-// This method should be called when we receive a read receipt
-// from a user to whom we have sent a message.
-//
-// This method can be called from any thread.
-- (void)processReadReceiptsFromRecipientId:(NSString *)recipientId
-                            sentTimestamps:(NSArray<NSNumber *> *)sentTimestamps
-                             readTimestamp:(uint64_t)readTimestamp;
-
 - (void)applyEarlyReadReceiptsForOutgoingMessageFromLinkedDevice:(TSOutgoingMessage *)message
                                                      transaction:(SDSAnyWriteTransaction *)transaction;
 

@@ -31,6 +31,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, assign) BOOL tempGroupCallCancelEnable;
 
+/// 机密消息模式阈值：群成员数量达到此值时，禁用机密消息功能
+@property (nonatomic, assign) NSUInteger confidentialModeThreshold;
+
 @end
 
 @interface DTGroupConfig : NSObject

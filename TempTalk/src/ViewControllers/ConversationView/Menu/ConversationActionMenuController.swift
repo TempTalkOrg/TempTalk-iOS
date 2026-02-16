@@ -60,10 +60,13 @@ class ConversationActionMenuController: OWSViewController {
     
     // 记录 TextView 是否选中了全部的文本
     var isSelectedAll = false
-    
+
     private var isNeedCloseAfterScroll = false
-    
+
     var dismissHandler: (() -> Void)?
+
+    // 初始菜单位置（在 present 之前设置，避免菜单位置跳动）
+    private var initialMenuPosition: (top: CGFloat, left: CGFloat, arrowDirection: ArrowDirection, sourceRect: CGRect)?
     
     init(
         actions: [MenuAction],
@@ -151,6 +154,35 @@ class ConversationActionMenuController: OWSViewController {
         dismissHandler?()
         dismiss(animated: animation, completion: completion)
     }
+
+    // 设置初始菜单位置（在 present 之前调用，避免菜单位置跳动）
+    func setInitialMenuPosition(top: CGFloat, left: CGFloat, arrowDirection: ArrowDirection, sourceRect: CGRect) {
+        initialMenuPosition = (top: top, left: left, arrowDirection: arrowDirection, sourceRect: sourceRect)
+    }
+
+    // 手动设置菜单位置（供外部调用，用于自定义位置计算）
+    func setMenuPosition(top: CGFloat, left: CGFloat, arrowDirection: ArrowDirection, sourceRect: CGRect) {
+        guard !CGSizeEqualToSize(contentSize, .zero) else { return }
+
+        let arrowHeight = ConversationActionMenuContainerView.arrowHeight
+        let containerViewPaddingH: CGFloat = 8
+        let containerViewWidth = contentSize.width + containerViewPaddingH * 2
+        let containerViewHeight = contentSize.height + arrowHeight
+
+        // 设置 containerView 的 frame
+        containerView.frame = CGRectMake(left, top, containerViewWidth, containerViewHeight)
+
+        // 使用传入的 sourceRect 作为箭头指向的位置
+        containerView.configue(sourceRect: sourceRect, arrowDirection: arrowDirection)
+
+        // 设置 contentView 的 frame
+        contentView.frame = CGRectMake(
+            containerViewPaddingH,
+            arrowDirection == .top ? arrowHeight : 0,
+            contentSize.width,
+            contentSize.height
+        )
+    }
     
     private func configueView() {
         view.backgroundColor = .clear
@@ -203,13 +235,23 @@ class ConversationActionMenuController: OWSViewController {
     
     private func refreshContainerView() {
         guard !actions.isEmpty else { return }
-        
+
         // 最多展示 5 个 action
         let maxCountOfActions = 5
-        let countOfActions = 5
-        let contentViewWidth = ActionButton.buttonWidth * CGFloat(countOfActions) + ActionButton.buttonMargin * CGFloat(countOfActions - 1)
+        let isNeedShowMore = actions.count > maxCountOfActions
+
+        // 根据实际按钮数量计算宽度
+        let actualButtonCount: Int
+        if isNeedShowMore {
+            actualButtonCount = maxCountOfActions // 4 个 action + 1 个 more
+        } else {
+            actualButtonCount = actions.count
+        }
+
+        let actionStackViewLeft: CGFloat = 8
+        let contentViewWidth = actionStackViewLeft * 2 + ActionButton.buttonWidth * CGFloat(actualButtonCount) + ActionButton.buttonMargin * CGFloat(actualButtonCount - 1)
         var contentViewHeight: CGFloat = 0
-        
+
         // emojis，最多展示 4 个 emoji + more
         if let emojiAction, !emojiAction.emojis.isEmpty {
             let emojiStackView = UIStackView()
@@ -239,9 +281,9 @@ class ConversationActionMenuController: OWSViewController {
                 make.width.equalTo(EmojiButton.buttonSize)
             }
             self.moreEmojiButton = moreButton
-            
+
             contentView.addSubview(emojiStackView)
-            let emojiStackViewLeft: CGFloat = 6
+            let emojiStackViewLeft: CGFloat = 8
             let emojiStackViewWidth = contentViewWidth - emojiStackViewLeft * 2
             emojiStackView.frame = CGRect(x: emojiStackViewLeft, y: 10, width: emojiStackViewWidth, height: EmojiButton.buttonSize)
             
@@ -252,10 +294,9 @@ class ConversationActionMenuController: OWSViewController {
             
             contentViewHeight = CGRectGetMaxY(lineView.frame)
         }
-        
+
         // actions，最多展示 5 个，超过 5 个时展示 4 个 action + more
         contentViewHeight += 16
-        let isNeedShowMore = actions.count > maxCountOfActions
         let prefix = isNeedShowMore ? maxCountOfActions - 1 : actions.count
         actions.prefix(prefix).enumerated().forEach { index, action in
             let button = ActionButton()
@@ -263,8 +304,8 @@ class ConversationActionMenuController: OWSViewController {
             button.addTarget(self, action: #selector(actionButtonDidTap(_:)), for: .touchUpInside)
             contentView.addSubview(button)
             actionButtons.append(button)
-            
-            let buttonLeft = CGFloat(index) * (ActionButton.buttonWidth + ActionButton.buttonMargin)
+
+            let buttonLeft = actionStackViewLeft + CGFloat(index) * (ActionButton.buttonWidth + ActionButton.buttonMargin)
             button.frame = CGRectMake(buttonLeft, contentViewHeight, ActionButton.buttonWidth, ActionButton.buttonHeight)
         }
         if isNeedShowMore {
@@ -280,7 +321,7 @@ class ConversationActionMenuController: OWSViewController {
             moreActionButton.action = moreAction
             moreActionButton.addTarget(self, action: #selector(actionButtonDidTap(_:)), for: .touchUpInside)
             contentView.addSubview(moreActionButton)
-            let moreActionButtonLeft = CGFloat(actionButtons.count) * (ActionButton.buttonWidth + ActionButton.buttonMargin)
+            let moreActionButtonLeft = actionStackViewLeft + CGFloat(actionButtons.count) * (ActionButton.buttonWidth + ActionButton.buttonMargin)
             moreActionButton.frame = CGRectMake(
                 moreActionButtonLeft,
                 contentViewHeight,
@@ -300,13 +341,28 @@ class ConversationActionMenuController: OWSViewController {
     
     private func refreshContainerViewFrame() {
         guard !CGSizeEqualToSize(contentSize, .zero) else { return }
-        
+
         let arrowHeight = ConversationActionMenuContainerView.arrowHeight
         let containerViewPaddingH: CGFloat = 8
         let containerViewWidth = contentSize.width + containerViewPaddingH * 2
         let containerViewHeight = contentSize.height + arrowHeight
         let sourceViewFrame = self.sourceViewFrame
-        
+
+        // 如果有预设的初始位置，直接使用（避免菜单位置跳动）
+        if let initialPosition = initialMenuPosition {
+            containerView.frame = CGRectMake(initialPosition.left, initialPosition.top, containerViewWidth, containerViewHeight)
+            containerView.configue(sourceRect: initialPosition.sourceRect, arrowDirection: initialPosition.arrowDirection)
+            contentView.frame = CGRectMake(
+                containerViewPaddingH,
+                initialPosition.arrowDirection == .top ? arrowHeight : 0,
+                contentSize.width,
+                contentSize.height
+            )
+            // 使用一次后清空，下次刷新时使用正常计算逻辑
+            initialMenuPosition = nil
+            return
+        }
+
         // 1.计算 sourceRect，如果存在光标（textSelectionView != nil），根据光标位置计算 sourceRect，否则根据 sourceViewFrame 计算
         var sourceRect: CGRect = sourceViewFrame
         
@@ -369,8 +425,9 @@ class ConversationActionMenuController: OWSViewController {
             case (false, true):
                 sourceRect = getRect(targetKnobFrame: rightKnobFrame, otherKnobFrame: leftKnobFrame)
             default:
-                let rectY = (visibleRange.bottom - visibleRange.top) * 0.5 + visibleRange.top
-                sourceRect = CGRectMake(selectionViewFrame.x, rectY, selectionViewFrame.width, 1)
+                // 当两个光标都不在可视区域时，使用 sourceViewFrame（消息气泡）作为 sourceRect
+                // 这样菜单会显示在消息气泡的上方或下方，而不是屏幕中间
+                sourceRect = sourceViewFrame
             }
         }
         
@@ -609,7 +666,7 @@ private class ActionButton: UIButton {
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         imageView?.sizeToFit()
         let imageScale: CGFloat = {
             let width = imageView?.width ?? .zero
@@ -620,18 +677,27 @@ private class ActionButton: UIButton {
             return height / width
         }()
         let imageViewHeight = imageScale * Self.imageWidth
+
+        titleLabel?.sizeToFit()
+        let titleHeight = titleLabel?.height ?? .zero
+
+        // 图标和文本之间的间距
+        let spacing: CGFloat = 4
+
+        // 计算总高度并垂直居中
+        let totalHeight = imageViewHeight + spacing + titleHeight
+        let topOffset = (self.bounds.size.height - totalHeight) * 0.5
+
         imageView?.frame = CGRect(
             x: (self.width - Self.imageWidth) * 0.5,
-            y: 0,
+            y: topOffset,
             width: Self.imageWidth,
             height: imageViewHeight
         )
-        
-        titleLabel?.sizeToFit()
-        let titleHeight = titleLabel?.height ?? .zero
+
         titleLabel?.frame = CGRectMake(
-            0, 
-            imageViewHeight,
+            0,
+            topOffset + imageViewHeight + spacing,
             self.bounds.size.width,
             titleHeight
         )

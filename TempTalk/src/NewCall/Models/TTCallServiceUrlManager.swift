@@ -15,16 +15,21 @@ public class TTCallServiceUrlManager {
         get { queue.sync { _currentIndex } }
         set { queue.sync { _currentIndex = newValue } }
     }
-    
-    private var allUrls: [String] {
+
+    /// 获取 URL 列表的快照，避免多次访问时数据不一致
+    private func getAllUrls() -> [String] {
         return DTMeetingManager.shared.clusterSpeedTester.sortedUrls
     }
 
     /// 当前正在使用的 URL
     func getCurrentUrl() async -> String? {
-        if DTParamsUtils.validateArray(allUrls).boolValue, currentIndex < allUrls.count {
-            Logger.info("[new call] currentUrl from allUrls = \(allUrls[currentIndex])")
-            return allUrls[currentIndex]
+        // 获取快照，避免多次访问时数据变化
+        let urls = getAllUrls()
+        let index = currentIndex
+
+        if DTParamsUtils.validateArray(urls).boolValue, index < urls.count {
+            Logger.info("[new call] currentUrl from allUrls = \(urls[index])")
+            return urls[index]
         }
 
         // fallback：调用接口
@@ -45,7 +50,9 @@ public class TTCallServiceUrlManager {
     /// 把回调封装成 async
     private func fetchLiveKitServers() async throws -> [String] {
         try await withCheckedThrowingContinuation { continuation in
-            LiveKitServersApi().liveKitServers { entity in
+            // ✅ Fix: Keep strong reference to prevent premature deallocation
+            let api = LiveKitServersApi()
+            api.liveKitServers { entity in
                 if let servers = entity?.data["serviceUrls"] as? [String] {
                     continuation.resume(returning: servers)
                 } else {
@@ -59,14 +66,17 @@ public class TTCallServiceUrlManager {
 
     /// 是否还有下一地址可尝试
     var hasNext: Bool {
-        return currentIndex < allUrls.count - 1
+        let urls = getAllUrls()
+        return currentIndex < urls.count - 1
     }
 
     /// 切换到下一个地址（失败时调用）
     @discardableResult
     func switchToNextUrl() -> Bool {
-        guard hasNext else { return false }
-        currentIndex += 1
+        let urls = getAllUrls()
+        let index = currentIndex
+        guard index < urls.count - 1 else { return false }
+        currentIndex = index + 1
         Logger.info("\(DTMeetingManager.shared.logTag) room switch next index \(currentIndex)")
         return true
     }

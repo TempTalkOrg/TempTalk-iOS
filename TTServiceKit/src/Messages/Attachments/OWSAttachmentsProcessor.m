@@ -18,7 +18,6 @@
 #import "TSThread.h"
 #import "DTFileRequestHandler.h"
 #import <TTServiceKit/TTServiceKit-Swift.h>
-#import "DTPinnedMessage.h"
 #import <AFNetworking/AFHTTPSessionManager.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -169,30 +168,24 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
             successHandler(attachmentStream);
             /// 自动保存图片
             if (message.messageModeType == TSMessageModeTypeNormal) {
-                // 机密消息不仅行自动保存
+                // 机密消息不进行自动保存
                 if (attachmentStream.isImage) {
                     // 如果是图片
-                    [[MediaSavePolicyManager shared] saveImageIfNeeded:attachmentStream.image];
+                    [[MediaSavePolicyManager shared] saveImageIfNeeded:attachmentStream.image threadId:message.uniqueThreadId];
                 } else if (attachmentStream.isVideo) {
                     // 如果是视频
-                    [[MediaSavePolicyManager shared] saveVideoIfNeeded:attachmentStream.mediaURL];
+                    [[MediaSavePolicyManager shared] saveVideoIfNeeded:attachmentStream.mediaURL threadId:message.uniqueThreadId];
                 }
             }
 
-            if (message.isPinnedMessage) {
-                [[NSNotificationCenter defaultCenter] postNotificationNameAsync:AnyPinnedMessageFinder.touchPinnedMessageNotification object:nil];
-            } else {
-                
-                DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
+            DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
 //                    [message anyReloadWithTransaction:writeTransaction];
-                    if(message.grdbId){
-                        [self.databaseStorage touchInteraction:message
-                                                 shouldReindex:NO
-                                                   transaction:writeTransaction];
-                    }
-                });
-            
-            }
+                if(message.grdbId){
+                    [self.databaseStorage touchInteraction:message
+                                             shouldReindex:NO
+                                               transaction:writeTransaction];
+                }
+            });
 
             backgroundTask = nil;
         });
@@ -602,18 +595,13 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
     [pointer anyInsertWithTransaction:transaction];
     
     if (message) {
-        if (message.isPinnedMessage) {
-            [[NSNotificationCenter defaultCenter] postNotificationNameAsync:AnyPinnedMessageFinder.touchPinnedMessageNotification object:nil];
-        } else {
-            
-            DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-                if(message.grdbId){
-                    [self.databaseStorage touchInteraction:message
-                                             shouldReindex:NO
-                                               transaction:writeTransaction];
-                }
-            });
-        }
+        DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
+            if(message.grdbId){
+                [self.databaseStorage touchInteraction:message
+                                         shouldReindex:NO
+                                           transaction:writeTransaction];
+            }
+        });
     }
      
 }

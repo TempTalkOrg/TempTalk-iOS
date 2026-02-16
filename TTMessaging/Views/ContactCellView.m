@@ -35,6 +35,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
 @property (nonatomic) OWSContactsManager *contactsManager;
 @property (nonatomic) NSString *recipientId;
 @property (nonatomic, strong) UIView *topicAccessoryView;
+
 @end
 
 #pragma mark -
@@ -47,8 +48,19 @@ const CGFloat kContactCellAvatarTextMargin = 12;
         [self configure];
         self.selectionStatus = ContactCellSelectionStatusNone;
         self.type = UserOfSelfIconTypeNoteToSelf;
+
+        // 监听字体大小变化通知
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(textSizeDidChange)
+                                                     name:NSNotification.TextSizeDidChange
+                                                   object:nil];
     }
     return self;
+}
+
+- (void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)setSelectionStatus:(ContactCellSelectionStatus)selectionStatus{
@@ -89,7 +101,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
     _avatarView.avatarImageView.backgroundColor = [UIColor colorWithRGBHex:0x3784f7];
     
     self.nameView = [DTConversationNameView new];
-    self.nameView.nameColor = Theme.primaryTextColor;
+    self.nameView.nameColor = Theme.tprimaryColor;
     [self.nameView setCompressionResistanceHigh];
 
     self.accessoryLabel = [[UILabel alloc] init];
@@ -130,9 +142,9 @@ const CGFloat kContactCellAvatarTextMargin = 12;
     UIImageView *topicAccessoryImage = [UIImageView new];
     UIImage *image =  [[UIImage imageNamed:@"ic_forward"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
     topicAccessoryImage.image = image;
-    topicAccessoryImage.tintColor = Theme.secondaryTextAndIconColor;
+    topicAccessoryImage.tintColor = Theme.tsecondaryColor;
     topicAccessoryLabel.text = @"Topic";
-    topicAccessoryLabel.textColor = Theme.primaryTextColor;
+    topicAccessoryLabel.textColor = Theme.tprimaryColor;
     
     [_topicAccessoryView addSubview:topicAccessoryImage];
     [_topicAccessoryView addSubview:topicAccessoryLabel];
@@ -166,7 +178,12 @@ const CGFloat kContactCellAvatarTextMargin = 12;
 - (void)configureFonts
 {
     self.nameView.nameFont = [UIFont ows_dynamicTypeBodyFont];
-    self.accessoryLabel.font = [UIFont ows_semiboldFontWithSize:13.f];
+    self.accessoryLabel.font = [[UIFont ows_dynamicTypeFootnoteFont] ows_semibold];  // 13pt 使用 footnote + semibold
+}
+
+- (void)textSizeDidChange
+{
+    [self configureFonts];
 }
 
 
@@ -177,7 +194,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
     [self configureFonts];
     
     NSDictionary<NSString *, id> *normalFontAttributes =
-        @{ NSFontAttributeName : self.nameView.nameFont, NSForegroundColorAttributeName : Theme.primaryTextColor };
+        @{ NSFontAttributeName : self.nameView.nameFont, NSForegroundColorAttributeName : Theme.tprimaryColor };
     self.nameView.attributeName = [[NSAttributedString alloc] initWithString:[signalAccount contactFullName] attributes:normalFontAttributes];
     
     NSUInteger diameter = kContactCellAvatarSize;
@@ -263,7 +280,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
         self.nameView.external = [SignalAccount isExt:recipientId];
         NSMutableAttributedString *attributeName = [[contactsManager formattedFullNameForRecipientId:recipientId font:self.nameView.nameFont] mutableCopy];
         if (self.isMentionOtherContacts) {
-            NSAttributedString *otherContactsMentionSuffix = [[NSAttributedString alloc] initWithString:@"*" attributes:@{NSForegroundColorAttributeName : Theme.primaryTextColor, NSFontAttributeName : self.nameView.nameFont}];
+            NSAttributedString *otherContactsMentionSuffix = [[NSAttributedString alloc] initWithString:@"*" attributes:@{NSForegroundColorAttributeName : Theme.tprimaryColor, NSFontAttributeName : self.nameView.nameFont}];
             [attributeName appendAttributedString:otherContactsMentionSuffix];
         }
         self.nameView.attributeName = attributeName;
@@ -325,7 +342,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
     NSAttributedString *attributedText =
         [[NSAttributedString alloc] initWithString:threadName
                                         attributes:@{
-                                            NSForegroundColorAttributeName : Theme.primaryTextColor,
+                                            NSForegroundColorAttributeName : Theme.tprimaryColor,
                                         }];
     self.nameView.attributeName = attributedText;
 
@@ -390,7 +407,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
         }
     } else {
         SignalAccount *account = [self.contactsManager signalAccountForRecipientId:self.recipientId];
-        [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:self.recipientId displayName:[self.contactsManager displayNameForPhoneIdentifier:recipientId] completion:nil];
+        [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:self.recipientId displayName:[self.contactsManager rawDisplayNameForPhoneIdentifier:recipientId] completion:nil];
         self.avatarView.avatarImageView.contentMode = UIViewContentModeScaleAspectFill;
     }
 }
@@ -399,7 +416,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
 {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 
-    self.backgroundColor = Theme.bg1Color;
+    self.backgroundColor = Theme.bgpagePrimaryColor;
 
     self.thread = nil;
     self.accessoryMessage = nil;
@@ -408,7 +425,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
     [self.avatarView resetForReuse];
     self.avatarView.recipientId = nil;
     [self.nameView prepareForReuse];
-    self.nameView.nameColor = Theme.primaryTextColor;
+    self.nameView.nameColor = Theme.tprimaryColor;
     for (UIView *subview in self.accessoryViewContainer.subviews) {
         [subview removeFromSuperview];
     }

@@ -85,7 +85,7 @@
             OWSAudioPlayer *player = [OWSSounds audioPlayerForSound:OWSSound_CriticalAlert];
             self.audioPlayer = player;
             player.isLooping = YES;
-            [player playWithPlayAndRecordAudioCategory];
+            [player playWithPlaybackAudioCategory];
         }
     });
 }
@@ -313,7 +313,9 @@ topSwipActionWithCallModel:(DTCallModel *)callModel
     
     if (tabbarVC.selectedIndex != 0) {
         UINavigationController *selectedNav = (UINavigationController *)tabbarVC.selectedViewController;
-        [selectedNav popToRootViewControllerAnimated:NO];
+        if ([selectedNav isKindOfClass:[UINavigationController class]] && selectedNav.viewControllers.count > 0) {
+            [selectedNav popToRootViewControllerAnimated:NO];
+        }
         tabbarVC.selectedIndex = 0;
     }
 
@@ -328,10 +330,10 @@ topSwipActionWithCallModel:(DTCallModel *)callModel
         }
     }
     
-    DTHomeViewController *homeVC = (DTHomeViewController *)cNav.viewControllers.firstObject;
+    HomeViewController *homeVC = (HomeViewController *)cNav.viewControllers.firstObject;
     if (thread) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            [homeVC.conversationVC presentThread:thread action:ConversationViewActionNone];
+            [homeVC presentThread:thread action:ConversationViewActionNone];
         });
     }
     

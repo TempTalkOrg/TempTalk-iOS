@@ -145,9 +145,8 @@ class UserNotificationPresenter: Dependencies {
 
     /// Request notification permissions.
     func registerNotificationSettings() -> Guarantee<Void> {
-        
-        var options: UNAuthorizationOptions!
-        options = [.badge, .sound, .alert]
+
+        let options: UNAuthorizationOptions = [.badge, .sound, .alert]
         
         return Guarantee { done in
             Self.notificationCenter.requestAuthorization(options: options) { (granted, error) in
@@ -278,8 +277,6 @@ class UserNotificationPresenter: Dependencies {
     // This method is thread-safe.
     func postGenericIncomingMessageNotification() -> Promise<Void> {
         let content = UNMutableNotificationContent()
-//        content.categoryIdentifier = AppNotificationCategory.incomingMessageGeneric.identifier
-        //TODO: 待删除
         content.categoryIdentifier = AppNotificationCategory.incomingMessageWithActions_CanReply.identifier
         content.userInfo = [:]
         // We use a fixed identifier so that if we post multiple "generic"
@@ -305,8 +302,7 @@ class UserNotificationPresenter: Dependencies {
     }
 
     private func shouldPresentNotification(category: AppNotificationCategory, userInfo: [AnyHashable: Any]) -> Bool {
-        let isAppActive = CurrentAppContext().isAppForegroundAndActive() //self.fetchIsAppActive()
-        //TODO: 待删除
+        let isAppActive = CurrentAppContext().isAppForegroundAndActive()
         switch category {
         case .incomingMessageWithActions_CanReply:
             // Only show these notification if:
@@ -327,7 +323,6 @@ class UserNotificationPresenter: Dependencies {
             return conversationSplitVC.visibleThread?.uniqueId != notificationThreadId
 
         case .infoOrErrorMessage:
-            ///TODO: 待处理
             guard isAppActive else { return true }
             guard let notificationThreadId = userInfo[AppNotificationUserInfoKey.threadId] as? String else {
                 owsFailDebug("threadId was unexpectedly nil")

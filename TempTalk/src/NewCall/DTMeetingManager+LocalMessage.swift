@@ -11,66 +11,89 @@ import LiveKit
 
 extension DTMeetingManager {
     // MARK: - Group Start
-    func receiveIncomingLocalGroupStartCallMessage() {
+    func receiveIncomingLocalGroupStartCallMessage(serverTimestamp: UInt64? = nil) {
         self.databaseStorage.write { transaction in
             guard let groupThread = getGroupThread(),
                   let source = currentCall.caller else { return }
 
             let body = Environment.shared.contactsManager.displayName(forPhoneIdentifier: currentCall.caller) + " has started a call"
-            let message = createIncomingMessage(thread: groupThread, timestamp: currentCall.timestamp, authorId: source, body: body)
+            let message = createIncomingMessage(
+                thread: groupThread,
+                timestamp: currentCall.timestamp,
+                serverTimestamp: serverTimestamp,
+                authorId: source,
+                body: body
+            )
             OWSMessageManager.shared().finalizeIncomingMessage(message, thread: groupThread, transaction: transaction)
         }
     }
 
-    func sendOutgoingLocalGroupStartCallMessage(thread: TSThread? = nil) {
+    func sendOutgoingLocalGroupStartCallMessage(thread: TSThread? = nil, serverTimestamp: UInt64? = nil) {
         self.databaseStorage.write { transaction in
             let targetThread = thread as? TSGroupThread ?? getGroupThread()
             if let thread = targetThread {
-                createOutgoingMessage(thread: thread, body: self.nameSelf() + " has started a call", transaction: transaction)
+                createOutgoingMessage(
+                    thread: thread,
+                    body: self.nameSelf() + " has started a call",
+                    serverTimestamp: serverTimestamp,
+                    transaction: transaction
+                )
             }
         }
     }
 
     // MARK: - Private Start
-    func receiveIncomingLocalPrivateStartCallMessage() {
+    func receiveIncomingLocalPrivateStartCallMessage(serverTimestamp: UInt64? = nil) {
         self.databaseStorage.write { transaction in
             let contactId = currentCall.caller ?? ""
             let thread = TSContactThread.getOrCreateThread(withContactId: contactId, transaction: transaction)
-            let message = createIncomingMessage(thread: thread, timestamp: currentCall.timestamp, authorId: contactId, body: "Calling")
+            let message = createIncomingMessage(
+                thread: thread,
+                timestamp: currentCall.timestamp,
+                serverTimestamp: serverTimestamp,
+                authorId: contactId,
+                body: "Calling"
+            )
             OWSMessageManager.shared().finalizeIncomingMessage(message, thread: thread, transaction: transaction)
         }
     }
 
-    func sendOutgoingLocalPrivateStartCallMessage(thread: TSThread? = nil) {
+    func sendOutgoingLocalPrivateStartCallMessage(thread: TSThread? = nil, serverTimestamp: UInt64? = nil) {
         self.databaseStorage.write { transaction in
             let contactId = currentCall.caller ?? ""
             let targetThread = thread as? TSContactThread ?? TSContactThread.getOrCreateThread(withContactId: contactId, transaction: transaction)
-            createOutgoingMessage(thread: targetThread, body: "Calling", contactId: contactId, transaction: transaction)
+            createOutgoingMessage(
+                thread: targetThread,
+                body: "Calling",
+                contactId: contactId,
+                serverTimestamp: serverTimestamp,
+                transaction: transaction
+            )
         }
     }
 
     // MARK: - Private Invite
-    func receiveIncomingLocalPrivateInviteCallMessage(receiptId: String?) {
+    func receiveIncomingLocalPrivateInviteCallMessage(receiptId: String?, serverTimestamp: UInt64? = nil) {
         self.databaseStorage.write { transaction in
             guard let contactId = receiptId else { return }
             let thread = TSContactThread.getOrCreateThread(withContactId: contactId, transaction: transaction)
             let body = Environment.shared.contactsManager.displayName(forPhoneIdentifier: contactId) + " invites you to a call"
             if let index = currentCall.inviteCallees?.firstIndex(of: TSAccountManager.localNumber() ?? "") {
                 let ts = (currentCall.timestamp ?? Date().ows_millisecondsSince1970) + UInt64(index)
-                let message = createIncomingMessage(thread: thread, timestamp: ts, authorId: contactId, body: body)
+                let message = createIncomingMessage(thread: thread, timestamp: ts, serverTimestamp: serverTimestamp, authorId: contactId, body: body)
                 OWSMessageManager.shared().finalizeIncomingMessage(message, thread: thread, transaction: transaction)
             }
         }
     }
 
-    func sendOutgoingLocalPrivateInviteCallMessage(receiptId: String?) {
+    func sendOutgoingLocalPrivateInviteCallMessage(receiptId: String?, serverTimestamp: UInt64? = nil) {
         self.databaseStorage.write { transaction in
             guard let contactId = receiptId else { return }
             let thread = TSContactThread.getOrCreateThread(withContactId: contactId, transaction: transaction)
             let body = self.nameSelf() + " invites you to a call"
             if let index = currentCall.inviteCallees?.firstIndex(of: receiptId ?? "") {
                 let timestamp = (currentCall.timestamp ?? Date().ows_millisecondsSince1970) + UInt64(index)
-                createOutgoingMessage(thread: thread, body: body, contactId: contactId, timestamp: timestamp, transaction: transaction)
+                createOutgoingMessage(thread: thread, body: body, contactId: contactId, timestamp: timestamp, serverTimestamp: serverTimestamp, transaction: transaction)
             }
         }
     }
@@ -112,7 +135,7 @@ extension DTMeetingManager {
         if let thread = thread, let writeTransation = transation {
             let contactIdefier = contactId ?? currentCall.caller ?? ""
             createOutgoingMessage(thread: thread,
-                                  body: "🚨 Sent a Critical Alert.",
+                                  body: Localized("CONVERSATION_MESSAGE_CRITICAL_ALERT"),
                                   contactId: contactIdefier,
                                   timestamp:timestamp,
                                   serverTimestamp: serverTimestamp,
@@ -133,7 +156,7 @@ extension DTMeetingManager {
                                                 serverTimestamp: serverTimestamp,
                                                 authorId: contactId,
                                                 sourceDeviceId: sourceDeviceId,
-                                                body: "🚨 Sent a Critical Alert.")
+                                                body: Localized("CONVERSATION_MESSAGE_CRITICAL_ALERT"))
             OWSMessageManager.shared().finalizeIncomingMessage(message, thread: thread, transaction: writeTransation)
         }
     }
@@ -146,8 +169,9 @@ extension DTMeetingManager {
                                  callType: CallType?,
                                  conversationId: String?,
                                  isFromOtherDevice: Bool?,
+                                 serverTimestamp: UInt64?,
                                  completion: (() -> Void)? = nil) {
-        
+
         guard (createCallMsg ?? false) else {
             return
         }
@@ -156,40 +180,44 @@ extension DTMeetingManager {
         case DTMeetingManager.sourceControlInvite:
             handleInviteCall(callees: callees,
                              caller: caller ?? "",
-                             isFromOtherDevice: isFromOtherDevice ?? false)
-            
+                             isFromOtherDevice: isFromOtherDevice ?? false,
+                             serverTimestamp: serverTimestamp)
+
         case DTMeetingManager.sourceControlStart:
             handleStartCall(callType: callType ?? .private,
                             conversationId: conversationId ?? "",
-                            isFromOtherDevice: isFromOtherDevice ?? false)
-            
+                            isFromOtherDevice: isFromOtherDevice ?? false,
+                            serverTimestamp: serverTimestamp)
+
         default:
             break
         }
     }
-    
+
     private func handleInviteCall(callees: [String]?,
                                   caller: String,
-                                  isFromOtherDevice: Bool) {
+                                  isFromOtherDevice: Bool,
+                                  serverTimestamp: UInt64?) {
         if isFromOtherDevice {
             callees?.forEach { receiptId in
-                sendOutgoingLocalPrivateInviteCallMessage(receiptId: receiptId)
+                sendOutgoingLocalPrivateInviteCallMessage(receiptId: receiptId, serverTimestamp: serverTimestamp)
             }
         } else {
-            receiveIncomingLocalPrivateInviteCallMessage(receiptId: caller)
+            receiveIncomingLocalPrivateInviteCallMessage(receiptId: caller, serverTimestamp: serverTimestamp)
         }
     }
 
     private func handleStartCall(callType: CallType,
                                  conversationId: String?,
-                                 isFromOtherDevice: Bool) {
+                                 isFromOtherDevice: Bool,
+                                 serverTimestamp: UInt64?) {
         let isPrivateCall = (callType == .private)
-        
+
         if isPrivateCall, let conversationId = conversationId {
             let contactThread = TSContactThread.getOrCreateThread(contactId: conversationId)
-            prepareForMeetingStartOrInvite(thread: contactThread, isOutgoing: isFromOtherDevice)
+            prepareForMeetingStartOrInvite(thread: contactThread, serverTimestamp: serverTimestamp, isOutgoing: isFromOtherDevice)
         } else {
-            prepareForMeetingStartOrInvite(isOutgoing: isFromOtherDevice)
+            prepareForMeetingStartOrInvite(serverTimestamp: serverTimestamp, isOutgoing: isFromOtherDevice)
         }
     }
     
@@ -204,7 +232,16 @@ extension DTMeetingManager {
         transaction: SDSAnyWriteTransaction
     ) {
         let finalTimestamp = timestamp ?? currentCall.timestamp ?? Date.ows_millisecondTimestamp()
-        let finalServerTimestamp = serverTimestamp ?? currentCall.serverTimestamp ?? Date.ows_millisecondTimestamp()
+        
+        let finalServerTimestamp: UInt64
+        if let serverTimestamp = serverTimestamp {
+            finalServerTimestamp = serverTimestamp
+        } else if let callServerTimestamp = currentCall.serverTimestamp {
+            finalServerTimestamp = callServerTimestamp
+        } else {
+            finalServerTimestamp = finalTimestamp
+        }
+
         let message = TSOutgoingMessage.init(outgoingMessageWithTimestamp: finalTimestamp,
                                              in: thread,
                                              messageBody: body,
@@ -234,7 +271,16 @@ extension DTMeetingManager {
         body: String
     ) -> TSIncomingMessage {
         let finalTimestamp = timestamp ?? currentCall.timestamp ?? Date.ows_millisecondTimestamp()
-        let finalServerTimestamp = serverTimestamp ?? currentCall.serverTimestamp ?? Date.ows_millisecondTimestamp()
+        
+        let finalServerTimestamp: UInt64
+        if let serverTimestamp = serverTimestamp {
+            finalServerTimestamp = serverTimestamp
+        } else if let callServerTimestamp = currentCall.serverTimestamp {
+            finalServerTimestamp = callServerTimestamp
+        } else {
+            finalServerTimestamp = finalTimestamp
+        }
+
         let sourceDeviceId = sourceDeviceId ?? currentCall.envelopeSourceDevice ?? OWSDevice.currentDeviceId()
         let author = authorId ?? currentCall.envelopeSource ?? ""
         let message = TSIncomingMessage(

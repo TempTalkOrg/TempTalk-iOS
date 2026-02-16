@@ -10,15 +10,18 @@ import SwiftUI
 
 struct BottomPopupView: View {
     let onDismiss: () -> Void
+    let onShowCriticalAlertConfirm: () -> Void
     @State private var isSwitchOn: Bool = DTMeetingManager.shared.roomContext?.isDenoiseFilterEnabled() ?? true
-    @StateObject private var roomDataManager = RoomDataManager.shared
+    @ObservedObject private var roomDataManager = RoomDataManager.shared
+    @State private var refreshTrigger = false
 
     @GestureState private var dragOffset = CGSize.zero
     @State private var offsetY: CGFloat = 0
     let meetingManager = DTMeetingManager.shared
 
     var body: some View {
-        
+
+        let _ = refreshTrigger // Force rebuild when notifications fire
         let buttons = buildButtons()
         let count = buttons.count
         let kScreenWidth: CGFloat = min(screenWidth, screenHeight)
@@ -93,13 +96,20 @@ struct BottomPopupView: View {
                 .animation(.easeOut(duration: 0.25), value: dragOffset)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CallStateDidChange"))) { _ in
+            refreshTrigger.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DTGroupCriticalAlertChangedNotification"))) { _ in
+            refreshTrigger.toggle()
+        }
     }
-    
+
     private func buildButtons() -> [AnyView] {
             var result: [AnyView] = []
             let call = meetingManager.currentCall
             let buttonWidth: CGFloat = 100
-            
+
+            // Always show invite button
             result.append(AnyView(
                 VerticalIconTextButton(
                     normalImage: Image("calling_invite"),
@@ -109,8 +119,44 @@ struct BottomPopupView: View {
                 }
                 .frame(width: buttonWidth, height: 76)
             ))
-            
-            if call.callType != .private {
+
+            switch call.callType {
+            case .private:
+                // Private call: show switch camera if enabled, and critical alert if outgoing and not in meeting
+                if meetingManager.openCallCamera {
+                    result.append(AnyView(
+                        VerticalIconTextButton(
+                            normalImage: Image("call_switch"),
+                            title: Localized("CALL_MORE_SWITCH_CAMERA")
+                        ) {
+                            meetingManager.switchCamera()
+                        }
+                        .frame(width: buttonWidth, height: 76)
+                    ))
+                }
+
+                if !meetingManager.inMeeting, call.callState == .outgoing {
+                    result.append(AnyView(
+                        VerticalIconTextButton(
+                            normalImage: Image("call_critical"),
+                            title: Localized("CALL_MORE_CRITICAL_ALERT")
+                        ) {
+                            handleCriticalAlertTap()
+                        }
+                        .frame(width: buttonWidth, height: 76)
+                    ))
+                }
+
+            case .group:
+                // Group call: show raise hand, switch camera if enabled, and critical alert if enabled in group settings
+                guard
+                    let gid = call.conversationId,
+                    let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid),
+                    let groupThread = TSGroupThread.getWithGroupId(groupId)
+                else {
+                    break
+                }
+
                 result.append(AnyView(
                     VerticalIconTextButton(
                         normalImage: Image("calling_lowerHand"),
@@ -134,41 +180,81 @@ struct BottomPopupView: View {
                     }
                     .frame(width: buttonWidth, height: 76)
                 ))
-            }
-            
-            if meetingManager.openCallCamera {
-                result.append(AnyView(
-                    VerticalIconTextButton(
-                        normalImage: Image("call_switch"),
-                        title: Localized("CALL_MORE_SWITCH_CAMERA")
-                    ) {
-                        meetingManager.switchCamera()
-                    }
-                    .frame(width: buttonWidth, height: 76)
-                ))
-            }
-            
-            if let gid = call.conversationId,
-               let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid),
-               let groupThread = TSGroupThread.getWithGroupId(groupId),
-               groupThread.groupModel.criticalAlert {
-                result.append(AnyView(
-                    VerticalIconTextButton(
-                        normalImage: Image("call_critical"),
-                        title: Localized("CALL_MORE_CRITICAL_ALERT")
-                    ) {
-                        Task {
-                            await meetingManager.sendCriticalAlertWithBarrage(
-                                Localized("MEETING_CRITICAL_ALERT_DANMU")
-                            )
+
+                if meetingManager.openCallCamera {
+                    result.append(AnyView(
+                        VerticalIconTextButton(
+                            normalImage: Image("call_switch"),
+                            title: Localized("CALL_MORE_SWITCH_CAMERA")
+                        ) {
+                            meetingManager.switchCamera()
                         }
-                    }
-                    .frame(width: buttonWidth, height: 76)
-                ))
+                        .frame(width: buttonWidth, height: 76)
+                    ))
+                }
+
+                if groupThread.groupModel.criticalAlert {
+                    result.append(AnyView(
+                        VerticalIconTextButton(
+                            normalImage: Image("call_critical"),
+                            title: Localized("CALL_MORE_CRITICAL_ALERT")
+                        ) {
+                            handleCriticalAlertTap()
+                        }
+                        .frame(width: buttonWidth, height: 76)
+                    ))
+                }
+
+            default:
+                // Instant call: show switch camera if enabled, and critical alert if there are invited users
+                if meetingManager.openCallCamera {
+                    result.append(AnyView(
+                        VerticalIconTextButton(
+                            normalImage: Image("call_switch"),
+                            title: Localized("CALL_MORE_SWITCH_CAMERA")
+                        ) {
+                            meetingManager.switchCamera()
+                        }
+                        .frame(width: buttonWidth, height: 76)
+                    ))
+                }
+
+                if meetingManager.currentCall.invitedCriticalAlertUsers.count > 0 {
+                    result.append(AnyView(
+                        VerticalIconTextButton(
+                            normalImage: Image("call_critical"),
+                            title: Localized("CALL_MORE_CRITICAL_ALERT")
+                        ) {
+                            handleCriticalAlertTap()
+                        }
+                        .frame(width: buttonWidth, height: 76)
+                    ))
+                }
             }
-            
+
             return result
         }
+
+    private func handleCriticalAlertTap() {
+        // 判断是否需要显示二次确认弹窗
+        if meetingManager.shouldShowCriticalAlertConfirm {
+            // Instant/Group: 显示二次确认弹窗（使用 SwiftUI 版本，适配横屏分享状态）
+            onDismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                onShowCriticalAlertConfirm()
+            }
+        } else {
+            // 1v1: 直接发送 Critical Alert
+            onDismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                Task {
+                    await meetingManager.sendCriticalAlert(
+                        message: Localized("MEETING_CRITICAL_ALERT_DANMU")
+                    )
+                }
+            }
+        }
+    }
 }
 
 

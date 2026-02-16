@@ -22,7 +22,7 @@ class DTConfideMessageCell : UITableViewCell {
     
     private lazy  var privateLable = {
         let contentLabel = UILabel()
-        contentLabel.textColor = Theme.primaryTextColor
+        contentLabel.textColor = Theme.tprimaryColor
         contentLabel.textAlignment = NSTextAlignment.left
         contentLabel.font = UIFont.systemFont(ofSize: 18)
         contentLabel.isUserInteractionEnabled = true

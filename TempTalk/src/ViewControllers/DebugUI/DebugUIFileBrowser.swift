@@ -222,13 +222,13 @@
                     return
                 }
 
-                UIPasteboard.general.string = strongSelf.fileURL.path
+                DTSecurePasteboard.setString(strongSelf.fileURL.path)
 
                 let alert = UIAlertController(title: "Path Copied to Clipboard!",
                                               message: "\(strongSelf.fileURL.path)",
                                               preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "Copy Filename Instead", style: .default) { _ in
-                    UIPasteboard.general.string = strongSelf.fileURL.lastPathComponent
+                    DTSecurePasteboard.setString(strongSelf.fileURL.lastPathComponent)
                 })
 
                 alert.addAction(UIAlertAction(title: "Dismiss", style: .default))

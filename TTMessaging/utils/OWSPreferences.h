@@ -18,6 +18,8 @@ extern NSString *const OWSPreferencesSignalDatabaseCollection;
 extern NSString *const OWSPreferencesKeyEnableDebugLog;
 extern NSString *const OWSPreferencesCallLoggingDidChangeNotification;
 extern NSString *const OWSPreferencesKeySystemEndCallKey;
+extern NSString *const OWSPreferencesKeyCurrentActiveRoomId;
+extern NSString *const OWSPreferencesKeyActiveRoomIds; // Array of active room IDs
 extern NSString *const DTCriticalAlertHighlightDidChangeNotification;
 
 @class SDSAnyWriteTransaction;
@@ -71,8 +73,6 @@ extern NSString *const DTCriticalAlertHighlightDidChangeNotification;
 
 - (BOOL)criticalAlertEnabled;
 - (void)setCriticalAlertEnabled:(BOOL)enabled;
-- (BOOL)hasShownCriticalAlertPopup;
-- (void)setHasShownCriticalAlertPopup:(BOOL)shown;
 
 #pragma mark Callkit
 

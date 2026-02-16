@@ -31,7 +31,7 @@ class DTImageRecognizedTextSelectionView: UIView {
         let imageView = UIImageView()
         imageView.isUserInteractionEnabled = false
         imageView.image = generateKnobImage(
-            color: Theme.themeBlueColor,
+            color: Theme.tinfoColor,
             diameter: Constants.knobDiameter
         )
         imageView.alpha = 0
@@ -42,7 +42,7 @@ class DTImageRecognizedTextSelectionView: UIView {
         let imageView = UIImageView()
         imageView.isUserInteractionEnabled = false
         imageView.image = generateKnobImage(
-            color: Theme.themeBlueColor,
+            color: Theme.tinfoColor,
             diameter: Constants.knobDiameter,
             inverted: true
         )
@@ -232,7 +232,7 @@ class DTImageRecognizedTextSelectionView: UIView {
             highlightOverlay.image = generateSelectionsImage(
                 size: self.size,
                 rects: rects,
-                color: Theme.themeBlueColor.withAlphaComponent(0.4)
+                color: Theme.tinfoColor.withAlphaComponent(0.4)
             )
             highlightOverlay.alpha = 0.9
             
@@ -361,7 +361,7 @@ class DTImageRecognizedTextSelectionView: UIView {
     
     @objc
     private func didTapCopy() {
-        UIPasteboard.general.string = selectedText
+        DTSecurePasteboard.setString(selectedText ?? "")
     }
     
     func dismissSelection() -> Bool {

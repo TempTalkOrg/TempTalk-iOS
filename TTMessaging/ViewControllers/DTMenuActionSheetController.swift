@@ -182,9 +182,9 @@ class DTMenuActionView: UIView {
     }
     
     func applyTheme() {
-        backgroundColor = Theme.backgroundColor
-        iconImageView.tintColor = Theme.primaryTextColor
-        titleLabel.textColor = Theme.primaryTextColor
-        subtitleLabel.textColor = Theme.ternaryTextColor
+        backgroundColor = Theme.bg1Color
+        iconImageView.tintColor = Theme.tprimaryColor
+        titleLabel.textColor = Theme.tprimaryColor
+        subtitleLabel.textColor = Theme.tthirdColor
     }
 }

@@ -10,10 +10,12 @@
 #import <TTServiceKit/NSTimer+OWS.h>
 #import <TTServiceKit/OWSDevice.h>
 #import <TTServiceKit/OWSDevicesService.h>
+#import <TTMessaging/TTMessaging.h>
+#import <TTMessaging/UIFont+OWS.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface OWSLinkedDevicesTableViewController ()
+@interface OWSLinkedDevicesTableViewController () <OWSNavigationChildController>
 
 @property (nonatomic) NSArray<OWSDevice *> *items;
 @property (nonatomic) NSTimer *pollingRefreshTimer;
@@ -40,11 +42,17 @@ int const OWSLinkedDevicesTableViewControllerSectionAddDevice = 1;
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     self.title = Localized(@"LINKED_DEVICES_TITLE", @"Menu item and navbar title for the device manager");
     self.editButtonItem.title = Localized(@"EDIT_TXT", @"");
     self.isExpectingMoreDevices = NO;
-    self.tableView.rowHeight = UITableViewAutomaticDimension;
-    self.tableView.estimatedRowHeight = 60;
+
+    // 根据 App 内字体大小设置固定 cell 高度，忽略系统 Dynamic Type
+    CGFloat scaleFactor = [TextSizeManager currentScaleFactor];
+    CGFloat cellHeight = scaleFactor > 1.0 ? 80.0 : 72.0;
+    self.tableView.rowHeight = cellHeight;
+    self.tableView.estimatedRowHeight = cellHeight;
 
     [self.tableView applyScrollViewInsetsFix];
 
@@ -63,9 +71,8 @@ int const OWSLinkedDevicesTableViewControllerSectionAddDevice = 1;
 }
 
 - (void)applyTheme {
-    
-    self.view.backgroundColor = Theme.backgroundColor;
-    self.tableView.backgroundColor = Theme.backgroundColor;
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -275,24 +282,28 @@ int const OWSLinkedDevicesTableViewControllerSectionAddDevice = 1;
     if (indexPath.section == OWSLinkedDevicesTableViewControllerSectionAddDevice) {
         UITableViewCell *addNewDeviceCell =
             [tableView dequeueReusableCellWithIdentifier:@"AddNewDevice" forIndexPath:indexPath];
-        addNewDeviceCell.backgroundColor = Theme.tableCellBackgroundColor;
-        addNewDeviceCell.contentView.backgroundColor = Theme.tableCellBackgroundColor;
-        addNewDeviceCell.textLabel.textColor = Theme.primaryTextColor;
+        addNewDeviceCell.backgroundColor = Theme.bg1Color;
+        addNewDeviceCell.contentView.backgroundColor = Theme.bg1Color;
+        addNewDeviceCell.textLabel.textColor = Theme.tprimaryColor;
         addNewDeviceCell.textLabel.text
             = Localized(@"LINK_NEW_DEVICE_TITLE", @"Navigation title when scanning QR code to add new device.");
-        addNewDeviceCell.detailTextLabel.textColor = Theme.secondaryTextAndIconColor;
+        addNewDeviceCell.detailTextLabel.textColor = Theme.tsecondaryColor;
         addNewDeviceCell.detailTextLabel.text
             = Localized(@"LINK_NEW_DEVICE_SUBTITLE", @"Subheading for 'Link New Device' navigation");
-        
-        addNewDeviceCell.backgroundColor = Theme.backgroundColor;
-        
+
+        // 设置固定字体大小，忽略系统 Dynamic Type
+        addNewDeviceCell.textLabel.font = [UIFont ows_dynamicTypeBodyFont];  // 17pt，支持 App 内缩放
+        addNewDeviceCell.detailTextLabel.font = [UIFont ows_dynamicTypeFootnoteFont];  // 13pt，支持 App 内缩放
+
+        addNewDeviceCell.backgroundColor = Theme.bg1Color;
+
         return addNewDeviceCell;
     } else if (indexPath.section == OWSLinkedDevicesTableViewControllerSectionExistingDevices) {
         OWSDeviceTableViewCell *cell =
             [tableView dequeueReusableCellWithIdentifier:@"ExistingDevice" forIndexPath:indexPath];
         OWSDevice *device = [self deviceForRowAtIndexPath:indexPath];
         [cell configureWithDevice:device];
-        cell.backgroundColor = Theme.tableCellBackgroundColor;
+        cell.backgroundColor = Theme.bg1Color;
         return cell;
     } else {
         DDLogError(@"Unknown section: %@", indexPath);
@@ -409,6 +420,28 @@ int const OWSLinkedDevicesTableViewControllerSectionAddDevice = 1;
         [self.refreshControl endRefreshing];
         self.isLoadedBeforeDragingEnd = NO;
     }
+}
+
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return false;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpageSecondaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
 }
 
 @end

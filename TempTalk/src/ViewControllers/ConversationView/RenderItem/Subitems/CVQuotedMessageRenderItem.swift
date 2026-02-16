@@ -52,7 +52,7 @@ class CVQuotedMessageRenderItem: ConversationRenderItem {
     }
     
     static var quotedAuthorHeight: CGFloat {
-        ceil(UIFont.ows_dynamicTypeSubheadline.ows_italic().lineHeight)
+        ceil(UIFont.ows_dynamicTypeSubheadline(scaled: false).ows_italic().lineHeight)
     }
     
     var hasQuotedAttachment: Bool {
@@ -94,10 +94,10 @@ class CVQuotedMessageRenderItem: ConversationRenderItem {
                 return String(format: Localized("QUOTED_AUTHOR_INDICATOR_YOU_FORMAT"), quotedReply.authorName)
             }
         }()
-        
+
         return .unstyledText(
             quoteAuthor,
-            font: .ows_dynamicTypeSubheadline.ows_italic(),
+            font: .ows_dynamicTypeSubheadline(scaled: false).ows_italic(),
             numberOfLines: 1,
             lineBreakMode: .byTruncatingTail
         )
@@ -125,7 +125,7 @@ class CVQuotedMessageRenderItem: ConversationRenderItem {
         }()
         let (quoteText, quoteFont, quoteColor) = {
             if quotedReply.inputPreviewType == .topicFromMainViewReply {
-                return ("", UIFont.ows_dynamicTypeBody, quotedTextColor)
+                return ("", UIFont.ows_dynamicTypeBody(scaled: false), quotedTextColor)
             }
             if let displayableQuotedText, !displayableQuotedText.displayText.isEmpty {
                 var text = displayableQuotedText.displayText
@@ -133,15 +133,15 @@ class CVQuotedMessageRenderItem: ConversationRenderItem {
                 if let cardContent = quotedReply.replyItem?.card?.content, !cardContent.isEmpty {
                     text = text.removeMarkdownStyle()
                 }
-                return (text, UIFont.ows_dynamicTypeBody, quotedTextColor)
+                return (text, UIFont.ows_dynamicTypeBody(scaled: false), quotedTextColor)
             }
             if let fileTypeForSnippet {
-                return (fileTypeForSnippet, UIFont.ows_dynamicTypeBody.ows_italic(), fileTypeTextColor)
+                return (fileTypeForSnippet, UIFont.ows_dynamicTypeBody(scaled: false).ows_italic(), fileTypeTextColor)
             }
             if let sourceFileName = quotedReply.sourceFilename {
-                return (sourceFileName, UIFont.ows_dynamicTypeBody, fileNameTextColor)
+                return (sourceFileName, UIFont.ows_dynamicTypeBody(scaled: false), fileNameTextColor)
             }
-            return (Localized("QUOTED_REPLY_TYPE_ATTACHMENT"), UIFont.ows_dynamicTypeBody.ows_italic(), fileTypeTextColor)
+            return (Localized("QUOTED_REPLY_TYPE_ATTACHMENT"), UIFont.ows_dynamicTypeBody(scaled: false).ows_italic(), fileTypeTextColor)
         }()
         
         return .unstyledText(

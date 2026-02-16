@@ -18,6 +18,7 @@
 #import "AddToGroupViewController.h"
 #import <TTMessaging/Environment.h>
 #import <TTMessaging/OWSAvatarBuilder.h>
+#import <TTMessaging/TTMessaging-swift.h>
 #import <TTMessaging/OWSContactsManager.h>
 #import <TTMessaging/OWSProfileManager.h>
 #import <TTMessaging/OWSSounds.h>
@@ -58,7 +59,7 @@ NS_ASSUME_NONNULL_BEGIN
 const CGFloat kIconViewLength = 24;
 
 @interface OWSConversationSettingsViewController () <ContactEditingDelegate,
-    ContactsViewHelperDelegate, AddToGroupViewControllerDelegate>
+    ContactsViewHelperDelegate, AddToGroupViewControllerDelegate, OWSNavigationChildController>
 
 @property (nonatomic) TSThread *thread;
 
@@ -258,6 +259,7 @@ const CGFloat kIconViewLength = 24;
     self.tableView.estimatedRowHeight = 45;
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     _disappearingMessagesDurationLabel = [UILabel new];
     self.disappearingMessagesDurations = [OWSDisappearingMessagesConfiguration validDurationsSeconds];
 
@@ -339,6 +341,7 @@ const CGFloat kIconViewLength = 24;
 - (void)applyTheme {
     
     [super applyTheme];
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     [self updateTableContents];
 }
 
@@ -365,15 +368,16 @@ const CGFloat kIconViewLength = 24;
 
     OWSTableSection *mainSection = [OWSTableSection new];
 
-    mainSection.customHeaderView = [self mainSectionHeader];
-    if (!self.isGroupThread) {
-        mainSection.customHeaderHeight =  @(114.f);
-    } else {
-        NSUInteger memberCount = self.sortedGroupMemberIds.count;
-        if (memberCount < 4) {
-            mainSection.customHeaderHeight = @(146.f);
+    UIView *headerView = [self mainSectionHeader];
+    if (headerView) {
+        mainSection.customHeaderView = headerView;
+        if (!self.isGroupThread) {
+            mainSection.customHeaderHeight = @(114.f);
         } else {
-            if (memberCount == 4 || memberCount == 5) {
+            NSUInteger memberCount = self.sortedGroupMemberIds.count;
+            if (memberCount < 4) {
+                mainSection.customHeaderHeight = @(146.f);
+            } else if (memberCount == 4 || memberCount == 5) {
                 mainSection.customHeaderHeight = @(208.f);
             } else {
                 mainSection.customHeaderHeight = @(228.f);
@@ -511,7 +515,8 @@ const CGFloat kIconViewLength = 24;
             @strongify(self);
             [self showGroupTranslateSettingController];
         }]];
-        
+
+        [otherSection addItem:self.saveToAlbumItem];
         [otherSection addItem:self.messageArchiveItem];
     }
     
@@ -532,7 +537,7 @@ const CGFloat kIconViewLength = 24;
                             UILabel *rowLabel = [UILabel new];
                             rowLabel.text = Localized(@"SETTINGS_ITEM_NOTIFICATION_SOUND_NM",
                                 @"Label for settings view that allows user to change the notification sound.");
-                            rowLabel.textColor = Theme.primaryTextColor;
+                            rowLabel.textColor = Theme.tprimaryColor;
                             rowLabel.font = self.primaryFont;
                             rowLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 
@@ -546,10 +551,10 @@ const CGFloat kIconViewLength = 24;
                             OWSSound sound = [OWSSounds notificationSoundForThread:self.thread];
                             cell.detailTextLabel.font = self.primaryFont;
                             cell.detailTextLabel.text = [OWSSounds displayNameForSound:sound];
-                            cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-                            cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+                            cell.backgroundColor = Theme.bg1Color;
+                            cell.contentView.backgroundColor = Theme.bg1Color;
                             UIView *view = [UIView new];
-                            view.backgroundColor = Theme.tableSettingCellBackgroundColor;
+                            view.backgroundColor = Theme.bg1Color;
                             cell.selectedBackgroundView = view;
                             return cell;
                         }
@@ -581,7 +586,7 @@ const CGFloat kIconViewLength = 24;
 
                                 UILabel *rowLabel = [UILabel new];
                                 rowLabel.text = Localized(@"SETTINGS_ITEM_NOTIFICATION_APNS_NM", nil);
-                                rowLabel.textColor = Theme.primaryTextColor;
+                                rowLabel.textColor = Theme.tprimaryColor;
                                 rowLabel.font = self.primaryFont;
                                 rowLabel.lineBreakMode = NSLineBreakByTruncatingTail;
                                 NSString *notificationTypeString = nil;
@@ -630,10 +635,10 @@ const CGFloat kIconViewLength = 24;
 
                                 cell.detailTextLabel.font = self.primaryFont;
                                 cell.detailTextLabel.text = notificationTypeString;
-                                cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-                                cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+                                cell.backgroundColor = Theme.bg1Color;
+                                cell.contentView.backgroundColor = Theme.bg1Color;
                                 UIView *view = [UIView new];
-                                view.backgroundColor = Theme.tableSettingCellBackgroundColor;
+                                view.backgroundColor = Theme.bg1Color;
                                 cell.selectedBackgroundView = view;
                                 return cell;
                             }
@@ -677,7 +682,7 @@ const CGFloat kIconViewLength = 24;
 }
 
 - (OWSTableItem *)blankItem {
-    return [OWSTableItem blankItemWithcustomRowHeight:16.f];
+    return [OWSTableItem blankItemWithcustomRowHeight:16.f backgroundColor:Theme.bgpageSecondaryColor];
 }
 
 
@@ -708,6 +713,61 @@ const CGFloat kIconViewLength = 24;
     }];
 }
 
+- (OWSTableItem *)saveToAlbumItem {
+    @weakify(self)
+    return [OWSTableItem itemWithCustomCellBlock:^{
+        @strongify(self)
+        UITableViewCell *cell =
+        [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
+        cell.preservesSuperviewLayoutMargins = YES;
+        cell.contentView.preservesSuperviewLayoutMargins = YES;
+        cell.accessoryView = self.accessoryArrow;
+        cell.separatorInset = UIEdgeInsetsMake(0, 50, 0, 0);
+
+        UILabel *rowLabel = [UILabel new];
+        rowLabel.text = Localized(@"CONVERSATION_SETTINGS_SAVE_TO_ALBUM",
+                                  @"Label for settings view that allows user to change the save to album policy.");
+        rowLabel.textColor = Theme.tprimaryColor;
+        rowLabel.font = self.primaryFont;
+        rowLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+
+        UIStackView *contentRow =
+        [[UIStackView alloc] initWithArrangedSubviews:@[rowLabel]];
+        contentRow.spacing = self.iconSpacing;
+        contentRow.alignment = UIStackViewAlignmentCenter;
+        [cell.contentView addSubview:contentRow];
+        [contentRow autoPinEdgesToSuperviewMargins];
+
+        MediaSavePolicy policy = [MediaSavePolicyManager.shared getConversationSavePolicyWithThreadId:self.thread.uniqueId];
+        NSString *policyText = @"";
+
+        if (policy == MediaSavePolicyAlways) {
+            policyText = Localized(@"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_ALWAYS", @"");
+        } else if (policy == MediaSavePolicyNever) {
+            policyText = Localized(@"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_NEVER", @"");
+        } else {
+            BOOL globalStatus = [MediaSavePolicyManager.shared getSaveToPhotoStatus];
+            if (globalStatus) {
+                policyText = Localized(@"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_DEFAULT_ON", @"");
+            } else {
+                policyText = Localized(@"CONVERSATION_SETTINGS_SAVE_TO_ALBUM_DEFAULT_OFF", @"");
+            }
+        }
+
+        cell.detailTextLabel.font = self.primaryFont;
+        cell.detailTextLabel.text = policyText;
+        cell.backgroundColor = Theme.bg1Color;
+        cell.contentView.backgroundColor = Theme.bg1Color;
+        UIView *view = [UIView new];
+        view.backgroundColor = Theme.bg1Color;
+        cell.selectedBackgroundView = view;
+        return cell;
+    } actionBlock:^{
+        @strongify(self)
+        [self showSaveToAlbumSettingController];
+    }];
+}
+
 - (OWSTableItem *)messageArchiveItem {
 
     @weakify(self)
@@ -723,7 +783,7 @@ const CGFloat kIconViewLength = 24;
         UILabel *rowLabel = [UILabel new];
         rowLabel.text = Localized(@"CONVERSATION_SETTINGS_ARCHIVE",
                                           @"Label for settings view that allows user to change the message archive.");
-        rowLabel.textColor = Theme.primaryTextColor;
+        rowLabel.textColor = Theme.tprimaryColor;
         rowLabel.font = self.primaryFont;
         rowLabel.lineBreakMode = NSLineBreakByTruncatingTail;
         
@@ -790,10 +850,10 @@ const CGFloat kIconViewLength = 24;
                 cell.detailTextLabel.text = [NSString stringWithFormat:@"%@",tipmessage];
             }
             
-            cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-            cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+            cell.backgroundColor = Theme.bg1Color;
+            cell.contentView.backgroundColor = Theme.bg1Color;
             UIView *view = [UIView new];
-            view.backgroundColor = Theme.tableSettingCellBackgroundColor;
+            view.backgroundColor = Theme.bg1Color;
             cell.selectedBackgroundView = view;
         }];
         
@@ -807,7 +867,7 @@ const CGFloat kIconViewLength = 24;
 - (void)showArchiveMessageSettingController {
     DTArchiveMessageSettingController *archiveMessageSettingVC = [DTArchiveMessageSettingController new];
     [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
-        
+
         TSThread *lastestThread = [TSThread anyFetchWithUniqueId:self.thread.uniqueId
                                                      transaction:transaction];
         archiveMessageSettingVC.durationSeconds = [lastestThread messageExpiresInSeconds];
@@ -816,6 +876,13 @@ const CGFloat kIconViewLength = 24;
         [self.navigationController pushViewController:archiveMessageSettingVC animated:true];
     }];
 }
+
+- (void)showSaveToAlbumSettingController {
+    DTSaveToAlbumSettingController *saveToAlbumSettingVC = [DTSaveToAlbumSettingController new];
+    saveToAlbumSettingVC.thread = self.thread;
+    [self.navigationController pushViewController:saveToAlbumSettingVC animated:true];
+}
+
 
 - (OWSTableItem *)groupInCommonItem {
     
@@ -919,7 +986,9 @@ const CGFloat kIconViewLength = 24;
             DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
                 TSContactThread * contactThread = [TSContactThread getThreadWithContactId:uid transaction:writeTransaction];
                 if (!contactThread) {
-                    [TTNavigator goToHomePage];
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [TTNavigator goToHomePage];
+                    });
                     return;
                 }
                 
@@ -960,8 +1029,8 @@ const CGFloat kIconViewLength = 24;
         cell.textLabel.text = title;
         cell.textLabel.font = OWSTableItem.textLabelFont;
         cell.textLabel.textColor = [UIColor colorWithRGBHex:0xF84135];
-        cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-        cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+        cell.backgroundColor = Theme.bg1Color;
+        cell.contentView.backgroundColor = Theme.bg1Color;
         return cell;
     } customRowHeight:45 actionBlock:^{
         if (actionBlock) actionBlock();
@@ -1131,8 +1200,8 @@ const CGFloat kIconViewLength = 24;
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     cell.preservesSuperviewLayoutMargins = YES;
     cell.contentView.preservesSuperviewLayoutMargins = YES;
-    cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-    cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
+    cell.contentView.backgroundColor = Theme.bg1Color;
     cell.separatorInset = UIEdgeInsetsMake(0, 50, 0, 0);
 
     UILabel *rowLabel = [UILabel new];
@@ -1140,7 +1209,7 @@ const CGFloat kIconViewLength = 24;
     if(nameColor){
         rowLabel.textColor = nameColor;
     }
-//    rowLabel.textColor = Theme.primaryTextColor;
+//    rowLabel.textColor = Theme.tprimaryColor;
     rowLabel.font = [UIFont systemFontOfSize:16.0];
     rowLabel.lineBreakMode = NSLineBreakByTruncatingTail;
     UIStackView *contentRow = [[UIStackView alloc] init];
@@ -1173,13 +1242,13 @@ const CGFloat kIconViewLength = 24;
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     cell.preservesSuperviewLayoutMargins = YES;
     cell.contentView.preservesSuperviewLayoutMargins = YES;
-    cell.backgroundColor = Theme.tableSettingCellBackgroundColor;
-    cell.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
+    cell.contentView.backgroundColor = Theme.bg1Color;
     cell.separatorInset = UIEdgeInsetsMake(0, 50, 0, 0);
 
     UILabel *rowLabel = [UILabel new];
     rowLabel.text = name;
-    rowLabel.textColor = Theme.primaryTextColor;
+    rowLabel.textColor = Theme.tprimaryColor;
     rowLabel.font = self.primaryFont;
     rowLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 
@@ -1207,8 +1276,13 @@ const CGFloat kIconViewLength = 24;
 }
 
 - (UIView *)mainSectionHeader {
-    
+
     if (!DTParamsUtils.validateArray(self.sortedGroupMemberIds)) {
+        return nil;
+    }
+
+    if (!self.isGroupThread &&
+        [self.thread.contactIdentifier isEqualToString:TSConstants.officialBotId]) {
         return nil;
     }
 
@@ -1251,7 +1325,7 @@ const CGFloat kIconViewLength = 24;
         if (!self.isGroupThread) { return; }
         [self showGroupMembersView];
     }];
-    header.backgroundColor = Theme.tableSettingCellBackgroundColor;
+    header.backgroundColor = Theme.bg1Color;
     
     return header;
 }
@@ -1260,9 +1334,9 @@ const CGFloat kIconViewLength = 24;
     if([view isKindOfClass:[UITableViewHeaderFooterView class]]) {
         // Text Color
         UITableViewHeaderFooterView *header = (UITableViewHeaderFooterView *)view;
-        [header.textLabel setTextColor:Theme.primaryTextColor];
-        header.backgroundColor = Theme.tableSettingCellBackgroundColor;
-        header.contentView.backgroundColor = Theme.tableSettingCellBackgroundColor;
+        [header.textLabel setTextColor:Theme.tprimaryColor];
+        header.backgroundColor = Theme.bg1Color;
+        header.contentView.backgroundColor = Theme.bg1Color;
    }
 }
 
@@ -1270,10 +1344,9 @@ const CGFloat kIconViewLength = 24;
     NSString *recipientId = self.thread.contactIdentifier;
     
     if (recipientId) {
-        
-        UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
-        pasteboard.string = recipientId;
-        
+
+        [DTSecurePasteboard setString:recipientId];
+
         NSString *fullPrefix = Localized(@"CONTACT_NUMBER_DESCRIPTION_HEADER", @"copy to pastboard");
         NSString *prefix = [fullPrefix substringToIndex:fullPrefix.length - 2];
 
@@ -1287,9 +1360,8 @@ const CGFloat kIconViewLength = 24;
     NSString *email = signalAccount.contact.email;
     
     if (email) {
-        
-        UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
-        pasteboard.string = email;
+
+        [DTSecurePasteboard setString:email];
 
         NSString *fullPrefix = Localized(@"CONTACT_EMAIL_DESCRIPTION_HEADER", @"copy to pastboard");
         NSString *prefix = [fullPrefix substringToIndex:fullPrefix.length - 2];
@@ -1314,7 +1386,7 @@ const CGFloat kIconViewLength = 24;
     OWSAssertDebug(icon);
     UIImageView *iconView = [UIImageView new];
     iconView.image = [icon imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-    iconView.tintColor = Theme.secondaryTextAndIconColor;
+    iconView.tintColor = Theme.tsecondaryColor;
     iconView.contentMode = UIViewContentModeScaleAspectFit;
     iconView.layer.minificationFilter = kCAFilterTrilinear;
     iconView.layer.magnificationFilter = kCAFilterTrilinear;
@@ -1653,6 +1725,28 @@ const CGFloat kIconViewLength = 24;
     [actionSheet addAction:[OWSActionSheets cancelAction]];
     
     [self presentActionSheet:actionSheet];
+}
+
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return false;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpageSecondaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
 }
 
 @end

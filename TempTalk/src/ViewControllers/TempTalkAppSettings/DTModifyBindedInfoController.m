@@ -24,7 +24,7 @@ extern NSString *const kSendPhoneCodeForLoginSucess;
 extern NSString *const kSendEmailCodeForChangeEmailSucess;
 extern NSString *const kSendEmailCodeForChangePhoneSucess;
 
-@interface DTModifyBindedInfoController ()<UITextFieldDelegate,CountryCodeViewControllerDelegate>
+@interface DTModifyBindedInfoController ()<UITextFieldDelegate,CountryCodeViewControllerDelegate,OWSNavigationChildController>
 @property (nonatomic, strong) UIImageView *iconImageView;
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *descLabel;
@@ -209,10 +209,10 @@ extern NSString *const kSendEmailCodeForChangePhoneSucess;
 
 - (void)applyTheme {
     [super applyTheme];
-    self.view.backgroundColor = Theme.backgroundColor;
-    self.titleLabel.textColor = Theme.primaryTextColor;
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.titleLabel.textColor = Theme.tprimaryColor;
     self.tfAccount.keyboardAppearance = Theme.keyboardAppearance;
-    self.tfAccount.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x181A20] : [UIColor colorWithRGBHex:0xFFFFFF] ;
+    self.tfAccount.backgroundColor = Theme.bg1Color;
     self.tfAccount.textColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xEAECEF] : [UIColor colorWithRGBHex:0x1E2329];
     self.nextButton.isSelected = self.tfAccount.text.length;
     self.nextButton.userInteractionEnabled = self.tfAccount.text.length;
@@ -407,6 +407,28 @@ extern NSString *const kSendEmailCodeForChangePhoneSucess;
     [self.countryCodeBtn setTitle:didSelectCountry.callingCode forState:UIControlStateNormal];
 }
 
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return false;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpageSecondaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
+}
+
 
 - (UIImageView *)iconImageView {
     if(!_iconImageView){
@@ -514,7 +536,7 @@ extern NSString *const kSendEmailCodeForChangePhoneSucess;
         _countryCodeBtn.titleAlignment = DTButtonTitleAlignmentTypeLeft;
         [_countryCodeBtn setTitle:@"+86" forState:UIControlStateNormal];
         [_countryCodeBtn setImage:[UIImage imageNamed:@"input_arrow"] forState:UIControlStateNormal];
-        [_countryCodeBtn setTitleColor:Theme.primaryTextColor forState:UIControlStateNormal];
+        [_countryCodeBtn setTitleColor:Theme.tprimaryColor forState:UIControlStateNormal];
         _countryCodeBtn.titleLabel.font = [UIFont systemFontOfSize:14];
         [_countryCodeBtn addTarget:self action:@selector(countryCodeBtnClick:) forControlEvents:UIControlEventTouchUpInside];
         _countryCodeBtn.hidden = true;

@@ -31,11 +31,6 @@ class CVMessageBubbleRenderItem: ConversationRenderItem {
             _confidentialEnable = newValue
         }
     }
-
-    
-    var isShowPinMark: Bool {
-        viewItem.isPinned && !viewItem.isPinMessage
-    }
     
     var sharpCorners: OWSDirectionalRectCorner {
         switch (!viewItem.isFirstInCluster, !viewItem.isLastInCluster) {
@@ -201,7 +196,7 @@ class CVMessageBubbleRenderItem: ConversationRenderItem {
         }
         
         var reactionSize = CGSizeZero
-        if let emojiReactionRenderItem, !viewItem.isPinMessage {
+        if let emojiReactionRenderItem {
             reactionSize = emojiReactionRenderItem.measureSize(bubbleWidth: cellSize.width)
             textViewSizeArray.append(reactionSize)
         }

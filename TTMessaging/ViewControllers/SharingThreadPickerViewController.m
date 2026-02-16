@@ -257,6 +257,8 @@ typedef void (^SendMessageBlock)(SendCompletionBlock completion);
                                                              }];
                 OWSLogInfo(@"SharingThreadPickerViewController -> tryToSendMessage -> sending -> timestamp = %llu", outgoingMessage.timestamp);
 
+                // Read position will be auto-updated in updateWithLastMessage if no unread messages
+
                 // This is necessary to show progress.
                 [self.outgoingMessages addObject:outgoingMessage];
             }];
@@ -288,7 +290,7 @@ typedef void (^SendMessageBlock)(SendCompletionBlock completion);
 - (void)tryToSendTextMessage:(NSString *)text {
     [self tryToSendMessageWithAttachment:NO withBlock:^(SendCompletionBlock sendCompletion) {
         OWSAssertIsOnMainThread();
-        
+
         TSOutgoingMessage *outgoingMessage = nil;
         outgoingMessage = [ThreadUtil sendMessageWithText:text
                                                 atPersons:nil
@@ -301,10 +303,12 @@ typedef void (^SendMessageBlock)(SendCompletionBlock completion);
         } failure:^(NSError * _Nonnull error) {
             sendCompletion(error, outgoingMessage, 0);
         }];
-        
+
+        // Read position will be auto-updated in updateWithLastMessage if no unread messages
+
         // This is necessary to show progress.
         [self.outgoingMessages addObject:outgoingMessage];
-        
+
     } fromViewController:self];
 }
 
@@ -340,7 +344,7 @@ typedef void (^SendMessageBlock)(SendCompletionBlock completion);
 
         sendedMessageCount ++;
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (error) {
+            if (error && message) {
                 [errorOutgoingMessages addObject:message];
             }
             if (sendedMessageCount == self.attachments.count) {

@@ -6,7 +6,7 @@
 //
 
 #import "DFTabbarController.h"
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import "UIImage+OWS.h"
 #import "UIColor+OWS.h"
 
@@ -24,7 +24,6 @@ NSString *const kTabBarItemDoubleClickNotification = @"kTabBarItemDoubleClickNot
 @property (nonatomic, assign) NSUInteger allUnMutedUnreadCount;
 @property (nonatomic, assign) NSUInteger allMutedUnReadCount;
 @property (nonatomic, assign) NSUInteger allUnreadCount;
-@property (nonatomic, assign) NSUInteger scheduleEventCount;
 
 @end
 
@@ -36,7 +35,7 @@ NSString *const kTabBarItemDoubleClickNotification = @"kTabBarItemDoubleClickNot
     self.delegate = self;
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(themeDidChange:)
-                                                 name:ThemeDidChangeNotification
+                                                 name:NSNotification.ThemeDidChange
                                                object:nil];
     [[DTThreadHelper sharedManager] loadUnReadThread];
     [[DTThreadHelper sharedManager] observerAllUnReadMessageCount];
@@ -93,7 +92,7 @@ NSString *const kTabBarItemDoubleClickNotification = @"kTabBarItemDoubleClickNot
         }
         if (![self.viewControllers.firstObject isKindOfClass:OWSNavigationController.class]) return;
         OWSNavigationController *homeNav = self.viewControllers.firstObject;
-        if (![homeNav.viewControllers.firstObject isKindOfClass:NSClassFromString(@"DTHomeViewController")]) return;
+        if (![homeNav.viewControllers.firstObject isKindOfClass:NSClassFromString(@"HomeViewController")]) return;
         if (allMutedUnReadCount <= 0) {
             homeNav.tabBarItem.badgeValue = nil;
         } else if (allMutedUnReadCount > 0 && allMutedUnReadCount < 100) {
@@ -113,7 +112,7 @@ NSString *const kTabBarItemDoubleClickNotification = @"kTabBarItemDoubleClickNot
         [UIApplication sharedApplication].applicationIconBadgeNumber = (NSInteger)allUnMutedUnreadCount;
         if (![self.viewControllers.firstObject isKindOfClass:OWSNavigationController.class]) return;
         OWSNavigationController *homeNav = self.viewControllers.firstObject;
-        if (![homeNav.viewControllers.firstObject isKindOfClass:NSClassFromString(@"DTHomeViewController")]) return;
+        if (![homeNav.viewControllers.firstObject isKindOfClass:NSClassFromString(@"HomeViewController")]) return;
         if (allUnMutedUnreadCount <= 0) {
             NSUInteger allMutedUnReadCount = self.allMutedUnReadCount;
             if (allMutedUnReadCount) {
@@ -124,10 +123,10 @@ NSString *const kTabBarItemDoubleClickNotification = @"kTabBarItemDoubleClickNot
             
         } else if (allUnMutedUnreadCount > 0 && allUnMutedUnreadCount < 100) {
             homeNav.tabBarItem.badgeValue = [NSString stringWithFormat:@"%lu",(unsigned long)allUnMutedUnreadCount];
-            [self setBadgeStyleWithBackgroundColorWithColor:Theme.redBgroundColor lightBackgroundColor:Theme.redBgroundColor darkThemeTextColor:UIColor.whiteColor lightThemeTextColor:UIColor.whiteColor];
+            [self setBadgeStyleWithBackgroundColorWithColor:Theme.errorColor lightBackgroundColor:Theme.errorColor darkThemeTextColor:UIColor.whiteColor lightThemeTextColor:UIColor.whiteColor];
         } else {
             homeNav.tabBarItem.badgeValue = @"99+";
-            [self setBadgeStyleWithBackgroundColorWithColor:Theme.redBgroundColor lightBackgroundColor:Theme.redBgroundColor darkThemeTextColor:UIColor.whiteColor lightThemeTextColor:UIColor.whiteColor];
+            [self setBadgeStyleWithBackgroundColorWithColor:Theme.errorColor lightBackgroundColor:Theme.errorColor darkThemeTextColor:UIColor.whiteColor lightThemeTextColor:UIColor.whiteColor];
         }
         
     }
@@ -150,19 +149,6 @@ NSString *const kTabBarItemDoubleClickNotification = @"kTabBarItemDoubleClickNot
     self.tabBar.standardAppearance = tabBarAppearance;
 }
 
-- (void)reloadTodayScheduleEventCount:(NSUInteger)eventCount {
-    @synchronized (self) {
-        if(_scheduleEventCount == eventCount) {
-            return;
-        }
-        _scheduleEventCount = eventCount;
-        
-        DispatchMainThreadSafe(^{
-            [self.tabBar updateBadgeOnItem:1 badgeValue:eventCount];
-        });
-    }
-}
-
 #pragma mark - UITabBarControllerDelegate
 
 - (BOOL)tabBarController:(UITabBarController *)tabBarController shouldSelectViewController:(UIViewController *)viewController {
@@ -173,10 +159,6 @@ NSString *const kTabBarItemDoubleClickNotification = @"kTabBarItemDoubleClickNot
         // 处理双击事件
         if (date.timeIntervalSince1970 - _lastDate.timeIntervalSince1970 <= 0.38) {
             [[NSNotificationCenter defaultCenter] postNotificationName:kTabBarItemDoubleClickNotification object:nil userInfo:@{@"selectedIndex" : @(selectedIndex)}];
-            if (selectedIndex == 1) {
-                [self reloadTodayScheduleEventCount:0];
-                DTCalendarManager.shared.isDisplayBadge = NO;
-            }
         }
         _lastDate = date;
         
@@ -209,7 +191,7 @@ NSString *const kTabBarItemDoubleClickNotification = @"kTabBarItemDoubleClickNot
         if([vc isKindOfClass:UINavigationController.class]){
             UINavigationController *nav = (UINavigationController *)vc;
             UIViewController *nav_root = nav.viewControllers.firstObject;
-            if([nav_root isKindOfClass:NSClassFromString(@"DTHomeViewController")]){
+            if([nav_root isKindOfClass:NSClassFromString(@"HomeViewController")]){
                 nav_root.tabBarItem.title = [Localize localized:@"TABBAR_HOME"];
             }
             if([nav_root isKindOfClass:NSClassFromString(@"DTMeetingListController")]){
@@ -231,16 +213,16 @@ NSString *const kTabBarItemDoubleClickNotification = @"kTabBarItemDoubleClickNot
 
 - (void)applyTheme {
     UITabBarAppearance *appearance = [UITabBarAppearance new];
-    appearance.shadowColor = Theme.hairlineColor;
-    appearance.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x181A20] : [UIColor whiteColor];
+    appearance.shadowColor = Theme.lineColor;
+    appearance.backgroundColor = Theme.bg1Color;
     UITabBarItemAppearance *tabBarItemAppearance = [UITabBarItemAppearance new];
-    tabBarItemAppearance.normal.iconColor = Theme.tabbarTitleNormalColor;
-    tabBarItemAppearance.normal.titleTextAttributes = @{NSForegroundColorAttributeName : Theme.tabbarTitleNormalColor, NSFontAttributeName : [UIFont systemFontOfSize:13]};
-    tabBarItemAppearance.selected.titleTextAttributes = @{NSForegroundColorAttributeName : Theme.tabbarTitleSelectedColor, NSFontAttributeName : [UIFont systemFontOfSize:13]};
+    tabBarItemAppearance.normal.iconColor = Theme.tsecondaryColor;
+    tabBarItemAppearance.normal.titleTextAttributes = @{NSForegroundColorAttributeName : Theme.tsecondaryColor, NSFontAttributeName : [UIFont systemFontOfSize:13]};
+    tabBarItemAppearance.selected.titleTextAttributes = @{NSForegroundColorAttributeName : Theme.tinfoColor, NSFontAttributeName : [UIFont systemFontOfSize:13]};
     if (self.allUnMutedUnreadCount > 0) {
         NSDictionary <NSAttributedStringKey,id> *badgeTextAttributes = @{NSForegroundColorAttributeName: UIColor.whiteColor, NSFontAttributeName : [UIFont systemFontOfSize:13]};
         tabBarItemAppearance.normal.badgeTextAttributes = badgeTextAttributes;
-        tabBarItemAppearance.normal.badgeBackgroundColor = Theme.redBgroundColor;
+        tabBarItemAppearance.normal.badgeBackgroundColor = Theme.errorColor;
     } else if(self.allUnMutedUnreadCount <= 0 && self.allMutedUnReadCount > 0){
         UIColor *badgeTextColor = Theme.isDarkThemeEnabled ? UIColor.blackColor : UIColor.whiteColor;
         NSDictionary <NSAttributedStringKey,id> *badgeTextAttributes = @{NSForegroundColorAttributeName: badgeTextColor, NSFontAttributeName : [UIFont systemFontOfSize:13]};

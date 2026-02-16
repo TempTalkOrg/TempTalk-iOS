@@ -20,13 +20,13 @@ class DTBlankCell: UITableViewCell {
     }
     
     func applyTheme()  {
-        backgroundColor = Theme.defaultBackgroundColor
-        contentView.backgroundColor = Theme.defaultBackgroundColor
+        backgroundColor = Theme.bgpageSecondaryColor
+        contentView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
     func prepareUI () {
-        backgroundColor = Theme.defaultBackgroundColor
-        contentView.backgroundColor = Theme.defaultBackgroundColor
+        backgroundColor = Theme.bgpageSecondaryColor
+        contentView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
 }

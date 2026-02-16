@@ -5,6 +5,7 @@
 #import "ConversationInputTextView.h"
 #import "Yelling-Swift.h"
 #import <SignalCoreKit/NSString+OWS.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -31,19 +32,17 @@ NS_ASSUME_NONNULL_BEGIN
 
         self.scrollsToTop = NO;
 
+        // 使用当前的字体大小设置
         self.font = [UIFont ows_dynamicTypeBodyFont];
-//        self.textColor = Theme.primaryTextColor;
         self.textAlignment = NSTextAlignmentNatural;
 
         self.contentMode = UIViewContentModeRedraw;
         self.dataDetectorTypes = UIDataDetectorTypeNone;
-//        self.keyboardAppearance = Theme.keyboardAppearance;
 
         self.text = nil;
 
         self.placeholderView = [UILabel new];
         self.placeholderView.text = Localized(@"new_message", @"");
-//        self.placeholderView.textColor = Theme.placeholderColor;
         self.placeholderView.userInteractionEnabled = NO;
         [self addSubview:self.placeholderView];
 
@@ -53,12 +52,28 @@ NS_ASSUME_NONNULL_BEGIN
 
         [self ensurePlaceholderConstraints];
         [self updatePlaceholderVisibility];
-        
+
         [self applyTheme];
         [self addMenuItem];
+
+        // 监听字体大小变化通知
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(textSizeDidChange)
+                                                     name:NSNotification.TextSizeDidChange
+                                                   object:nil];
     }
 
     return self;
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)textSizeDidChange {
+    self.font = [UIFont ows_dynamicTypeBodyFont];
+    [self setNeedsLayout];
+    [self layoutIfNeeded];
 }
 
 - (void)addMenuItem {
@@ -84,9 +99,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)applyTheme {
     
     self.backgroundColor = Theme.isDarkThemeEnabled?[UIColor colorWithRgbHex:0x1E2329]:[UIColor colorWithRgbHex:0xFAFAFA];
-    self.textColor = Theme.primaryTextColor;
+    self.textColor = Theme.tprimaryColor;
     self.keyboardAppearance = Theme.keyboardAppearance;
-    self.placeholderView.textColor = Theme.placeholderColor;
+    self.placeholderView.textColor = [UIColor colorWithRGBHex:0x848E9C];
 }
 
 - (void)setPlaceholder:(NSString *)placeholder {
@@ -97,7 +112,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setFont:(UIFont *_Nullable)font
 {
     [super setFont:font];
-
     self.placeholderView.font = font;
 }
 
@@ -165,12 +179,18 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL)becomeFirstResponder
 {
+    // 先检查是否允许成为 first responder
+    // 如果当前有 attachment 键盘，会返回 NO 并先收起它，延迟后再次尝试
+    if (![self.textViewToolbarDelegate textViewShouldBecomeFirstResponder:self]) {
+        return NO;
+    }
+
     BOOL result = [super becomeFirstResponder];
-    
+
     if (result) {
         [self.textViewToolbarDelegate textViewDidBecomeFirstResponder:self];
     }
-    
+
     return result;
 }
 

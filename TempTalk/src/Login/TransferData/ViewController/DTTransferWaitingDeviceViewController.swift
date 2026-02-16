@@ -168,7 +168,7 @@ import TTMessaging
 
 extension DTTransferWaitingDeviceViewController: DeviceTransferServiceObserver {
     func deviceTransferServiceDiscoveredNewDevice(peerId: MCPeerID, discoveryInfo: [String : String]?) {
-        Logger.info("\(peerId.displayName)")
+        Logger.info("New device discovered")
     }
     
     func deviceTransferServiceDidStartTransfer(progress: Progress) {

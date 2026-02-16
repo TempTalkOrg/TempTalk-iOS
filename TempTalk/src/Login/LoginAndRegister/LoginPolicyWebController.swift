@@ -43,6 +43,6 @@ class LoginPolicyWebController: OWSViewController {
     }
     
     override func applyTheme() {
-        view.backgroundColor = Theme.backgroundColor
+        view.backgroundColor = Theme.bg1Color
     }
 }

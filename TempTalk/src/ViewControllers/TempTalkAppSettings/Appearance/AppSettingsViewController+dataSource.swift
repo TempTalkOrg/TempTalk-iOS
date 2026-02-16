@@ -22,19 +22,19 @@ extension AppSettingsViewController {
     ///plainTextType = 7
     ///注意可点击 cell的type 是需要递增且是唯一标识
     func getDataSource(transaction: SDSAnyReadTransaction) ->  [[DTSettingMeItem]] {
-        
+
         var linkedCount = OWSDevice.anyCount(transaction: transaction);
         if linkedCount > 0 {
             linkedCount -= 1
         }
-        
+
         if(linkedCount > 0){
-            return self.uiDataSource(UInt(linkedCount))
+            return self.uiDataSource(UInt(linkedCount), transaction: transaction)
         } else {
-            return self.uiDataSource(nil)
+            return self.uiDataSource(nil, transaction: transaction)
         }
     }
-    
+
     /// cellStyle 不同的值对应不同的cell类型
     ///blank = 0
     ///onlyAccessory = 1
@@ -45,7 +45,7 @@ extension AppSettingsViewController {
     ///checkBox = 6
     ///plainTextType = 7
     ///注意可点击 cell的type 是需要递增且是唯一标识
-    func uiDataSource(_ linkedDeviceNum: UInt?) -> [[DTSettingMeItem]] {
+    func uiDataSource(_ linkedDeviceNum: UInt?, transaction: SDSAnyReadTransaction) -> [[DTSettingMeItem]] {
         var linkedDeviceItem: [String : Any]?
         var dataSourceArr  = [[[String: Any]]]()
         if let linkedDeviceNum = linkedDeviceNum, linkedDeviceNum > 0 {
@@ -99,6 +99,12 @@ extension AppSettingsViewController {
              "title":Localized("SETTINGS_ADVANCED_THEME",comment: ""),
              "description": Theme.isDarkThemeEnabled ? Localized("APPEARANCE_SETTINGS_DARK_THEME_NAME",comment: "") : Localized("APPEARANCE_SETTINGS_LIGHT_THEME_NAME",comment: "") ,
              "type":6,
+             "cellStyle":4
+            ],
+            ["icon":"",
+             "title":Localized("SETTINGS_TEXT_SIZE_TITLE",comment: ""),
+             "description": TextSizeManager.getCurrentLevel(transaction: transaction).displayName,
+             "type":10,
              "cellStyle":4
             ],
             ["icon":"",

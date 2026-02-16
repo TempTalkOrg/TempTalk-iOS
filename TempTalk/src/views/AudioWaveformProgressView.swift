@@ -7,19 +7,19 @@ import TTServiceKit
 
 
 @objc class AudioWaveformProgressView: UIView {
-    @objc var playedColor: UIColor = Theme.primaryTextColor {
+    @objc var playedColor: UIColor = Theme.tprimaryColor {
         didSet {
             playedShapeLayer.fillColor = playedColor.cgColor
         }
     }
 
-    var unplayedColor: UIColor = Theme.secondaryTextAndIconColor {
+    var unplayedColor: UIColor = Theme.tsecondaryColor {
         didSet {
             unplayedShapeLayer.fillColor = unplayedColor.cgColor
         }
     }
 
-    @objc var thumbColor: UIColor = Theme.primaryTextColor {
+    @objc var thumbColor: UIColor = Theme.tprimaryColor {
         didSet {
             thumbView.backgroundColor = thumbColor
         }
@@ -84,10 +84,10 @@ import TTServiceKit
         
         layer.addSublayer(playedShapeLayer)
 
-        unplayedShapeLayer.fillColor = Theme.thirdTextAndIconColor.cgColor
+        unplayedShapeLayer.fillColor = Theme.tdisableColor.cgColor
         layer.addSublayer(unplayedShapeLayer)
 
-        thumbView.backgroundColor = Theme.themeBlueColor2
+        thumbView.backgroundColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x82C1FC) : UIColor.color(rgbHex: 0x056FFA)
         addSubview(thumbView)
     }
 
@@ -155,12 +155,17 @@ import TTServiceKit
         unplayedShapeLayer.frame = bounds
 
         let progress = self.value
+        let squareSize: CGFloat = 8
         let thumbXPos = width * progress
 
-        let squareSize: CGFloat = 8
+        // Clamp thumbView position to stay within bounds
+        let minX: CGFloat = 0
+        let maxX = width - squareSize
+        let clampedThumbXPos = min(max(thumbXPos, minX), maxX)
+
         thumbView.frame.size = CGSize(square: squareSize)
         thumbView.layer.cornerRadius = squareSize / 2
-        thumbView.frame.origin.x = thumbXPos
+        thumbView.frame.origin.x = clampedThumbXPos
         thumbView.frame.origin.y = bounds.center.y - squareSize / 2
 
 //        Logger.debug("[voice] width: \(width), progress: \(progress),  thumbXPos: \(thumbXPos)")

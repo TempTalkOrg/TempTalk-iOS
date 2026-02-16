@@ -98,11 +98,11 @@ public class OWSNavigationBar: UINavigationBar {
     internal var navbarTintColorOverride: UIColor?
 
     private var navbarBackgroundColor: UIColor {
-        return navbarBackgroundColorOverride ?? Theme.backgroundColor // Theme.navbarBackgroundColor
+        return navbarBackgroundColorOverride ?? Theme.bgpagePrimaryColor // Theme.bg1Color
     }
 
     private var navbarTintColor: UIColor {
-        return navbarTintColorOverride ?? Theme.primaryIconColor // Theme.primaryTextColor
+        return navbarTintColorOverride ?? Theme.iconColor // Theme.tprimaryColor
     }
 
     // MARK: Appearance
@@ -281,7 +281,7 @@ internal struct OWSNavigationBarAppearance: Equatable {
         } else {
             appearance.backgroundStyle = .blur(Theme.barBlurEffect)
         }
-        appearance.titleTextColor = Theme.primaryTextColor
+        appearance.titleTextColor = Theme.tprimaryColor
         appearance.clipsToBounds = false
         appearance.hasShadowImage = false
         appearance.isTranslucent = false
@@ -292,8 +292,8 @@ internal struct OWSNavigationBarAppearance: Equatable {
 
         let applyDarkThemeOverride = {
             appearance.barStyle = .black
-            appearance.backgroundStyle = .tint(Theme.darkThemeBackgroundColor)
-            appearance.tintColor = Theme.darkThemePrimaryColor
+            appearance.backgroundStyle = .tint(Theme.dark.bg1Color)
+            appearance.tintColor = Theme.dark.tprimaryColor
         }
 
         let applySolidBarOverride = {
@@ -342,6 +342,20 @@ internal struct OWSNavigationBarAppearance: Equatable {
         appearance.shadowImage = shadowImage
         // We have to override the color default, we never use it.
         appearance.shadowColor = nil
+
+        // 设置返回按钮和其他按钮的字体（忽略系统 Dynamic Type）
+        let barButtonFont = UIFont.ows_regularFont(withSize: 17.0, scaled: true)
+        let barButtonAttributes: [NSAttributedString.Key: Any] = [
+            .font: barButtonFont
+        ]
+
+        let buttonAppearance = UIBarButtonItemAppearance()
+        buttonAppearance.normal.titleTextAttributes = barButtonAttributes
+        buttonAppearance.highlighted.titleTextAttributes = barButtonAttributes
+        buttonAppearance.disabled.titleTextAttributes = barButtonAttributes
+
+        appearance.buttonAppearance = buttonAppearance
+        appearance.backButtonAppearance = buttonAppearance
 
         navigationBar.standardAppearance = appearance
         navigationBar.scrollEdgeAppearance = appearance
@@ -400,6 +414,10 @@ internal struct OWSNavigationBarAppearance: Equatable {
         if let titleTextColor = titleTextColor {
             attributes[.foregroundColor] = titleTextColor
         }
+        // 设置固定字体大小（忽略系统 Dynamic Type）
+        // 导航栏标题使用 17pt semibold 字体，支持 App 内缩放
+        let navBarTitleFont = UIFont.ows_semiboldFont(withSize: 17.0, scaled: true)
+        attributes[.font] = navBarTitleFont
         return attributes
     }
 }

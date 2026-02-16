@@ -144,41 +144,39 @@ class DTSearchResultListController: OWSViewController , UITableViewDelegate , UI
             let avatar = contact.avatar as? [String : Any]
             let iconRender: IconRender = .account(avatar: avatar ?? [:], recipientId: item.recipientId)
             let date = TimeZoneUntil.timeZoneFrom(contact: contact).orEmpty
+            let remarkName = item.signalAccount.remarkName
+
             if contact.fullName.lowercased().contains(keyword) {
-                let attribute = gengertAttribute(contact.fullName, match: keyword, font: SearchFonts.body, color: Theme.primaryTextColor)
+                let attribute = gengertAttribute(contact.fullName, match: keyword, font: SearchFonts.body, color: Theme.tprimaryColor)
                 let others: [String] = [
-                    contact.signature, contact.email, item.recipientId
+                    remarkName, contact.signature, contact.email
                 ].compactMap {
                     guard let result = $0, !result.isEmpty else { return nil }
                     return result
                 }
                 renderRows.append(.contact(icon: iconRender, name: .attribute(attribute), sign: .normal(others.first.orEmpty), email: .normal(others.second.orEmpty), date: date))
-                
-            }else if let signature = contact.signature, signature.lowercased().contains(keyword) {
+
+            } else if let remarkName = remarkName, remarkName.lowercased().contains(keyword) {
+                // Display remarkName as the main name when matched
+                let attribute = gengertAttribute(remarkName, match: keyword, font: SearchFonts.body, color: Theme.tprimaryColor)
+                let others: [String] = [
+                    contact.signature, contact.email
+                ].compactMap {
+                    guard let result = $0, !result.isEmpty else { return nil }
+                    return result
+                }
+                renderRows.append(.contact(icon: iconRender, name: .attribute(attribute), sign: .normal(others.first.orEmpty), email: .normal(others.second.orEmpty), date: date))
+
+            } else if let signature = contact.signature, signature.lowercased().contains(keyword) {
                 let attribute = gengertAttribute(signature, match: keyword)
-                let others: [String?] = [contact.email, item.recipientId
-                ]
+                let others: [String?] = [remarkName, contact.email]
                 let shouldRender = others.first { $0?.isEmpty == false } ?? .empty
                 renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: .attribute(attribute), email: .normal(shouldRender.orEmpty), date: date))
-                
+
             } else if let email = contact.email, email.lowercased().contains(keyword) {
                 let attribute = gengertAttribute(email, match: keyword)
                 let others: [String] = [
-                    contact.signature.orEmpty, item.recipientId
-                ]
-                guard let firstIndex = others.firstIndex(where: { !$0.isEmpty }) else {
-                    renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: .attribute(attribute), email: .normal(.empty), date: date))
-                    continue
-                }
-                let shouldRender = others[safe: firstIndex].orEmpty
-                let sign: RenderText = firstIndex == 0 ? .normal(shouldRender) : .attribute(attribute)
-                let email: RenderText = firstIndex == 0 ? .attribute(attribute) : .normal(shouldRender)
-                renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: sign, email: email, date: date))
-                
-            } else if item.recipientId.lowercased().contains(keyword) {
-                let attribute = gengertAttribute(item.recipientId, match: keyword)
-                let others: [String] = [
-                    contact.signature.orEmpty, contact.email.orEmpty,
+                    remarkName.orEmpty, contact.signature.orEmpty
                 ]
                 guard let firstIndex = others.firstIndex(where: { !$0.isEmpty }) else {
                     renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: .attribute(attribute), email: .normal(.empty), date: date))
@@ -198,11 +196,11 @@ class DTSearchResultListController: OWSViewController , UITableViewDelegate , UI
         for item in groups {
             let iconRender = IconRender.group(thread: item.thread, contactsManager: self.contactsManager)
             if item.accounts.isEmpty, item.groupName.lowercased().contains(keyword) {
-                let attribute = gengertAttribute(item.groupName, match: keyword, font: SearchFonts.body, color: Theme.primaryTextColor)
+                let attribute = gengertAttribute(item.groupName, match: keyword, font: SearchFonts.body, color: Theme.tprimaryColor)
                 renderRows.append(.group(icon: iconRender, name: .attribute(attribute), include: .normal(.empty)))
-                
+
             } else if let account = item.accounts.first, let contact = account.contact {
-                guard let renderText = [contact.fullName, contact.email, account.recipientId].first(where: { $0?.lowercased().contains(keyword) == true }) else {
+                guard let renderText = [contact.fullName, account.remarkName, contact.email].first(where: { $0?.lowercased().contains(keyword) == true }) else {
                     continue
                 }
                 let attribute = gengertAttribute(renderText.orEmpty, match: keyword)
@@ -228,14 +226,14 @@ class DTSearchResultListController: OWSViewController , UITableViewDelegate , UI
         return renderRows
     }
     
-    private func gengertAttribute(_ nString: String, match: String, font: UIFont = SearchFonts.small, color: UIColor = Theme.ternaryTextColor) -> NSMutableAttributedString {
+    private func gengertAttribute(_ nString: String, match: String, font: UIFont = SearchFonts.small, color: UIColor = Theme.tthirdColor) -> NSMutableAttributedString {
         NSMutableAttributedString.covertString(nString, match: match, attributes: [.font: font, .foregroundColor: color], matchAttributes: [.foregroundColor: UIColor.ows_darkSkyBlue])
     }
     
     override func applyTheme() {
-        view.backgroundColor = Theme.backgroundColor
-        tableView.backgroundColor = Theme.backgroundColor
-        tableView.separatorColor = Theme.cellSeparatorColor
+        view.backgroundColor = Theme.bgpagePrimaryColor
+        tableView.backgroundColor = Theme.bgpagePrimaryColor
+        tableView.separatorColor = Theme.dividerColor
         self.tableView.reloadData()
     }
     
@@ -387,9 +385,9 @@ extension DTSearchResultListController {
         case contact(icon: IconRender, name: RenderText, sign: RenderText, email: RenderText, date: String)
         case group(icon: IconRender, name: RenderText, include: RenderText)
         case message(thread: ThreadViewModel, overrideSnippet: NSAttributedString, date: Date)
-        
+
         var subheadlineSize: CGFloat {
-            return UIFont.preferredFont(forTextStyle: .subheadline).pointSize
+            return UIFont.preferredFont(forTextStyle: .subheadline).scaled().pointSize
         }
         
         var height: CGFloat {

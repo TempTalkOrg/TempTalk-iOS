@@ -20,10 +20,11 @@
 #import "DTRecallMessage.h"
 #import <SignalCoreKit/NSDate+OWS.h>
 #import "DTRecallConfig.h"
-#import "DTRecallMessagesJob.h"
 #import "OWSMessageManager.h"
 #import "DTReactionMessage.h"
 #import "AppVersion.h"
+#import "TSMessageReadPosition.h"
+#import "DTReadPositionEntity.h"
 
 #import <TTServiceKit/TTServiceKit-Swift.h>
 
@@ -78,7 +79,7 @@ NS_ASSUME_NONNULL_BEGIN
     OWSLogDebug(@"%@ Recording transcript: %@", self.logTag, transcript);
 
     if (transcript.isEndSessionMessage) {
-        OWSLogInfo(@"%@ EndSession was sent to recipient: %@.", self.logTag, transcript.recipientId);
+        OWSLogInfo(@"%@ EndSession was sent to recipient.", self.logTag);
 
         // Don't continue processing lest we print a bubble for the session reset.
         return;
@@ -132,8 +133,8 @@ NS_ASSUME_NONNULL_BEGIN
         OWSLogInfo(@"start handle recall sync message");
         OWSLogInfo(@"recall description:%@", transcript.recall.description);
         
-        BOOL duplicateRecallMessage = [RecallFinder duplicateRecallMessageWithTimestamp:transcript.recall.source.timestamp
-                                                                               sourceId:[TSAccountManager localNumber]
+        BOOL duplicateRecallMessage = [RecallFinder duplicateRecallMessageWithTimestamp:transcript.timestamp + index
+                                                                               sourceId:localNumber
                                                                          sourceDeviceId:transcript.sourceDeviceId
                                                                             transaction:transaction];
         if(duplicateRecallMessage){
@@ -146,77 +147,17 @@ NS_ASSUME_NONNULL_BEGIN
         
         TSOutgoingMessage *originMessage = [TSOutgoingMessage findSyncMessageWithTimestamp:transcript.recall.source.timestamp + index
                                                                                transaction:transaction];
-        TSThread *thread = nil;
-        if (transcript.groupId.length > 0) {
-            thread = [TSGroupThread threadWithGroupId:transcript.groupId transaction:transaction];
-        }else{
-            thread = [TSContactThread getOrCreateThreadWithContactId:transcript.recipientId
-                                                         transaction:transaction
-                                                               relay:transcript.relay];
-        }
-        
-        NSMutableAttributedString *customString = [[NSMutableAttributedString alloc] initWithString:[NSString stringWithFormat:Localized(@"RECALL_INFO_MESSAGE_WITH_EDIT",nil), Localized(@"YOU",nil)]];
-        NSAttributedString *editString = [[NSAttributedString alloc] initWithString:Localized(@"RE-EDIT_MESSAGE",nil)
-                                                                         attributes:@{
-                                             NSForegroundColorAttributeName:[UIColor colorWithRed:76.0/255 green:97.0/255 blue:140.0/255 alpha:1.0]
-                                         }];
-        [customString appendAttributedString:editString];
-        
-        
-        NSString *previewSting = [NSString stringWithFormat:Localized(@"RECALL_INFO_MESSAGE",nil), Localized(@"YOU",nil)];
-        
-        uint64_t now = [NSDate ows_millisecondTimeStamp];
-        BOOL timeoutForEdit = ((now - (transcript.timestamp + index)) > [DTRecallConfig fetchRecallConfig].editableInterval*1000);
-        if(!originMessage.isTextMessage || timeoutForEdit){
-            customString = [[NSMutableAttributedString alloc] initWithString:previewSting];
-        }
-        
         DTRecallMessage *recall = transcript.recall;
-        
-        TSInfoMessage *recallInfoMessage = [[TSInfoMessage alloc] initWithTimestamp:recall.source.timestamp + index
-                                                                    serverTimestamp:transcript.serverTimestamp
-                                                                           inThread:thread
-                                                                   expiresInSeconds:transcript.expirationDuration
-                                                                      customMessage:customString];
-        recall.timestamp = transcript.timestamp + index;
-        recallInfoMessage.serverTimestamp = originMessage.serverTimestamp?(originMessage.serverTimestamp + index):(recall.source.serverTimestamp + index);
-        recallInfoMessage.recall = recall;
-        recallInfoMessage.authorId = [TSAccountManager localNumber];
-        recallInfoMessage.sourceDeviceId = transcript.sourceDeviceId;
-        recallInfoMessage.recallPreview = previewSting;
-        if(originMessage.isTextMessage && !timeoutForEdit){
-            recallInfoMessage.editable = YES;
-            recall.body = originMessage.body;
+        OWSLogInfo(@"%@ recall message will remove timestamp: %llu", self.logTag, recall.source.timestamp + index);
+        if (originMessage){
+            [originMessage anyRemoveWithTransaction:transaction];
+            OWSLogInfo(@"%@ recall message did remove  timestamp: %llu", self.logTag, recall.source.timestamp + index);
         }
-        if(originMessage){
-            recallInfoMessage.uniqueId = originMessage.uniqueId;
-            if(!recallInfoMessage.grdbId && originMessage.grdbId){
-                [recallInfoMessage updateRowId:originMessage.grdbId.longLongValue];
-            }
-        }
-        
-        if(job.envelopeProto.lastestMsgFlag){
-            if(!recallInfoMessage.grdbId){
-                [recallInfoMessage updateRowId:100];
-            }
-            OWSLogInfo(@"%@ handling lastestMsgFlag  timestamp: %llu", self.logTag, recallInfoMessage.timestamp);
-            [thread updateWithLastMessage:recallInfoMessage isInserted:YES transaction:transaction];
-        } else {
-//            if(originMessage){
-//                [originMessage anyRemoveWithTransaction:transaction];
-//                OWSLogInfo(@"recalled message timestamp for sorting: %llu", originMessage.timestampForSorting);
-//            }
-            OWSLogInfo(@"%@ will insert recall message  timestamp: %llu", self.logTag, recallInfoMessage.timestamp);
-            [recallInfoMessage anyUpsertWithTransaction:transaction];
-            OWSLogInfo(@"%@ did insert recall message  timestamp: %llu", self.logTag, recallInfoMessage.timestamp);
-        }
-        
-//        [[OWSDisappearingMessagesJob shared] startAnyExpirationForMessage:recallInfoMessage
-//                                                      expirationStartedAt:transcript.expirationStartedAt
-//                                                              transaction:transaction];
-        
-        [[DTRecallMessagesJob sharedJob] startIfNecessary];
-        
+        [recall insertRecordWithSource:localNumber
+                          sourceDevice:transcript.sourceDeviceId
+                             timestamp:transcript.timestamp + index
+                           transaction:transaction];
+                
         if(self.handleUnsupportedMessage){
             TSOutgoingMessage *oldMessage = [TSOutgoingMessage findSyncMessageWithTimestamp:transcript.timestamp + index
                                                                                    transaction:transaction];
@@ -225,11 +166,6 @@ NS_ASSUME_NONNULL_BEGIN
                 OWSLogInfo(@"handleUnsupportedMessage delete message timestamp for sorting: %llu", oldMessage.timestampForSorting);
             }
         }
-        
-        // If the message arrives later than the archived notification, archive it directly
-        // Messages are no longer stored in "model_TSInteraction" table
-        // TODO: 目前message 没有合适的方式直接入归档消息的table，后面数据库优化后调整
-        [[OWSArchivedMessageJob sharedJob] checkAndArchiveWithMessage:recallInfoMessage withThread:thread transaction:transaction];
        
         return;
     }
@@ -305,46 +241,40 @@ NS_ASSUME_NONNULL_BEGIN
     
     TSQuotedMessage *_Nullable quotedMessage = transcript.quotedMessage;
     
-    TSThread *thread_t = transcript.thread;
     if (quotedMessage && quotedMessage.thumbnailAttachmentPointerId ) {
-        if (![[OWSArchivedMessageJob sharedJob] needArchiveWithMessage:outgoingMessage withThread:thread_t]){
-                    // We weren't able to derive a local thumbnail, so we'll fetch the referenced attachment.
-                    TSAttachmentPointer *attachmentPointer =
-                        [TSAttachmentPointer anyFetchAttachmentPointerWithUniqueId:quotedMessage.thumbnailAttachmentPointerId
-                                                                       transaction:transaction];
+        // We weren't able to derive a local thumbnail, so we'll fetch the referenced attachment.
+        TSAttachmentPointer *attachmentPointer =
+            [TSAttachmentPointer anyFetchAttachmentPointerWithUniqueId:quotedMessage.thumbnailAttachmentPointerId
+                                                           transaction:transaction];
 
-                    if ([attachmentPointer isKindOfClass:[TSAttachmentPointer class]]) {
-                        OWSAttachmentsProcessor *attachmentProcessor =
-                            [[OWSAttachmentsProcessor alloc] initWithAttachmentPointer:attachmentPointer];
+        if ([attachmentPointer isKindOfClass:[TSAttachmentPointer class]]) {
+            OWSAttachmentsProcessor *attachmentProcessor =
+                [[OWSAttachmentsProcessor alloc] initWithAttachmentPointer:attachmentPointer];
 
-                        OWSLogDebug(
-                            @"%@ downloading thumbnail for transcript: %lu", self.logTag, (unsigned long)transcript.timestamp);
-                        [attachmentProcessor fetchAttachmentsForMessage:outgoingMessage
-                                                          forceDownload:NO
-                                                            transaction:transaction
-                                                                success:^(TSAttachmentStream *_Nonnull attachmentStream) {
-                                DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
-                                        
-                                        [outgoingMessage anyUpdateWithTransaction:transaction
-                                                                            block:^(TSInteraction * instance) {
-                                            if([instance isKindOfClass:[TSOutgoingMessage class]]){
-                                                [((TSOutgoingMessage *)instance) setQuotedMessageThumbnailAttachmentStream:attachmentStream];
-                                            }
-                                        }];
-                                });
-                                
-                            }
-                                                                failure:^(NSError *_Nonnull error) {
-                                OWSLogWarn(@"%@ failed to fetch thumbnail for transcript: %lu with error: %@",
-                                    self.logTag,
-                                    (unsigned long)transcript.timestamp,
-                                    error);
+            OWSLogDebug(
+                @"%@ downloading thumbnail for transcript: %lu", self.logTag, (unsigned long)transcript.timestamp);
+            [attachmentProcessor fetchAttachmentsForMessage:outgoingMessage
+                                              forceDownload:NO
+                                                transaction:transaction
+                                                    success:^(TSAttachmentStream *_Nonnull attachmentStream) {
+                    DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+                            
+                            [outgoingMessage anyUpdateWithTransaction:transaction
+                                                                block:^(TSInteraction * instance) {
+                                if([instance isKindOfClass:[TSOutgoingMessage class]]){
+                                    [((TSOutgoingMessage *)instance) setQuotedMessageThumbnailAttachmentStream:attachmentStream];
+                                }
                             }];
-                    }
-            } else {
-                OWSLogInfo(@"Message need archive, so don't download attachment.");
-            }
-
+                    });
+                    
+                }
+                                                    failure:^(NSError *_Nonnull error) {
+                    OWSLogWarn(@"%@ failed to fetch thumbnail for transcript: %lu with error: %@",
+                        self.logTag,
+                        (unsigned long)transcript.timestamp,
+                        error);
+                }];
+        }
     }
     
     DTCombinedForwardingMessage *forwardMessage = transcript.forwardingMessage;
@@ -440,10 +370,6 @@ NS_ASSUME_NONNULL_BEGIN
         
 
     }
-    // If the message arrives later than the archived notification, archive it directly
-    // Messages are no longer stored in "model_TSInteraction" table, but this situation needs to be completed in the subsequent database optimization process
-    // TODO: 目前message 没有合适的方式直接入归档消息的table，后面数据库优化后调整
-    [[OWSArchivedMessageJob sharedJob] checkAndArchiveWithMessage:outgoingMessage withThread:thread_t transaction:transaction];
     
 }
 

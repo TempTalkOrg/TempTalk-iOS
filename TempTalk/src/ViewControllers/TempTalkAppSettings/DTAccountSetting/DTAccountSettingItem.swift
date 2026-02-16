@@ -27,6 +27,7 @@ class DTAccountSettingItem: DTSettingItem , DTSettingItemProtocol {
         case email = 2
         case phoneNumber = 3
         case logout = 4
+        case allowSearch = 5
     }
 
     /// 关联协议中的 SettingType属性 并重写 type的 get 函数 为type赋值

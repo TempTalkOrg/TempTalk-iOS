@@ -29,9 +29,11 @@ extension ConversationViewController: ConversationHeaderViewDelegate {
     
     func createHeaderViews() {
         navigationItem.titleView = headerView
-        
-        if let _ = navigationController?.presentingViewController, navigationController?.viewControllers.count == 1 {
-            
+
+        // 如果是从PersonalCard浮动窗口打开，始终使用headerView
+        if isFromPersonalCard {
+            navigationItem.titleView = headerView
+        } else if let _ = navigationController?.presentingViewController, navigationController?.viewControllers.count == 1 {
             navigationItem.titleView = nil
             var threadName: String?
             databaseStorage.read { [weak self] transaction in
@@ -94,12 +96,36 @@ extension ConversationViewController {
         if let button = viewState.threadBackButton {
             return button
         }
-        let newButton = UIBarButtonItem(
-            barButtonSystemItem: .stop,
-            target: self,
-            action: #selector(dismissConversationButtonClick)
-        )
+        let closeButton = UIButton(type: .custom)
+        closeButton.tintColor = Theme.iconColor
+        let closeImage = UIImage(named: "nav_bar_close")?.withRenderingMode(.alwaysTemplate)
+        closeButton.setImage(closeImage, for: .normal)
+        closeButton.addTarget(self, action: #selector(dismissConversationButtonClick), for: .touchUpInside)
+
+        // 设置图片向左偏移，并扩大点击区域到 44x44
+        closeButton.imageEdgeInsets = UIEdgeInsets(top: 0, left: -12, bottom: 0, right: 12)
+        closeButton.frame = CGRect(x: 0, y: 0, width: 36, height: 44)
+
+        let newButton = UIBarButtonItem(customView: closeButton)
         viewState.threadBackButton = newButton
+        return newButton
+    }
+
+    // 半屏状态的返回按钮（< 样式）
+    var threadPopBackButton: UIBarButtonItem {
+        if let button = viewState.threadPopBackButton {
+            return button
+        }
+        let backButton = UIButton(type: .custom)
+        backButton.tintColor = Theme.iconColor
+        let backImage = UIImage(named: "NavBarBack")?.withRenderingMode(.alwaysTemplate)
+        backButton.setImage(backImage, for: .normal)
+        backButton.addTarget(self, action: #selector(popConversationButtonClick), for: .touchUpInside)
+        backButton.imageEdgeInsets = UIEdgeInsets(top: 0, left: -12, bottom: 0, right: 12)
+        backButton.frame = CGRect(x: 0, y: 0, width: 36, height: 44)
+
+        let newButton = UIBarButtonItem(customView: backButton)
+        viewState.threadPopBackButton = newButton
         return newButton
     }
     
@@ -108,7 +134,7 @@ extension ConversationViewController {
             return button
         }
         let quickGroupBtn = UIButton(type: .custom)
-        quickGroupBtn.tintColor = Theme.primaryIconColor
+        quickGroupBtn.tintColor = Theme.iconColor
         quickGroupBtn.setImage(UIImage(named: "quick_group")?.withRenderingMode(UIImage.RenderingMode.alwaysTemplate), for: .normal)
         quickGroupBtn.addTarget(self, action: #selector(self.quickGroupAction), for: .touchUpInside)
         quickGroupBtn.frame = CGRectMake(0, 0, 19, 19)
@@ -122,7 +148,7 @@ extension ConversationViewController {
             return button
         }
         let askFriendBtn = UIButton(type: .custom)
-        askFriendBtn.tintColor = Theme.primaryIconColor
+        askFriendBtn.tintColor = Theme.iconColor
         askFriendBtn.setImage(UIImage(named: "ask_friend")?.withRenderingMode(UIImage.RenderingMode.alwaysTemplate), for: .normal)
         askFriendBtn.addTarget(self, action: #selector(self.askFriendAction), for: .touchUpInside)
         askFriendBtn.frame = CGRectMake(0, 0, 19, 19)
@@ -136,7 +162,8 @@ extension ConversationViewController {
         // UIBarButtonItem in order to ensure that these buttons are spaced tightly.
         // The contents of the navigation bar are cramped in this view.
         let callButton = UIButton(type: .custom)
-        let callImage = UIImage(named: "user_voice_call")
+        callButton.tintColor = Theme.iconColor
+        let callImage = UIImage(named: "user_voice_call")?.withRenderingMode(.alwaysTemplate)
         callButton.setImage(callImage, for: .normal)
         callButton.accessibilityLabel = Localized("CALL_LABEL")
         callButton.addTarget(self, action: #selector(startCallAction), for: .touchUpInside)
@@ -176,7 +203,7 @@ extension ConversationViewController {
                 headerView.isExternal = false
                 return NSAttributedString(
                     string: MessageStrings.noteToSelf(),
-                    attributes: [.foregroundColor: Theme.primaryTextColor]
+                    attributes: [.foregroundColor: Theme.tprimaryColor]
                 )
             }
             
@@ -211,43 +238,46 @@ extension ConversationViewController {
             }
 
             headerView.isExternal = false
-            
+
             return NSAttributedString(
                 string: groupThread.groupThreadNameWithMemberCount(),
-                attributes: [.foregroundColor: Theme.primaryTextColor]
+                attributes: [.foregroundColor: Theme.tprimaryColor]
             )
         }
-        
-        
+
+
         if let groupThread = self.thread as? TSGroupThread, viewState.conversationViewMode == .normalPresent {
-            
+
             self.title = groupThread.name(with: nil)
             return
         }
-        
+
         let attributedTitle: NSAttributedString? = {
-            
+
             var title: NSAttributedString?
             if let contractThread = self.thread as? TSContactThread {
                 title = titleForContactThread(contractThread)
                 Logger.info("[Conversation] contactThread theadName \(title)")
-            }
-            if let groupThread = self.thread as? TSGroupThread {
+            } else if let groupThread = self.thread as? TSGroupThread {
                 title = titleForGroupThread(groupThread)
                 Logger.info("[Conversation] groupThread theadName \(title)")
+            } else {
+                Logger.error("[Conversation] failure: unexpected thread: \(self.thread)")
             }
+
             if let currentTitle = title,
                thread.messageExpiresInSeconds() > 0 {
                 title = DTConversactionSettingUtils.msgDisappearingTipsOnThread(messageExpiry: TimeInterval(thread.messageExpiresInSeconds()), threadName: currentTitle, font: headerView.titlePrimaryFont)
             }
-            Logger.error("[Conversation] failure: unexpected thread: \(self.thread)")
             return title
         }()
-        
-        self.title = nil
-        
-        if attributedTitle != headerView.attributedTitle {
-            headerView.attributedTitle = attributedTitle
+
+        // Ensure UI updates happen on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.title = nil
+            // Force update to ensure UI refresh when contact name changes
+            self.headerView.attributedTitle = attributedTitle
         }
     }
     
@@ -267,7 +297,7 @@ extension ConversationViewController {
             return ""
         }()
         
-        let subtitleColor = Theme.navbarTitleColor.withAlphaComponent(0.9)
+        let subtitleColor = Theme.tprimaryColor.withAlphaComponent(0.9)
         let attributedTitle = NSAttributedString(
             string: subtitle,
             attributes: [.font: headerView.subtitleFont, .foregroundColor: subtitleColor]
@@ -277,30 +307,55 @@ extension ConversationViewController {
     
     func updateBarButtonItems() {
         navigationItem.hidesBackButton = false
-        
+
         if isMultiSelectMode {
             navigationItem.leftBarButtonItem = cancelMultiButton
             navigationItem.rightBarButtonItems = []
             return
         }
-        
+
+        // If from personal card and in compact mode (50%), show close button (X)
+        if isFromPersonalCard && floatingWindowIsCompactMode {
+            navigationItem.leftBarButtonItem = threadBackButton
+            navigationItem.rightBarButtonItems = [createFullScreenBarButtonItem()]
+            return
+        }
+
+        // If from personal card and in expanded mode (90%), show close button (X)
+        if isFromPersonalCard && !floatingWindowIsCompactMode && !isFullScreenMode {
+            navigationItem.leftBarButtonItem = threadBackButton
+            navigationItem.rightBarButtonItems = [createFullScreenBarButtonItem()]
+            return
+        }
+
+        // If from personal card and in fullscreen mode (100%), show back arrow button (<) + normal right buttons
+        if isFromPersonalCard && isFullScreenMode {
+            navigationItem.leftBarButtonItem = threadPopBackButton
+            setupNormalRightBarButtonItems()
+            return
+        }
+
+        // Set left bar button based on conversation view mode
         if conversationViewMode == .normalPresent {
             navigationItem.leftBarButtonItem = threadBackButton
         } else {
             navigationItem.leftBarButtonItem = navigationItem.backBarButtonItem
         }
-        
+
         if isUserLeftGroup {
             navigationItem.rightBarButtonItems = []
             return
         }
-        
+
+        setupNormalRightBarButtonItems()
+    }
+
+    // 设置正常的右侧按钮（通话、建群等）
+    private func setupNormalRightBarButtonItems() {
         let showFriendAction = isFriend && !isBot && !thread.isNoteToSelf
         var barBtnItems: [UIBarButtonItem] = []
-        if thread.isGroupThread() ||
-            showFriendAction {
-            barBtnItems.append(createCallBarButtonItem())
-        }
+
+        // 先添加快速建群/添加群组按钮
         if let groupThread = self.thread as? TSGroupThread,
            GroupPermissions.hasPermissionToAddGroupMembers(groupModel: groupThread.groupModel) {
             barBtnItems.append(quickGroupBtn)
@@ -309,6 +364,13 @@ extension ConversationViewController {
         } else if !self.thread.isGroupThread() && !self.isFriend {
             barBtnItems.append(askFriendBtn)
         }
+
+        // 再添加通话/发起会议按钮
+        if thread.isGroupThread() ||
+            showFriendAction {
+            barBtnItems.append(createCallBarButtonItem())
+        }
+
         self.navigationItem.rightBarButtonItems = barBtnItems
 
     }
@@ -322,9 +384,49 @@ extension ConversationViewController {
     func dismissConversationButtonClick() {
         view.endEditing(true)
 
-        navigationController?.dismiss(animated: true)
+        // 如果是从PersonalCard打开的
+        if isFromPersonalCard {
+            // 50% compact模式和90% expanded模式都使用从上往下的present风格dismiss
+            if let navController = navigationController,
+               let floatingVC = navController.parent as? FloatingConversationViewController {
+                floatingVC.dismiss(animated: true)
+            } else {
+                navigationController?.dismiss(animated: true)
+            }
+        } else {
+            navigationController?.dismiss(animated: true)
+        }
     }
-    
+
+    // 从浮动模式返回Home（退出浮动窗口，直接回到HomeViewController）
+    private func navigateToNormalConversation() {
+        // 使用push风格dismiss浮动窗口，直接返回HomeViewController
+        if let navController = navigationController,
+           let floatingVC = navController.parent as? FloatingConversationViewController {
+            floatingVC.dismissWithPushStyleAndReturnToHome()
+        }
+    }
+
+    // 100%全屏模式或其他模式的返回按钮点击事件
+    @objc
+    func popConversationButtonClick() {
+        view.endEditing(true)
+
+        // 100%全屏模式：直接返回HomeViewController
+        if isFullScreenMode {
+            navigateToNormalConversation()
+            return
+        }
+
+        // 其他情况：不应该执行到这里，因为100%全屏时才使用threadPopBackButton
+        if let navController = navigationController,
+           let floatingVC = navController.parent as? FloatingConversationViewController {
+            floatingVC.dismissWithPopStyle()
+        } else {
+            navigationController?.dismiss(animated: true)
+        }
+    }
+
     func quickGroupAction() {
         if self.thread.isGroupThread() {
             if let groupThread = self.thread as? TSGroupThread, GroupPermissions.hasPermissionToAddGroupMembers(groupModel: groupThread.groupModel) {
@@ -357,6 +459,36 @@ extension ConversationViewController {
     
     func startCallAction() {
         didTapCallNavBtn()
+    }
+
+    private func createFullScreenBarButtonItem() -> UIBarButtonItem {
+        let button = UIButton(type: .custom)
+        button.tintColor = Theme.iconColor
+        let image = UIImage(named: "ic_expand_screen")?.withRenderingMode(.alwaysTemplate)
+        button.setImage(image, for: .normal)
+        button.accessibilityLabel = isFullScreenMode ? "Exit full screen" : "Full screen"
+        button.addTarget(self, action: #selector(toggleFullScreen), for: .touchUpInside)
+        button.isEnabled = true
+        button.isUserInteractionEnabled = true
+
+        let imageWidth: CGFloat = 24
+        let imageHeight: CGFloat = 24
+        let imageEdgeInsets = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        button.imageEdgeInsets = imageEdgeInsets
+        let buttonWidth = round(imageWidth + imageEdgeInsets.left + imageEdgeInsets.right)
+        let buttonHeight = round(imageHeight + imageEdgeInsets.top + imageEdgeInsets.bottom)
+        button.frame = CGRectMake(0, 0, buttonWidth, buttonHeight)
+
+        return UIBarButtonItem(customView: button, accessibilityIdentifier: "fullscreen")
+    }
+
+    @objc private func toggleFullScreen() {
+        // 查找FloatingConversationViewController
+        if let navController = navigationController,
+           let floatingVC = navController.parent as? FloatingConversationViewController {
+            // 通知FloatingConversationViewController切换到全屏
+            floatingVC.switchToFullScreen()
+        }
     }
 }
 
@@ -403,23 +535,34 @@ extension ConversationViewController: OWSNavigationChildController {
         if let gesture = viewState.tapGestureRecognizer {
             return gesture
         }
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(dismissKeyBoard))
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTapToDismissKeyboard))
         viewState.tapGestureRecognizer = tapGesture
         return tapGesture
+    }
+
+    @objc private func handleTapToDismissKeyboard() {
+        // 用户点击页面收起键盘，标记为用户操作
+        dismissKeyBoard(byUserAction: true)
     }
     
     func enterMultiSelectMode(viewItem: ConversationViewItem) {
         addForwardMessage(viewItem)
-        
+
         isMultiSelectMode = true
         tapGestureRecognizer.isEnabled = false
         collectionView.allowsMultipleSelection = true
         collectionView.reloadData()
-        dismissKeyBoard()
+        dismissKeyBoard(byUserAction: true)  // 用户进入多选模式，标记为用户操作
         reloadBottomBar()
-        forwardToolbar.updateActionItemsSelectedCount(1, maxCount: 50, enableCounts: [1, 2, 1])
+        let recallableCount = countRecallableMessages()
+        forwardToolbar.updateActionItemsSelectedCount(
+            1,
+            maxCount: 50,
+            enableCounts: [1, 2, 1, NSNumber(value: recallableCount > 0 ? 1 : UInt.max)],
+            recallableCount: UInt(recallableCount)
+        )
         leftEdgePanGestureDisabled(true)
-        
+
         scrollDownButton.alpha = 0
         headerView.isUserInteractionEnabled = false
         updateBarButtonItems()

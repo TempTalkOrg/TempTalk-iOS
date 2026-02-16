@@ -8,6 +8,7 @@
 
 import UIKit
 import SnapKit
+import TTMessaging
 
 class ConversationOutgoingMessageCell: ConversationMessageCell {
     
@@ -16,6 +17,7 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
     
     private var sendFailedBadgeView: UIImageView?
     private var sendFailedLeftView: UIImageView?
+    private var audioControlButton: UIView?
     
     // MARK: - Override
     
@@ -69,17 +71,21 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
     
     override func configure(renderItem: ConversationMessageRenderItem) {
         super.configure(renderItem: renderItem)
-        
+
         footerViewApperanceCommon(renderItem: renderItem)
-        
+
         updateViewLayout(viewItem: renderItem.viewItem)
-        
+
         guard let outgoingRenderItem = renderItem as? ConversationOutgoingMessageRenderItem else {
             return
         }
 //        configureSendFailureBadgeView(renderItem: outgoingRenderItem)
         configureReadStatusImageView(renderItem: outgoingRenderItem)
+        configureAudioControlButton(renderItem: outgoingRenderItem)
         configureSendFailureLeftView(renderItem: outgoingRenderItem)
+
+        // 关联 cell 到 viewItem，以便在音频播放状态改变时更新按钮
+        renderItem.viewItem.associateAudioCell(self)
     }
     
     override func multiSelectModeDidChange() {
@@ -90,12 +96,23 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
     override func refreshTheme() {
         super.refreshTheme()
         if footerView.isHidden {
-            readStatusImageView.tintColor = Theme.ternaryTextColor
-            readStatusImageView.titleLable.textColor = Theme.ternaryTextColor
+            readStatusImageView.tintColor = Theme.tthirdColor
+            readStatusImageView.titleLable.textColor = Theme.tthirdColor
         } else {
             readStatusImageView.tintColor = UIColor.white
             readStatusImageView.titleLable.textColor = UIColor.white
         }
+    }
+
+    // MARK: - Public Methods
+
+    @objc func refreshAudioControlButton() {
+        guard let renderItem = renderItem as? ConversationOutgoingMessageRenderItem else {
+            return
+        }
+        configureAudioControlButton(renderItem: renderItem)
+        // 音频控制按钮状态改变后，需要更新失败标记的位置
+        configureSendFailureLeftView(renderItem: renderItem)
     }
     
     // MARK: - Actions
@@ -232,18 +249,30 @@ extension ConversationOutgoingMessageCell {
                 let tap = UITapGestureRecognizer(target: self, action: #selector(sendFailedBridgeViewDidClick))
                 imageView.addGestureRecognizer(tap)
                 contentView.addSubview(imageView)
-                
-                imageView.snp.remakeConstraints { make in
-                    make.size.width.height.equalTo(16)
-                    make.trailing.equalTo(messageBubbleView.snp.leading).offset(-8)
-                    make.centerY.equalTo(messageBubbleView)
-                }
-                
+
                 self.sendFailedLeftView = imageView
                 return imageView
             }
             return sendFailedLeftView
         }()
+
+        // 根据音频控制按钮的状态来调整失败标记的位置
+        let viewItem = renderItem.viewItem
+        let isAudioMessage = viewItem.messageCellType() == .audio
+        let isAudioPlaying = viewItem.audioPlaybackState() == .playing
+
+        badgeView.snp.remakeConstraints { make in
+            make.size.width.height.equalTo(16)
+            if isAudioMessage && isAudioPlaying, let audioControlButton = self.audioControlButton, !audioControlButton.isHidden {
+                // 音频消息且控制按钮显示时，失败标记在控制按钮左边
+                make.trailing.equalTo(audioControlButton.snp.leading).offset(-8)
+            } else {
+                // 其他情况，失败标记在气泡左边
+                make.trailing.equalTo(messageBubbleView.snp.leading).offset(-8)
+            }
+            make.centerY.equalTo(messageBubbleView)
+        }
+
         badgeView.isHidden = false
         badgeView.tintColor = .ows_destructiveRed
     }
@@ -253,17 +282,90 @@ extension ConversationOutgoingMessageCell {
             readStatusImageView.isHidden = true
             return
         }
-        
+
         readStatusImageView.isHidden = false
         readStatusImageView.image = .init(named: statusImageName)?.withRenderingMode(.alwaysTemplate)
-        readStatusImageView.tintColor = Theme.ternaryTextColor
-        readStatusImageView.titleLable.textColor = Theme.themeBlueColor
+        readStatusImageView.tintColor = Theme.tthirdColor
+        readStatusImageView.titleLable.textColor = Theme.tinfoColor
         readStatusImageView.titleLable.text = renderItem.readStatusTitle
         readStatusImageView.isUserInteractionEnabled = renderItem.isReadStatusImageViewInteractionEnabled
-        
+
         if renderItem.isShowReadStatusSpinning {
 //            readStatusImageView.showSpinning()
         }
+    }
+
+    private func configureAudioControlButton(renderItem: ConversationOutgoingMessageRenderItem) {
+        // 检查是否是音频消息
+        let viewItem = renderItem.viewItem
+        guard viewItem.messageCellType() == .audio else {
+            if let audioControlButton, !audioControlButton.isHidden {
+                audioControlButton.isHidden = true
+            }
+            return
+        }
+
+        // 检查是否正在播放音频
+        let isAudioPlaying = viewItem.audioPlaybackState() == .playing
+
+        let controlButton: UIView = {
+            guard let audioControlButton else {
+                let button = UIView()
+                button.layer.backgroundColor = Theme.bg4Color.cgColor
+                button.layer.cornerRadius = 12
+                button.translatesAutoresizingMaskIntoConstraints = false
+                button.isUserInteractionEnabled = true
+                contentView.addSubview(button)
+
+                // 添加速度标签
+                let label = UILabel()
+                label.font = .systemFont(ofSize: 12, weight: .regular)
+                label.textColor = Theme.tsecondaryColor
+                label.textAlignment = .center
+                label.translatesAutoresizingMaskIntoConstraints = false
+                button.addSubview(label)
+                label.snp.makeConstraints { make in
+                    make.center.equalToSuperview()
+                }
+
+                // 添加点击手势
+                let tapGesture = UITapGestureRecognizer(target: self, action: #selector(audioControlButtonTapped))
+                button.addGestureRecognizer(tapGesture)
+
+                // Outgoing: 按钮在音频的左边（气泡左边），与 incoming 对称
+                button.snp.makeConstraints { make in
+                    make.width.equalTo(36)
+                    make.height.equalTo(24)
+                    make.trailing.equalTo(messageBubbleView.snp.leading).offset(-8)
+                    make.centerY.equalTo(messageBubbleView)
+                }
+
+                self.audioControlButton = button
+                return button
+            }
+            return audioControlButton
+        }()
+
+        // 更新速度标签
+        if let label = controlButton.subviews.first as? UILabel {
+            let rate = (delegate as? ConversationViewController)?.audioPlaybackRate ?? 1.0
+            if rate == 1.0 {
+                label.text = "1x"
+            } else if rate == 1.5 {
+                label.text = "1.5x"
+            } else {
+                label.text = "2x"
+            }
+        }
+
+        controlButton.isHidden = !isAudioPlaying
+    }
+
+    @objc private func audioControlButtonTapped() {
+        guard let conversationVC = delegate as? ConversationViewController else {
+            return
+        }
+        conversationVC.toggleAudioPlaybackRate()
     }
     
     // Note: 需要保证气泡左边距 = leading，父容器左边距需要减去 readStatusImage 的距离

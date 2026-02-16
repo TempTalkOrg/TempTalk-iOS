@@ -114,7 +114,11 @@ NS_ASSUME_NONNULL_BEGIN
         
         [SSKEnvironment setShared:sskEnvironment];
         
-
+        // Warm caches early to prevent database reentrancy issues when
+        // localNumber/isRegistered are accessed within a database transaction.
+        // This is especially important for app extensions (NSE, Share Extension).
+        // Note: warmCaches calls localNumber, which also warms isRegistered's cache.
+        [accountManager warmCaches];
                 
         !appSpecificSingletonBlock ? : appSpecificSingletonBlock();
 

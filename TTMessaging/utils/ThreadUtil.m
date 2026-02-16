@@ -20,7 +20,6 @@
 //
 //#import <TTServiceKit/TSInvalidIdentityKeyErrorMessage.h>
 #import <TTServiceKit/TSThread.h>
-#import "DTRecallMessagesJob.h"
 #import <TTServiceKit/DTCardOutgoingMessage.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import <TTServiceKit/DTScreenShotOutgoingMessage.h>
@@ -64,6 +63,7 @@ NS_ASSUME_NONNULL_BEGIN
                             inThread:thread
                     quotedReplyModel:replyModel
                        messageSender:messageSender
+                     forceNormalMode:NO
                              success:^{
         OWSLogInfo(@"%@ Successfully sent message.", self.logTag);
     }
@@ -79,6 +79,7 @@ NS_ASSUME_NONNULL_BEGIN
                                   inThread:(TSThread *)thread
                           quotedReplyModel:(nullable DTReplyModel *)replyModel
                              messageSender:(OWSMessageSender *)messageSender
+                           forceNormalMode:(BOOL)forceNormalMode
                                    success:(void (^)(void))successHandler
                                    failure:(void (^)(NSError *error))failureHandler
 {
@@ -86,8 +87,9 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertDebug(text.length > 0);
     OWSAssertDebug(thread);
     OWSAssertDebug(messageSender);
+
     uint32_t expiresInSeconds = [thread messageExpiresInSeconds];
-    
+
     TSOutgoingMessage *message = [TSOutgoingMessage outgoingMessageInThread:thread
                                                                 messageBody:text
                                                                   atPersons:atPersons
@@ -97,7 +99,33 @@ NS_ASSUME_NONNULL_BEGIN
                                                               quotedMessage:(TSQuotedMessage *)[replyModel buildMessage]
                                                           forwardingMessage:nil];
     message.sourceDeviceId = [OWSDevice currentDeviceId];
-    message.messageModeType = thread.conversationEntity.confidentialMode;
+
+    // Determine message mode type
+    TSMessageModeType messageModeType = TSMessageModeTypeNormal;
+
+    if (!forceNormalMode) {
+        // Check if recipient is a friend (only for 1-on-1 contact threads)
+        if ([thread isKindOfClass:[TSContactThread class]]) {
+            TSContactThread *contactThread = (TSContactThread *)thread;
+            NSString *recipientId = contactThread.contactIdentifier;
+
+            __block BOOL isFriend = NO;
+            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                SignalAccount *account = [SignalAccount anyFetchWithUniqueId:recipientId transaction:transaction];
+                isFriend = account.isFriend;
+            }];
+
+            // Only use confidential mode if recipient is a friend
+            if (isFriend) {
+                messageModeType = thread.conversationEntity.confidentialMode;
+            }
+        } else {
+            // For group threads, use thread's confidential mode setting
+            messageModeType = thread.conversationEntity.confidentialMode;
+        }
+    }
+
+    message.messageModeType = messageModeType;
     //⚠️ 时机待确认 需要更新历史消息
     [messageSender enqueueMessage:message success:^{
         if (successHandler) {
@@ -105,6 +133,26 @@ NS_ASSUME_NONNULL_BEGIN
         }
     } failure:failureHandler];
     return message;
+}
+
++ (TSOutgoingMessage *)sendMessageWithText:(NSString *)text
+                                 atPersons:(nullable NSString *)atPersons
+                                  mentions:(nullable NSArray <DTMention *> *)mentions
+                                  inThread:(TSThread *)thread
+                          quotedReplyModel:(nullable DTReplyModel *)replyModel
+                             messageSender:(OWSMessageSender *)messageSender
+                                   success:(void (^)(void))successHandler
+                                   failure:(void (^)(NSError *error))failureHandler
+{
+    return [self sendMessageWithText:text
+                           atPersons:atPersons
+                            mentions:mentions
+                            inThread:thread
+                    quotedReplyModel:replyModel
+                       messageSender:messageSender
+                     forceNormalMode:NO
+                             success:successHandler
+                             failure:failureHandler];
 }
 
 + (TSOutgoingMessage *)sendMessageWithAttachment:(SignalAttachment *)attachment
@@ -153,7 +201,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                   quotedMessage:(TSQuotedMessage *)[replyModel buildMessage]
                                               forwardingMessage:nil
                                                    contactShare:nil];
-    
+
     message.sourceDeviceId = [OWSDevice currentDeviceId];
     message.messageModeType = thread.conversationEntity.confidentialMode;
     [messageSender enqueueAttachment:attachment.dataSource
@@ -318,90 +366,6 @@ NS_ASSUME_NONNULL_BEGIN
     return (CurrentAppContext().isMainApp && CurrentAppContext().isAppForegroundAndActive);
 }
 
-+ (void)archiveThreadsWithItems:(NSMutableArray<TSThread *> *)items
-                  oversizeItems:(NSMutableArray<TSThread *> *)oversizeItems
-                      batchSize:(NSUInteger)batchSize{
-    
-    return;
-
-    
-    if(![self shouldArchiveThreads] ||
-       (items.count == 0 && oversizeItems.count == 0)){
-        return;
-    }
-    
-    [BenchManager benchAsyncWithTitle:@"archiveInactiveConversations or archiveOversizeThreads" block:^(void (^ _Nonnull completeBenchmark)(void)) {
-        
-        DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-            
-            __block NSUInteger loopBatchIndex = 0;
-            [Batching loopObjcWithBatchSize:batchSize loopBlock:^(BOOL * _Nonnull stop) {
-                TSThread *lastThread = items.lastObject;
-                if (loopBatchIndex == batchSize || lastThread == nil || ![self shouldArchiveThreads]) {*stop = YES;return;}
-                [lastThread anyUpdateWithTransaction:writeTransaction block:^(TSThread * _Nonnull t) {
-                    [t archiveThreadWithTransaction:writeTransaction];
-                }];
-                OWSLogInfo(@"archive inactive thread name: %@", [lastThread nameWithTransaction:writeTransaction]);
-                [items removeLastObject];
-                loopBatchIndex += 1;
-            }];
-            
-            loopBatchIndex = 0;
-            [Batching loopObjcWithBatchSize:batchSize loopBlock:^(BOOL * _Nonnull stop) {
-                TSThread *lastThread = oversizeItems.lastObject;
-                if (loopBatchIndex == batchSize || lastThread == nil || ![self shouldArchiveThreads]) {*stop = YES;return;}
-                [lastThread anyUpdateWithTransaction:writeTransaction block:^(TSThread * _Nonnull t) {
-                    [t archiveOversizeThreadWithTransaction:writeTransaction];
-                }];
-                OWSLogInfo(@"archive oversize thread name: %@", [lastThread nameWithTransaction:writeTransaction]);
-                [oversizeItems removeLastObject];
-                loopBatchIndex += 1;
-            }];
-            
-            [writeTransaction addAsyncCompletionOffMain:^{
-                completeBenchmark();
-                [self archiveThreadsWithItems:items oversizeItems:oversizeItems batchSize:100];
-            }];
-        });
-    }];
-    
-}
-
-+ (void)archiveInactiveConversations{
-    
-    return;
-    
-    if(![self shouldArchiveThreads]){
-        return;
-    }
-    
-    NSMutableArray<TSThread *> *items = @[].mutableCopy;
-    NSMutableArray<TSThread *> *oversizeItems = @[].mutableCopy;
-    [BenchManager benchWithTitle:@"read archiveInactiveConversations" block:^{
-        [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
-            
-            AnyThreadFinder *finder = [[AnyThreadFinder alloc] init];
-            NSError *error;
-            [finder enumerateInactiveThreadsWithTransaction:readTransaction
-                                                      error:&error
-                                                      block:^(TSThread * thread) {
-                if (thread.isNoteToSelf) { return; }
-                [items addObject:thread];
-                
-            }];
-        }];
-    }];
-    
-    if(![self shouldArchiveThreads]){
-        return;
-    }
-    
-    OWSLogInfo(@"will archive inactive thread count: %ld", items.count);
-    OWSLogInfo(@"will archive oversize thread count: %ld", oversizeItems.count);
-    
-    [self archiveThreadsWithItems:items oversizeItems:oversizeItems batchSize:100];
-}
-
 #pragma mark - Find Content
 
 + (nullable TSInteraction *)findInteractionInThreadByTimestamp:(uint64_t)timestamp
@@ -560,18 +524,16 @@ NS_ASSUME_NONNULL_BEGIN
     
     uint32_t expiresInSeconds = [thread messageExpiresInSeconds];
     
+    NSString *localNumber = [TSAccountManager localNumber];
     DTRealSourceEntity *originSource = [[DTRealSourceEntity alloc] initSourceWithTimestamp:originMessage.timestamp
                                                                               sourceDevice:originMessage.sourceDeviceId?:[OWSDevice currentDeviceId]
-                                                                                    source:[TSAccountManager localNumber]
+                                                                                    source:localNumber
                                                                                 sequenceId:originMessage.sequenceId
                                                                           notifySequenceId:originMessage.notifySequenceId];
     originSource.serverTimestamp = originMessage.serverTimestamp;
     
     DTRecallMessage *recallMessage = [[DTRecallMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
-                                                                         source:originSource
-                                                                           body:originMessage.body
-                                                                      atPersons:originMessage.atPersons
-                                                                       mentions:originMessage.mentions];
+                                                                         source:originSource];
     
     DTRecallOutgoingMessage *message = [DTRecallOutgoingMessage recallOutgoingMessageWithTimestamp:[NSDate ows_millisecondTimeStamp]
                                                                                             recall:recallMessage
@@ -584,53 +546,15 @@ NS_ASSUME_NONNULL_BEGIN
         DDLogInfo(@"%@ Successfully sent recall message.", self.logTag);
         
         DatabaseStorageAsyncWrite(self.databaseStorage, (^(SDSAnyWriteTransaction *writeTransaction) {
-            
-            //            [originMessage removeWithTransaction:transaction];
-            
-            NSMutableAttributedString *customString = [[NSMutableAttributedString alloc] initWithString:[NSString stringWithFormat:Localized(@"RECALL_INFO_MESSAGE_WITH_EDIT",nil), Localized(@"YOU",nil)]];
-            NSAttributedString *editString = [[NSAttributedString alloc] initWithString:Localized(@"RE-EDIT_MESSAGE",nil)
-                                                                             attributes:@{
-                NSForegroundColorAttributeName:[UIColor colorWithRGBHex:0x4c618c]
-            }];
-            [customString appendAttributedString:editString];
-            
-            
-            NSString *previewSting = [NSString stringWithFormat:Localized(@"RECALL_INFO_MESSAGE",nil), Localized(@"YOU",nil)];
-            
-            if(!originMessage.isTextMessage){
-                customString = [[NSMutableAttributedString alloc] initWithString:previewSting];
-            }
-            
-            TSInfoMessage *recallInfoMessage = [[TSInfoMessage alloc] initWithTimestamp:originSource.timestamp
-                                                                        serverTimestamp:originSource.serverTimestamp
-                                                                               inThread:thread
-                                                                       expiresInSeconds:originMessage.expiresInSeconds
-                                                                          customMessage:customString];
-            
-            NSString *localNumber = [[TSAccountManager shared] localNumberWithTransaction:writeTransaction];
-            recallInfoMessage.sourceDeviceId = [OWSDevice currentDeviceId];
-            recallInfoMessage.authorId = localNumber;
-            recallInfoMessage.recall = recallMessage;
-            recallInfoMessage.recallPreview = previewSting;
-            if(originMessage.isTextMessage){
-                recallInfoMessage.editable = YES;
-            }
-            // NOTE: 这里设置了和原始消息一样的 uniqueId，相当于覆盖了原始消息
-            recallInfoMessage.uniqueId = originMessage.uniqueId;
-            // 删除 model_TSMessageSecondary 中已经被被撤回的消息，避免在搜索时还能搜索到（实际展示的是空白）
-            [[FullTextSearchFinder new] modelWasRemovedObjcWithModel:originMessage transaction:writeTransaction];
-            
-            if(!recallInfoMessage.grdbId && originMessage.grdbId){
-                [recallInfoMessage updateRowId:originMessage.grdbId.longLongValue];
-            }
-           
-            [recallInfoMessage anyUpsertWithTransaction:writeTransaction];
-           
+            [originMessage anyRemoveWithTransaction:writeTransaction];
+            [recallMessage insertRecordWithSource:localNumber
+                                     sourceDevice:[OWSDevice currentDeviceId]
+                                        timestamp:message.timestamp
+                                      transaction:writeTransaction];
             [writeTransaction addAsyncCompletionOnMain:^{
                 if(successHandler){
                     successHandler();
                 }
-                [[DTRecallMessagesJob sharedJob] startIfNecessary];
             }];
         }));
         

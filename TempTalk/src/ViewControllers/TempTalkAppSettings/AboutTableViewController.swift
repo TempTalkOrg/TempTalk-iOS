@@ -66,15 +66,15 @@ class AboutTableViewController : SettingBaseViewController {
     
     override func applyTheme() {
         super.applyTheme()
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
-        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
+        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultColor
         self.mainTableView.reloadData()
     }
     
     func prepareTheme() {
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
     func prepareView() {
@@ -129,8 +129,9 @@ extension AboutTableViewController : UITableViewDelegate, UITableViewDataSource 
                 defaultStyleCell.borderType = .none
             }
             defaultStyleCell.selectionStyle = .none
+            defaultStyleCell.longPressDelegate = self
             defaultStyleCell.reloadCell(model: settingItem)
-            defaultStyleCell.titleTextColor = Theme.primaryTextColor
+            defaultStyleCell.titleTextColor = Theme.tprimaryColor
             return defaultStyleCell
             
         } else {
@@ -150,6 +151,13 @@ extension AboutTableViewController : UITableViewDelegate, UITableViewDataSource 
                 safariVC.modalPresentationStyle = .fullScreen;
                 self.navigationController?.present(safariVC, animated: true)
                 
+            }
+        } else if settingItem.tag == AboutViewItemType.submitDebugLog.rawValue {
+            OWSLogger.info("Submitting debug logs")
+            DTToastHelper.show()
+            DDLog.flushLog()
+            Pastelog.submitLogs {
+                DTToastHelper.hide()
             }
         }
     }
@@ -182,6 +190,7 @@ extension AboutTableViewController {
         case build = 2
         case checkForUpdate = 3
         case website = 4
+        case submitDebugLog = 5
     }
  
     func getDataSource() -> [[DTSettingItem]] {
@@ -189,12 +198,17 @@ extension AboutTableViewController {
         let spaceItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.blank.rawValue)
         
         let platformItem = DTSettingItem(icon: "", title: Localized("SETTINGS_PLATFORM"), description: "iOS", cellStyle: SettingCellStyle.onlyDescription.rawValue, plainText:  "")
+        platformItem.tag = AboutViewItemType.platform.rawValue
         let versionItem = DTSettingItem(icon: "", title: Localized("SETTINGS_VERSION"), description: AppVersion.shared().currentAppReleaseVersion, cellStyle: SettingCellStyle.onlyDescription.rawValue, plainText:  "")
+        versionItem.tag = AboutViewItemType.version.rawValue
         let buildItem = DTSettingItem(icon: "", title: Localized("BUILD_SETTINGS_VERSION"), description: AppVersion.shared().currentAppBuildVersion, cellStyle: SettingCellStyle.onlyDescription.rawValue, plainText: "")
+        buildItem.tag = AboutViewItemType.build.rawValue
         let checkForUpdateItem = DTSettingItem(icon: "", title: Localized("CHECK_NEW_VERSION"), description: "", cellStyle: SettingCellStyle.accessoryAndDescription.rawValue, plainText: "")
         checkForUpdateItem.tag = AboutViewItemType.checkForUpdate.rawValue
         let websiteItem = DTSettingItem(icon: "", title: Localized("SETTINGS_WEBSITE"), description: "Yelling.pro", cellStyle: SettingCellStyle.accessoryAndDescription.rawValue, plainText: "")
         websiteItem.tag = AboutViewItemType.website.rawValue
+        let submitDebugLogItem = DTSettingItem(icon: "", title: Localized("SETTINGS_ADVANCED_SUBMIT_DEBUGLOG"), description: "", cellStyle: SettingCellStyle.accessoryAndDescription.rawValue, plainText: "")
+        submitDebugLogItem.tag = AboutViewItemType.submitDebugLog.rawValue
         
         return [
             [spaceItem],
@@ -206,9 +220,35 @@ extension AboutTableViewController {
             [spaceItem],
             [checkForUpdateItem],
             [spaceItem],
-            [websiteItem]
+            [websiteItem],
+            [spaceItem],
+            [submitDebugLogItem]
         ]
     }
     
 }
 
+extension AboutTableViewController: DTDefaultBaseStyleCellLongPressDelegate {
+    
+    func longPressClick(_ cell: DTDefaultBaseStyleCell, longPressGesture: UILongPressGestureRecognizer) {
+        guard longPressGesture.state == .began,
+              let indexPath = self.mainTableView.indexPath(for: cell) else {
+            return
+        }
+        
+        let settingItem = self.dataSource[indexPath.section][indexPath.row]
+        guard settingItem.tag == AboutViewItemType.version.rawValue ||
+                settingItem.tag == AboutViewItemType.build.rawValue else {
+            return
+        }
+        
+        copyVersionAndBuildInfo()
+    }
+    
+    private func copyVersionAndBuildInfo() {
+        let versionContent = "\(Localized("SETTINGS_VERSION")) \(AppVersion.shared().currentAppReleaseVersion)"
+        let buildContent = "\(Localized("BUILD_SETTINGS_VERSION")) \(AppVersion.shared().currentAppBuildVersion)"
+        DTSecurePasteboard.setString("\(versionContent)\n\(buildContent)")
+        DTToastHelper.toast(withText: Localized("COPYID", comment: "copy to pastboard"), durationTime: 2)
+    }
+}

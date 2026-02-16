@@ -11,28 +11,28 @@ import TTServiceKit
 
     /// If non-nil, will use the provided child (should be a child view controller) for
     /// all other protocol methods.
-    @objc optional var childForOWSNavigationConfiguration: OWSNavigationChildController? { get }
+    var childForOWSNavigationConfiguration: OWSNavigationChildController? { get }
 
     /// Will be called if the back button was pressed or if a back gesture
     /// was performed but not if the view is popped programmatically.
     /// Default false.
-    @objc optional var shouldCancelNavigationBack: Bool { get }
+    var shouldCancelNavigationBack: Bool { get }
 
     /// The style to apply to the nav bar on view appearance in the navigation stack.
     /// Defaults to `blur`.
-//    var preferredNavigationBarStyle: OWSNavigationBarStyle { get }
+//    @objc var preferredNavigationBarStyle: OWSNavigationBarStyle { get }
 
     /// A background color to use for the navbar in certain styles.
     /// Defaults to nil (default color for style)
-    @objc optional var navbarBackgroundColorOverride: UIColor? { get }
+    var navbarBackgroundColorOverride: UIColor? { get }
 
-    /// A tint color to use for navbar in certain styles.
+    /// A tint color to use for the navbar in certain styles.
     /// Defaults to nil (default color for style)
-    @objc optional var navbarTintColorOverride: UIColor? { get }
+    var navbarTintColorOverride: UIColor? { get }
 
     /// Whether the navigation bar should show or hide when this view controller appears.
     /// Defaults to false.
-    @objc optional var prefersNavigationBarHidden: Bool { get }
+    var prefersNavigationBarHidden: Bool { get }
 }
 
 extension OWSNavigationChildController {
@@ -53,7 +53,7 @@ extension OWSNavigationChildController {
 /// This navigation controller subclass should be used anywhere we might
 /// want to cancel back button presses or back gestures due to, for example,
 /// unsaved changes.
-@objc open class OWSNavigationController: OWSNavigationControllerBase {
+open class OWSNavigationController: UINavigationController {
 
     private var owsNavigationBar: OWSNavigationBar {
         return navigationBar as! OWSNavigationBar
@@ -73,11 +73,11 @@ extension OWSNavigationChildController {
             externalDelegate = newValue
         }
     }
-
+    
     deinit {
         Logger.debug("Navigation dealloc")
     }
-    
+
     public init() {
         super.init(navigationBarClass: OWSNavigationBar.self, toolbarClass: nil)
 
@@ -86,7 +86,7 @@ extension OWSNavigationChildController {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(themeDidChange),
-            name: .ThemeDidChange,
+            name: .themeDidChange,
             object: nil
         )
     }
@@ -100,28 +100,14 @@ extension OWSNavigationChildController {
     public required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
-    open override var shouldAutorotate: Bool {
-        return false
-    }
 
     open override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         if let delegateOrientations = self.delegate?.navigationControllerSupportedInterfaceOrientations?(self) {
             return delegateOrientations
-        } else if let topViewController = self.topViewController {
-            return topViewController.supportedInterfaceOrientations
+        } else if let visibleViewController = self.visibleViewController {
+            return visibleViewController.supportedInterfaceOrientations
         } else {
             return UIDevice.current.defaultSupportedOrientations
-        }
-    }
-    
-    open override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        if let delegateOrientationForPresentation = self.delegate?.navigationControllerPreferredInterfaceOrientationForPresentation?(self) {
-            return delegateOrientationForPresentation
-        } else if let topViewController = self.topViewController {
-            return topViewController.preferredInterfaceOrientationForPresentation
-        } else {
-            return .portrait
         }
     }
 
@@ -133,10 +119,6 @@ extension OWSNavigationChildController {
 
     open override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        
-        if !CurrentAppContext().isMainApp {
-            Logger.info("[ScreenShare] OWSNavigationController viewWillAppear - frame: \(self.view.frame), topVC: \(String(describing: self.topViewController))")
-        }
 
         updateNavbarAppearance(animated: animated)
     }
@@ -186,9 +168,9 @@ extension OWSNavigationChildController {
         let navChildController = viewController.getFinalNavigationChildController()
         let shouldHideNavbar = navChildController?.prefersNavigationBarHidden ?? false
 
+        // Only update navbar appearance when it's visible to avoid unnecessary work
+        // and visual glitches during transitions
         if !shouldHideNavbar {
-            // Only update visible attributes if we aren't hiding; if its hidden anyway
-            // they won't matter and seeing them blink then hide is weird.
             owsNavigationBar.navbarBackgroundColorOverride = navChildController?.navbarBackgroundColorOverride
             owsNavigationBar.navbarTintColorOverride = navChildController?.navbarTintColorOverride
             owsNavigationBar.setStyle(navChildController?.preferredNavigationBarStyle ?? .solid, animated: animated)
@@ -272,23 +254,10 @@ extension OWSNavigationController: UINavigationBarDelegate {
         // wasBackButtonClicked is true if the back button was pressed but not
         // if a back gesture was performed or if the view is popped programmatically.
         let wasBackButtonClicked = topViewController?.navigationItem == item
-        var result = true
-        if wasBackButtonClicked {
-            if let child = topViewController?.getFinalNavigationChildController() {
-                result = !child.shouldCancelNavigationBack
-            }
+        if wasBackButtonClicked, let child = topViewController?.getFinalNavigationChildController() {
+            return !child.shouldCancelNavigationBack
         }
-
-        // If we're not going to cancel the pop/back, we need to call the super
-        // implementation since it has important side effects.
-        if result {
-            // NOTE: result might end up false if the super implementation cancels the
-            // the pop/back.
-            super.ows_navigationBar(navigationBar, shouldPop: item)
-            result = true
-        }
-
-        return result
+        return true
     }
 }
 
@@ -301,7 +270,14 @@ extension OWSNavigationController: UINavigationControllerDelegate {
         willShow viewController: UIViewController,
         animated: Bool
     ) {
-        updateNavbarAppearance(for: viewController, fromViewControllerTransition: true, animated: animated)
+        // The `viewController` parameter is non-Optional. It is annotated as such
+        // in Apple's header. However, on iOS 16, they pass `nil`, and that causes
+        // our code to blow up. Detect when they've given us nil in a non-Optional
+        // parameter and avoid calling the method that causes things to blow up.
+        Logger.info("[navi] willshow viewController \(viewController) delegate \(externalDelegate) navigationController \(navigationController)")
+        if let viewController = viewController as AnyObject as? UIViewController {
+            updateNavbarAppearance(for: viewController, fromViewControllerTransition: true, animated: animated)
+        }
         externalDelegate?.navigationController?(navigationController, willShow: viewController, animated: animated)
     }
 
@@ -310,6 +286,7 @@ extension OWSNavigationController: UINavigationControllerDelegate {
         didShow viewController: UIViewController,
         animated: Bool
     ) {
+        Logger.info("[navi] didShow viewController \(viewController) delegate \(externalDelegate) navigationController \(navigationController)")
         externalDelegate?.navigationController?(navigationController, didShow: viewController, animated: animated)
     }
 
@@ -367,8 +344,8 @@ extension UIViewController {
 extension OWSNavigationChildController {
 
     func getFinalChild() -> OWSNavigationChildController {
-        if let child = childForOWSNavigationConfiguration, let child = child {
-            return child.getFinalChild()
+        if let child = childForOWSNavigationConfiguration {
+            return child
         }
         return self
     }

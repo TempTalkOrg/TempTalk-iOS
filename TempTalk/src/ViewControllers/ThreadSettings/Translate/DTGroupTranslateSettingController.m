@@ -18,9 +18,10 @@
 #import <TTServiceKit/DTGroupUtils.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import <TTServiceKit/Localize_Swift.h>
+#import <TTMessaging/TTMessaging.h>
 
 
-@interface DTGroupTranslateSettingController ()
+@interface DTGroupTranslateSettingController () <OWSNavigationChildController>
 @property(nonatomic,strong) Contact *contact;
 @property(nonatomic,strong) NSNumber* customGroupTranslateSetting;//自定义消息的值
 @property(nonatomic,strong) TSThread *thread;
@@ -40,6 +41,8 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     [self setTitle:Localized(@"SETTINGS_SECTION_TRANSLATE", nil)];
     if(self.thread.isGroupThread){
         
@@ -53,6 +56,12 @@
 
 - (void)preapreUIData {
     [self updateTableContents];
+}
+
+- (void)applyTheme {
+    [super applyTheme];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
 }
 
 #pragma mark - Table Contents
@@ -91,7 +100,7 @@
 
 - (UITableViewCell *)custonTipCell {
     UITableViewCell *cell = [OWSTableItem newCell];
-    cell.backgroundColor = Theme.tableCellBackgroundColor;
+    cell.backgroundColor = Theme.bg1Color;
     
     UILabel *detailTextLabel = [UILabel new];
     detailTextLabel.font = [UIFont ows_regularFontWithSize:14.f];
@@ -147,5 +156,28 @@
         }
     });
 }
+
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return false;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpageSecondaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
+}
+
 
 @end

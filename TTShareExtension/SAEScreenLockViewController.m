@@ -8,6 +8,7 @@
 #import <TTServiceKit/AppContext.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import <TTServiceKit/Localize_Swift.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -43,21 +44,26 @@ NS_ASSUME_NONNULL_BEGIN
 {
     [super loadView];
 
-    self.view.backgroundColor = [UIColor ows_materialBlueColor];
-    
+    self.view.backgroundColor = Theme.bg1Color;
+
     NSString *shareToPrefix = Localized(@"SHARE_EXTENSION_VIEW_TITLE", @"Title for the 'share extension' view.");
     NSString *shareScreenLockTitle = [NSString stringWithFormat:@"%@%@", shareToPrefix, TSConstants.appDisplayName];
     self.title = shareScreenLockTitle;
 
-    self.navigationItem.leftBarButtonItem =
-        [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemStop
-                                                      target:self
-                                                      action:@selector(dismissPressed:)];
+    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemStop
+                                                                                          target:self
+                                                                                          action:@selector(dismissPressed:)];
+
 }
 
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
+
+    // 恢复侧滑返回手势（从 unlockScreenVc 返回后）
+    if ([self.navigationController respondsToSelector:@selector(interactivePopGestureRecognizer)]) {
+        self.navigationController.interactivePopGestureRecognizer.enabled = YES;
+    }
 
     [self ensureUI];
 }
@@ -104,9 +110,21 @@ NS_ASSUME_NONNULL_BEGIN
         [self.shareViewDelegate shareViewWasUnlocked];
 
         [self.navigationController popViewControllerAnimated:NO];
-        
+
     }];
+    unlockScreenVc.navigationItem.leftBarButtonItem =
+        [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemStop
+                                                      target:self
+                                                      action:@selector(dismissPressed:)];
+    unlockScreenVc.navigationItem.hidesBackButton = YES;
+
     [self.navigationController pushViewController:unlockScreenVc animated:NO];
+
+    // 禁用侧滑返回手势
+    if ([self.navigationController respondsToSelector:@selector(interactivePopGestureRecognizer)]) {
+        self.navigationController.interactivePopGestureRecognizer.enabled = NO;
+    }
+
     [self ensureUI];
 }
 

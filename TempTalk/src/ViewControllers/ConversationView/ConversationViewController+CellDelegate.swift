@@ -22,20 +22,25 @@ extension ConversationViewController: ConversationMessageCellDelegate {
     func contactsManager(for cell: ConversationMessageCell) -> OWSContactsManager {
         self.contactsManager
     }
-    
+
     func messageCell(_ cell: ConversationMessageCell, didTapAvatarWith recipientId: String) {
+        // 如果是从 PersonalCard 打开的浮动窗口，不弹出个人卡
+        guard !isFromPersonalCard else { return }
+
         showPersonalInfoCard(recipientId: recipientId)
     }
     
     func messageCell(_ cell: ConversationMessageCell, didLongPressAvatarWith recipientId: String, senderName: String?) {
         owsAssertDebug(!recipientId.isEmpty)
-        
+
         guard isGroupConversation else { return }
-        
+
         let messageText = self.inputToolbar.messageBodyForSending ?? ""
+        // 使用 contactFullName（实际名字）而不是 senderName（备注名），与文本艾特人保持一致
         let targetName: String
-        if let senderName, !senderName.isEmpty {
-            targetName = senderName
+        if let account = self.contactsManager.signalAccount(forRecipientId: recipientId),
+           let fullName = account.contactFullName(), !fullName.isEmpty {
+            targetName = fullName
         } else {
             targetName = recipientId
         }
@@ -104,8 +109,8 @@ extension ConversationViewController: ConversationMessageCellDelegate {
             }
         }
         actionSheet.addAction(resendMessageAction)
-        
-        dismissKeyBoard()
+
+        dismissKeyBoard(byUserAction: true)  // 用户点击重发，标记为用户操作
         presentActionSheet(actionSheet)
     }
     
@@ -192,11 +197,6 @@ extension ConversationViewController: ConversationSystemMessageCellDelegate {
         case .recallMessage:
             handleTapRecallMessageEvent(message: message)
             
-        case .pinMessage:
-            if let realSource = message.realSource {
-                scrollToOrigionMessage(realSource: realSource)
-            }
-
         case .callEnd:
             handleTapCallEndMessageEvent()
             
@@ -260,32 +260,7 @@ extension ConversationViewController: ConversationSystemMessageCellDelegate {
 
 private extension ConversationViewController {
     func handleTapRecallMessageEvent(message: TSInfoMessage) {
-        guard let recallModel = message.recall, !recallModel.body.isEmpty else {
-            return
-        }
-        var newText = recallModel.body
-        let originMessageText = self.inputToolbar.messageBodyForSending
-        if let originMessageText = originMessageText, !originMessageText.isEmpty {
-            newText = originMessageText + recallModel.body
-        }
-        
-        if let mentions = recallModel.mentions, !mentions.isEmpty {
-            self.inputToolbar.atCache.setMentions(mentions, body: recallModel.body)
-        } else {
-            recallModel.atPersons.components(separatedBy: ";").filter {
-                !$0.isEmpty
-            }.forEach {
-                let item = DTInputAtItem()
-                if let account = self.contactsManager.signalAccount(forRecipientId: $0) {
-                    item.uid = $0
-                    item.name = "\(kMentionStartChar)\(account.contactFullName() ?? "")\(kMentionEndChar)"
-                    self.inputToolbar.atCache.add(item)
-                }
-            }
-        }
-        
-        self.inputToolbar.setMessageBody(newText, animated: true)
-        self.inputToolbar.beginEditingMessage()
+       // do nothing
     }
     
     func handleTapCallEndMessageEvent() {
@@ -400,14 +375,6 @@ private extension ConversationViewController {
                         self.hideInputIfNeeded()
                     }
                 }
-            }
-            // rejoin group 预约会议相关
-            if let localNumber = TSAccountManager.localNumber() {
-                DTCalendarManager.shared.groupChange(
-                    gid: self.thread.serverThreadId,
-                    actionCode: 1,
-                    target: [localNumber]
-                )
             }
             
         } failure: { error in

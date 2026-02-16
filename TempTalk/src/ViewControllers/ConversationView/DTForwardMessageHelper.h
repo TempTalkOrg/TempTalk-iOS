@@ -13,10 +13,11 @@
 @class YapDatabaseConnection;
 
 typedef NS_ENUM(NSInteger, DTForwardMessageType) {
-    
+
     DTForwardMessageTypeOneByOne = 0,
     DTForwardMessageTypeCombined,
-    DTForwardMessageTypeNote
+    DTForwardMessageTypeNote,
+    DTForwardMessageTypeBatchRecall
 };
 
 NS_ASSUME_NONNULL_BEGIN

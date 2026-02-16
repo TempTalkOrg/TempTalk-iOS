@@ -12,21 +12,79 @@ import TTServiceKit
 extension DTMeetingManager {
     
     func registerNotifications() {
-        
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(didReceiveCallEndNotify),
             name: .notifyCallEnd,
             object: nil
         )
-        
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(appWillTerminate),
             name: UIApplication.willTerminateNotification,
             object: nil
         )
-        
+
+        // Observer for showing deferred rating when app enters foreground
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+
+        // Observer for showing deferred rating after screen unlock completes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenLockDidUnlock),
+            name: .ScreenLockDidUnlock,
+            object: nil
+        )
+    }
+
+    @objc func screenLockDidUnlock(_ notification: Notification) {
+        // Show deferred rating after screen unlock
+        guard hasPendingRating else { return }
+
+        Logger.info("\(logTag) screenLockDidUnlock: showing deferred rating controller")
+
+        // Small delay to ensure UI transition completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.showDeferredRatingController()
+        }
+    }
+
+    @objc func appDidBecomeActive(_ notification: Notification) {
+        // Show deferred rating controller if pending
+        // PanModal can't present properly in background, so we defer to foreground
+        guard hasPendingRating else { return }
+
+        Logger.info("\(logTag) appDidBecomeActive: has pending rating, will show after delay")
+
+        // Delay to ensure UI is fully ready and screen unlock has completed
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.showDeferredRatingController()
+        }
+    }
+
+    private func showDeferredRatingController() {
+        guard hasPendingRating else { return }
+
+        // Check if screen lock is currently active (blocking window is above background level)
+        // If so, don't show rating now - it will be shown when user unlocks
+        let screenBlockingWindow = OWSScreenLockUI.sharedManager().screenBlockingWindow
+        let isScreenLockActive = screenBlockingWindow.windowLevel > UIWindow.Level(rawValue: -1) // UIWindowLevel_Background = -1
+
+        if isScreenLockActive {
+            Logger.info("\(logTag) showDeferredRatingController: screen lock active, keeping pending")
+            // Keep hasPendingRating = true, will retry when unlock completes
+            return
+        }
+
+        hasPendingRating = false
+        showRatingController()
     }
     
     // 1on1 | instant | group 兜底方案
@@ -45,6 +103,8 @@ extension DTMeetingManager {
             }
         } else {
             callAlertManager.removeLiveKitAlertCall(roomId)
+            // 如果不是当前会议，仍然需要根据 roomId 移除对应的 join/meeting bar，防止 UI 残留
+            handleMeetingBar(roomId: roomId, action: .remove)
         }
         
         Task {
@@ -79,18 +139,11 @@ extension DTMeetingManager {
             return
         }
 
-        let isSchedule = (callInfo["type"] as? String) == "meeting-popups"
-        let mode = callInfo["mode"] as? String
         let caller = callInfo["caller"] as? String
         let meetingName = callInfo["meetingName"] as? String
         let groupId = callInfo["groupId"] as? String
         let callType = callInfo["callType"] as? NSNumber
-        let emk = callInfo["emk"] as? String
-        let meetingVersion = callInfo["meetingVersion"] as? NSNumber
         let meetingId = callInfo["meetingId"] as? String
-        let numberIsLiveStream = callInfo["isLiveStream"] as? NSNumber
-        let eid = callInfo["eid"] as? String
-        let isLiveStream = (numberIsLiveStream as? NSNumber)?.boolValue ?? false
         
         let callModel = DTLiveKitCallModel()
         callModel.callState = .alerting

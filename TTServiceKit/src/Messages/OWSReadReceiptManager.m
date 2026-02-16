@@ -316,7 +316,9 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
                 groupId = ((TSGroupThread *)thread).groupModel.groupId;
             }
             uint64_t notifySequenceId = message.notifySequenceId;
-            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.serverTimestamp notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
+            // ✅ Fix: Use timestampForSorting instead of serverTimestamp
+            // timestampForSorting = serverTimestamp ?? timestamp, ensures we always have a valid value
+            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.timestampForSorting notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
             newReadReceipt.readPosition = readPosition;
             
             newReadReceipt.messageModeType = message.messageModeType;
@@ -410,7 +412,9 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
                 groupId = ((TSGroupThread *)thread).groupModel.groupId;
             }
             uint64_t notifySequenceId = message.notifySequenceId;
-            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.serverTimestamp notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
+            // ✅ Fix: Use timestampForSorting instead of serverTimestamp
+            // timestampForSorting = serverTimestamp ?? timestamp, ensures we always have a valid value
+            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.timestampForSorting notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
             newReadReceipt.readPosition = readPosition;
             
             newReadReceipt.messageModeType = message.messageModeType;
@@ -447,7 +451,9 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
                 [timestamps addObject:@(message.timestamp)];
                 NSNumber *maxTimestamp = [timestamps valueForKeyPath:@"@max.self"];
                 if([maxTimestamp isEqualToNumber:@(message.timestamp)]){
-                    DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.serverTimestamp notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
+                    // ✅ Fix: Use timestampForSorting instead of serverTimestamp
+            // timestampForSorting = serverTimestamp ?? timestamp, ensures we always have a valid value
+            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.timestampForSorting notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
                     readReceiptEntity.readPosition = readPosition;
                 }
                 readReceiptEntity.whisperMessageType = TSEncryptedWhisperMessageType;
@@ -461,62 +467,6 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
 }
 
 #pragma mark - Read Receipts From Recipient
-
-- (void)processReadReceiptsFromRecipientId:(NSString *)recipientId
-                            sentTimestamps:(NSArray<NSNumber *> *)sentTimestamps
-                             readTimestamp:(uint64_t)readTimestamp
-{
-    OWSAssertDebug(recipientId.length > 0);
-    OWSAssertDebug(sentTimestamps);
-    
-    
-    if (![self areReadReceiptsEnabled]) {
-        OWSLogInfo(@"%@ Ignoring incoming receipt message as read receipts are disabled.", self.logTag);
-        return;
-    }
-    
-    dispatch_async(self.serialQueue, ^{
-        DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-            
-            for (NSNumber *nsSentTimestamp in sentTimestamps) {
-                UInt64 sentTimestamp = [nsSentTimestamp unsignedLongLongValue];
-                
-                NSError *error;
-                NSArray<TSOutgoingMessage *> *messages = (NSArray<TSOutgoingMessage *> *)[InteractionFinder interactionsWithTimestamp:sentTimestamp
-                                                                                                      filter:^BOOL(TSInteraction * interaction) {
-                    return ([interaction isKindOfClass:[TSOutgoingMessage class]]);
-                } transaction:writeTransaction error:&error];
-                
-                if (messages.count > 1) {
-                    OWSLogError(@"%@ More than one matching message with timestamp: %llu.", self.logTag, sentTimestamp);
-                }
-                if (messages.count > 0) {
-                    // TODO: We might also need to "mark as read by recipient" any older messages
-                    // from us in that thread.  Or maybe this state should hang on the thread?
-                    for (TSOutgoingMessage *message in messages) {
-                        
-                        if(message.grdbId){
-                            [self.databaseStorage touchInteraction:message
-                                                     shouldReindex:NO
-                                                       transaction:writeTransaction];
-                        }
-                        
-                    }
-                } else {
-                    // Persist the read receipts so that we can apply them to outgoing messages
-                    // that we learn about later through sync messages.
-//                    [TSRecipientReadReceipt addRecipientId:recipientId
-//                                             sentTimestamp:sentTimestamp
-//                                             readTimestamp:readTimestamp
-//                                               transaction:writeTransaction];
-                }
-            }
-        });
-    });
-     
-     
-}
- 
 //收到同步消息，标记之前为已读
 - (void)applyEarlyReadReceiptsForOutgoingMessageFromLinkedDevice:(TSOutgoingMessage *)message
                                                      transaction:(SDSAnyWriteTransaction *)transaction
@@ -977,27 +927,27 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
         return;
     }
     
-    if(readPosition.maxServerTime <= thread.readPositionEntity.maxServerTime) {
-        OWSLogError(@"sendReadRecipet, invalid readPosition: new <= old");
-        return;
-    }
-    
     NSString *localNumber = [[TSAccountManager sharedInstance] localNumberWithTransaction:transaction];
     TSMessageReadPosition *messageReadPosition = [[TSMessageReadPosition alloc] initWithUniqueThreadId:thread.uniqueId
                                                                                            recipientId:localNumber
                                                                                           readPosition:readPosition];
     [messageReadPosition updateOrInsertWithTransaction:transaction];
-    __block NSUInteger count = 0;
-    [thread anyUpdateWithTransaction:transaction
-                               block:^(TSThread * instance) {
-        [instance updateReadPositionEntity:readPosition];
-        if (count == 1){
-            NSUInteger unreadCount = [instance getUnreadMessageCountWithTransaction:transaction];
-            [instance updateUnreadMessageCount:unreadCount];
-            [thread updateUnreadMessageCount:unreadCount];
-        }
-        count++;
-    }];
+    
+    // 位置向下移动才需要更新未读计数
+    if(readPosition.maxServerTime > thread.readPositionEntity.maxServerTime) {
+        
+        __block NSUInteger count = 0;
+        [thread anyUpdateWithTransaction:transaction
+                                   block:^(TSThread * instance) {
+            [instance updateReadPositionEntity:readPosition];
+            if (count == 1){
+                NSUInteger unreadCount = [instance getUnreadMessageCountWithTransaction:transaction];
+                [instance updateUnreadMessageCount:unreadCount];
+                [thread updateUnreadMessageCount:unreadCount];
+            }
+            count++;
+        }];
+    }
 }
 
 

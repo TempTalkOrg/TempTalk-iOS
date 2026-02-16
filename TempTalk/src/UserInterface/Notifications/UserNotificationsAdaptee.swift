@@ -88,7 +88,6 @@ public class UserNotificationsAdaptee: NSObject, UNUserNotificationCenterDelegat
     }
 
     public func requestAuthorization() {
-#warning ("--- cc us暂时不支持criticalAlert ---")
         var options: UNAuthorizationOptions!
         options = [.badge, .sound, .alert]
         center.requestAuthorization(options: options) { (granted, error) in

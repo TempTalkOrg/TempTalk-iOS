@@ -55,7 +55,7 @@ class QRCodeView: UIView {
 
         let activityIndicator = UIActivityIndicatorView(style: .whiteLarge)
         placeholder.addSubview(activityIndicator)
-        activityIndicator.color = Theme.lightThemePrimaryColor
+        activityIndicator.color = UIColor.color(rgbHex: 0x1E2329)
         activityIndicator.autoCenterInSuperview()
         activityIndicator.autoSetDimensions(to: .init(width: 40, height: 40))
         activityIndicator.startAnimating()
@@ -97,7 +97,7 @@ class QRCodeView: UIView {
     }
 
     public static func buildQRImage(data: Data, forExport: Bool = false) throws -> UIImage {
-        let foregroundColor: UIColor = (forExport ? .black : Theme.lightThemePrimaryColor)
+        let foregroundColor: UIColor = (forExport ? .black : UIColor.color(rgbHex: 0x1E2329))
         let backgroundColor: UIColor = (forExport ? .white : .clear)
         return try buildQRImage(data: data,
                                 foregroundColor: foregroundColor,

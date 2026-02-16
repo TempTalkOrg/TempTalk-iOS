@@ -23,9 +23,9 @@ struct CallScreenShareView: View {
     @State private var showPlaceholder = true
     // 用于防抖的任务
     @State private var debounceTask: Task<Void, Never>?
-    
-    @StateObject private var timerManager = TimerDataManager.shared
-    @StateObject private var roomDataManager = RoomDataManager.shared
+
+    @ObservedObject private var timerManager = TimerDataManager.shared
+    @ObservedObject private var roomDataManager = RoomDataManager.shared
     
     var appCtx: LiveKitContext? {
         DTMeetingManager.shared.appContext
@@ -37,6 +37,7 @@ struct CallScreenShareView: View {
     @StateObject private var viewModel = ControlBarViewModel()
     
     @State private var isPopupPresented = false
+    @State private var showCriticalAlertConfirm = false
 
     public var body: some View {
         GeometryReader { geometry in
@@ -63,12 +64,30 @@ struct CallScreenShareView: View {
                 }
                 
                 if isPopupPresented {
-                    BottomPopupView {
-                        isPopupPresented = false
-                    }
+                    BottomPopupView(
+                        onDismiss: {
+                            isPopupPresented = false
+                        },
+                        onShowCriticalAlertConfirm: {
+                            showCriticalAlertConfirm = true
+                        }
+                    )
                     .transition(.move(edge: .bottom))
                     .animation(.easeOut(duration: 0.3), value: isPopupPresented)
                     .allowsHitTesting(isPopupPresented)
+                }
+
+                // Critical Alert 确认弹窗
+                if showCriticalAlertConfirm {
+                    CriticalAlertConfirmBottomPopupView(
+                        onDismiss: {
+                            showCriticalAlertConfirm = false
+                        },
+                        invitedUserIds: Array(DTMeetingManager.shared.currentCall.invitedCriticalAlertUsers),
+                        callType: DTMeetingManager.shared.currentCall.callType
+                    )
+                    .transition(.opacity)
+                    .animation(.easeOut(duration: 0.3), value: showCriticalAlertConfirm)
                 }
                 
                 // 右侧滑出成员列表
@@ -100,7 +119,7 @@ struct CallScreenShareView: View {
                             track,
                             layoutMode: .fit,
                             pinchToZoomOptions: .resetOnRelease,
-                            isRendering: $isRendering
+                            didRenderFirstFrame: $isRendering
                         )
                         .id(track.sid)
                         .frame(
@@ -225,14 +244,19 @@ struct CallScreenShareView: View {
     
     
     private var bulletChatOverlay: some View {
-        ZStack(alignment: .bottomLeading) {
+        // 根据屏幕方向动态计算弹幕宽度
+        let currentScreenSize = UIScreen.main.bounds.size
+        let isLandscape = currentScreenSize.width > currentScreenSize.height
+        let bulletChatWidth = isLandscape ? currentScreenSize.width * 0.5 : currentScreenSize.width
+
+        return ZStack(alignment: .bottomLeading) {
             VStack(alignment: .leading, spacing: 0) {
                 DTBulletChatViewRepresentable()
-                    .frame(width: min(screenWidth, screenHeight) + 150)
+                    .frame(width: bulletChatWidth)
                     .padding(.top, 20)
-                    .padding(.leading, -30)
+                    .padding(.leading, -15)
                     .allowsHitTesting(false)
-               
+
                 if viewModel.showControls {
                     DTBulletChatControlViewRepresentable(
                         showQuickPanel: $showQuickPanel,
@@ -240,12 +264,17 @@ struct CallScreenShareView: View {
                             viewModel.userPressedButton()
                         }
                     )
-                    .frame(width: 172, height: 36)
+                    .frame(height: 36)
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.bottom, 30)
                     .padding(.leading, 30)
                     .allowsHitTesting(viewModel.showControls)
                 }
             }.frame(maxWidth: .infinity, alignment: .leading)
+
+            DTEmojiFlyingViewRepresentable(containerSize: CGSize(width: bulletChatWidth, height: 0))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .allowsHitTesting(false)
 
             if showQuickPanel, viewModel.showControls {
                 Color.black.opacity(0.001)
@@ -254,21 +283,25 @@ struct CallScreenShareView: View {
                         showQuickPanel = false
                     }
                     .allowsHitTesting(viewModel.showControls)
-                
-                let messages = DTMeetingManager.shared.sampleBulletRtmCalls()
-                QuickMessagePanelUIKitWrapper(messages: messages) { message in
+
+                let config = DTMeetingManager.shared.bubbleMessageConfig()
+                QuickMessagePanelUIKitWrapper(
+                    emojiPresets: config.emojiPresets,
+                    textPresets: config.textPresets
+                ) { message in
                     Task {
-                        await DTMeetingManager.shared.sendDanmu(message)
+                        // 发送气泡类型消息
+                        await DTMeetingManager.shared.sendDanmu(message, type: .bubble)
                         showQuickPanel = false
                     }
                 }
-                .frame(width: 270)
-                .frame(height: 270)
+                .frame(width: 300, height: 170)
                 .padding(.leading, 30)
                 .padding(.bottom, 75)
                 .allowsHitTesting(showQuickPanel && viewModel.showControls)
             }
         }
+        .padding(.leading, 15) // 整体向右偏移15px，避开灵动岛和摄像头
     }
     
     

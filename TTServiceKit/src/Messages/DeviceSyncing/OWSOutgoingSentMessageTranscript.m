@@ -47,13 +47,13 @@ NS_ASSUME_NONNULL_BEGIN
     _message = message;
     // This will be nil for groups.
     _sentRecipientId = message.threadWithSneakyTransaction.contactIdentifier;
-    
+
     _source = [[DTRealSourceEntity alloc] initSourceWithTimestamp:message.timestamp
                                                      sourceDevice:[OWSDevice currentDeviceId]
                                                            source:[TSAccountManager localNumber]
                                                        sequenceId:message.sequenceId
                                                  notifySequenceId:message.notifySequenceId];
-    
+
     self.associatedUniqueThreadId = message.uniqueThreadId;
 
     return self;
@@ -73,8 +73,7 @@ NS_ASSUME_NONNULL_BEGIN
 
     [sentBuilder setDestination:self.sentRecipientId];
     [sentBuilder setMessage:[self.message buildDataMessage:self.sentRecipientId]];
-    [sentBuilder setExpirationStartTimestamp:self.message.timestamp];
-    [sentBuilder setServerTimestamp:self.message.serverTimestamp];
+    [sentBuilder setExpirationStartTimestamp:[NSDate ows_millisecondTimeStamp]];
     [sentBuilder setSequenceID:self.message.sequenceId];
     [sentBuilder setNotifySequenceID:self.message.notifySequenceId];
     

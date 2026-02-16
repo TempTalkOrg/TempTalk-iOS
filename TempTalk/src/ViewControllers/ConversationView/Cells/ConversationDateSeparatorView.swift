@@ -70,7 +70,7 @@ class ConversationDateSeparatorView: UIView {
     }
     
     func refreshTheme() {
-        dateLabel.textColor = Theme.primaryTextColor
-        containerView.backgroundColor = Theme.stickBackgroundColor
+        dateLabel.textColor = Theme.tprimaryColor
+        containerView.backgroundColor = Theme.bg2Color
     }
 }

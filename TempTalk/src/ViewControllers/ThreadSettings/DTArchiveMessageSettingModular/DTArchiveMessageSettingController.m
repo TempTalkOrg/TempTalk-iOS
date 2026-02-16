@@ -25,7 +25,7 @@ extern const NSTimeInterval kDayInterval;
 
 NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
 
-@interface DTArchiveMessageSettingController ()
+@interface DTArchiveMessageSettingController () <OWSNavigationChildController>
 @property (nonatomic, strong) NSDictionary *params;
 @property (nonatomic, strong) DTUpdateGroupInfoAPI *updateGroupInfoAPI;
 @property (nonatomic, strong) DTUpdateConversationShareConfigApi *updateConversationShareConfigApi;
@@ -55,7 +55,7 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
 
 - (UITableViewCell *)baseCell {
     UITableViewCell *cell = [[UITableViewCell alloc]initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"UITableViewCellStyleValue1"];
-    cell.contentView.backgroundColor = Theme.backgroundColor;
+    cell.contentView.backgroundColor = Theme.bg1Color;
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     cell.preservesSuperviewLayoutMargins = YES;
     cell.contentView.preservesSuperviewLayoutMargins = YES;
@@ -68,7 +68,7 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
     UILabel *tipLabel = [UILabel new];
     tipLabel.numberOfLines = 0;
     tipLabel.text = Localized(@"YOU_UPDATED_DISAPPEARING_MESSAGES_TIP_MESSAGE", nil);
-    tipLabel.textColor = Theme.thirdTextAndIconColor;
+    tipLabel.textColor = Theme.tdisableColor;
     tipLabel.font = [UIFont ows_regularFontWithSize:14.f];
     [cell.contentView addSubview:tipLabel];
 
@@ -81,7 +81,7 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
 
     // 分割线
     UIView *lineView = [UIView new];
-    lineView.backgroundColor = Theme.thirdTextAndIconColor;
+    lineView.backgroundColor = Theme.tdisableColor;
     lineView.translatesAutoresizingMaskIntoConstraints = NO;
     [cell.contentView addSubview:lineView];
 
@@ -97,6 +97,8 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     [OWSArchivedMessageJob sharedJob].inConversation = NO;
     self.title = Localized(@"CONVERSATION_SETTINGS_ARCHIVE", nil);
     [[NSNotificationCenter defaultCenter] addObserver:self
@@ -107,6 +109,12 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
                                              selector:@selector(messageExpiryConfigChanged:)
                                                  name:DTConversationSharingConfigurationChangeNotification
                                                object:nil];
+}
+
+- (void)applyTheme {
+    [super applyTheme];
+    self.view.backgroundColor = Theme.bgpageSecondaryColor;
+    self.tableView.backgroundColor = Theme.bgpageSecondaryColor;
 }
 
 - (void)viewDidDisappear:(BOOL)animated {
@@ -257,13 +265,15 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
                                                                         block:^(TSGroupThread * latestInstance) {
                 if([latestInstance isKindOfClass:[TSGroupThread class]]){
                     latestInstance.groupModel.messageExpiry = @(self.durationSeconds);
-                    
+
                     [self updateExpiTimeAndClearMessagesWithData:entity.data thread:latestInstance];
                 }
             }];
-            
+
             [transaction addAsyncCompletionOnMain:^{
                 [self updateTableContents];
+                // 事务提交后触发归档检查
+                [[OWSArchivedMessageJob sharedJob] triggerArchiveCheckImmediately];
             }];
         });
     } failure:^(NSError * _Nonnull error) {
@@ -298,15 +308,15 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
                     threadConfig.ver = sharingConfigurationEntity.ver;
                     threadConfig.conversation = sharingConfigurationEntity.conversation;
                     latestInstance.threadConfig = threadConfig;
-                    
+
                     [self updateExpiTimeAndClearMessagesWithData:entity.data thread:latestInstance];
                 }
             }];
-                        
+
             [transaction addAsyncCompletionOnMain:^{
                 [self updateTableContents];
-                // 之前个人页面会会退到消息页面
-//                [self.conversationSettingsViewDelegate popAllConversationSettingsViews];
+                // 事务提交后触发归档检查
+                [[OWSArchivedMessageJob sharedJob] triggerArchiveCheckImmediately];
             }];
         } );
     } failure:^(NSError * _Nonnull error, DTAPIMetaEntity * _Nullable entity) {
@@ -350,5 +360,27 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
         _updateConversationShareConfigApi = [DTUpdateConversationShareConfigApi new];
     }
     return _updateConversationShareConfigApi;
+}
+
+#pragma mark - OWSNavigationChildController
+
+- (id<OWSNavigationChildController> _Nullable)childForOWSNavigationConfiguration {
+    return nil;
+}
+
+- (BOOL)shouldCancelNavigationBack {
+    return false;
+}
+
+- (UIColor * _Nullable)navbarBackgroundColorOverride {
+    return Theme.bgpageSecondaryColor;
+}
+
+- (BOOL)prefersNavigationBarHidden {
+    return NO;
+}
+
+- (UIColor * _Nullable)navbarTintColorOverride {
+    return nil;
 }
 @end

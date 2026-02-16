@@ -33,6 +33,16 @@ NS_ASSUME_NONNULL_BEGIN
 // group
 @property (nonatomic, strong) NSNumber *conversationGroup;
 
+/// activeConversation 活跃会话清理
+// default
+@property (nonatomic, strong) NSNumber *activeConversationDefault;
+// note to self
+@property (nonatomic, strong) NSNumber *activeConversationMe;
+// other thread
+@property (nonatomic, strong) NSNumber *activeConversationOthers;
+// group
+@property (nonatomic, strong) NSNumber *activeConversationGroup;
+
 @property (nonatomic, copy) NSArray *messageArchivingTimeOptionValues;
 @end
 

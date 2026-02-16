@@ -7,9 +7,9 @@
 
 #import "DTTextInsetsLabel.h"
 #import <TTServiceKit/Localize_Swift.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 
 @interface DTTextInsetsLabel()
-@property (nonatomic, strong) UIPasteboard *pasteBoard;
 @end
 
 @implementation DTTextInsetsLabel
@@ -18,7 +18,6 @@
     if (self = [super init]) {
         _textInsets = UIEdgeInsetsZero;
         [self attachLongPress];
-        self.pasteBoard = [UIPasteboard generalPasteboard];
     }
     return self;
 }
@@ -68,15 +67,15 @@
 }
 
 - (void)copyAction:(id)sender {
-    self.pasteBoard.string = self.text;
+    [DTSecurePasteboard setString:self.text];
 }
 
 - (void)pasteAction:(id)sender {
-    self.text = self.pasteBoard.string;
+    self.text = [UIPasteboard generalPasteboard].string;
 }
 
 - (void)cutAction:(id)sender  {
-    self.pasteBoard.string = self.text;
+    [DTSecurePasteboard setString:self.text];
     self.text = nil;
 }
 

@@ -39,6 +39,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, strong) NSArray<DTMsgPeerContextParams *> *recipients;
 
+@property (nonatomic, strong, nullable) NSString *syncContent;
 
 - (instancetype)initWithType:(TSWhisperMessageType)type
                      content:(NSData *)content

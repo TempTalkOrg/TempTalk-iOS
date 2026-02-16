@@ -8,7 +8,7 @@
 #import "DTSelectedAccountToolView.h"
 #import "DTAddToGroupItem.h"
 #import <TTMessaging/UIView+SignalUI.h>
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 
 extern NSString *const kDTAddToGroupItemIdentifier;
 

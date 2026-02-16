@@ -125,15 +125,18 @@ struct RoomView: View {
                 }) { participant in
                     ParticipantView(participant: participant, videoViewMode: .fill)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                // 当新数据非空时更新缓存
+            } else if case .reconnecting = room.connectionState {
+                // 只有重连时才显示缓存的快照作为占位
                 let displayedSnapshots: [ParticipantSnapshot] = computeDisplayedSnapshots()
-                ParticipantLayout(displayedSnapshots, spacing: 8, id: { shot in
-                    shot.id
-                }) { shot in
-                    ReconnectingParticipantView(snapshot: shot, videoViewMode: .fill)
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                if !displayedSnapshots.isEmpty {
+                    ParticipantLayout(displayedSnapshots, spacing: 8, id: { shot in
+                        shot.id
+                    }) { shot in
+                        ReconnectingParticipantView(snapshot: shot, videoViewMode: .fill)
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
+            // disconnected 状态不显示任何参会者视图
         }
     }
 }

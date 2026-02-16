@@ -15,12 +15,12 @@
 #import <MessageUI/MessageUI.h>
 #import <TTMessaging/Environment.h>
 #import <TTMessaging/UIUtil.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <TTServiceKit/AppVersion.h>
 #import <TTServiceKit/SignalAccount.h>
 #import <TTServiceKit/TSAccountManager.h>
 
 #import "ConversationItemMacro.h"
-#import "DTGroupsViewController.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -114,13 +114,13 @@ static BOOL isLoadInternalContactsOver = NO;
 - (UITableView *)tableView {
     if (!_tableView) {
         _tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
-        _tableView.backgroundColor = Theme.bg1Color;
+        _tableView.backgroundColor = Theme.bgpagePrimaryColor;
         _tableView.delegate = self;
         _tableView.dataSource = self;
         _tableView.estimatedRowHeight = 0;
         _tableView.rowHeight = 70;
         _tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
-        _tableView.sectionIndexColor = Theme.tabbarTitleSelectedColor;
+        _tableView.sectionIndexColor = Theme.tinfoColor;
         if (@available(iOS 15.0, *)) {
             _tableView.sectionHeaderTopPadding = 0;
         }
@@ -254,6 +254,12 @@ static BOOL isLoadInternalContactsOver = NO;
 {
     [super viewDidLoad];
     [self.tableView reloadData];
+
+    // 监听字体大小变化通知
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(textSizeDidChange)
+                                                 name:NSNotification.TextSizeDidChange
+                                               object:nil];
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -312,14 +318,18 @@ static BOOL isLoadInternalContactsOver = NO;
 - (void)applyTheme
 {
     OWSAssertIsOnMainThread();
-    self.tableView.backgroundColor = Theme.bg1Color;
-    self.tableView.sectionIndexColor = Theme.tabbarTitleSelectedColor;
+    self.tableView.backgroundColor = Theme.bgpagePrimaryColor;
+    self.tableView.sectionIndexColor = Theme.bgpagePrimaryColor;
     [super applyTheme];
     [self.tableView reloadData];
 }
 
 - (void)applyLanguage {
     [super applyLanguage];
+    [self.tableView reloadData];
+}
+
+- (void)textSizeDidChange {
     [self.tableView reloadData];
 }
 
@@ -350,19 +360,20 @@ static BOOL isLoadInternalContactsOver = NO;
     for (NSUInteger i = 0; i < self.collation.sectionTitles.count; i++) {
         self.collatedSignalAccounts[i] = [NSMutableArray new];
     }
+    
     for (SignalAccount *signalAccount in self.contactsViewHelper.signalAccounts) {
-        if (signalAccount.contact.isExternal) {
+        if (!signalAccount.isFriend) {
             continue;
         }
         NSInteger section =
         [self.collation sectionForObject:signalAccount collationStringSelector:@selector(stringForCollation)];
-        
+
         if (section < 0) {
             OWSFailDebug(@"Unexpected collation for name:%@", signalAccount.stringForCollation);
             continue;
         }
         NSUInteger sectionIndex = (NSUInteger)section;
-        
+
         [self.collatedSignalAccounts[sectionIndex] addObject:signalAccount];
     }
     
@@ -396,7 +407,7 @@ static BOOL isLoadInternalContactsOver = NO;
         UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"DTNoContactsCellID" forIndexPath:indexPath];
         cell.userInteractionEnabled = NO;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        cell.contentView.backgroundColor = Theme.bg1Color;
+        cell.contentView.backgroundColor = Theme.bgpagePrimaryColor;
         if (self.hasRequestData) {
             for (UIView *subview in cell.contentView.subviews) {
                 if ([subview isKindOfClass:UIActivityIndicatorView.class]) {
@@ -407,13 +418,13 @@ static BOOL isLoadInternalContactsOver = NO;
             cell.textLabel.text = Localized(@"SETTINGS_BLOCK_LIST_NO_CONTACTS",
                                                     @"A label that indicates the user has no Signal contacts.");
             cell.textLabel.font = [UIFont ows_regularFontWithSize:15.f];
-            cell.textLabel.textColor = Theme.primaryTextColor;
+            cell.textLabel.textColor = Theme.tprimaryColor;
             cell.textLabel.textAlignment = NSTextAlignmentCenter;
         } else {
             cell.textLabel.text = nil;
             UIActivityIndicatorView *activityIndicatorView =
                 [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
-            activityIndicatorView.color = Theme.primaryTextColor;
+            activityIndicatorView.color = Theme.tprimaryColor;
             [cell.contentView addSubview:activityIndicatorView];
             [activityIndicatorView startAnimating];
             
@@ -468,12 +479,12 @@ static BOOL isLoadInternalContactsOver = NO;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    
+
     NSUInteger section = (NSUInteger)indexPath.section, row = (NSUInteger)indexPath.row;
     if (section >= self.collatedSignalAccounts.count) return;
     if (row >= self.collatedSignalAccounts[section].count) return;
     SignalAccount *signalAccount = self.collatedSignalAccounts[section][row];
-    [self showProfileCardInfoWith:signalAccount.recipientId isFromSameThread:false isPresent:false];
+    [self showProfileCardInfoWith:signalAccount.recipientId isFromSameThread:false isPresent:false isFromContacts:true];
 }
 
 - (nullable NSArray<NSString *> *)sectionIndexTitlesForTableView:(UITableView *)tableView {
@@ -483,11 +494,11 @@ static BOOL isLoadInternalContactsOver = NO;
 - (UIView *)headerWithTitle:(NSString *)title {
     
     UIView *headerView = [UIView new];
-    headerView.backgroundColor = Theme.bgelevateColor;
+    headerView.backgroundColor = Theme.bgpagePrimaryColor;
     
     UILabel *lbTitle = [UILabel new];
     lbTitle.font = [UIFont systemFontOfSize:14];
-    lbTitle.textColor = Theme.ternaryTextColor;
+    lbTitle.textColor = Theme.tthirdColor;
     lbTitle.text = title;
     [headerView addSubview:lbTitle];
     [lbTitle autoPinEdgeToSuperviewEdge:ALEdgeLeading withInset:16];
@@ -496,169 +507,6 @@ static BOOL isLoadInternalContactsOver = NO;
     return headerView;
 }
 
-
-/*
-- (void)updateTableContents
-{
-    OWSTableContents *contents = [OWSTableContents new];
-
-    if (self.isNoContactsModeActive) {//？？没看懂这个是什么
-        self.tableViewController.contents = contents;
-        return;
-    }
-
-    // Count the none collated sections, before we add our collated sections.
-    // Later we'll need to offset which sections our collation indexes reference
-    // by this amount. e.g. otherwise the "B" index will reference names starting with "A"
-    // And the "A" index will reference the static non-collated section(s).
-    NSInteger noncollatedSections = (NSInteger)contents.sections.count;
-    for (OWSTableSection *section in [self collatedContactsSections]) {
-        [contents addSection:section];
-    }
-    contents.sectionForSectionIndexTitleBlock = ^NSInteger(NSString *_Nonnull title, NSInteger index) {
-        // Offset the collation section to account for the noncollated sections.
-        NSInteger sectionIndex = [self.collation sectionForSectionIndexTitleAtIndex:index] + noncollatedSections;
-        if (sectionIndex < 0) {
-            // Sentinal in case we change our section ordering in a surprising way.
-            OWSFailDebug(@"Unexpected negative section index");
-            return 0;
-        }
-        if (sectionIndex >= (NSInteger)contents.sections.count) {
-            // Sentinal in case we change our section ordering in a surprising way.
-            OWSFailDebug(@"Unexpectedly large index");
-            return 0;
-        }
-
-        return sectionIndex;
-    };
-    contents.sectionIndexTitlesForTableViewBlock = ^NSArray<NSString *> *_Nonnull
-    {
-        return self.collation.sectionTitles;
-    };
-    self.tableViewController.contents = contents;
-}
-
-- (NSArray<OWSTableSection *> *)collatedContactsSections
-{
-    if (self.contactsViewHelper.signalAccounts.count < 1) {
-        // No Contacts
-        OWSTableSection *contactsSection = [OWSTableSection new];
-
-// modified: load internal contacts from server.
-//        if (self.contactsViewHelper.contactsManager.isSystemContactsAuthorized) {
-        if (self.contactsViewHelper.hasUpdatedContactsAtLeastOnce || isLoadInternalContactsOver) {
-
-            [contactsSection
-                addItem:[OWSTableItem softCenterLabelItemWithText:
-                                          Localized(@"SETTINGS_BLOCK_LIST_NO_CONTACTS",
-                                              @"A label that indicates the user has no Signal contacts.")
-                                                  customRowHeight:UITableViewAutomaticDimension]];
-        } else {
-            UITableViewCell *loadingCell = [UITableViewCell new];
-            OWSAssertDebug(loadingCell.contentView);
-
-            UIActivityIndicatorView *activityIndicatorView =
-                [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleGray];
-            [loadingCell.contentView addSubview:activityIndicatorView];
-            [activityIndicatorView startAnimating];
-
-            [activityIndicatorView autoCenterInSuperview];
-            [activityIndicatorView setCompressionResistanceHigh];
-            [activityIndicatorView setContentHuggingHigh];
-
-            // hide separator for loading cell. The loading cell doesn't really feel like a cell
-            loadingCell.backgroundView = [UIView new];
-
-            OWSTableItem *loadingItem =
-                [OWSTableItem itemWithCustomCell:loadingCell customRowHeight:40 actionBlock:nil];
-            [contactsSection addItem:loadingItem];
-        }
-        
-        return @[ contactsSection ];
-    }
-    __weak NewContactThreadViewController *weakSelf = self;
-    
-    NSMutableArray<OWSTableSection *> *contactSections = [NSMutableArray new];
-    
-    NSMutableArray<NSMutableArray<SignalAccount *> *> *collatedSignalAccounts = [NSMutableArray new];
-    for (NSUInteger i = 0; i < self.collation.sectionTitles.count; i++) {
-        collatedSignalAccounts[i] = [NSMutableArray new];
-    }
-    for (SignalAccount *signalAccount in self.contactsViewHelper.signalAccounts) {
-        
-        if (signalAccount.contact.isExternal) {
-            continue;
-        }
-        NSInteger section =
-            [self.collation sectionForObject:signalAccount collationStringSelector:@selector(stringForCollation)];
-
-        if (section < 0) {
-            OWSFailDebug(@"Unexpected collation for name:%@", signalAccount.stringForCollation);
-            continue;
-        }
-        NSUInteger sectionIndex = (NSUInteger)section;
-
-        [collatedSignalAccounts[sectionIndex] addObject:signalAccount];
-    }
-    
-    for (NSUInteger i = 0; i < collatedSignalAccounts.count; i++) {
-        NSArray<SignalAccount *> *signalAccounts = collatedSignalAccounts[i];
-        NSMutableArray <OWSTableItem *> *contactItems = [NSMutableArray new];
-        for (SignalAccount *signalAccount in signalAccounts) {
-            [contactItems addObject:[OWSTableItem
-                                        itemWithCustomCellBlock:^{
-                                            ContactTableViewCell *cell = [ContactTableViewCell new];
-                                            BOOL isBlocked = [self.contactsViewHelper
-                                                isRecipientIdBlocked:signalAccount.recipientId];
-                                            if (isBlocked) {
-                                                cell.accessoryMessage = Localized(@"CONTACT_CELL_IS_BLOCKED",
-                                                    @"An indicator that a contact has been blocked.");
-                                            }
-
-                                            [cell configureWithSignalAccount:signalAccount
-                                                             contactsManager:self.contactsViewHelper.contactsManager];
-                
-                                            cell.separatorInset = UIEdgeInsetsMake(0, 75, 0, 0);
-
-                                            return cell;
-                                        }
-                                        customRowHeight:UITableViewAutomaticDimension
-                                        actionBlock:^{
-                                            [weakSelf newPersonCardInfoWithRecipientId:signalAccount.recipientId];
-                                        }]];
-        }
-
-        // Don't show empty sections.
-        // To accomplish this we add a section with a blank title rather than omitting the section altogether,
-        // in order for section indexes to match up correctly
-        OWSTableSection *contactSection = [OWSTableSection new];
-        [contactSection addTableItems:contactItems];
-        NSString *sectionTitle = contactItems.count > 0 ? self.collation.sectionTitles[i] : nil;
-        if (contactItems.count > 0) {
-            contactSection.customHeaderView = [self headerWithTitle:sectionTitle];
-            contactSection.customHeaderHeight = @30;
-        }
-        [contactSections addObject:contactSection];
-    }
-    
-    return [contactSections copy];
-}
- */
- 
-//- (NSArray<TSGroupThread *> *)filteredGroupThreads
-//{
-//    NSMutableArray<TSGroupThread *> *groupThreads = [NSMutableArray new];
-//    [TSGroupThread enumerateCollectionObjectsUsingBlock:^(id obj, BOOL *stop) {
-//        if (![obj isKindOfClass:[TSGroupThread class]]) {
-//            // group and contact threads are in the same collection.
-//            return;
-//        }
-//        TSGroupThread *groupThread = (TSGroupThread *)obj;
-//        [groupThreads addObject:groupThread];
-//    }];
-//
-//    return [self.conversationSearcher filterGroupThreads:groupThreads withSearchText:self.searchBar.text];
-//}
 
 #pragma mark - No Contacts Mode
 
@@ -758,7 +606,8 @@ static BOOL isLoadInternalContactsOver = NO;
                                                                                              action:ConversationViewActionCompose
                                                                                      focusMessageId:nil
                                                                                         botViewItem:nil
-                                                                                           viewMode:ConversationViewMode_Main];
+                                                                                           viewMode:ConversationViewMode_Main
+                                                                                 isFromPersonalCard:false];
 
     [self.navigationController pushViewController:viewController animated:YES];
 }
@@ -786,7 +635,7 @@ static BOOL isLoadInternalContactsOver = NO;
 - (void)recipientIdWasSelected:(NSString *)recipientId
 {
     OWSAssertDebug(recipientId.length > 0);
-    [self showProfileCardInfoWith:recipientId isFromSameThread:false isPresent:true];
+    [self showProfileCardInfoWith:recipientId isFromSameThread:false isPresent:false isFromContacts:true];
 }
 
 - (void)updateNonContactAccountSet:(NSArray<SignalRecipient *> *)recipients
@@ -819,7 +668,8 @@ static BOOL isLoadInternalContactsOver = NO;
                                                                                                  action:action
                                                                                          focusMessageId:focusMessageId
                                                                                             botViewItem:nil
-                                                                                               viewMode:ConversationViewMode_Main];
+                                                                                               viewMode:ConversationViewMode_Main
+                                                                                     isFromPersonalCard:false];
 
         [self pushTopLevelViewController:viewController animateDismissal:NO animatePresentation:YES];
     });

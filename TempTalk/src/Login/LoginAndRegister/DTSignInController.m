@@ -220,10 +220,10 @@ NSString *const kSendEmailCodeForChangePhoneSucess = @"kSendEmailCodeForChangePh
 
 - (void)applyTheme {
     [super applyTheme];
-    self.view.backgroundColor = Theme.backgroundColor;
-    self.titleLabel.textColor = Theme.primaryTextColor;
+    self.view.backgroundColor = Theme.bg1Color;
+    self.titleLabel.textColor = Theme.tprimaryColor;
     self.tfAccount.keyboardAppearance = Theme.keyboardAppearance;
-    self.tfAccount.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x181A20] : [UIColor colorWithRGBHex:0xFFFFFF] ;
+    self.tfAccount.backgroundColor = Theme.bg1Color;
     self.tfAccount.textColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xEAECEF] : [UIColor colorWithRGBHex:0x1E2329];
     self.nextButton.isSelected = self.tfAccount.text.length;
     [self.nextButton setTitleColor: [UIColor colorWithRGBHex:0xFFFFFF] for:UIControlStateSelected];
@@ -419,7 +419,7 @@ NSString *const kSendEmailCodeForChangePhoneSucess = @"kSendEmailCodeForChangePh
         _countryCodeBtn.titleAlignment = DTButtonTitleAlignmentTypeLeft;
         [_countryCodeBtn setTitle:@"+86" forState:UIControlStateNormal];
         [_countryCodeBtn setImage:[UIImage imageNamed:@"input_arrow"] forState:UIControlStateNormal];
-        [_countryCodeBtn setTitleColor:Theme.primaryTextColor forState:UIControlStateNormal];
+        [_countryCodeBtn setTitleColor:Theme.tprimaryColor forState:UIControlStateNormal];
         _countryCodeBtn.titleLabel.font = [UIFont systemFontOfSize:14];
         [_countryCodeBtn addTarget:self action:@selector(countryCodeBtnClick:) forControlEvents:UIControlEventTouchUpInside];
         _countryCodeBtn.hidden = true;

@@ -10,43 +10,46 @@ import TTMessaging
 @objc
 public class LoadingViewController: UIViewController {
 
-    var logoView: UIImageView!
-    var topLabel: UILabel!
-    var bottomLabel: UILabel!
+    var logoView: UIImageView?
+    var topLabel: UILabel?
+    var bottomLabel: UILabel?
 
     override public func loadView() {
         self.view = UIView()
-        
-        view.backgroundColor = Theme.backgroundColor
 
-        self.logoView = UIImageView(image: #imageLiteral(resourceName: TSConstants.appLogoName))
-        view.addSubview(logoView)
+        view.backgroundColor = Theme.bg1Color
 
-        logoView.autoCenterInSuperview()
-        logoView.autoPinToSquareAspectRatio()
-        logoView.autoMatch(.width, to: .width, of: view, withMultiplier: 1/3)
+        let logo = UIImageView(image: #imageLiteral(resourceName: TSConstants.appLogoName))
+        self.logoView = logo
+        view.addSubview(logo)
 
-        self.topLabel = buildLabel()
-        topLabel.alpha = 0
-        topLabel.textColor = Theme.primaryTextColor
-        
-        topLabel.font = UIFont.ows_dynamicTypeTitle2
+        logo.autoCenterInSuperview()
+        logo.autoPinToSquareAspectRatio()
+        logo.autoMatch(.width, to: .width, of: view, withMultiplier: 1/3)
+
+        let top = buildLabel()
+        self.topLabel = top
+        top.alpha = 0
+        top.textColor = Theme.tprimaryColor
+
+        top.font = UIFont.ows_dynamicTypeTitle2
         refreshOverlayTitle()
 
-        self.bottomLabel = buildLabel()
-        bottomLabel.alpha = 0
-        bottomLabel.textColor = Theme.primaryTextColor
+        let bottom = buildLabel()
+        self.bottomLabel = bottom
+        bottom.alpha = 0
+        bottom.textColor = Theme.tprimaryColor
 
-        bottomLabel.font = UIFont.ows_dynamicTypeBody
-        bottomLabel.text = Localized("DATABASE_VIEW_OVERLAY_SUBTITLE", comment: "Subtitle shown while the app is updating its database.")
+        bottom.font = UIFont.ows_dynamicTypeBody
+        bottom.text = Localized("DATABASE_VIEW_OVERLAY_SUBTITLE", comment: "Subtitle shown while the app is updating its database.")
 
-        let labelStack = UIStackView(arrangedSubviews: [topLabel, bottomLabel])
+        let labelStack = UIStackView(arrangedSubviews: [top, bottom])
         labelStack.axis = .vertical
         labelStack.alignment = .center
         labelStack.spacing = 8
         view.addSubview(labelStack)
 
-        labelStack.autoPinEdge(.top, to: .bottom, of: logoView, withOffset: 20)
+        labelStack.autoPinEdge(.top, to: .bottom, of: logo, withOffset: 20)
         labelStack.autoPinLeadingToSuperviewMargin()
         labelStack.autoPinTrailingToSuperviewMargin()
         labelStack.setCompressionResistanceHigh()
@@ -72,10 +75,10 @@ public class LoadingViewController: UIViewController {
 
             strongSelf.isShowingTopLabel = true
             UIView.animate(withDuration: 0.1) {
-                strongSelf.topLabel.alpha = 1
+                strongSelf.topLabel?.alpha = 1
             }
             UIView.animate(withDuration: 0.9, delay: 2, options: [.autoreverse, .repeat, .curveEaseInOut], animations: {
-                strongSelf.topLabel.alpha = 0.2
+                strongSelf.topLabel?.alpha = 0.2
             }, completion: nil)
         }
 
@@ -90,7 +93,7 @@ public class LoadingViewController: UIViewController {
 
             strongSelf.isShowingBottomLabel = true
             UIView.animate(withDuration: 0.1) {
-                strongSelf.bottomLabel.alpha = 1
+                strongSelf.bottomLabel?.alpha = 1
             }
         }
     }

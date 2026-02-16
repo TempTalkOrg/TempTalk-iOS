@@ -33,6 +33,10 @@ message protocol.
     'DTPROTO_FFI_LIB_TO_LINK' => '${DTPROTOLIBROOT}/${DTPROTOTARGETLIB}/${PLATFORM_NAME}/libdtproto_ffi.a',
     'OTHER_LDFLAGS' => '$(DTPROTO_FFI_LIB_TO_LINK)'
   }
+
+  s.user_target_xcconfig = {
+    'SWIFT_INCLUDE_PATHS' => '$(PODS_ROOT)/../DTProto/dtprotoFFI'
+  }
   
   s.script_phases = [
       { name: 'Download and cache libdtproto_ffi',

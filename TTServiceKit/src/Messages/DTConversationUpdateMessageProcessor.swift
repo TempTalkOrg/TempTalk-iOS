@@ -10,7 +10,13 @@ import Foundation
 public extension DTConversationUpdateMessageProcessor {
     @objc
     func handleConversationSharingConfiguration(_ envelope: DSKProtoEnvelope, display: Bool, conversationNotifyEntity: DTThreadConfigEntity, transaction: SDSAnyWriteTransaction ) {
-        let localNumber = TSAccountManager.sharedInstance().localNumber()
+        let localNumber = TSAccountManager.sharedInstance().localNumber(with: transaction)
+        // 关键修复：检查 localNumber 是否为 nil，防止后续的崩溃
+        guard let localNumber = localNumber else {
+            Logger.error("handleConversationSharingConfiguration: localNumber is nil")
+            return
+        }
+
         Logger.info("handleConversationSharingConfiguration  receptid = \(conversationNotifyEntity.source)")
         if(conversationNotifyEntity.source == localNumber && conversationNotifyEntity.sourceDeviceId == OWSDevice.currentDeviceId()){
             return
@@ -19,8 +25,47 @@ public extension DTConversationUpdateMessageProcessor {
         if(conversationNotifyEntity.changeType == 1){
             let conversationId = conversationNotifyEntity.source
             var contactThread : TSContactThread?
-            if(conversationId.stripped == localNumber?.stripped){///表示的是同一个账号的不同设备的消息同步
-                contactThread = TSContactThread.getOrCreateThread(withContactId: conversationNotifyEntity.conversation, transaction: transaction)
+            if(conversationId.stripped == localNumber.stripped){///表示的是同一个账号的不同设备的消息同步
+                let conversation = conversationNotifyEntity.conversation
+
+                let remoteContactId: String
+                if conversation.contains(":") {
+                    let components = conversation.components(separatedBy: ":")
+                    guard components.count == 2 else {
+                        Logger.error("handleConversationSharingConfiguration: Invalid conversation format, expected 2 components, got \(components.count)")
+                        return
+                    }
+
+                    // 验证两个组件都不为空
+                    let component0 = components[0].trimmingCharacters(in: .whitespaces)
+                    let component1 = components[1].trimmingCharacters(in: .whitespaces)
+                    guard !component0.isEmpty && !component1.isEmpty else {
+                        Logger.error("handleConversationSharingConfiguration: Invalid conversation format, empty components: '\(component0)' and '\(component1)'")
+                        return
+                    }
+
+                    // 选择不是本地号码的那个作为远程联系人ID
+                    let strippedLocalNumber = localNumber.stripped
+                    if component0.stripped == strippedLocalNumber {
+                        remoteContactId = component1
+                    } else if component1.stripped == strippedLocalNumber {
+                        remoteContactId = component0
+                    } else {
+                        Logger.error("handleConversationSharingConfiguration: Neither component matches local number. components: '\(component0)', '\(component1)', localNumber: '\(strippedLocalNumber)'")
+                        return
+                    }
+                } else {
+                    // Fallback: use conversation as-is if no colon found
+                    // 但也要验证不为空
+                    let trimmedConversation = conversation.trimmingCharacters(in: .whitespaces)
+                    guard !trimmedConversation.isEmpty else {
+                        Logger.error("handleConversationSharingConfiguration: Empty conversation ID")
+                        return
+                    }
+                    remoteContactId = trimmedConversation
+                }
+
+                contactThread = TSContactThread.getOrCreateThread(withContactId: remoteContactId, transaction: transaction)
             } else {
                 contactThread = TSContactThread.getOrCreateThread(withContactId: conversationId, transaction: transaction)
             }
@@ -47,17 +92,19 @@ public extension DTConversationUpdateMessageProcessor {
     
     func saveConversationSharingConfiguration(thread: TSContactThread, conversationNotifyEntity: DTThreadConfigEntity, transaction: SDSAnyWriteTransaction) {
         Logger.info("DTConversationUpdateMessageProcessor saveConversationSharingConfiguration  receptid = \(thread.contactIdentifier()) \(conversationNotifyEntity.messageExpiry)")
-        
+
         thread.threadConfig = conversationNotifyEntity
-        
+
         // 全量更新 contact notify
         DataUpdateUtil.shared.updateConversation(thread: thread,
                                                  expireTime: conversationNotifyEntity.messageExpiry,
                                                  messageClearAnchor: NSNumber(value: conversationNotifyEntity.messageClearAnchor))
         thread.anyUpsert(transaction: transaction)
-        
+
         transaction.addAsyncCompletionOnMain({
             NotificationCenter.default.post(Notification(name: Notification.Name("kDTconversationSharingConfigurationChangeNotification")))
+            // 事务提交后触发归档检查
+            OWSArchivedMessageJob.shared().triggerArchiveCheckImmediately()
         })
     }
     

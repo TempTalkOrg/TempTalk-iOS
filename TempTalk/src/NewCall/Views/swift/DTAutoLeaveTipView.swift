@@ -25,7 +25,7 @@ import TTMessaging
     
     private let titleLabel: UILabel = {
         let titleLabel = UILabel()
-        titleLabel.textColor = Theme.darkThemePrimaryColor
+        titleLabel.textColor = Theme.dark.tprimaryColor
         titleLabel.textAlignment = .center
         titleLabel.numberOfLines = 1
         titleLabel.font = UIFont.systemFont(ofSize: 15)
@@ -35,7 +35,7 @@ import TTMessaging
     
     private let detailLabel: UILabel = {
         let detailLabel = UILabel()
-        detailLabel.textColor = Theme.darkThemePrimaryColor
+        detailLabel.textColor = Theme.dark.tprimaryColor
         detailLabel.textAlignment = .center
         detailLabel.numberOfLines = 0
         detailLabel.font = UIFont.systemFont(ofSize: 15)
@@ -47,14 +47,14 @@ import TTMessaging
     
     private let hSeplineLabel: UIView = {
         let hSeplineLabel = UIView()
-        hSeplineLabel.backgroundColor = Theme.cellSeparatorColor
+        hSeplineLabel.backgroundColor = Theme.dividerColor
         
         return hSeplineLabel
     }()
     
     private let vSepartor: UIView = {
         let vSepartor = UIView()
-        vSepartor.backgroundColor = Theme.cellSeparatorColor
+        vSepartor.backgroundColor = Theme.dividerColor
         
         return vSepartor
     }()

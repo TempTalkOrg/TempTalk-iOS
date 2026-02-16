@@ -22,7 +22,7 @@ extension ConversationViewController {
     
     @objc(didTapCallNavBtnWithThread:)
     func didTapCallNavBtn(_ thread: TSThread? = nil) {
-        dismissKeyBoard()
+        dismissKeyBoard(byUserAction: true)  // 用户点击通话按钮，标记为用户操作
         guard !isUserDeregistered() else { return }
         
         if DTMeetingManager.shared.hasMeeting, OWSWindowManager.shared().hasCall() {

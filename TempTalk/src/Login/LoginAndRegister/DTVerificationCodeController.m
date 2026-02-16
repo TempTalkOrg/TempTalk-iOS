@@ -302,8 +302,8 @@ static dispatch_source_t _timer;
 
 - (void)applyTheme {
     [super applyTheme];
-    self.view.backgroundColor = Theme.backgroundColor;
-    self.titleLabel.textColor = Theme.primaryTextColor;
+    self.view.backgroundColor = Theme.bg1Color;
+    self.titleLabel.textColor = Theme.tprimaryColor;
     self.descLabel.textColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xB7BDC6] :[UIColor colorWithRGBHex:0x474D57];
     self.bottomTipLabel.textColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xEAECEF] : [UIColor colorWithRGBHex:0x1E2329];
     [self.resendButton setTitleColor:Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x4DA0FF] : [UIColor colorWithRGBHex:0x4DA0FF] forState:UIControlStateNormal];
@@ -560,7 +560,9 @@ static dispatch_source_t _timer;
             self.isExecuteNexting = false;
             [DTToastHelper hide];
             if((self.loginModeType == DTLoginModeTypeChangeEmailFromMe) || (self.loginModeType == DTLoginModeTypeChangePhoneNumberFromMe)){
-                [self.navigationController popToRootViewControllerAnimated:true];
+                if (self.navigationController && self.navigationController.viewControllers.count > 0) {
+                    [self.navigationController popToRootViewControllerAnimated:true];
+                }
             } else {
                 [self verificationWasCompleted];
             }
@@ -715,7 +717,7 @@ static dispatch_source_t _timer;
             NSDictionary *responseData = metaEntity.data;
             if (![responseData isKindOfClass:[NSDictionary class]]) {
                 [DTToastHelper hide];
-                OWSLogInfo(@"responseData = %@", responseData);
+                OWSLogInfo(@"responseData is not a dictionary");
                 break;}
             NSString *number = [(NSDictionary *)responseData objectForKey:@"account"];
             if (number.length) {
@@ -724,7 +726,7 @@ static dispatch_source_t _timer;
             }
             NSString *vCode = [(NSDictionary *)responseData objectForKey:@"vcode"];
             NSString *inviter = [(NSDictionary *)responseData objectForKey:@"inviter"];
-            if (!vCode) {[DTToastHelper hide];  OWSLogInfo(@"vCode = %@", vCode);  break; }
+            if (!vCode) {[DTToastHelper hide];  OWSLogInfo(@"vCode is nil");  break; }
             accountOk = TRUE;
             self.vCode = vCode;
 //            [self sendinfoMessageWith:inviter];
@@ -761,7 +763,7 @@ static dispatch_source_t _timer;
 
 
 - (void)submitVerificationWithCode:(NSString *)code screenlock:(DTScreenLockEntity *)screenlock {
-    OWSLogInfo(@"submitVerificationWithCode = %@", code);
+    OWSLogInfo(@"submitVerificationWithCode called");
     
     [DTLoginNeedUnlockScreen checkIfNeedScreenlockWithVcode:code
                                                  screenlock:screenlock
@@ -1023,7 +1025,7 @@ static dispatch_source_t _timer;
     config.secureTextEntry = false;
     config.inputBoxColor   = [Theme isDarkThemeEnabled] ? [UIColor colorWithRGBHex:0x474D57] : [UIColor colorWithRGBHex:0xEAECEF];
     config.font            = [UIFont systemFontOfSize:24];
-    config.textColor       = Theme.primaryTextColor;
+    config.textColor       = Theme.tprimaryColor;
     config.inputType       = DTStepTextFieldConfigInputType_Number;
     
     config.inputBoxBorderWidth  = 1;

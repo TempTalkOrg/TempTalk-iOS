@@ -21,7 +21,7 @@ struct AvatarImageViewRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: AvatarImageView, context: Context) {
-        let displayName = Environment.shared.contactsManager.displayName(forPhoneIdentifier: recipientId)
+        let displayName = Environment.shared.contactsManager.rawDisplayName(forPhoneIdentifier: recipientId)
         uiView.setImageWithRecipientId(recipientId, displayName: displayName)
     }
     

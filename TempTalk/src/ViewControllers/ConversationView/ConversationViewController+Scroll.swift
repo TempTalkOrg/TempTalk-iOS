@@ -86,22 +86,55 @@ extension ConversationViewController {
             _scrollToDefaultPosition(animated: animated)
         }
     }
-    
+
     private func _scrollToDefaultPosition(animated: Bool) {
-        guard let indexPath = indexPathOfFocusMessage ?? indexPathOfUnreadMessagesIndicator else {
+        let focusIndexPath = indexPathOfFocusMessage
+        let unreadIndexPath = indexPathOfUnreadMessagesIndicator
+
+
+        guard let indexPath = focusIndexPath ?? unreadIndexPath else {
             scrollToBottom(animated: animated)
+            viewState.hasCompletedInitialScroll = true
             return
         }
+
+
         if indexPath.section == 0 && indexPath.row == 0 {
             collectionView.setContentOffset(.zero, animated: animated)
         } else if indexPath.row < dataSource.snapshot().numberOfItems {
-            collectionView.scrollToItem(at: indexPath, at: .top, animated: animated)
+            // For focus messages (from search), use .centeredVertically to highlight the message
+            // For unread messages, use .top with padding to show them near the top of the screen
+            let isFocusMessage = indexPathOfFocusMessage != nil
+
+            if isFocusMessage {
+                // Focus message: center it for emphasis
+                collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: animated)
+            } else {
+                // Unread message: position near top with padding to avoid navigation bar
+                collectionView.scrollToItem(at: indexPath, at: .top, animated: false)
+
+                // Add padding from the top (40pt) to position message higher on screen
+                // Smaller padding = less scroll adjustment = message appears higher
+                let topPadding: CGFloat = 40
+                let currentOffset = collectionView.contentOffset.y
+                let adjustedOffset = max(currentOffset - topPadding, -collectionView.adjustedContentInset.top)
+                collectionView.setContentOffset(CGPoint(x: 0, y: adjustedOffset), animated: animated)
+            }
+
+            // Store the target scroll position to protect against keyboard flash events
+            // This position will be restored if keyboard events try to disrupt it
+            let targetOffset = collectionView.contentOffset.y
+            viewState.initialScrollTargetOffset = targetOffset
+            // Set protection deadline to 2 seconds from now
+            viewState.initialScrollProtectionDeadline = Date().addingTimeInterval(2.0)
         }
+
+        viewState.hasCompletedInitialScroll = true
     }
     
     func scrollToBottom(animated: Bool) {
         AssertIsOnMainThread()
-        
+
         guard !isUserScrolling else {
             return
         }
@@ -452,9 +485,30 @@ extension ConversationViewController: UIScrollViewDelegate {
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         userHasScrolled = true
         isUserScrolling = true
-        
+
         actionMenuController?.hideMenu(animation: false)
-        
+
+        // Only dismiss keyboard if user is actively typing
+        // Don't dismiss on minor scrolls while keyboard is up
+        if !inputToolbar.isInputViewFirstResponder {
+            // Keyboard is not active, safe to dismiss
+            dismissKeyBoard(byUserAction: true)
+        }
+        // If keyboard is active, let the system's interactive dismissal handle it
+
+        // Clear focus message when user manually scrolls, but only after initial scroll-to-focus completes
+        // This prevents clearing the focus during the initial navigation from search results
+        if viewState.hasCompletedInitialScroll {
+            conversationViewModel.clearFocusMessageIndex()
+            conversationViewModel.focusMessageIdOnOpen = nil
+        }
+
+        // Clear initial scroll protection when user manually scrolls
+        if viewState.initialScrollTargetOffset != nil {
+            viewState.initialScrollTargetOffset = nil
+            viewState.initialScrollProtectionDeadline = nil
+        }
+
         refreshDateSeparator()
     }
     
@@ -577,10 +631,16 @@ extension ConversationViewController {
         
         let closeToTop = collectionView.contentOffset.y < loadThreshold
         if closeToTop, !isScrollUp {
-            
+
             Logger.info("[hot data] ------ ⬆️⬆️⬆️")
-            
+
             if isShowLoadOlderHeader {
+                // 防止在加载过程中重复触发
+                guard !isLoadingOlderItems else {
+                    Logger.info("[hot data] already loading older items, skip")
+                    return
+                }
+                isLoadingOlderItems = true
                 BenchManager.bench(title: "loading older interactions") {
                     self.databaseStorage.uiRead { transaction in
                         self.conversationViewModel.appendOlderItems(with: transaction)
@@ -596,10 +656,16 @@ extension ConversationViewController {
         let distanceFromBottom = collectionView.contentSize.height - collectionView.bounds.size.height - collectionView.contentOffset.y
         let closeToBottom = distanceFromBottom < loadThreshold
         if closeToBottom, isScrollUp {
-            
+
             Logger.info("[hot data] ------ ⬇️⬇️⬇️")
-            
+
             if isShowLoadNewerHeader {
+                // 防止在加载过程中重复触发
+                guard !isLoadingNewerItems else {
+                    Logger.info("[hot data] already loading newer items, skip")
+                    return
+                }
+                isLoadingNewerItems = true
                 BenchManager.bench(title: "loading newer interactions") {
                     self.databaseStorage.uiRead { transaction in
                         self.conversationViewModel.appendNewerItems(with: transaction)
@@ -709,7 +775,7 @@ extension ConversationViewController {
             jump: { [weak self] focusMessage in
                 
                 guard let self else { return }
-                Logger.info("jump to message.body = \(focusMessage.body ?? "")")
+                Logger.info("jump to message")
                 
                 self.forcusMessage(focusMessage, animated: true)
                 DispatchQueue.main.async {
@@ -751,6 +817,10 @@ extension ConversationViewController: DTPanModalNavigationChildController {
     // 解决从个人信息页进入会话页时，若又 present 一个新的 vc (比如点击图片预览器)，
     // 当新的 vc dismiss 时，需要更新当前会话页展示位置
     func layoutDidUpdateWhenViewWillAppear() {
-        scrollToBottom(animated: false)
+        // Don't auto-scroll to bottom when returning from call window
+        // The user should stay at their current scroll position
+        if isReturningFromCallWindow {
+            isReturningFromCallWindow = false
+        }
     }
 }

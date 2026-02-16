@@ -4,10 +4,10 @@
     {
       "identity" : "client-sdk-swift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/difftim/client-sdk-swift",
+      "location" : "https://github.com/difftim/client-sdk-swift.git",
       "state" : {
-        "revision" : "6756c9cd1c6763892199fa20d04a450c07cb6547",
-        "version" : "2.9.0-a2"
+        "revision" : "b63259520fd6338a984fea019fb44a1db7c84922",
+        "version" : "2.10.2-a8"
       }
     },
     {
@@ -20,12 +20,12 @@
       }
     },
     {
-      "identity" : "jwt-kit",
+      "identity" : "livekit-uniffi-xcframework",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/vapor/jwt-kit.git",
+      "location" : "https://github.com/livekit/livekit-uniffi-xcframework.git",
       "state" : {
-        "revision" : "13e7513b3ba0afa13967daf77af2fb4ad087306c",
-        "version" : "4.13.5"
+        "revision" : "be164f3a9bfe83a7354a63e57950cc7d7c6393d0",
+        "version" : "0.0.3"
       }
     },
     {
@@ -38,30 +38,12 @@
       }
     },
     {
-      "identity" : "swift-asn1",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-asn1.git",
-      "state" : {
-        "revision" : "40d25bbb2fc5b557a9aa8512210bded327c0f60d",
-        "version" : "1.5.0"
-      }
-    },
-    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
       "state" : {
         "revision" : "8c0c0a8b49e080e54e5e328cc552821ff07cd341",
         "version" : "1.2.1"
-      }
-    },
-    {
-      "identity" : "swift-crypto",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-crypto.git",
-      "state" : {
-        "revision" : "95ba0316a9b733e92bb6b071255ff46263bbe7dc",
-        "version" : "3.15.1"
       }
     },
     {

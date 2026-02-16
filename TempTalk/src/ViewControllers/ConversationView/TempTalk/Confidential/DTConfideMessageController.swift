@@ -22,7 +22,7 @@ import TTMessaging
         let privateLabel = UILabel()
         let screenWidth = UIScreen.main.bounds.width
         privateLabel.font = UIFont.systemFont(ofSize: 24)
-        privateLabel.textColor = Theme.primaryTextColor
+        privateLabel.textColor = Theme.tprimaryColor
         privateLabel.frame = CGRectMake(0, 0, screenWidth - 48, CGFLOAT_MAX)
         privateLabel.numberOfLines = 0;
         return privateLabel
@@ -82,7 +82,7 @@ import TTMessaging
         refreshTheme()
         let tap = UITapGestureRecognizer.init(target: self, action: #selector(tapGestureEvent))
         view.addGestureRecognizer(tap)
-        
+
         let swipeTap = UISwipeGestureRecognizer.init(target: self, action: #selector(swipeGestureEvent))
         view.addGestureRecognizer(swipeTap)
     }
@@ -114,9 +114,25 @@ import TTMessaging
     }
     
     func seperateTheMessage(){
-        guard let body = self.message.body, DTParamsUtils.validateString(body).boolValue == true else {return}
-        self.messageLabel.text = body;
-        self.confideMessageArr = NSObject.getSeparatedLines(from: self.messageLabel);
+        var displayText = ""
+
+        // Check if this is a single forward message - extract body from forwarded message
+        if let combinedForwardingMessage = self.message.combinedForwardingMessage,
+           combinedForwardingMessage.subForwardingMessages.count == 1,
+           let singleForwardMessage = combinedForwardingMessage.subForwardingMessages.first {
+
+            // For single forward messages, use the forwarded message body
+            if let forwardedBody = singleForwardMessage.body, DTParamsUtils.validateString(forwardedBody).boolValue == true {
+                displayText = forwardedBody
+            }
+        } else {
+            // Regular message, use body directly
+            guard let body = self.message.body, DTParamsUtils.validateString(body).boolValue == true else {return}
+            displayText = body
+        }
+
+        self.messageLabel.text = displayText
+        self.confideMessageArr = NSObject.getSeparatedLines(from: self.messageLabel)
     }
     
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {

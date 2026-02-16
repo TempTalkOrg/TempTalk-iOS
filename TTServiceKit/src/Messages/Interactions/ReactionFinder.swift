@@ -46,25 +46,31 @@ struct GRDBReactionFinderAdapter: ReactionFinderAdapter {
     typealias ReadTransaction = GRDBReadTransaction
     
     static func findReactionRelatedMessages(timestamp: UInt64, sourceId: String, transaction: GRDBReadTransaction) -> TSMessage? {
-        
+
         var fetched : TSMessage?
-        
+
+        // 修复 GRDB 事务嵌套：在进入 filter 闭包前获取 localNumber
+        let localNumber = TSAccountManager.shared.localNumber(with: transaction.asAnyRead)
+
         do {
-            
+
             fetched = try InteractionFinder.interactions(withTimestamp: timestamp,
                                                           filter: { interaction in
-                             
+
                  if interaction is TSIncomingMessage {
-                     let message = interaction as! TSIncomingMessage
+                     guard let message = interaction as? TSIncomingMessage else {
+                         owsFailDebug("Expected TSIncomingMessage but got different type")
+                         return false
+                     }
                      return message.authorId == sourceId
                  }
-                 
+
                  if interaction is TSOutgoingMessage {
-                     return TSAccountManager.localNumber() == sourceId
+                     return localNumber == sourceId
                  }
-                 
+
                  return false
-                             
+
             }, transaction: transaction.asAnyRead).first as? TSMessage
             
         } catch {

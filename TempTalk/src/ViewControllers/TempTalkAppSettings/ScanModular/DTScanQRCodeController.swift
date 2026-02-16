@@ -30,7 +30,7 @@ class DTScanQRCodeController: OWSViewController, QRCodeScanDelegate {
     
     override func applyTheme() {
         super.applyTheme()
-        self.view.backgroundColor = Theme.defaultBackgroundColor
+        self.view.backgroundColor = Theme.defaultColor
     }
     
     func qrCodeScanViewScanned(

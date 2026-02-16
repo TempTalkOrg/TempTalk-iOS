@@ -3,6 +3,7 @@
 //
 
 #import "UIFont+OWS.h"
+#import <TTMessaging/TTMessaging-Swift.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -20,12 +21,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (UIFont *)ows_regularFontWithSize:(CGFloat)size
 {
-    return [UIFont systemFontOfSize:size weight:UIFontWeightRegular];
+    UIFont *font = [UIFont systemFontOfSize:size weight:UIFontWeightRegular];
+    return [font scaledWithShouldScale:YES];
 }
 
 + (UIFont *)ows_semiboldFontWithSize:(CGFloat)size
 {
-    return [UIFont systemFontOfSize:size weight:UIFontWeightSemibold];
+    UIFont *font = [UIFont systemFontOfSize:size weight:UIFontWeightSemibold];
+    return [font scaledWithShouldScale:YES];
 }
 
 + (UIFont *)ows_monospacedDigitFontWithSize:(CGFloat)size
@@ -52,29 +55,66 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - Dynamic Type
 
+// 辅助方法：获取固定大小的字体（忽略系统 Dynamic Type）
++ (UIFont *)fixedSizeFontForTextStyle:(UIFontTextStyle)fontTextStyle
+{
+    static NSDictionary<UIFontTextStyle, NSNumber *> *basePointSizeMap = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSMutableDictionary<UIFontTextStyle, NSNumber *> *map = [@{
+            UIFontTextStyleTitle1 : @(28.0),      // 固定 28pt
+            UIFontTextStyleTitle2 : @(22.0),      // 固定 22pt
+            UIFontTextStyleTitle3 : @(20.0),      // 固定 20pt
+            UIFontTextStyleHeadline : @(17.0),    // 固定 17pt (semibold)
+            UIFontTextStyleBody : @(17.0),        // 固定 17pt
+            UIFontTextStyleSubheadline : @(15.0), // 固定 15pt
+            UIFontTextStyleFootnote : @(13.0),    // 固定 13pt
+            UIFontTextStyleCaption1 : @(12.0),    // 固定 12pt
+            UIFontTextStyleCaption2 : @(11.0),    // 固定 11pt
+        } mutableCopy];
+        if (@available(iOS 11.0, *)) {
+            map[UIFontTextStyleLargeTitle] = @(34.0);  // 固定 34pt
+        }
+        basePointSizeMap = map;
+    });
+
+    NSNumber *_Nullable basePointSize = basePointSizeMap[fontTextStyle];
+    if (!basePointSize) {
+        OWSFailDebug(@"Missing base point size for style: %@", fontTextStyle);
+        return [UIFont systemFontOfSize:17.0]; // Fallback
+    }
+
+    return [UIFont systemFontOfSize:basePointSize.floatValue];
+}
+
 + (UIFont *)ows_dynamicTypeTitle1Font
 {
-    return [UIFont preferredFontForTextStyle:UIFontTextStyleTitle1];
+    UIFont *font = [UIFont fixedSizeFontForTextStyle:UIFontTextStyleTitle1];
+    return [font scaledWithShouldScale:YES];
 }
 
 + (UIFont *)ows_dynamicTypeTitle2Font
 {
-    return [UIFont preferredFontForTextStyle:UIFontTextStyleTitle2];
+    UIFont *font = [UIFont fixedSizeFontForTextStyle:UIFontTextStyleTitle2];
+    return [font scaledWithShouldScale:YES];
 }
 
 + (UIFont *)ows_dynamicTypeTitle3Font
 {
-    return [UIFont preferredFontForTextStyle:UIFontTextStyleTitle3];
+    UIFont *font = [UIFont fixedSizeFontForTextStyle:UIFontTextStyleTitle3];
+    return [font scaledWithShouldScale:YES];
 }
 
 + (UIFont *)ows_dynamicTypeHeadlineFont
 {
-    return [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+    UIFont *font = [UIFont fixedSizeFontForTextStyle:UIFontTextStyleHeadline];
+    return [font scaledWithShouldScale:YES];
 }
 
 + (UIFont *)ows_dynamicTypeBodyFont
 {
-    return [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+    UIFont *font = [UIFont fixedSizeFontForTextStyle:UIFontTextStyleBody];
+    return [font scaledWithShouldScale:YES];
 }
 
 + (UIFont *)ows_dynamicTypeBody2Font
@@ -84,63 +124,40 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (UIFont *)ows_dynamicTypeSubheadlineFont
 {
-    return [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+    UIFont *font = [UIFont fixedSizeFontForTextStyle:UIFontTextStyleSubheadline];
+    return [font scaledWithShouldScale:YES];
 }
 
 + (UIFont *)ows_dynamicTypeFootnoteFont
 {
-    UIFont *footnoteFont = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
-    CGFloat pointSize = footnoteFont.pointSize;
-    return pointSize > 16 ? [UIFont systemFontOfSize:16] : footnoteFont;
+    UIFont *font = [UIFont fixedSizeFontForTextStyle:UIFontTextStyleFootnote];
+    return [font scaledWithShouldScale:YES];
 }
 
 + (UIFont *)ows_dynamicTypeCaption1Font
 {
-    return [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+    UIFont *font = [UIFont fixedSizeFontForTextStyle:UIFontTextStyleCaption1];
+    return [font scaledWithShouldScale:YES];
 }
 
 + (UIFont *)ows_dynamicTypeCaption2Font
 {
-    return [UIFont preferredFontForTextStyle:UIFontTextStyleCaption2];
+    UIFont *font = [UIFont fixedSizeFontForTextStyle:UIFontTextStyleCaption2];
+    return [font scaledWithShouldScale:YES];
 }
 
 #pragma mark - Dynamic Type Clamped
 
 + (UIFont *)preferredFontForTextStyleClamped:(UIFontTextStyle)fontTextStyle
 {
-    // We clamp the dynamic type sizes at the max size available
-    // without "larger accessibility sizes" enabled.
-    static NSDictionary<UIFontTextStyle, NSNumber *> *maxPointSizeMap = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        NSMutableDictionary<UIFontTextStyle, NSNumber *> *map = [@{
-            UIFontTextStyleTitle1 : @(34.0),
-            UIFontTextStyleTitle2 : @(28.0),
-            UIFontTextStyleTitle3 : @(26.0),
-            UIFontTextStyleHeadline : @(23.0),
-            UIFontTextStyleBody : @(23.0),
-            UIFontTextStyleSubheadline : @(21.0),
-            UIFontTextStyleFootnote : @(19.0),
-            UIFontTextStyleCaption1 : @(18.0),
-            UIFontTextStyleCaption2 : @(17.0),
-        } mutableCopy];
-        if (@available(iOS 11.0, *)) {
-            map[UIFontTextStyleLargeTitle] = @(40.0);
-        }
-        maxPointSizeMap = map;
-    });
-    
-    UIFont *font = [UIFont preferredFontForTextStyle:fontTextStyle];
-    NSNumber *_Nullable maxPointSize = maxPointSizeMap[fontTextStyle];
-    if (maxPointSize) {
-        if (maxPointSize.floatValue < font.pointSize) {
-            return [font fontWithSize:maxPointSize.floatValue];
-        }
-    } else {
-        OWSFailDebug(@"Missing max point size for style: %@", fontTextStyle);
-    }
-    
-    return font;
+    // 使用固定的基础字体大小，忽略系统的辅助功能设置
+    // App 内的字体大小完全由 TextSizeManager 控制
+    UIFont *baseFont = [UIFont fixedSizeFontForTextStyle:fontTextStyle];
+
+    // 应用 App 内的自定义缩放（1.4x for large font mode）
+    UIFont *scaledFont = [baseFont scaledWithShouldScale:YES];
+
+    return scaledFont;
 }
 
 + (UIFont *)ows_dynamicTypeLargeTitle1ClampedFont

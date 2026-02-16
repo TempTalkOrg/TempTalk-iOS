@@ -10,14 +10,14 @@ import TTServiceKit
 import SVProgressHUD
 
 class DTEnterGroupController: OWSViewController {
-    
-    @objc var groupEntity: DTInviteToGroupEntity!
-    
-    @IBOutlet weak var groupAvatar: AvatarImageView!
-    @IBOutlet weak var lbGroupName: UILabel!
-    @IBOutlet weak var btnEnterGroup: UIButton!
-    
-    @objc var inviteCode: String!
+
+    @objc var groupEntity: DTInviteToGroupEntity?
+
+    @IBOutlet weak var groupAvatar: AvatarImageView?
+    @IBOutlet weak var lbGroupName: UILabel?
+    @IBOutlet weak var btnEnterGroup: UIButton?
+
+    @objc var inviteCode: String?
     
     lazy var joinGroupApi = DTInviteToGroupAPI()
     lazy var groupUpdateProcessor = DTGroupUpdateMessageProcessor()
@@ -25,31 +25,36 @@ class DTEnterGroupController: OWSViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .stop, target: self, action: #selector(dismissVC))
-        view.backgroundColor = Theme.backgroundColor
-        self.lbGroupName.text = threadName() + "(\(self.groupEntity.membersCount))"
-        self.btnEnterGroup.setTitle(Localized("ENTER_GROUP_ACTION", comment: ""), for: .normal)
-        guard self.groupEntity.avatar.count > 0 else {
-            return
-        }
-        self.avatarUpdateProcessor.handleReceivedGroupAvatarUpdate(withAvatarUpdate: self.groupEntity.avatar) { stream in
-            DispatchMainThreadSafe {
-                self.groupAvatar.image = stream.image()
+        view.backgroundColor = Theme.bg1Color
+
+        if let groupEntity = self.groupEntity {
+            self.lbGroupName?.text = threadName() + "(\(groupEntity.membersCount))"
+            self.btnEnterGroup?.setTitle(Localized("ENTER_GROUP_ACTION", comment: ""), for: .normal)
+
+            guard groupEntity.avatar.count > 0 else {
+                return
             }
-        } failure: {_ in
-            
+            self.avatarUpdateProcessor.handleReceivedGroupAvatarUpdate(withAvatarUpdate: groupEntity.avatar) { stream in
+                DispatchMainThreadSafe {
+                    self.groupAvatar?.image = stream.image()
+                }
+            } failure: {_ in
+
+            }
         }
-        
     }
 
     func threadName() -> String {
-        
-        let threadName = self.groupEntity.name
+        guard let groupEntity = self.groupEntity else {
+            return MessageStrings.newGroupDefaultTitle()
+        }
+        let threadName = groupEntity.name
         if threadName.count == 0 {
             return MessageStrings.newGroupDefaultTitle()
         }
-        
+
         return threadName
     }
     
@@ -71,7 +76,8 @@ class DTEnterGroupController: OWSViewController {
     }
     
     @IBAction func btnEnterGroupAction(_ sender: Any) {
-                    
+
+        guard let inviteCode = inviteCode else { return }
         DTToastHelper.svShow()
         joinGroupApi.joinGroup(byInviteCode: inviteCode) { entity, status in
         
@@ -102,10 +108,6 @@ class DTEnterGroupController: OWSViewController {
                 DTToastHelper.show(withInfo: "join group failure, try again!")
                 return
             }
-            //MARK: 邀请链接入群通知server处理预约会议
-            DTCalendarManager.shared.groupChange(gid: entity.gid,
-                                                 actionCode: 29,
-                                                 target: [localNumber])
             
         } failure: { error in
             let err = error as NSError
@@ -146,8 +148,8 @@ class DTEnterGroupController: OWSViewController {
         currentNav.popToRootViewController(animated: false)
         tabbarVC.selectedIndex = 0
         let homeNav = tabbarVC.selectedViewController as! UINavigationController
-        let homeVC = homeNav.viewControllers.first as! DTHomeViewController
-        homeVC.conversationVC.present(groupThread, action: .none)
+        let homeVC = homeNav.viewControllers.first as! HomeViewController
+        homeVC.present(groupThread, action: .none)
     }
     
     func groupThreadFromGroupInfo(_ gid: Data, _ entity: DTInviteToGroupEntity) -> TSGroupThread? {

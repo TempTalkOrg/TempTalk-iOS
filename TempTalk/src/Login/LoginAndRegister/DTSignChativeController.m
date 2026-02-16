@@ -210,10 +210,10 @@
 
 - (void)applyTheme {
     [super applyTheme];
-    self.view.backgroundColor = Theme.backgroundColor;
-    self.titleLabel.textColor = Theme.primaryTextColor;
+    self.view.backgroundColor = Theme.bg1Color;
+    self.titleLabel.textColor = Theme.tprimaryColor;
     self.tfAccount.keyboardAppearance = Theme.keyboardAppearance;
-    self.tfAccount.backgroundColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0x181A20] : [UIColor colorWithRGBHex:0xFFFFFF] ;
+    self.tfAccount.backgroundColor = Theme.bg1Color;
     self.tfAccount.textColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xEAECEF] : [UIColor colorWithRGBHex:0x1E2329];
     self.loginButton.isSelected = self.tfAccount.text.length;
     self.loginButton.userInteractionEnabled = self.tfAccount.text.length;
@@ -695,7 +695,7 @@
         _countryCodeBtn.spacing = 4;
         _countryCodeBtn.titleAlignment = DTButtonTitleAlignmentTypeLeft;
         [_countryCodeBtn setImage:[UIImage imageNamed:@"input_arrow"] forState:UIControlStateNormal];
-        [_countryCodeBtn setTitleColor:Theme.primaryTextColor forState:UIControlStateNormal];
+        [_countryCodeBtn setTitleColor:Theme.tprimaryColor forState:UIControlStateNormal];
         _countryCodeBtn.titleLabel.font = [UIFont systemFontOfSize:14];
         [_countryCodeBtn addTarget:self action:@selector(countryCodeBtnClick:) forControlEvents:UIControlEventTouchUpInside];
     }
@@ -725,7 +725,7 @@
         _transferLabel = [UILabel new];
         _transferLabel.font = [UIFont ows_semiboldFontWithSize:14];
         _transferLabel.textAlignment = NSTextAlignmentRight;
-        _transferLabel.textColor = Theme.primaryTextColor;
+        _transferLabel.textColor = Theme.tprimaryColor;
     }
     return _transferLabel;
 }

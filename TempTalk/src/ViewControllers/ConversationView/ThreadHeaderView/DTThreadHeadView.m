@@ -7,7 +7,7 @@
 
 #import "DTThreadHeadView.h"
 #import <TTMessaging/UIColor+OWS.h>
-#import <TTMessaging/Theme.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <TTMessaging/UIView+SignalUI.h>
 
 @interface DTThreadHeadView()
@@ -36,7 +36,7 @@
     if (!_titleLabel) {
         _titleLabel = [UILabel new];
         _titleLabel.font = [UIFont systemFontOfSize:17];
-        _titleLabel.textColor = Theme.primaryTextColor;
+        _titleLabel.textColor = Theme.tprimaryColor;
         _titleLabel.numberOfLines = 2;
     }
     return _titleLabel;

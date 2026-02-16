@@ -16,9 +16,9 @@ extension DTAlertCallView {
         static var liveKitCallKey: Int8 = 0
     }
     
-    @objc var liveKitCall: DTLiveKitCallModel {
+    @objc var liveKitCall: DTLiveKitCallModel? {
         get {
-            return objc_getAssociatedObject(self, &AssociatedKeys.liveKitCallKey) as! DTLiveKitCallModel
+            return objc_getAssociatedObject(self, &AssociatedKeys.liveKitCallKey) as? DTLiveKitCallModel
         }
         set {
             objc_setAssociatedObject(self, &AssociatedKeys.liveKitCallKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
@@ -27,12 +27,14 @@ extension DTAlertCallView {
     
     func configLiveKitAlertCall(_ call: DTLiveKitCallModel) {
         self.liveKitCall = call
-        
+
         guard let callerId = call.caller else {
             return
         }
-        
-        let contactsManager = Environment.shared.contactsManager!
+
+        guard let contactsManager = Environment.shared.contactsManager else {
+            return
+        }
         let callerName = contactsManager.displayName(forPhoneIdentifier: callerId)
         
         let leftTextColor = UIColor(rgbHex: 0xD9271E)

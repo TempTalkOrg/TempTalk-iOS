@@ -58,6 +58,8 @@ class DTChatSettingsController : SettingBaseViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         self.navigationController?.setNavigationBarHidden(false, animated: true)
+        // 刷新数据以更新语音播放速度等设置
+        reloadPage()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -66,15 +68,15 @@ class DTChatSettingsController : SettingBaseViewController {
     
     override func applyTheme() {
         super.applyTheme()
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
-        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
+        self.mainTableView.tableHeaderView?.backgroundColor = Theme.defaultColor
         self.mainTableView.reloadData()
     }
     
     func prepareTheme() {
-        view.backgroundColor = Theme.defaultBackgroundColor
-        mainTableView.backgroundColor = Theme.defaultBackgroundColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        mainTableView.backgroundColor = Theme.bgpageSecondaryColor
     }
     
     func prepareView() {
@@ -192,6 +194,18 @@ extension DTChatSettingsController : UITableViewDelegate, UITableViewDataSource 
         self.dataSource = self.getDataSource()
         self.mainTableView.reloadData()
     }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+
+        let settingItem = self.dataSource[indexPath.section][indexPath.row]
+        if settingItem.tag == ChatItemType.voicePlaybackSpeed.rawValue {
+            // 打开播放速度选择页面
+            let speedVC = VoicePlaybackSpeedViewController()
+            speedVC.delegate = self
+            navigationController?.pushViewController(speedVC, animated: true)
+        }
+    }
 }
 
 //MARK:  DataSource
@@ -199,20 +213,43 @@ extension DTChatSettingsController {
     
     enum ChatItemType: Int {
         case savePhotos = 0
+        case voicePlaybackSpeed = 1
     }
  
     func getDataSource() -> [[DTSettingItem]] {
+        let blanckItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.blank.rawValue)
+
+        // Save Photos Section
         let chatSwitchItem = DTSettingItem(icon: "", title: Localized("SETTINGS_CHAT_SAVE_PHOTOS"), description: "", cellStyle: SettingCellStyle.onlySwitch.rawValue, openSwitch: MediaSavePolicyManager.shared.getSaveToPhotoStatus())
         chatSwitchItem.tag = ChatItemType.savePhotos.rawValue
         let chatTipsItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.plainTextType.rawValue, plainText:  Localized("SETTINGS_CHAT_SAVE_PHOTOS_DESCRIPTION"))
-        
-        return [[chatSwitchItem, chatTipsItem]]
+
+        // Voice Playback Speed Section
+        let currentRate = MediaSavePolicyManager.shared.getPlaybackSpeed()
+        let rateText: String
+        if currentRate == 1.5 {
+            rateText = "1.5x"
+        } else if currentRate == 2.0 {
+            rateText = "2x"
+        } else {
+            rateText = "1x"
+        }
+        let voiceSpeedItem = DTSettingItem(icon: "", title: Localized("SETTINGS_CHAT_VOICE_PLAYBACK_SPEED"), description: rateText, cellStyle: SettingCellStyle.accessoryAndDescription.rawValue)
+        voiceSpeedItem.tag = ChatItemType.voicePlaybackSpeed.rawValue
+        let voiceSpeedTipsItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.plainTextType.rawValue, plainText: Localized("SETTINGS_CHAT_VOICE_PLAYBACK_SPEED_DESCRIPTION"))
+
+        return [[blanckItem],
+                [chatSwitchItem],
+                [chatTipsItem],
+                [blanckItem],
+                [voiceSpeedItem],
+                [voiceSpeedTipsItem]]
     }
 }
 
 //MARK:  switch action
 extension DTChatSettingsController : DTSettingSwitchCellDelegate  {
-    
+
     func switchValueChanged(isOn: Bool, cell: DTDefaultBaseStyleCell) {
         if let settingItem = cell.model {
             if settingItem.tag == ChatItemType.savePhotos.rawValue {
@@ -220,19 +257,19 @@ extension DTChatSettingsController : DTSettingSwitchCellDelegate  {
             }
         }
     }
-    
+
     func chatEnabledChangeAction(isOn: Bool, cell: DTDefaultBaseStyleCell) {
-        DTToastHelper.showHud(in: self.view)
-        self.setProfileApi.setProfileInfo(isOn) { entity in
-            DTToastHelper.hide()
-            if entity?.status == 0 {
-                self.isSavePhotos = isOn
-                MediaSavePolicyManager.shared.updateSaveToPhoto(needSave: self.isSavePhotos)
-            }
-//            self.reloadPage()
-        } failure: { error in
-            DTToastHelper.hide()
-            self.reloadPage()
-        }
+        // 直接本地保存，不再调用服务端接口
+        self.isSavePhotos = isOn
+        MediaSavePolicyManager.shared.updateSaveToPhoto(needSave: self.isSavePhotos)
     }
 }
+
+//MARK: VoicePlaybackSpeedDelegate
+extension DTChatSettingsController: VoicePlaybackSpeedDelegate {
+    func didSelectPlaybackSpeed(_ speed: Float) {
+        // 刷新页面显示新的速度
+        reloadPage()
+    }
+}
+

@@ -77,9 +77,9 @@ class ConversationEmojiReactionView: UIView, Themeable {
     
     func refreshTheme() {
         emojiLabels.forEach {
-            $0.textColor = Theme.primaryTextColor
+            $0.textColor = Theme.tprimaryColor
             $0.layer.borderColor = (Theme.isDarkThemeEnabled ? UIColor(rgbHex: 0x82C1FC) : .ows_themeBlue).cgColor
-            $0.backgroundColor = renderItem?.emojiBackgroundColor(isHighlighted: $0.isHighlighted)
+            $0.backgroundColor = renderItem?.emojiBackgroundColor(isHighlighted: $0.isHighlighted) ?? .clear
         }
     }
 }

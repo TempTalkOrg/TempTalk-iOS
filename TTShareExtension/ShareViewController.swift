@@ -23,7 +23,6 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
 
     private var hasInitialRootViewController = false
     private var isReadyForAppExtensions = false
-    //TODO: areVersionMigrationsComplete 待删除
     private var areVersionMigrationsComplete = false
 
     private var progressPoller: ProgressPoller?
@@ -50,9 +49,8 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
         
         // We don't need to use DeviceSleepManager in the SAE.
         // We don't need to use applySignalAppearence in the SAE.
-        
+
         if appContext.isRunningTests {
-            // TODO: Do we need to implement isRunningTests in the SAE context?
             return
         }
 
@@ -156,7 +154,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
             self.dismiss(animated: false) { [weak self] in
                 AssertIsOnMainThread()
                 guard let strongSelf = self else { return }
-                strongSelf.extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
+                strongSelf.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
             }
         }
     }
@@ -242,7 +240,6 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
 
         Logger.debug("\(self.logTag) \(#function)")
 
-        // TODO: Once "app ready" logic is moved into AppSetup, move this line there.
         OWSProfileManager.shared().ensureLocalProfileCached()
 
         // Note that this does much more than set a flag;
@@ -423,7 +420,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
         self.dismiss(animated: true) { [weak self] in
             AssertIsOnMainThread()
             guard let strongSelf = self else { return }
-            strongSelf.extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
+            strongSelf.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
         }
     }
 
@@ -433,7 +430,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
         self.dismiss(animated: true) { [weak self] in
             AssertIsOnMainThread()
             guard let strongSelf = self else { return }
-            strongSelf.extensionContext!.cancelRequest(withError: NSError(domain: "user cancel error", code: NSUserCancelledError, userInfo: nil))
+            strongSelf.extensionContext?.cancelRequest(withError: NSError(domain: "user cancel error", code: NSUserCancelledError, userInfo: nil))
         }
     }
 
@@ -443,7 +440,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
         self.dismiss(animated: true) { [weak self] in
             AssertIsOnMainThread()
             guard let strongSelf = self else { return }
-            strongSelf.extensionContext!.cancelRequest(withError: error)
+            strongSelf.extensionContext?.cancelRequest(withError: error)
         }
     }
     
@@ -459,7 +456,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
         AssertIsOnMainThread()
 
         // 确保全屏展示
-        shareViewNavigationController.modalPresentationStyle = .fullScreen
+        shareViewNavigationController.modalPresentationStyle = .overFullScreen
         shareViewNavigationController.presentationController?.delegate = self
         shareViewNavigationController.setViewControllers([viewController], animated: false)
         
@@ -691,9 +688,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
 
                 let (promise, exportSession) = SignalAttachment.compressVideoAsMp4(dataSource: dataSource, dataUTI: utiType)
 
-                // TODO: How can we move waiting for this export to the end of the share flow rather than having to do it up front?
-                // Ideally we'd be able to start it here, and not block the UI on conversion unless there's still work to be done
-                // when the user hits "send".
+                // Note: Video compression happens upfront before user can proceed
                 if let exportSession = exportSession {
                     DispatchQueue.main.async {
                         let progressPoller = ProgressPoller(timeInterval: 0.1, ratioCompleteBlock: { return exportSession.progress })
@@ -726,11 +721,12 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
                 return Promise(error: error)
             }
         case .inMemoryImage(let image):
-            guard let pngData = image.pngData() else {
-                return Promise(error: OWSAssertionError("pngData was unexpectedly nil"))
+            // 使用JPEG格式（最高质量）而不是PNG，避免文件过大导致后续被重新压缩
+            guard let jpegData = image.jpegData(compressionQuality: 1.0) else {
+                return Promise(error: OWSAssertionError("jpegData was unexpectedly nil"))
             }
-            let dataSource = DataSourceValue.dataSource(with: pngData, fileExtension: "png")
-            let attachment = SignalAttachment.attachment(dataSource: dataSource, dataUTI: kUTTypePNG as String)
+            let dataSource = DataSourceValue.dataSource(with: jpegData, fileExtension: "jpg")
+            let attachment = SignalAttachment.attachment(dataSource: dataSource, dataUTI: kUTTypeJPEG as String, imageQuality: .original)
             return Promise.value(attachment)
         case .pdf(let pdf):
             let dataSource = DataSourceValue.dataSource(with: pdf, fileExtension: "pdf")
@@ -1128,9 +1124,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
 //                // This can happen, e.g. when sharing a quicktime-video from iCloud drive.
 //                let (promise, exportSession) = SignalAttachment.compressVideoAsMp4(dataSource: dataSource, dataUTI: specificUTIType)
 //
-//                // TODO: How can we move waiting for this export to the end of the share flow rather than having to do it up front?
-//                // Ideally we'd be able to start it here, and not block the UI on conversion unless there's still work to be done
-//                // when the user hits "send".
+//                // Note: Video compression happens upfront before user can proceed
 //                if let exportSession = exportSession {
 //                    let progressPoller = ProgressPoller(timeInterval: 0.1, ratioCompleteBlock: { return exportSession.progress })
 //                    strongSelf.progressPoller = progressPoller
@@ -1221,18 +1215,6 @@ extension ShareViewController: UIAdaptivePresentationControllerDelegate {
     public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
         Logger.info("\(self.logTag) [ScreenShare] presentationControllerDidDismiss - presentationController: \(type(of: presentationController))")
         shareViewWasCancelled()
-    }
-    
-    public func adaptivePresentationStyle(for controller: UIPresentationController,
-                                   traitCollection: UITraitCollection) -> UIModalPresentationStyle {
-        Logger.info("\(self.logTag) [ScreenShare] adaptivePresentationStyle - returning .fullScreen")
-        return .fullScreen
-    }
-    
-    public func presentationController(_ presentationController: UIPresentationController, 
-                                      willPresentWithAdaptiveStyle style: UIModalPresentationStyle, 
-                                      transitionCoordinator: UIViewControllerTransitionCoordinator?) {
-        Logger.info("\(self.logTag) [ScreenShare] willPresentWithAdaptiveStyle - style: \(style.rawValue), frame: \(presentationController.presentedViewController.view.frame)")
     }
 }
 

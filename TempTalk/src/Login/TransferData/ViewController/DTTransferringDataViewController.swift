@@ -107,14 +107,11 @@ import TTMessaging
     }
     
     private func beginTransfer() {
-        //TODO:temptalk need handle
-//        TSSocketManager.shared().deregisteredBrokenSocket()
         DispatchQueue.global().async {
             do {
                 try DeviceTransferService.shared.transferAccountToNewDevice(with: self.urlComponent.peerId, certificateHash: self.urlComponent.certificateHash)
             } catch {
-                // TODO: Error
-                // Alert
+                Logger.error("Device transfer failed: \(error)")
             }
         }
     }
@@ -206,24 +203,19 @@ import TTMessaging
 
 extension DTTransferringDataViewController: DeviceTransferServiceObserver {
     func deviceTransferServiceDiscoveredNewDevice(peerId: MCPeerID, discoveryInfo: [String : String]?) {
-        Logger.info("[DeviceTransferModule -> DTTransferringDataViewController -> func -> deviceTransferServiceDiscoveredNewDevice] peerId = \(peerId.displayName)")
+        Logger.info("[DeviceTransferModule -> DTTransferringDataViewController -> func -> deviceTransferServiceDiscoveredNewDevice] new device discovered")
     }
     
     func deviceTransferServiceDidStartTransfer(progress: Progress) {
         Logger.info("[DeviceTransferModule -> DTTransferringDataViewController -> func -> deviceTransferServiceDidStartTransfer (progress:)]")
         self.progress = progress
-        //TODO:temptalk need handle
-//        if TSSocketManager.shared().state != .closed {
-//            TSSocketManager.shared().deregisteredBrokenSocket()
-//        }
     }
-    
+
     func deviceTransferServiceDidEndTransfer(error: DeviceTransferService.Error?) {
         DTToastHelper.hide()
         guard let error = error  else {
             Logger.info("[DeviceTransferModule -> DTTransferringDataViewController -> func -> deviceTransferServiceDidEndTransfer] no error message")
-            //TODO: 旧设备数据转移成功
-            //TODO: 清理登陆密码,标记为未登陆状态
+            // Old device data transfer successful - mark as deregistered
             if(self.oldDevice){
                 TSAccountManager.shared.setIsDeregistered(true)
                 TSAccountManager.shared.setTransferedSucess(true)

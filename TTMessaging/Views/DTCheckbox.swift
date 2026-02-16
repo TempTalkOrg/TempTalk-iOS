@@ -13,11 +13,11 @@ public class DTCheckbox: UIView {
     public var isSelected: Bool = false {
         willSet {
             isUserInteractionEnabled = true
-            button.isSelected = newValue
+            button?.isSelected = newValue
             if newValue == true {
-                icon.image = UIImage(named: "ic_checkbox_selected")
+                icon?.image = UIImage(named: "ic_checkbox_selected")
             } else {
-                icon.image = UIImage(named: "ic_checkbox_unselected")
+                icon?.image = UIImage(named: "ic_checkbox_unselected")
             }
         }
     }
@@ -27,7 +27,7 @@ public class DTCheckbox: UIView {
             isUserInteractionEnabled = !newValue
             if newValue == true {
                 let disableImage = UIImage(named: "ic_checkbox_disable")?.withRenderingMode(.alwaysTemplate)
-                icon.image = disableImage
+                icon?.image = disableImage
             }
         }
     }
@@ -37,42 +37,44 @@ public class DTCheckbox: UIView {
             isUserInteractionEnabled = !newValue
             if newValue == true {
                 let disableImage = Theme.isDarkThemeEnabled ? UIImage(named: "ic_checkbox_selected_disable_dark") : UIImage(named: "ic_checkbox_selected_disable")
-                icon.image = disableImage
+                icon?.image = disableImage
             }
         }
     }
-    
+
     private weak var _target: AnyObject?
     private var _action: Selector?
-    private var icon: UIImageView!
-    private var button: UIButton!
+    private var icon: UIImageView?
+    private var button: UIButton?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupUI()
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     public func applyTheme() {
-        icon.tintColor = Theme.hairlineColor
+        icon?.tintColor = Theme.lineColor
     }
-    
+
     func setupUI() {
-        
-        icon = UIImageView(image: #imageLiteral(resourceName: "ic_checkbox_unselected"))
-        addSubview(icon!)
-        
-        button = UIButton(type: .custom)
-        button.addTarget(self, action: #selector(buttonAction(_:)), for: .touchUpInside)
-        addSubview(button)
-        
-        icon.autoCenterInSuperview()
-        icon.autoSetDimensions(to: CGSize(square: 16))
-        button.autoPinEdgesToSuperviewEdges()
-        
+
+        let iconView = UIImageView(image: #imageLiteral(resourceName: "ic_checkbox_unselected"))
+        icon = iconView
+        addSubview(iconView)
+
+        let btn = UIButton(type: .custom)
+        button = btn
+        btn.addTarget(self, action: #selector(buttonAction(_:)), for: .touchUpInside)
+        addSubview(btn)
+
+        iconView.autoCenterInSuperview()
+        iconView.autoSetDimensions(to: CGSize(square: 16))
+        btn.autoPinEdgesToSuperviewEdges()
+
         applyTheme()
     }
     

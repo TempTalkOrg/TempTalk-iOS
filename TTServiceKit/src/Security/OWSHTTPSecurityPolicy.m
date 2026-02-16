@@ -5,25 +5,7 @@
 #import "OWSHTTPSecurityPolicy.h"
 #import <AssertMacros.h>
 
-#ifdef POD_CONFIGURATION_DEBUG
-
 #define CerName  @"DifftCyberTrustRoot"
-#define TestCerName  @"DifftTestRoot"
-#define TestCrtName  @"root"
-
-#elif POD_CONFIGURATION_DEVELOPMENT
-
-#define CerName  @"textsecure_dev"
-#define TestCerName  @"DifftTestRoot"
-#define TestCrtName  @"root"
-
-#else
-
-#define CerName  @"DifftCyberTrustRoot"
-#define TestCerName  @"DifftTestRoot"
-#define TestCrtName  @"root"
-
-#endif
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -40,7 +22,6 @@ NS_ASSUME_NONNULL_BEGIN
         httpSecurityPolicy = [[self alloc]
                               initWithPinnedCertificates:[NSSet setWithObjects:
                                                           [self certificateDataForService:CerName fileType:@"cer"],
-                                                          [self certificateDataForService:TestCrtName fileType:@"der"],
                                                           nil]];
     });
     return httpSecurityPolicy;

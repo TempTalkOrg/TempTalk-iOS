@@ -114,7 +114,7 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
 
     self.title = self.createType == DTCreateGroupTypeConvenient ? Localized(@"NEW_GROUP_CONVENIENT_TITLE", @"") : [MessageStrings newGroupDefaultTitle];
 
-    self.view.backgroundColor = Theme.backgroundColor;
+    self.view.backgroundColor = Theme.bg1Color;
     
     if (self.createType == DTCreateGroupTypeConvenient) {
         self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemStop target:self action:@selector(dismissViewController)];
@@ -162,7 +162,7 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
 - (UIView *)firstSectionHeader
 {
     UIView *firstSectionHeader = [UIView new];
-    firstSectionHeader.backgroundColor = Theme.tableCellBackgroundColor;
+    firstSectionHeader.backgroundColor = Theme.bg1Color;
     firstSectionHeader.userInteractionEnabled = YES;
     [firstSectionHeader
         addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(headerWasTapped:)]];
@@ -183,7 +183,7 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
 
     UITextField *groupNameTextField = [UITextField new];
     _groupNameTextField = groupNameTextField;
-    groupNameTextField.textColor = Theme.primaryTextColor;
+    groupNameTextField.textColor = Theme.tprimaryColor;
     groupNameTextField.font = [UIFont ows_dynamicTypeTitle2Font];
     
     switch (self.createType) {
@@ -390,7 +390,7 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
             }];
 
             for (SignalAccount *signalAccount in filtedSignalAccounts) {
-                if (signalAccount.contact.isExternal || signalAccount.isLocalSignalAccount) {
+                if (signalAccount.contact.isExternal || signalAccount.isLocalSignalAccount || signalAccount.isBot) {
                     continue;
                 }
                 [signalAccountSection
@@ -642,7 +642,7 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
         
         if ((self.createType == DTCreateGroupTypeContact && [recipientId isEqualToString:self.thread.contactIdentifier]) || (self.createType == DTCreateGroupTypeByMeeting && [self.meetingMemberIds containsObject:recipientId])) {
             cell.userInteractionEnabled = NO;
-            cell.backgroundColor = cell.contentView.backgroundColor = cell.cellView.backgroundColor = Theme.hairlineColor;
+            cell.backgroundColor = cell.contentView.backgroundColor = cell.cellView.backgroundColor = Theme.lineColor;
         }
     } else if (isBlocked) {
         cell.accessoryMessage = Localized(
@@ -938,11 +938,11 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
                                                                                                                      action:ConversationViewActionNone
                                                                                                              focusMessageId:nil
                                                                                                                 botViewItem:nil
-                                                                                                                   viewMode:ConversationViewMode_Main];
+                                                                                                                   viewMode:ConversationViewMode_Main isFromPersonalCard:false];
                             OWSNavigationController *nav = (OWSNavigationController *)self.navigationController;
                             
                             [nav pushViewController:conversationVC animated:YES completion:^{
-                                [nav removeToViewController:@"DTHomeViewController"];
+                                [nav removeToViewController:@"HomeViewController"];
                             }];
                         }
                     });
@@ -1081,7 +1081,7 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
 
 - (void)applyTheme {
     [super applyTheme];
-    self.firstSection.backgroundColor = Theme.backgroundColor;
+    self.firstSection.backgroundColor = Theme.bg1Color;
 }
 
 #pragma mark - Event Handling

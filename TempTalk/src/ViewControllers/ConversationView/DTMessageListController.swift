@@ -10,17 +10,18 @@ import QuickLook
 import TTServiceKit
 import TTMessaging
 import PureLayout
+import PanModal
 
 @objcMembers
 class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
-        
-    var currentThread: TSThread!
-    var conversationStyle: ConversationStyle!
-    var viewItems: [ConversationViewItem]!
-    var viewItemCache: Dictionary<String, ConversationViewItem>!
+
+    var currentThread: TSThread?
+    var conversationStyle: ConversationStyle?
+    var viewItems: [ConversationViewItem]?
+    var viewItemCache: Dictionary<String, ConversationViewItem>?
     var attachmentDownloadFlag = [UInt64]()
     var isMultiSelectMode = false
-    var currentFileURL: URL!
+    var currentFileURL: URL?
     lazy var selectedViewItems: [ConversationViewItem] = {
         return [ConversationViewItem]()
     }()
@@ -73,7 +74,7 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
     
     override func applyTheme() {
         super.applyTheme()
-        collectionView.backgroundColor = Theme.backgroundColor
+        collectionView.backgroundColor = Theme.bg1Color
         reloadViewItems(forceReload: true)
         self.collectionView.collectionViewLayout.invalidateLayout()
         self.collectionView.reloadData()
@@ -91,7 +92,6 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
     private func addNotificationObserver() {
         
         NotificationCenter.default.addObserver(self, selector: #selector(didChangePreferredContentSize(noti:)), name: UIContentSizeCategory.didChangeNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(touchPinnedMessage(noti:)), name: AnyPinnedMessageFinder.touchPinnedMessageNotification, object: nil)
         
         self.databaseStorage.appendDatabaseChangeDelegate(self)
     }
@@ -104,7 +104,8 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
             return
         }
         
-        guard databaseChanges.threadUniqueIds.contains(self.currentThread.uniqueId) else {
+        guard let currentThread = self.currentThread,
+              databaseChanges.threadUniqueIds.contains(currentThread.uniqueId) else {
             return
         }
         
@@ -120,10 +121,6 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
         self.anyUIDBDidUpdateExternally()
     }
     
-    func touchPinnedMessage(noti: Notification) {
-        self.anyUIDBDidUpdateExternally()
-    }
-    
     
     func anyUIDBDidUpdateExternally() {
         
@@ -136,10 +133,20 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
     }
     
     lazy var collectionView: ConversationCollectionView = {
-        
-        let layout = ConversationViewLayout(conversationStyle: self.conversationStyle)
+
+        let style: ConversationStyle
+        if let conversationStyle = self.conversationStyle {
+            style = conversationStyle
+        } else if let currentThread = self.currentThread {
+            style = ConversationStyle(thread: currentThread)
+        } else {
+            owsFailDebug("Both conversationStyle and currentThread are nil")
+            preconditionFailure("DTMessageListController requires either conversationStyle or currentThread to be set before accessing collectionView")
+        }
+
+        let layout = ConversationViewLayout(conversationStyle: style)
         layout.delegate = self
-        
+
         let collectionView = ConversationCollectionView(frame: view.bounds, collectionViewLayout: layout)
         collectionView.layoutDelegate = self
         collectionView.delegate = self
@@ -148,12 +155,12 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
         collectionView.showsHorizontalScrollIndicator = false
         collectionView.alwaysBounceVertical = true
         collectionView.allowsSelection = false
-        collectionView.backgroundColor = Theme.backgroundColor
-        
+        collectionView.backgroundColor = Theme.bg1Color
+
         collectionView.register(ConversationUnknownCell.self, forCellWithReuseIdentifier: ConversationUnknownCell.reuserIdentifier)
         collectionView.register(ConversationIncomingMessageCell.self, forCellWithReuseIdentifier: ConversationIncomingMessageCell.reuseIdentifier)
         collectionView.register(ConversationOutgoingMessageCell.self, forCellWithReuseIdentifier: ConversationOutgoingMessageCell.reuseIdentifier)
-        
+
         return collectionView
     }()
         
@@ -187,17 +194,29 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
                     messageId = "\(kMessage.timestamp)"
                 }
             } else {
-                let incomingMessage = kMessage as! TSIncomingMessage
-                messageId = "\(kMessage.timestamp)" + incomingMessage.authorId
+                // Try to get authorId for incoming messages, fallback to timestamp only
+                if let incomingMessage = kMessage as? TSIncomingMessage {
+                    messageId = "\(kMessage.timestamp)" + incomingMessage.authorId
+                } else {
+                    owsFailDebug("Expected TSIncomingMessage but got different type")
+                    messageId = "\(kMessage.timestamp)"
+                }
             }
-            var viewItem: ConversationViewItem!
-            
-            if viewItemCache != nil && viewItemCache.keys.contains(messageId) {
-                viewItem = viewItemCache[messageId]
-            } else {
-                viewItem = conversationViewItem(from: kMessage)
+            guard let viewItem = {
+                if viewItemCache != nil && viewItemCache?.keys.contains(messageId) == true,
+                   let cachedItem = viewItemCache?[messageId] {
+                    return cachedItem
+                } else {
+                    if viewItemCache?.keys.contains(messageId) == true {
+                        owsFailDebug("viewItemCache contained key but returned nil")
+                    }
+                    return conversationViewItem(from: kMessage)
+                }
+            }() else {
+                owsFailDebug("Failed to create viewItem for message")
+                return
             }
-            
+
             if (viewItem.card != nil) {
                 cardItems.append(viewItem)
             }
@@ -211,7 +230,10 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
                         source = localNumber
                     }
                 } else {
-                    let incomingMessage = kMessage as! TSIncomingMessage
+                    guard let incomingMessage = kMessage as? TSIncomingMessage else {
+                        owsFailDebug("Expected TSIncomingMessage but got different type")
+                        return
+                    }
                     source = incomingMessage.authorId
                 }
                 let cardUniqueId = card.generateUniqueId(withSource: source, conversationId: conversationId)
@@ -281,12 +303,14 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
                     isFirstInCluster = previousViewItem?.interaction.interactionType() != .outgoingMessage
                 }
                 
-                if nextViewItem == nil {
-                    isLastInCluster = true
-                } else if nextViewItem!.hasCellHeader == true {
-                    isLastInCluster = true
+                if let nextViewItem = nextViewItem {
+                    if nextViewItem.hasCellHeader == true {
+                        isLastInCluster = true
+                    } else {
+                        isLastInCluster = nextViewItem.interaction.interactionType() != .outgoingMessage
+                    }
                 } else {
-                    isLastInCluster = nextViewItem!.interaction.interactionType() != .outgoingMessage
+                    isLastInCluster = true
                 }
                 
                 if previousViewItem != nil && previousViewItem?.interaction.interactionType() == interactionType {
@@ -298,7 +322,10 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
             }
             
             if interactionType == .incomingMessage {
-                let incomingMessage = currentViewItem.interaction as! TSIncomingMessage
+                guard let incomingMessage = currentViewItem.interaction as? TSIncomingMessage else {
+                    owsFailDebug("Expected TSIncomingMessage but got different type")
+                    continue
+                }
                 let incomingSenderId = incomingMessage.authorId
                 
                 if previousViewItem == nil {
@@ -308,23 +335,37 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
                 } else if previousViewItem?.interaction.interactionType() != .incomingMessage {
                     isFirstInCluster = true
                 } else {
-                    let previousIncomingMessage = previousViewItem?.interaction as! TSIncomingMessage
+                    guard let previousIncomingMessage = previousViewItem?.interaction as? TSIncomingMessage else {
+                        owsFailDebug("Expected TSIncomingMessage but got different type")
+                        isFirstInCluster = true
+                        continue
+                    }
                     isFirstInCluster = incomingSenderId != previousIncomingMessage.authorId
                 }
-                
-                if nextViewItem == nil {
-                    isLastInCluster = true
-                } else if nextViewItem?.interaction.interactionType() != .incomingMessage {
-                    isLastInCluster = true
-                } else if nextViewItem!.hasCellHeader {
-                    isLastInCluster = true
+
+                if let nextViewItem = nextViewItem {
+                    if nextViewItem.interaction.interactionType() != .incomingMessage {
+                        isLastInCluster = true
+                    } else if nextViewItem.hasCellHeader {
+                        isLastInCluster = true
+                    } else {
+                        guard let nextIncomingMessage = nextViewItem.interaction as? TSIncomingMessage else {
+                            owsFailDebug("Expected TSIncomingMessage but got different type")
+                            isLastInCluster = true
+                            continue
+                        }
+                        isLastInCluster = incomingSenderId != nextIncomingMessage.authorId
+                    }
                 } else {
-                    let nextIncomingMessage = nextViewItem!.interaction as! TSIncomingMessage
-                    isLastInCluster = incomingSenderId != nextIncomingMessage.authorId
+                    isLastInCluster = true
                 }
                 
                 if previousViewItem != nil && previousViewItem?.interaction.interactionType() == interactionType {
-                    let previousIncomingMessage = previousViewItem?.interaction as! TSIncomingMessage
+                    guard let previousIncomingMessage = previousViewItem?.interaction as? TSIncomingMessage else {
+                        owsFailDebug("Expected TSIncomingMessage but got different type")
+                        shouldShowSenderAvatar = true
+                        continue
+                    }
                     let previousSenderId = previousIncomingMessage.authorId
                     shouldShowSenderAvatar = previousSenderId != incomingSenderId || currentViewItem.hasCellHeader
                     shouldShowSenderName = previousSenderId != incomingSenderId || currentViewItem.hasCellHeader
@@ -363,10 +404,21 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
         if forceReload {
             forceRebuildIds = viewItems.map { $0.interaction.uniqueId }
         }
+
+        let style: ConversationStyle
+        if let conversationStyle = conversationStyle {
+            style = conversationStyle
+        } else if let currentThread = self.currentThread {
+            style = ConversationStyle(thread: currentThread)
+        } else {
+            owsFailDebug("Both conversationStyle and currentThread are nil")
+            preconditionFailure("DTMessageListController requires either conversationStyle or currentThread to be set")
+        }
+
         self.renderItems = renderItemBuilder.syncBuild(
             viewItems: viewItems,
             forceRebuildIds: forceRebuildIds,
-            style: conversationStyle
+            style: style
         )
     }
     
@@ -384,8 +436,8 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
     }
     
     func didChangePreferredContentSize(noti: Notification) {
-        
-        self.viewItems.forEach { viewItem in
+
+        self.viewItems?.forEach { viewItem in
             viewItem.clearCachedLayoutState()
         }
         self.collectionView.collectionViewLayout.invalidateLayout()
@@ -431,7 +483,7 @@ extension DTMessageListController {
         guard let indexPath = collectionView.indexPathForItem(at: currentOffset) else {
             return
         }
-        guard let viewItem = viewItems[safe: indexPath.row] else {
+        guard let viewItem = viewItems?[safe: indexPath.row] else {
             return
         }
         if dateSeparatorView == nil {
@@ -465,7 +517,7 @@ extension DTMessageListController: ConversationCollectionViewDelegate {
     }
     
     func collectionViewDidChangeSize(from oldSize: CGSize, to newSize: CGSize) {
-        self.conversationStyle.viewWidth = newSize.width
+        self.conversationStyle?.viewWidth = newSize.width
     }
     
     func collectionViewDidChangeContentInset(_ oldContentInset: UIEdgeInsets, to newContentInset: UIEdgeInsets) {
@@ -534,11 +586,11 @@ extension DTMessageListController: UICollectionViewDelegate, UICollectionViewDat
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         
-        guard self.isMultiSelectMode == true else {
+        guard self.isMultiSelectMode == true, let viewItems = self.viewItems else {
             return
         }
         collectionView.deselectItem(at: indexPath, animated: false)
-        let currentViewItem = self.viewItems[indexPath.item]
+        let currentViewItem = viewItems[indexPath.item]
         let isSelected = self.viewItemWasSelected(currentViewItem)
         let maxSelectCount = 50
         if self.selectedViewItems.count == maxSelectCount && !isSelected {
@@ -598,14 +650,8 @@ extension DTMessageListController: ConversationMessageCellDelegate {
     
     private func presentMessage(focusedCell: ConversationMessageCell, viewItem: ConversationViewItem) {
         
-        var bubleView: ConversationMessageBubbleView?
-        guard let containerView = focusedCell.contentView.viewWithTag(10000) else { return }
-        for subview in containerView.subviews {
-            if subview is ConversationMessageBubbleView {
-                bubleView = subview as? ConversationMessageBubbleView
-            }
-        }
-        guard let bubleView = bubleView else {
+        let currentBubleView: ConversationMessageBubbleView? = focusedCell.messageBubbleView
+        guard let bubleView = currentBubleView else {
             OWSLogger.info("bubleView is nil")
             return
         }
@@ -639,7 +685,7 @@ extension DTMessageListController: ConversationMessageCellDelegate {
         if let jsonMentions = viewItem.convertMentionsToJson() {
             copyItems.append(jsonMentions)
         }
-        UIPasteboard.general.strings = copyItems
+        DTSecurePasteboard.setStrings(copyItems)
     }
 }
 
@@ -694,7 +740,7 @@ extension DTMessageListController: ConversationMessageBubbleViewDelegate {
             return
         }
         currentFileURL = URL(fileURLWithPath: filePath)
-        guard QLPreviewController.canPreview(currentFileURL as QLPreviewItem) else {
+        guard let currentFileURL = currentFileURL, QLPreviewController.canPreview(currentFileURL as QLPreviewItem) else {
             DTToastHelper.show(withInfo: "Unsupported file type")
             return
         }
@@ -768,19 +814,35 @@ extension DTMessageListController: ConversationMessageBubbleViewDelegate {
         didTapCombinedForwardingItemWith viewItem: any ConversationViewItem
     ) {
         owsAssertDebug(Thread.isMainThread)
-        owsAssertDebug(viewItem.combinedForwardingMessage != nil)
-        owsAssertDebug(viewItem.combinedForwardingMessage!.timestamp > 0)
-        owsAssertDebug(viewItem.combinedForwardingMessage!.authorId.count > 0)
-        
-        guard viewItem.interaction is TSMessage else {
+
+        guard let combinedForwardingMessage = viewItem.combinedForwardingMessage else {
+            owsFailDebug("combinedForwardingMessage is nil")
             return
         }
-        let combinedMessage = viewItem.interaction as! TSMessage
-        let isGroupChat = combinedMessage.combinedForwardingMessage!.isFromGroup
+        owsAssertDebug(combinedForwardingMessage.timestamp > 0)
+        owsAssertDebug(combinedForwardingMessage.authorId.count > 0)
+
+        guard let combinedMessage = viewItem.interaction as? TSMessage else {
+            return
+        }
+
+        guard let combinedForwardingMsg = combinedMessage.combinedForwardingMessage else {
+            owsFailDebug("combinedMessage.combinedForwardingMessage is nil")
+            return
+        }
+
+        let isGroupChat = combinedForwardingMsg.isFromGroup
         let combinedMessageVC = DTCombinedMessageController()
         combinedMessageVC.shouldUseTheme = true
-        combinedMessageVC.configure(thread: self.currentThread, combinedMessage: combinedMessage, isGroupChat: isGroupChat)
-        navigationController?.pushViewController(combinedMessageVC, animated: true)
+        guard let currentThread = self.currentThread else { return }
+        combinedMessageVC.configure(thread: currentThread, combinedMessage: combinedMessage, isGroupChat: isGroupChat)
+
+        // 使用 PanModal 方式展示
+        let navController = DTPanModalNavController(
+            rootViewController: combinedMessageVC,
+            defaultHeight: UIScreen.main.bounds.height * 0.75
+        )
+        presentPanModal(navController)
     }
 
     func messageBubbleView(
@@ -794,33 +856,16 @@ extension DTMessageListController: ConversationMessageBubbleViewDelegate {
             return
         }
         let message = viewItem.interaction as!TSMessage
-        let isPinnedMessage = message.isPinnedMessage
         let processor = OWSAttachmentsProcessor(attachmentPointer: attachmentPointer)
         self.databaseStorage.asyncWrite { transaction in
             processor.fetchAttachments(for: message, forceDownload: true, transaction: transaction) { attachmentStream in
                 self.databaseStorage.asyncWrite { successTransaction in
-                    if isPinnedMessage {
-                        guard let pinnedMessage = DTPinnedMessage.anyFetch(uniqueId: message.pinId!, transaction: successTransaction) else {
-                            return
-                        }
-                        let contentMessage = pinnedMessage.contentMessage
-                        contentMessage.setQuotedMessageThumbnailAttachmentStream(attachmentStream)
-                        pinnedMessage.anyInsert(transaction: successTransaction)
-                    } else {
-                        message.setQuotedMessageThumbnailAttachmentStream(attachmentStream)
-                        message.anyInsert(transaction: successTransaction)
-                    }
+                    message.setQuotedMessageThumbnailAttachmentStream(attachmentStream)
+                    message.anyInsert(transaction: successTransaction)
                 }
             } failure: { error in
                 self.databaseStorage.asyncWrite { failureTransaction in
-                    if isPinnedMessage {
-                        guard DTPinnedMessage.anyFetch(uniqueId: message.pinId!, transaction: failureTransaction) != nil else {
-                            return
-                        }
-                        self.anyUIDBDidUpdateExternally()
-                    } else {
-                        self.databaseStorage.touch(interaction: message, shouldReindex: false, transaction: failureTransaction)
-                    }
+                    self.databaseStorage.touch(interaction: message, shouldReindex: false, transaction: failureTransaction)
                 }
             }
         }
@@ -868,7 +913,20 @@ extension DTMessageListController: QLPreviewControllerDataSource, QLPreviewContr
     }
     
     public func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
-        self.currentFileURL as QLPreviewItem
+        guard let fileURL = self.currentFileURL else {
+            owsFailDebug("currentFileURL was unexpectedly nil")
+            // Dismiss the preview controller and show error to user
+            controller.dismiss(animated: true) {
+                OWSActionSheets.showErrorAlert(message: NSLocalizedString("FILE_PREVIEW_ERROR",
+                                                                          comment: "Error message when file preview fails"))
+            }
+            // Create a valid placeholder file to prevent QuickLook crash
+            let tempDir = FileManager.default.temporaryDirectory
+            let placeholderURL = tempDir.appendingPathComponent("placeholder.txt")
+            try? "Placeholder".write(to: placeholderURL, atomically: true, encoding: .utf8)
+            return placeholderURL as QLPreviewItem
+        }
+        return fileURL as QLPreviewItem
     }
     
     public func previewControllerWillDismiss(_ controller: QLPreviewController) {

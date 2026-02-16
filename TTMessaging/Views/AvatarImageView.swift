@@ -168,10 +168,19 @@ public class ConversationAvatarImageView: AvatarImageView {
     public func updateImage() {
         Logger.debug("\(self.logTag) in \(#function) updateImage")
         if(thread.isGroupThread()){
-            self.setImageWith(thread as! TSGroupThread, diameter: diameter, contactsManager: contactsManager)
+            guard let groupThread = thread as? TSGroupThread else {
+                owsFailDebug("Expected TSGroupThread but got different type")
+                return
+            }
+            self.setImageWith(groupThread, diameter: diameter, contactsManager: contactsManager)
         }else {
-            let contactIdentifier: NSString = thread.contactIdentifier()! as NSString
-            if(contactIdentifier.isEqual(to: TSAccountManager.sharedInstance().localNumber()!)){
+            guard let contactIdentifier = thread.contactIdentifier(),
+                  let localNumber = TSAccountManager.sharedInstance().localNumber() else {
+                owsFailDebug("contactIdentifier or localNumber is nil")
+                self.image = OWSAvatarBuilder.buildImage(thread: thread, diameter: diameter, contactsManager: contactsManager)
+                return
+            }
+            if contactIdentifier == localNumber {
                 self.dt_setImage(with: nil, placeholderImage: UIImage.init(named: "icon_note_to_self"))
             }else {
                 let account:SignalAccount? = contactsManager.signalAccount(forRecipientId: thread.contactIdentifier() ?? "")

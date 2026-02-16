@@ -287,13 +287,13 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
         block: @escaping (TSMessage, String) -> Void) {
 
             let tableName = "model_TSMessageSecondary_virtual"
-            
+
             // simple_query 是 FTS5 自定义分词器 simple 自定义函数，用于 wrap 需要查询的字符串
             let query = "simple_query('\(searchText)')"
-            
+
             // simple_snippet 效果等同于 FTS5 的 snippet，获取匹配结果中命中的关键词
             let snippet = "simple_snippet(\(tableName), 2, '', '', '', 1) as snippet"
-            
+
             let sql = """
                 SELECT \(messageSecondaryColumn: .uniqueId), \(snippet)
                 FROM \(tableName)
@@ -303,9 +303,9 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
                 ORDER BY \(messageSecondaryColumn: .timestamp) DESC
                 \(Self.assembleQuery(strategy: loadStrategy))
             """
-            
+
             do {
-                
+
                 let rows = try Row.fetchCursor(transaction.database, sql: sql)
                 var results: [(uniqueId: String, snippet: String)] = []
                 while let row = try rows.next() {
@@ -315,17 +315,18 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
                         results.append((uniqueId: uniqueId, snippet: snippet ?? ""))
                     }
                 }
-                
+
                 results.forEach {
                     let message = TSMessage.anyFetchMessage(
                         uniqueId: $0.uniqueId,
                         transaction: SDSAnyReadTransaction(.grdbRead(transaction))
                     )
-                    if let message {
+
+                    if let message, !message.isConfidentialMessage() {
                         block(message, $0.snippet)
                     }
                 }
-                
+
             } catch {
                 owsFailDebug("error: \(error)")
             }
@@ -338,15 +339,15 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
         at transaction: GRDBReadTransaction,
         loadStrategy: LoadStrategy,
         block: @escaping (TSMessage, String) -> Void) {
-            
+
             let tableName = "model_TSMessageSecondary_virtual"
-            
+
             // simple_query 是 FTS5 自定义分词器 simple 自定义函数，用于 wrap 需要查询的字符串
             let query = "simple_query('\(searchText)')"
-            
+
             // simple_snippet 效果等同于 FTS5 的 snippet，获取匹配结果中命中的关键词
             let snippet = "simple_snippet(\(tableName), 2, '', '', '', 1) as snippet"
-            
+
             let sql = """
                 SELECT \(messageSecondaryColumn: .uniqueId), \(snippet)
                 FROM \(tableName)
@@ -355,7 +356,7 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
                 ORDER BY \(messageSecondaryColumn: .timestamp) DESC
                 \(Self.assembleQuery(strategy: loadStrategy))
             """
-            
+
             do {
                 let rows = try Row.fetchCursor(transaction.database, sql: sql)
                 var results: [(uniqueId: String, snippet: String)] = []
@@ -366,31 +367,32 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
                         results.append((uniqueId: uniqueId, snippet: snippet ?? ""))
                     }
                 }
-                
+
                 results.forEach {
                     let message = TSMessage.anyFetchMessage(
                         uniqueId: $0.uniqueId,
                         transaction: SDSAnyReadTransaction(.grdbRead(transaction))
                     )
-                    if let message {
+
+                    if let message, !message.isConfidentialMessage() {
                         block(message, $0.snippet)
                     }
                 }
-                
+
             } catch {
                 owsFailDebug("error: \(error)")
             }
-                        
+
     }
-    
-    
+
+
     public static func enumerateMessages(
         with recipientId: String,
         threadId: String,
         at transaction: GRDBReadTransaction,
         block: @escaping (TSMessage, String) -> Void) {
-                        
-            
+
+
             let sql = """
                 SELECT *
                 FROM \(InteractionRecord.databaseTableName)
@@ -398,14 +400,20 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
                 AND \(interactionColumn: .authorId) = ?
                 ORDER BY \(interactionColumn: .serverTimestamp) DESC
                 """
-            
+
             let arguments: StatementArguments = [threadId, recipientId]
-            
-            
+
+
             do {
                 if let interactionRecord = try InteractionRecord.fetchOne(transaction.database, sql: sql, arguments: arguments) {
-                    let message = try TSMessage.fromRecord(interactionRecord) as! TSMessage
-                    block(message, "")
+                    guard let message = try TSMessage.fromRecord(interactionRecord) as? TSMessage else {
+                        owsFailDebug("Expected TSMessage but got different type")
+                        return
+                    }
+                    // Exclude confidential messages from search results
+                    if !message.isConfidentialMessage() {
+                        block(message, "")
+                    }
                 } else {
 //                    owsFailDebug("not found!")
                 }
@@ -413,7 +421,7 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
             } catch {
                 owsFailDebug("error: \(error)")
             }
-            
+
     }
     
     private class func collection(forModel model: SDSIndexableModel) -> String {
@@ -486,8 +494,11 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
     }
     
     private class func createMessageSecondary(inserted: Bool, message: TSMessage, transaction: GRDBWriteTransaction) -> TSMessageSecondary? {
-        var content = self.messageIndexer.removeWhitespacesAndNewlines(message, transaction: transaction.asAnyRead)
         
+        guard !message.isConfidentialMessage() else { return nil }
+
+        var content = self.messageIndexer.removeWhitespacesAndNewlines(message, transaction: transaction.asAnyRead)
+
         guard !content.isEmpty else { return nil}
         
         if let quoted = message.quotedMessage, let quotedBody = quoted.body, !quotedBody.isEmpty {
@@ -602,24 +613,29 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
         guard shouldIndexModel(model) else {
             return
         }
-        
+
         if let message = model as? TSMessage {
-            
+
             if let messageSecondary = createMessageSecondary(inserted: false, message: message, transaction: transaction) {
                 messageSecondary.anyUpsert(transaction: transaction.asAnyWrite)
+            } else if message.isConfidentialMessage() {
+                // If message became confidential, remove it from search index
+                if let existingSecondary = TSMessageSecondary.anyFetch(uniqueId: message.uniqueId, transaction: transaction.asAnyRead) {
+                    existingSecondary.anyRemove(transaction: transaction.asAnyWrite)
+                }
             }
-            
+
         } else if let thread = model as? TSGroupThread {
-            
+
             handleGroupThreadSecondary(inserted: false, thread: thread, transaction: transaction)
         } else if let account = model as? SignalAccount {
-            
+
             if let accountSecondary = createSignalAccountSecondary(inserted: false, account: account, transaction: transaction) {
                 accountSecondary.anyUpsert(transaction: transaction.asAnyWrite)
             }
-            
+
         }
-        
+
     }
 
     public class func modelWasRemoved(model: SDSIndexableModel, transaction: GRDBWriteTransaction) {
@@ -792,49 +808,49 @@ extension AnyFullTextSearchFinder {
 
     private static let recipientIndexer: SearchIndexer<String> = SearchIndexer { (recipientId: String, transaction: SDSAnyReadTransaction) in
         var string = recipientId
-        
+
         let account = contactsManager.signalAccount(forRecipientId: recipientId, transaction: transaction)
 
         if let account = account as SignalAccount? {
-            
-            if let displayName = contactsManager.displayName(forPhoneIdentifier: recipientId, signalAccount: account) {
+
+            if let displayName = contactsManager.displayName(forPhoneIdentifier: recipientId, signalAccount: account, transaction: transaction) {
                 string = "\(string) \(displayName.lowercased())"
             }
-            
+
             if let contact = account.contact {
-                
+
                 if let signature = contact.signature {
                     string = "\(string) \(signature.lowercased())"
                 }
-                
+
                 if let email = contact.email {
                     string = "\(string) \(email.lowercased())"
                 }
             }
         }
-        
+
         return string
     }
     
     private static let groupWithRecipientIndexer: SearchIndexer<String> = SearchIndexer { (recipientId: String, transaction: SDSAnyReadTransaction) in
         var string = recipientId
-        
+
         let account = contactsManager.signalAccount(forRecipientId: recipientId, transaction: transaction)
-        
+
         if let account = account as SignalAccount? {
-            
-            if let displayName = contactsManager.displayName(forPhoneIdentifier: recipientId, signalAccount: account) {
+
+            if let displayName = contactsManager.displayName(forPhoneIdentifier: recipientId, signalAccount: account, transaction: transaction) {
                 string = "\(string) \(displayName.lowercased())"
             }
-            
+
             if let contact = account.contact {
-                
+
                 if let email = contact.email {
                     string = "\(string) \(email.lowercased())"
                 }
             }
         }
-        
+
         return string
     }
 
