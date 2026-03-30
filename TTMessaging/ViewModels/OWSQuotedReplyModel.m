@@ -14,12 +14,25 @@
 @implementation OWSQuotedReplyModel
 
 - (TSQuotedMessage *)buildMessage {
-    NSArray *attachments = self.attachmentStream ? @[ self.attachmentStream ] : @[];
     NSString *bodyString = self.body;
     // 如果 quote 的是卡片消息，发送前需要将 body 移除 markdown
     if (DTParamsUtils.validateString(self.replyItem.card.content)) {
         bodyString = [bodyString removeMarkdownStyle];
     }
+
+    // When quoting an undownloaded attachment, attachmentStream is nil but contentType is set.
+    // Use receivedQuotedAttachmentInfos path to preserve attachment metadata in the proto.
+    if (!self.attachmentStream && self.contentType.length > 0) {
+        OWSAttachmentInfo *attachmentInfo = [[OWSAttachmentInfo alloc] initWithAttachmentId:nil
+                                                                                contentType:self.contentType
+                                                                             sourceFilename:self.sourceFilename];
+        return [[TSQuotedMessage alloc] initWithTimestamp:self.timestamp
+                                                 authorId:self.authorId
+                                                     body:bodyString
+                                receivedQuotedAttachmentInfos:@[attachmentInfo]];
+    }
+
+    NSArray *attachments = self.attachmentStream ? @[ self.attachmentStream ] : @[];
     return [[TSQuotedMessage alloc] initWithTimestamp:self.timestamp
                                              authorId:self.authorId
                                                  body:bodyString
@@ -82,7 +95,10 @@
     BOOL hasAttachment = NO;
 
     TSAttachment *_Nullable attachment = [message attachmentWithTransaction:transaction];
-    TSAttachmentStream *quotedAttachment;
+    TSAttachmentStream *quotedAttachment = nil;
+    NSString *_Nullable attachmentContentType = nil;
+    NSString *_Nullable attachmentSourceFilename = nil;
+
     if (attachment && [attachment isKindOfClass:[TSAttachmentStream class]]) {
 
         TSAttachmentStream *attachmentStream = (TSAttachmentStream *)attachment;
@@ -129,6 +145,15 @@
             quotedAttachment = attachmentStream;
             hasAttachment = YES;
         }
+    } else if (attachment && [attachment isKindOfClass:[TSAttachmentPointer class]]) {
+        // Handle undownloaded attachments (TSAttachmentPointer)
+        // We need to preserve the attachment metadata even though the file isn't downloaded yet
+        TSAttachmentPointer *attachmentPointer = (TSAttachmentPointer *)attachment;
+
+        // Store metadata to be included in the quoted message proto
+        attachmentContentType = attachmentPointer.contentType;
+        attachmentSourceFilename = attachmentPointer.sourceFilename;
+        hasAttachment = YES;
     }
 
     if (!hasText && !hasAttachment) {
@@ -140,7 +165,12 @@
     return [[OWSQuotedReplyModel alloc] initWithTimestamp:timestamp
                                                  authorId:authorId
                                                      body:quotedText
+                                           thumbnailImage:nil
+                                              contentType:attachmentContentType
+                                           sourceFilename:attachmentSourceFilename
                                          attachmentStream:quotedAttachment
+                               thumbnailAttachmentPointer:nil
+                                  thumbnailDownloadFailed:NO
                                      conversationViewItem:conversationItem];
 }
 

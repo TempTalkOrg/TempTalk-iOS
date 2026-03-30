@@ -871,11 +871,12 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
                 \(sqlThreadUniqueIdCondition())
                 AND \(interactionColumn: .errorType) IS NOT ?
                 AND \(interactionColumn: .messageType) IS NOT ?
+                AND \(interactionColumn: .messageType) IS NOT ?
                 AND \(interactionColumn: .recall) IS NULL
                 ORDER BY \(interactionColumn: .serverTimestamp) DESC
                 LIMIT 1
                 """
-        let arguments: StatementArguments = [threadUniqueId, TSErrorMessageType.nonBlockingIdentityChange.rawValue, TSInfoMessageType.verificationStateChange.rawValue]
+        let arguments: StatementArguments = [threadUniqueId, TSErrorMessageType.nonBlockingIdentityChange.rawValue, TSInfoMessageType.verificationStateChange.rawValue, TSInfoMessageType.confidentialViewed.rawValue]
         return TSInteraction.grdbFetchOne(sql: sql, arguments: arguments, transaction: transaction)
     }
     

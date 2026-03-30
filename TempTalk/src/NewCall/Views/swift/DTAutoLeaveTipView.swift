@@ -47,15 +47,15 @@ import TTMessaging
     
     private let hSeplineLabel: UIView = {
         let hSeplineLabel = UIView()
-        hSeplineLabel.backgroundColor = Theme.dividerColor
-        
+        hSeplineLabel.backgroundColor = Theme.dark.dividerColor
+
         return hSeplineLabel
     }()
-    
+
     private let vSepartor: UIView = {
         let vSepartor = UIView()
-        vSepartor.backgroundColor = Theme.dividerColor
-        
+        vSepartor.backgroundColor = Theme.dark.dividerColor
+
         return vSepartor
     }()
     

@@ -47,6 +47,8 @@ class DarkTheme: ThemeProtocol {
     static var bgpopupColor: UIColor  { UIColor(rgbHex: 0x1E2329) }
     static var bgelevateColor: UIColor  { UIColor(rgbHex: 0x0B0E11) }
     static var bgskyColor: UIColor  { UIColor(rgbHex: 0x003366) }
+    static var bgskyAlphaColor: UIColor  { UIColor(rgbHex: 0x051732) }
+    static var bgConfidentialCompensatedColor: UIColor  { UIColor(rgbHex: 0x003366, alpha: 0x33 / 255.0) }
     static var bgspaceColor: UIColor  { UIColor(rgbHex: 0x000000) }
     static var defaultColor: UIColor  { UIColor(rgbHex: 0x181A20) }
     static var bgpagePrimaryColor: UIColor { UIColor(rgbHex: 0x0B0E11) }

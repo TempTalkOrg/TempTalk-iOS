@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/difftim/client-sdk-swift.git",
       "state" : {
-        "revision" : "b63259520fd6338a984fea019fb44a1db7c84922",
-        "version" : "2.10.2-a8"
+        "revision" : "7e0b0cba48289ea52f9fe7b09ca6ec745be9a955",
+        "version" : "2.10.2-a9"
       }
     },
     {
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-protobuf.git",
       "state" : {
-        "revision" : "c169a5744230951031770e27e475ff6eefe51f9d",
-        "version" : "1.33.3"
+        "revision" : "a008af1a102ff3dd6cc3764bb69bf63226d0f5f6",
+        "version" : "1.36.1"
       }
     },
     {

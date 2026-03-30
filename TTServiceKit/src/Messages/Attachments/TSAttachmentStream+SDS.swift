@@ -65,7 +65,7 @@ class TSAttachmentStreamSerializer: SDSSerializer {
         // Properties
         let attachmentSchemaVersion: UInt = model.attachmentSchemaVersion
         let attachmentType: TSAttachmentType = model.attachmentType
-        let byteCount: UInt32 = model.byteCount
+        let byteCount: UInt64 = model.byteCount
         let cachedAudioDurationSeconds: UInt64? = archiveOptionalNSNumber(model.cachedAudioDurationSeconds, conversion: { $0.uint64Value })
         let cachedImageHeight: UInt64? = archiveOptionalNSNumber(model.cachedImageHeight, conversion: { $0.uint64Value })
         let cachedImageWidth: UInt64? = archiveOptionalNSNumber(model.cachedImageWidth, conversion: { $0.uint64Value })

@@ -164,6 +164,24 @@ class CVBodyTextRenderItem: ConversationRenderItem {
                 }
             }
         })
+        // Pre-detect URLs to avoid UITextView dataDetectorTypes async flicker
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let nsText = text as NSString
+            let matches = detector.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
+            for match in matches {
+                let range = match.range
+                guard range.location != NSNotFound, range.location + range.length <= nsText.length else { continue }
+                // Only add if no .link attribute already set (don't override personinfocard:// links)
+                var hasExistingLink = false
+                attributedString.enumerateAttribute(.link, in: range, options: []) { value, _, stop in
+                    if value != nil { hasExistingLink = true; stop.pointee = true }
+                }
+                if !hasExistingLink, let url = match.url {
+                    attributedString.addAttribute(.link, value: url, range: range)
+                }
+            }
+        }
+
         if let mentions = viewItem.mentions {
             mentions.forEach { mention in
                 let range = NSMakeRange(Int(mention.start), Int(mention.length))

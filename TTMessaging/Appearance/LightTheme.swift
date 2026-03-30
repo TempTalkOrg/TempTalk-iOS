@@ -47,6 +47,8 @@ class LightTheme: ThemeProtocol {
     static var bgpopupColor: UIColor  { UIColor(rgbHex: 0xFFFFFF) }
     static var bgelevateColor: UIColor  { UIColor(rgbHex: 0xF5F5F5) }
     static var bgskyColor: UIColor  { UIColor(rgbHex: 0xEBF7FF) }
+    static var bgskyAlphaColor: UIColor  { UIColor(rgbHex: 0xEBF7FF) }
+    static var bgConfidentialCompensatedColor: UIColor  { UIColor(rgbHex: 0xEBF7FF, alpha: 0xD9 / 255.0) }
     static var bgspaceColor: UIColor  { UIColor(rgbHex: 0x001C4E) }
     static var defaultColor: UIColor  { UIColor(rgbHex: 0xFAFAFA) }
     static var bgpagePrimaryColor: UIColor { UIColor(rgbHex: 0xFFFFFF) }

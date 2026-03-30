@@ -207,7 +207,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)clearOutdatedAttachments {
     [DTToastHelper show];
     
-    __block NSUInteger byteCount = 0;
+    __block UInt64 byteCount = 0;
     __block NSMutableArray<TSAttachmentStream *> *needDeleteAttachments = @[].mutableCopy;
     [self.databaseStorage asyncReadWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
         NSTimeInterval threeMonthTimeInterval = ([NSDate ows_millisecondTimeStamp] / 1000.0) - kMonthInterval * 3;

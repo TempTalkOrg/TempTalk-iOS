@@ -161,8 +161,6 @@ NS_ASSUME_NONNULL_BEGIN
     CGSize viewSize = self.scrollView.bounds.size;
     UIImage *image = self.image;
     
-    OWSAssertDebug(image);
-    
     if (!image) return;
 
     if (image.size.width == 0 || image.size.height == 0) {

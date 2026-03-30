@@ -55,9 +55,11 @@
     if (isFriend) {
         [self.shareButton setImage:[[UIImage imageNamed:@"user_share_contact"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate] forState:UIControlStateNormal];
         [self.shareButton setTitle:Localized(@"PERSON_CARD_SHARE_CARD",@"") forState:UIControlStateNormal];
+        [self.messageButton setTitle:Localized(@"PERSON_CARD_SEND_MESSAGE",@"") forState:UIControlStateNormal];
     } else {
         [self.shareButton setImage:[[UIImage imageNamed:@"ask_friend"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate] forState:UIControlStateNormal];
         [self.shareButton setTitle:Localized(@"Add Contact",@"") forState:UIControlStateNormal];
+        [self.messageButton setTitle:Localized(@"PERSON_CARD_ADD_AND_SEND_MESSAGE",@"") forState:UIControlStateNormal];
     }
 }
 

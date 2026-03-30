@@ -60,7 +60,6 @@ class FullScreenInputViewController: OWSViewController {
     }
     
     private func setupViews() {
-        view.backgroundColor = textView.backgroundColor
         view.addSubview(collapseButton)
         collapseButton.snp.makeConstraints { make in
             make.top.left.equalToSuperview()
@@ -135,12 +134,10 @@ class FullScreenInputViewController: OWSViewController {
     
     func checkConfideStatus() {
         guard let thread else { return }
-        
-        if let conversationEntity = thread.conversationEntity, conversationEntity.confidentialMode == TSMessageModeType.confidential {
-            self.confideButton.isSelected = true
-        } else {
-            self.confideButton.isSelected = false
-        }
+
+        let isConfidential = thread.conversationEntity?.confidentialMode == TSMessageModeType.confidential
+        confideButton.isSelected = isConfidential
+        view.backgroundColor = isConfidential ? Theme.bgskyAlphaColor : textView.backgroundColor
     }
 
     deinit {

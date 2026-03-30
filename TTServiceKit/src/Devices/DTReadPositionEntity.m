@@ -49,14 +49,19 @@
 }
 
 + (DTReadPositionEntity *)readPostionEntityWithProto:(DSKProtoReadPosition *)readPositionProto{
-    
+
+    uint64_t readAt = [SDS fitsInInt64:readPositionProto.readAt] ? readPositionProto.readAt : 0;
+    uint64_t maxServerTime = [SDS fitsInInt64:readPositionProto.maxServerTime] ? readPositionProto.maxServerTime : 0;
+    uint64_t maxNotifySequenceID = [SDS fitsInInt64:readPositionProto.maxNotifySequenceID] ? readPositionProto.maxNotifySequenceID : 0;
+    uint64_t maxSequenceID = [SDS fitsInInt64:readPositionProto.maxSequenceID] ? readPositionProto.maxSequenceID : 0;
+
     DTReadPositionEntity *readPositionEntity = [[DTReadPositionEntity alloc] initWithGroupId:readPositionProto.groupID
-                                                                                      readAt:readPositionProto.readAt
-                                                                               maxServerTime:readPositionProto.maxServerTime
-                                                                            notifySequenceId:readPositionProto.maxNotifySequenceID
-                                                                               maxSequenceId:readPositionProto.maxSequenceID];
+                                                                                      readAt:readAt
+                                                                               maxServerTime:maxServerTime
+                                                                            notifySequenceId:maxNotifySequenceID
+                                                                               maxSequenceId:maxSequenceID];
     return readPositionEntity;
-    
+
 }
 
 + (nullable DSKProtoReadPosition *)readPostionProtoWithEntity:(nullable DTReadPositionEntity *)readPositionEntity{

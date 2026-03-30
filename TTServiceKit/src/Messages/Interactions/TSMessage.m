@@ -318,8 +318,12 @@ static const NSUInteger OWSMessageSchemaVersion = 4;
     if(!DTParamsUtils.validateArray(self.attachmentIds)){
         return nil;
     }
-    return [TSAttachment anyFetchWithUniqueId:self.attachmentIds.firstObject transaction:transaction];
-    
+    NSString *firstAttachmentId = self.attachmentIds.firstObject;
+    if (!firstAttachmentId.length) {
+        return nil;
+    }
+    return [TSAttachment anyFetchWithUniqueId:firstAttachmentId transaction:transaction];
+
 }
 
 

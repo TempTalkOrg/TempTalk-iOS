@@ -48,11 +48,15 @@
        !(realSourceProto.hasSource &&  realSourceProto.hasTimestamp && realSourceProto.hasSourceDevice)){
         return nil;
     }
-    DTRealSourceEntity *realSourceEntity = [[DTRealSourceEntity alloc] initSourceWithTimestamp:realSourceProto.timestamp
+
+    uint64_t timestamp = [SDS fitsInInt64:realSourceProto.timestamp] ? realSourceProto.timestamp : 0;
+    uint64_t serverTimestamp = realSourceProto.hasServerTimestamp ? ([SDS fitsInInt64:realSourceProto.serverTimestamp] ? realSourceProto.serverTimestamp : 0) : 0;
+
+    DTRealSourceEntity *realSourceEntity = [[DTRealSourceEntity alloc] initSourceWithTimestamp:timestamp
                                                                                   sourceDevice:realSourceProto.sourceDevice
                                                                                         source:realSourceProto.source];
     if(realSourceProto.hasServerTimestamp){
-        realSourceEntity.serverTimestamp = realSourceProto.serverTimestamp;
+        realSourceEntity.serverTimestamp = serverTimestamp;
     }
     return realSourceEntity;;
 }

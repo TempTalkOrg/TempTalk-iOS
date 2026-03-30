@@ -226,7 +226,7 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertIsOnMainThread();
     NSDictionary *userInfo = notification.userInfo;
     NSNumber *windowLevel = userInfo[@"windowLevel"];
-    if (userInfo != nil && windowLevel.floatValue != 0.0) return;
+    if (userInfo != nil && windowLevel.floatValue > UIWindowLevelAlert) return;
 
     [self applyTheme];
 }

@@ -481,14 +481,6 @@ extern bool bScreenLockDone;
                 [[DTConversationsJob sharedJob] startIfNecessary];
 
                 [self enableBackgroundRefreshIfNecessary];
-
-                // Mark all "attempting out" messages as "unsent", i.e. any messages that were not successfully
-                // sent before the app exited should be marked as failures.
-                //TODO OWSFailedMessagesJob
-//                [[[OWSFailedMessagesJob alloc] initWithPrimaryStorage:[OWSPrimaryStorage sharedManager]] run];
-                // Mark all "incomplete" calls as missed, e.g. any incoming or outgoing calls that were not
-                // connected, failed or hung up before the app existed should be marked as missed.
-//                [[[OWSIncompleteCallsJob alloc] initWithPrimaryStorage:[OWSPrimaryStorage sharedManager]] run];
                 
                 // 数据库清理操作 - 异步执行避免阻塞
                 dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
@@ -589,7 +581,10 @@ extern bool bScreenLockDone;
     
     
     [self clearAllNotificationsAndRestoreBadgeCount];
-    
+
+    // Dismiss keyboard before snapshot to avoid _UISnapshotWindow crash
+    [self.window endEditing:YES];
+
     OWSLogWarn(@"%@ applicationWillResignActive.", self.logTag);
     
     [DDLog flushLog];
@@ -667,19 +662,18 @@ extern bool bScreenLockDone;
         INPerson *contact = startAudioCallIntent.contacts[0];
         INPersonHandle *personHandle = contact.personHandle;
         NSString *contactID = personHandle.value;
-      
-        //MARK: 多人允许不允许回拨
-        if (![contactID hasPrefix:@"+"]) return NO;
-        
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+
+        if (![contactID hasPrefix:@"+"]) {
+            return NO;
+        }
+        // 直接在后台队列处理，避免主线程阻塞
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
             [self startCallByCallKitWithID:contactID];
         });
         return YES;
     }
     
     if ([userActivity.activityType isEqualToString: @"INStartVideoCallIntent"]) {
-        // TODO：henry基于livekit实现打开的逻辑
-//        [[DTMultiCallManager sharedManager] didOpenVideoByCallKit];
         return YES;
     }
 
@@ -687,14 +681,15 @@ extern bool bScreenLockDone;
 }
 
 - (void)startCallByCallKitWithID:(NSString *)contactID {
-    /// 点击系统通讯录回拨获取contentID
     if (contactID == nil) {
+        OWSLogWarn(@"[callback] startCallByCallKitWithID: contactID is nil, aborting");
         return;
     }
-    if (contactID.length > 6) {
+    NSString *cleanContactID = [contactID componentsSeparatedByString:@"."].firstObject ?: contactID;
+    if (cleanContactID.length > 6) {
         DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-            TSThread *thread = [TSContactThread getOrCreateThreadWithContactId: contactID transaction:writeTransaction];
-            [writeTransaction addAsyncCompletionOnMain:^{
+            TSThread *thread = [TSContactThread getOrCreateThreadWithContactId:cleanContactID transaction:writeTransaction];
+            [writeTransaction addAsyncCompletionOffMain:^{
                 NSArray *callAccounts = nil;
                 if ([thread isKindOfClass:TSContactThread.class]) {
                     callAccounts = [thread contactIdentifier_containMac_callNumbers];
@@ -704,6 +699,8 @@ extern bool bScreenLockDone;
                 [DTMeetingManager.shared startCallWithThread:thread recipientIds:callAccounts displayLoading:NO];
             }];
         });
+    } else {
+        OWSLogWarn(@"[callback] cleanContactID too short (%lu), aborting", (unsigned long)cleanContactID.length);
     }
 }
 

@@ -55,8 +55,9 @@ extension DTMeetingManager {
             Logger.info("\(logTag) current call add roomId = \(body.roomID)")
             currentCall.roomId = body.roomID
 
-            // 连接成功，停止超时 Timer
-            stopCallTimeoutTimer()
+            if !(currentCall.callType == .private && currentCall.isCaller) {
+                stopCallTimeoutTimer()
+            }
 
             // 使用统一的 RoomIdManager 保存
             RoomIdManager.shared.saveRoomId(

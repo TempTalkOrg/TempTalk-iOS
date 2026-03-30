@@ -27,6 +27,13 @@ extension DTMeetingManager {
             object: nil
         )
 
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+
         // Observer for showing deferred rating when app enters foreground
         NotificationCenter.default.addObserver(
             self,
@@ -56,7 +63,15 @@ extension DTMeetingManager {
         }
     }
 
+    @objc func appWillResignActive(_ notification: Notification) {
+        guard hasMeeting else { return }
+        suspendAutoLeaveForBackground()
+    }
+
     @objc func appDidBecomeActive(_ notification: Notification) {
+        // 恢复自动离会检测（sourceTimer 在后台已暂停，需要重新开始）
+        resumeAutoLeaveIfNeeded()
+
         // Show deferred rating controller if pending
         // PanModal can't present properly in background, so we defer to foreground
         guard hasPendingRating else { return }

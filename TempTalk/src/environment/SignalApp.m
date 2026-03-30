@@ -226,6 +226,67 @@ NS_ASSUME_NONNULL_BEGIN
     });
 }
 
+- (void)presentTargetProfileCardForRecipientId:(NSString *)recipientId {
+    OWSLogInfo(@"%@ %s", self.logTag, __PRETTY_FUNCTION__);
+
+    if (recipientId.length == 0) {
+        OWSFailDebug(@"%@ recipientId is empty.", self.logTag);
+        return;
+    }
+
+    DispatchMainThreadSafe(^{
+        UIViewController *frontmostVC = [[UIApplication sharedApplication] frontmostViewController];
+
+        // 查找 DFTabbarController
+        DFTabbarController *tabbarVC = nil;
+        if ([frontmostVC isKindOfClass:[DFTabbarController class]]) {
+            tabbarVC = (DFTabbarController *)frontmostVC;
+        } else {
+            UIViewController *parentVC = frontmostVC;
+            while (parentVC != nil && ![parentVC isKindOfClass:[DFTabbarController class]]) {
+                parentVC = parentVC.parentViewController;
+            }
+            if ([parentVC isKindOfClass:[DFTabbarController class]]) {
+                tabbarVC = (DFTabbarController *)parentVC;
+            }
+        }
+
+        if (!tabbarVC) {
+            OWSLogError(@"DFTabbarController not found");
+            return;
+        }
+
+        UINavigationController *rootNav = tabbarVC.viewControllers.firstObject;
+        if (!rootNav) {
+            OWSLogError(@"rootNav = nil");
+            return;
+        }
+
+        void (^showProfileCard)(void) = ^{
+            if (tabbarVC.selectedIndex != 0) {
+                UIViewController *selectedVC = tabbarVC.selectedViewController;
+                if ([selectedVC isKindOfClass:[UINavigationController class]]) {
+                    [(UINavigationController *)selectedVC popToRootViewControllerAnimated:NO];
+                }
+                [tabbarVC setSelectedIndex:0];
+            }
+
+            [rootNav popToRootViewControllerAnimated:NO];
+
+            dispatch_async(dispatch_get_main_queue(), ^{
+                UIViewController *rootVC = rootNav.viewControllers.firstObject;
+                [rootVC showProfileCardInfoWith:recipientId isFromSameThread:NO isPresent:NO isFromContacts:YES];
+            });
+        };
+
+        if (tabbarVC.presentedViewController != nil) {
+            [tabbarVC.presentedViewController dismissViewControllerAnimated:NO completion:showProfileCard];
+        } else {
+            showProfileCard();
+        }
+    });
+}
+
 #pragma mark - Methods
 
 + (void)resetAppDataWithUI

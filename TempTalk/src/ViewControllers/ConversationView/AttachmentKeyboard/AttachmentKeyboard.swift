@@ -25,6 +25,7 @@ class AttachmentKeyboard: CustomKeyboard {
         didSet {
             guard oldValue != inputToolbarState else { return }
             moreAttachmentCollectionView.updateDataSource(inputToolbarState: inputToolbarState)
+            backgroundColor = inputToolbarState == .confidential ? Theme.bgskyAlphaColor : Theme.bg1Color
         }
     }
     
@@ -51,7 +52,7 @@ class AttachmentKeyboard: CustomKeyboard {
         
         super.init()
 
-        backgroundColor = Theme.bg1Color
+        backgroundColor = inputToolbarState == .confidential ? Theme.bgskyAlphaColor : Theme.bg1Color
 
         let stackView = UIStackView(arrangedSubviews: [ moreAttachmentCollectionView ])
         stackView.axis = .vertical
@@ -65,14 +66,8 @@ class AttachmentKeyboard: CustomKeyboard {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: state
-    
-    
-    // MARK: -
-
     override func willPresent() {
         super.willPresent()
-//        checkPermissions()
         moreAttachmentCollectionView.prepareForPresentation()
     }
 
@@ -80,18 +75,6 @@ class AttachmentKeyboard: CustomKeyboard {
         super.wasPresented()
         moreAttachmentCollectionView.performPresentationAnimation()
     }
-
-//    private func checkPermissions() {
-//        let authorizationStatus: PHAuthorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-//        guard authorizationStatus != .notDetermined else {
-//            let handler: (PHAuthorizationStatus) -> Void = { status in
-//                self.moreAttachmentCollectionView.mediaLibraryAuthorizationStatus = status
-//            }
-//            PHPhotoLibrary.requestAuthorization(for: .readWrite, handler: handler)
-//            return
-//        }
-//        moreAttachmentCollectionView.mediaLibraryAuthorizationStatus = authorizationStatus
-//    }
 }
 
 extension AttachmentKeyboard: MoreAttachmentDelegate {
@@ -119,21 +102,3 @@ extension AttachmentKeyboard: MoreAttachmentDelegate {
         }
     }
 }
-
-//extension AttachmentKeyboard: AttachmentFormatPickerDelegate {
-//    func didTapPhotos() {
-//        delegate?.didTapPhotos()
-//    }
-//
-//    func didTapGif() {
-//        delegate?.didTapGif()
-//    }
-//
-//    func didTapFile() {
-//        delegate?.didTapFile()
-//    }
-//
-//    func didTapContact() {
-//        delegate?.didTapContact()
-//    }
-//}

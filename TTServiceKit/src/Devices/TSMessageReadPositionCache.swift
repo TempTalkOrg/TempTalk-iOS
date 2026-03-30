@@ -134,7 +134,7 @@ public class TSMessageReadPositionCache: NSObject {
                     instance.maxServerTime = newPosition.maxServerTime
                     instance.maxNotifySequenceId = newPosition.maxNotifySequenceId
                     instance.creationTimestamp = newPosition.creationTimestamp
-                    instance.updateCount = existing.updateCount + 1
+                    instance.updateCount = instance.updateCount + 1
                 }
                 updateCache(with: existing)
             }

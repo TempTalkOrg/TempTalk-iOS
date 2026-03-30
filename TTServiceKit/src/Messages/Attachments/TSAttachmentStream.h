@@ -31,7 +31,7 @@ NS_ASSUME_NONNULL_BEGIN
             appearInMediaGallery:(BOOL)appearInMediaGallery
          attachmentSchemaVersion:(NSUInteger)attachmentSchemaVersion
                   attachmentType:(TSAttachmentType)attachmentType
-                       byteCount:(unsigned int)byteCount
+                       byteCount:(unsigned long long)byteCount
                      contentType:(NSString *)contentType
                    encryptionKey:(NSData *)encryptionKey
                           height:(unsigned int)height
@@ -58,7 +58,7 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessag
 
 - (instancetype)init NS_UNAVAILABLE;
 - (instancetype)initWithContentType:(NSString *)contentType
-                          byteCount:(UInt32)byteCount
+                          byteCount:(UInt64)byteCount
                      sourceFilename:(nullable NSString *)sourceFilename
                      albumMessageId:(nullable NSString *)albumMessageId
                             albumId:(nullable NSString *)albumId NS_DESIGNATED_INITIALIZER;

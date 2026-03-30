@@ -156,9 +156,22 @@ class DTPersonalCardController: OWSTableViewController,
     
     func updateMoreBtnStatus() {
         if account.isFriend {
-            self.navigationItem.rightBarButtonItem = UIBarButtonItem(image: UIImage(named: "nav_bar_more"), style: .plain, target: self, action: #selector(moreBtnClick))
+            let moreBtn = UIBarButtonItem(image: UIImage(named: "nav_bar_more"), style: .plain, target: self, action: #selector(moreBtnClick))
+            if type == .other {
+                // Show edit button for both bot and non-bot accounts
+                let editButton = UIButton(type: .custom)
+                let editImage = UIImage(named: "setting_edit")?.withRenderingMode(.alwaysTemplate)
+                editButton.setImage(editImage, for: .normal)
+                editButton.tintColor = navigationController?.navigationBar.tintColor
+                editButton.frame = CGRect(x: 0, y: 0, width: 20, height: 20)
+                editButton.addTarget(self, action: #selector(editNameBtnClick), for: .touchUpInside)
+                let editBtn = UIBarButtonItem(customView: editButton)
+                self.navigationItem.rightBarButtonItems = [moreBtn, editBtn]
+            } else {
+                self.navigationItem.rightBarButtonItems = [moreBtn]
+            }
         } else {
-            self.navigationItem.rightBarButtonItem = nil
+            self.navigationItem.rightBarButtonItems = nil
         }
     }
     
@@ -285,8 +298,18 @@ class DTPersonalCardController: OWSTableViewController,
                 return self.personCardForOther(withTitle: Localized("MET_METHOD"), detailText: sourceDesc, longPressSel: nil, accessoryType: .none)
             }, customRowHeight: 36, actionBlock: {}))
         }
-        
-        if !isMe {
+
+        if account.isBot() {
+            let botWebsite = "https://yelling.pro"
+            contactsSection.add(OWSTableItem(customCellBlock: { [weak self] in
+                guard let self else { return UITableViewCell()}
+                return self.personCardForOther(withTitle: Localized("PERSON_CARD_WEBSITE"), detailText: botWebsite, detailColor: Theme.tinfoColor, longPressSel: nil, accessoryType: .none)
+            }, customRowHeight: 36, actionBlock: {
+                if let url = URL(string: botWebsite) {
+                    UIApplication.shared.open(url)
+                }
+            }))
+        } else if !isMe {
             var detailText = "0"
             let commonGroups = commonGroupContext?.inCommonGroups
             if let commonGroups, !commonGroups.isEmpty {
@@ -296,9 +319,7 @@ class DTPersonalCardController: OWSTableViewController,
                 guard let self else { return UITableViewCell()}
                 return self.personCardForOther(withTitle: Localized("GROUPS"), detailText: detailText, longPressSel: nil, accessoryType: .none)
             }, customRowHeight: 36, actionBlock: { [weak self] in
-                if let navigationController = self?.navigationController {
-                    self?.commonGroupContext?.showCommonView(with: navigationController)
-                }
+                self?.showCommonGroups()
             }))
         }
         
@@ -413,6 +434,33 @@ class DTPersonalCardController: OWSTableViewController,
             self.navigationController?.pushViewController(settingsVC, animated: true)
         }
     }
+
+    private func showCommonGroups() {
+        guard let commonGroupContext = commonGroupContext,
+              let inCommonGroups = commonGroupContext.inCommonGroups,
+              !inCommonGroups.isEmpty else {
+            return
+        }
+
+        if let presentingVC = self.presentingViewController {
+            presentingVC.dismiss(animated: true) { [weak self] in
+                guard let self = self else { return }
+                // dismiss 完成后，找到底层的 ViewController 并 push 共同群 VC
+                if let conversationVC = self.findConversationViewController(from: presentingVC),
+                   let navController = conversationVC.navigationController {
+                    commonGroupContext.showCommonView(with: navController)
+                } else if let navController = presentingVC as? UINavigationController {
+                    commonGroupContext.showCommonView(with: navController)
+                } else if let navController = presentingVC.navigationController {
+                    commonGroupContext.showCommonView(with: navController)
+                }
+            }
+        } else {
+            if let navigationController = self.navigationController {
+                commonGroupContext.showCommonView(with: navigationController)
+            }
+        }
+    }
     
     func showDetailAlertViewController(withTitle title: String, detail contentString: String, type: DTCardAlertViewType, maxLength: UInt, tag: Int) {
         showDetailAlertViewController(withTitle: title, detailAttributedString: NSAttributedString(string: contentString), type: type, maxLength: maxLength, tag: tag)
@@ -471,12 +519,7 @@ class DTPersonalCardController: OWSTableViewController,
         nameLabel.font = UIFont(name: "PingFangSC-Medium", size: 20)
         nameLabel.textColor = Theme.tprimaryColor
         nameLabel.numberOfLines = 2
-        nameLabel.isUserInteractionEnabled = true
-        let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(longPressNameClick))
-        longPressGesture.minimumPressDuration = 0.75
-        nameLabel.addGestureRecognizer(longPressGesture)
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(tapNameClick))
-        nameLabel.addGestureRecognizer(tapGesture)
+        nameLabel.isUserInteractionEnabled = false  // Disable tap gesture for name label
         let displayName = Environment.shared.contactsManager?.displayName(forPhoneIdentifier: recipientId) ?? ""
         // For avatar generation, use nickname only (not remark name)
         let nicknameForAvatar: String = {
@@ -485,22 +528,29 @@ class DTPersonalCardController: OWSTableViewController,
             }
             return recipientId ?? ""
         }()
-        if type == .other {
-            let displayNameAttributed = generateNameAttributedString(displayName.ows_stripped(), image: UIImage.init(named: "setting_edit"), font: UIFont(name: "PingFangSC-Medium", size: 12))
+        if type == .other && account.isBot() {
+            let supportIcon = UIImage(named: "setting_support")
+            let displayNameAttributed = generateNameAttributedString(displayName.ows_stripped(), image: supportIcon, font: UIFont(name: "PingFangSC-Medium", size: 12))
             nameLabel.attributedText = displayNameAttributed
         } else {
-            nameLabel.text = displayName
+            nameLabel.text = displayName.ows_stripped()
         }
         topRightContentView.addArrangedSubview(nameLabel)
-        
+
         if self.type != .selfCanEdit {
-            let nameLabel = UILabel()
-            nameLabel.textColor = Theme.tsecondaryColor;
-            nameLabel.font = UIFont.ows_regularFont(withSize: 14)
-            nameLabel.textAlignment = .left
-            if let contact = account.contact, let remark = contact.remark, !remark.isEmpty {
-                nameLabel.text = Localized("CONTACT_PROFILE_NAME") + ": \(contact.fullName)"
-                topRightContentView.addArrangedSubview(nameLabel)
+            let secondaryLabel = UILabel()
+            secondaryLabel.textColor = Theme.tsecondaryColor;
+            secondaryLabel.font = UIFont.ows_regularFont(withSize: 14)
+            secondaryLabel.textAlignment = .left
+            secondaryLabel.isUserInteractionEnabled = false
+
+            if account.isBot() {
+                let rawName = Environment.shared.contactsManager?.rawDisplayName(forPhoneIdentifier: recipientId ?? "") ?? ""
+                secondaryLabel.text = rawName
+                topRightContentView.addArrangedSubview(secondaryLabel)
+            } else if let contact = account.contact, let remark = contact.remark, !remark.isEmpty {
+                secondaryLabel.text = Localized("CONTACT_PROFILE_NAME", comment: "") + ": \(contact.fullName)"
+                topRightContentView.addArrangedSubview(secondaryLabel)
             }
         }
         
@@ -539,19 +589,21 @@ class DTPersonalCardController: OWSTableViewController,
     }
     
     @objc func tapNameClick(tapRecognizer: UITapGestureRecognizer) {
-        
+        editNameBtnClick()
+    }
+
+    @objc func editNameBtnClick() {
         guard self.type == .other,
         let contactsManager = Environment.shared.contactsManager,
         let recipientId else {
             return
         }
-        
+
         let displayName = contactsManager.displayName(forPhoneIdentifier: recipientId)
         let remarkVC = DTEditRemarkController()
         let remarkNav = OWSNavigationController(rootViewController: remarkVC)
         remarkVC.configure(withRecipientId: recipientId, defaultRemarkText: displayName)
         self.present(remarkNav, animated: true, completion: nil)
-        
     }
     
     func showAvatarBrowserViewAnimate(_ animate: Bool) {
@@ -711,7 +763,7 @@ class DTPersonalCardController: OWSTableViewController,
         return sectionHeaderCell
     }
     
-    func personCardForOther(withTitle title: String, detailText detail: String, longPressSel seletor: Selector?, accessoryType: UITableViewCell.AccessoryType) -> UITableViewCell {
+    func personCardForOther(withTitle title: String, detailText detail: String, detailColor: UIColor? = nil, longPressSel seletor: Selector?, accessoryType: UITableViewCell.AccessoryType) -> UITableViewCell {
         let cell = UITableViewCell(style: .value1, reuseIdentifier: "UITableViewCellStyleValue1")
         cell.textLabel?.text = title
         cell.textLabel?.font = UIFont.ows_regularFont(withSize: 14, scaled: false)
@@ -723,7 +775,7 @@ class DTPersonalCardController: OWSTableViewController,
 
         let detailTextLabel = UILabel()
         detailTextLabel.font = UIFont.systemFont(ofSize: 14)
-        detailTextLabel.textColor = Theme.tsecondaryColor
+        detailTextLabel.textColor = detailColor ?? Theme.tsecondaryColor
         detailTextLabel.text = detail
         detailTextLabel.textAlignment = .left
         cell.contentView.addSubview(detailTextLabel)
@@ -1098,6 +1150,14 @@ extension DTPersonalCardController : DTQuickActionCellDelegate {
             }
 
             guard let recipientId = self.recipientId else { return }
+
+            if !self.account.isFriend {
+                AddFriendHandler.handleRequestAddFriend(identifier: recipientId,
+                                                        sourceType: .inUserCard,
+                                                        sourceConversationID: nil,
+                                                        shareContactCardUId: nil,
+                                                        action: nil)
+            }
 
             let thread = TSContactThread.getOrCreateThread(contactId: recipientId)
             self.contactThread = thread

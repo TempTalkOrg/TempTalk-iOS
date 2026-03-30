@@ -386,6 +386,16 @@ const CGFloat kIconViewLength = 24;
     }
     [mainSection addItem:self.blankItem];
 
+    if (!self.thread.isGroupThread && !self.isLocalNumber) {
+        [mainSection addItem:[OWSTableItem itemWithCustomCellBlock:^{
+            @strongify(self);
+            return [self disclosureCellWithName:Localized(@"CONVERSATION_SETTINGS_NAME_CARD", @"table cell label in conversation settings") iconName:@"table_ic_share_profile"];
+        } actionBlock:^{
+            @strongify(self);
+            [self showProfileCardInfo:self.thread.contactIdentifier];
+        }]];
+    }
+
     [mainSection addItem:[OWSTableItem itemWithCustomCellBlock:^{
         @strongify(self);
         return [self disclosureCellWithName:MediaStrings.allMedia iconName:@"actionsheet_camera_roll_black"];
@@ -393,7 +403,7 @@ const CGFloat kIconViewLength = 24;
         @strongify(self);
         [self showMediaGallery];
     }]];
-    
+
     [mainSection addItem:[OWSTableItem itemWithCustomCellBlock:^{
         @strongify(self);
         return [self disclosureCellWithName:Localized(@"CONVERSATION_SETTINGS_SEARCH_HISTORY", @"table cell label in conversation settings") iconName:@"table_ic_search_history"];
@@ -410,7 +420,7 @@ const CGFloat kIconViewLength = 24;
     [contents addSection:mainSection];
 
     //MARK: group in common
-    if (!self.thread.isGroupThread && !self.isLocalNumber) {
+    if (!self.thread.isGroupThread && !self.isLocalNumber && ![self.thread.contactIdentifier isEqualToString:TSConstants.officialBotId]) {
         OWSTableSection *groupInCommonSection = [OWSTableSection new];
         [groupInCommonSection addItem:self.groupInCommonItem];
         [groupInCommonSection addItem:self.blankItem];
@@ -1318,7 +1328,12 @@ const CGFloat kIconViewLength = 24;
         } else {
             recipientId = self.thread.contactIdentifier;
         }
-        
+        // Convert thread.uniqueId to groupModel.groupId using transformToServerGroupId
+        if ([self.thread isKindOfClass:[TSGroupThread class]]) {
+            TSGroupThread *groupThread = (TSGroupThread *)self.thread;
+            NSString *groupIdStr = [TSGroupThread transformToServerGroupIdWithLocalGroupId:groupThread.groupModel.groupId];
+            [[DTAddFriendSourceManager shared] setGroupSource:DTSourceToPersonalCardTypeInGroupMemberUserIcon groupId:groupIdStr ?: @""];
+        }
         [self showProfileCardInfo:recipientId];
     } viewAll:^{
         @strongify(self)

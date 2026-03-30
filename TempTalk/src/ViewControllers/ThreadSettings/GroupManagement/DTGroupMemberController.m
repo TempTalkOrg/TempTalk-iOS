@@ -132,16 +132,21 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
     self.tableView.estimatedRowHeight = 45;
     if (self.controllerType == DTGroupMemberSelectedType_ShowAdminPeople) {
         self.tableView.allowsMultipleSelection = false;
-    }else {
+    } else if (self.controllerType == DTGroupMemberSelectedType_AddAdminPeople ||
+               self.controllerType == DTGroupMemberSelectedType_DeleteAdminPeople) {
+        self.tableView.allowsMultipleSelection = true;
+    } else {
         self.tableView.allowsMultipleSelection = true;
         self.canEditRow = YES;
         self.tableView.editing = YES;
         self.tableView.allowsMultipleSelectionDuringEditing = YES;
     }
     self.tableView.backgroundColor = Theme.bg1Color;
-    //处理底部的用户选择框
-    [self creatBottomContainView];
-    [self configBottomContainViewLayoput];
+    if (self.controllerType != DTGroupMemberSelectedType_AddAdminPeople &&
+        self.controllerType != DTGroupMemberSelectedType_DeleteAdminPeople) {
+        [self creatBottomContainView];
+        [self configBottomContainViewLayoput];
+    }
     [self updateTableContents];
 }
 
@@ -262,7 +267,12 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
                 [cell configureWithThread:self.thread recipientId:recipientId contactsManager:helper.contactsManager];
             }
             cell.cellView.type = UserOfSelfIconTypeRealAvater;
-            cell.selectionStatus = ContactCellSelectionStatusNone;
+            if (self.controllerType == DTGroupMemberSelectedType_AddAdminPeople ||
+                self.controllerType == DTGroupMemberSelectedType_DeleteAdminPeople) {
+                cell.selectionStatus = ContactCellSelectionStatusUnselected;
+            } else {
+                cell.selectionStatus = ContactCellSelectionStatusNone;
+            }
             cell.tintColor = [UIColor ows_materialBlueColor];
 
             return cell;
@@ -291,7 +301,16 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
             if (![self.selectedMemberRecipientIdsArr containsObject:receptedId]) {
                 [self.selectedMemberRecipientIdsArr addObject:receptedId];
                 [self.selectedRecipientIdsMap setValue:indexPath forKey:receptedId];
-                [self.selectedAccountToolView reloadWithData:self.selectedMemberRecipientIdsArr];
+                BOOL isAdminType = (self.controllerType == DTGroupMemberSelectedType_AddAdminPeople ||
+                                    self.controllerType == DTGroupMemberSelectedType_DeleteAdminPeople);
+                if (isAdminType) {
+                    ContactTableViewCell *tappedCell = (ContactTableViewCell *)[self.tableView cellForRowAtIndexPath:indexPath];
+                    if ([tappedCell isKindOfClass:ContactTableViewCell.class]) {
+                        tappedCell.selectionStatus = ContactCellSelectionStatusSelected;
+                    }
+                } else {
+                    [self.selectedAccountToolView reloadWithData:self.selectedMemberRecipientIdsArr];
+                }
                 switch (self.controllerType) {
                     case DTGroupMemberSelectedType_AddAdminPeople:{
                         [self requestForAddGroupMangerWithReceptId:receptedId];
@@ -306,8 +325,9 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
                     default:
                         break;
                 }
-               
-                [self showBottomSelectedPersonContainView];
+                if (!isAdminType) {
+                    [self showBottomSelectedPersonContainView];
+                }
             }
             
         } deselectActionWithIndexPathBlock:^(NSIndexPath * _Nonnull indexPath) {
@@ -331,9 +351,18 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
             if ([self.selectedMemberRecipientIdsArr containsObject:receptedId]) {
                 [self.selectedMemberRecipientIdsArr removeObject:receptedId];
                 [self.selectedRecipientIdsMap removeObjectForKey:receptedId];
-                [self.selectedAccountToolView reloadWithData:self.selectedMemberRecipientIdsArr];
+                BOOL isAdminType = (self.controllerType == DTGroupMemberSelectedType_AddAdminPeople ||
+                                    self.controllerType == DTGroupMemberSelectedType_DeleteAdminPeople);
+                if (isAdminType) {
+                    ContactTableViewCell *tappedCell = (ContactTableViewCell *)[self.tableView cellForRowAtIndexPath:indexPath];
+                    if ([tappedCell isKindOfClass:ContactTableViewCell.class]) {
+                        tappedCell.selectionStatus = ContactCellSelectionStatusUnselected;
+                    }
+                } else {
+                    [self.selectedAccountToolView reloadWithData:self.selectedMemberRecipientIdsArr];
+                }
                 switch (self.controllerType) {
-                    case DTGroupMemberSelectedType_AddAdminPeople:{//添加群成员中取消选中
+                    case DTGroupMemberSelectedType_AddAdminPeople:{
                         [self requestForDeleteGroupMangerWithReceptId:receptedId];
                     }break;
                     case DTGroupMemberSelectedType_DeleteAdminPeople:{
@@ -342,8 +371,7 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
                     default:
                         break;
                 }
-                
-                if (self.selectedMemberRecipientIdsArr.count == 0) {
+                if (!isAdminType && self.selectedMemberRecipientIdsArr.count == 0) {
                     [self hideBottomSelectedPersonContainView];
                 }
             }
@@ -492,72 +520,67 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
     __weak typeof(self)weakSelf = self;
     [self.changeYourSettingsInAGroupAPI sendRequestWithGroupId:serverGId role:roleNumber uid:uid success:^(DTAPIMetaEntity * _Nonnull entity) {
             [DTToastHelper hide];
-        TSGroupModel *oldGroupModel = [self.thread.groupModel copy];
         switch (weakSelf.controllerType) {
-                //添加群管理员
-            case DTGroupMemberSelectedType_AddAdminPeople:{//添加群管理员
+            case DTGroupMemberSelectedType_AddAdminPeople:{
                 NSMutableArray *oldGroupAdminArr = [weakSelf.thread.groupModel.groupAdmin mutableCopy];
-                if (self.userActionType == DTUserSelectedActionTypeForSelected) {//用户行为是添加
+                if (self.userActionType == DTUserSelectedActionTypeForSelected) {
                     if (![oldGroupAdminArr containsObject:uid]) {
                         [oldGroupAdminArr addObject:uid];
                     }
-                }else {//用户行为是删除
+                } else {
                     if ([oldGroupAdminArr containsObject:uid]) {
                         [oldGroupAdminArr removeObject:uid];
                     }
                 }
-               
-                //更新thread信息
-                TSGroupModel *newGroupModel = [self.thread.groupModel copy];
                 DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
                     [weakSelf.thread anyUpdateGroupThreadWithTransaction:transaction block:^(TSGroupThread * instance) {
                         instance.groupModel.groupAdmin = [oldGroupAdminArr copy];
                     }];
                     NSString *updateGroupInfo = nil;
-                    if (self.userActionType == DTUserSelectedActionTypeForSelected) {//用户行为是添加
-                        updateGroupInfo = [self getSystermUpdateInfoWithOldGroupModel:oldGroupModel withNewGroupModel:newGroupModel isAdd:true transaction:transaction];
-                    }else {
-                        updateGroupInfo = [self getSystermUpdateInfoWithOldGroupModel:oldGroupModel withNewGroupModel:newGroupModel isAdd:false transaction:transaction];
+                    if (self.userActionType == DTUserSelectedActionTypeForSelected) {
+                        updateGroupInfo = [DTGroupUtils getMemberChangedInfoStringWithAddedAdminIds:@[uid] removedIds:nil transaction:transaction];
+                    } else {
+                        updateGroupInfo = [DTGroupUtils getMemberChangedInfoStringWithAddedAdminIds:nil removedIds:@[uid] transaction:transaction];
                     }
-                    [self generateInfoMessageWithUpdateGroupInfo:updateGroupInfo
-                                                     transaction:transaction];
+                    if (updateGroupInfo.length > 0) {
+                        [self generateInfoMessageWithUpdateGroupInfo:updateGroupInfo
+                                                         transaction:transaction];
+                    }
                 });
-                                
                 if (weakSelf.memberControllerDelegate && [weakSelf.memberControllerDelegate respondsToSelector:@selector(memberIdsWasAdded:withType:)]) {
                     [weakSelf.memberControllerDelegate memberIdsWasAdded:weakSelf.selectedMemberRecipientIdsArr withType:weakSelf.controllerType];
                 }
             } return;
-            case DTGroupMemberSelectedType_DeleteAdminPeople:{//删除群管理员
+            case DTGroupMemberSelectedType_DeleteAdminPeople:{
                 NSMutableArray *oldGroupAdminArr = [weakSelf.thread.groupModel.groupAdmin mutableCopy];
-                if (self.userActionType == DTUserSelectedActionTypeForSelected) {//用户行为是选中，及表示删除
+                if (self.userActionType == DTUserSelectedActionTypeForSelected) {
                     if ([oldGroupAdminArr containsObject:uid]) {
                         [oldGroupAdminArr removeObject:uid];
                     }
-                }else {//用户行为是不选中，及表示添加为管理员
+                } else {
                     if (![oldGroupAdminArr containsObject:uid]) {
                         [oldGroupAdminArr addObject:uid];
                     }
                 }
-                //更新thread信息
-                TSGroupModel *newGroupModel = self.thread.groupModel;
                 DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
                     [weakSelf.thread anyUpdateGroupThreadWithTransaction:transaction block:^(TSGroupThread * instance) {
                         instance.groupModel.groupAdmin = [oldGroupAdminArr copy];
                     }];
                     NSString *updateGroupInfo = nil;
-                    if (self.userActionType == DTUserSelectedActionTypeForSelected) {//用户行为是添加
-                        updateGroupInfo = [self getSystermUpdateInfoWithOldGroupModel:oldGroupModel withNewGroupModel:newGroupModel isAdd:false transaction:transaction];
-                    }else {
-                        updateGroupInfo = [self getSystermUpdateInfoWithOldGroupModel:oldGroupModel withNewGroupModel:newGroupModel isAdd:true transaction:transaction];
+                    if (self.userActionType == DTUserSelectedActionTypeForSelected) {
+                        updateGroupInfo = [DTGroupUtils getMemberChangedInfoStringWithAddedAdminIds:nil removedIds:@[uid] transaction:transaction];
+                    } else {
+                        updateGroupInfo = [DTGroupUtils getMemberChangedInfoStringWithAddedAdminIds:@[uid] removedIds:nil transaction:transaction];
                     }
-                    
-                    [self generateInfoMessageWithUpdateGroupInfo:updateGroupInfo
-                                                     transaction:transaction];
+                    if (updateGroupInfo.length > 0) {
+                        [self generateInfoMessageWithUpdateGroupInfo:updateGroupInfo
+                                                         transaction:transaction];
+                    }
                 });
                 if (weakSelf.memberControllerDelegate && [weakSelf.memberControllerDelegate respondsToSelector:@selector(memberIdsWasAdded:withType:)]) {
                     [weakSelf.memberControllerDelegate memberIdsWasAdded:weakSelf.selectedMemberRecipientIdsArr withType:weakSelf.controllerType];
                 }
-            } return;;
+            } return;
            
             default:
                 break;
@@ -583,52 +606,44 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
 }
 
 - (void)recoverCellStateWithUid:(NSString *)uid {
-    if(self.userActionType == DTUserSelectedActionTypeForSelected){//删除
+    BOOL isAdminType = (self.controllerType == DTGroupMemberSelectedType_AddAdminPeople ||
+                        self.controllerType == DTGroupMemberSelectedType_DeleteAdminPeople);
+    if (self.userActionType == DTUserSelectedActionTypeForSelected) {
         if ([self.selectedMemberRecipientIdsArr containsObject:uid]) {
             [self.selectedMemberRecipientIdsArr removeObject:uid];
             [self.selectedRecipientIdsMap removeObjectForKey:uid];
-            [self.selectedAccountToolView reloadWithData:self.selectedMemberRecipientIdsArr];
+            if (isAdminType) {
+                ContactTableViewCell *cell = (ContactTableViewCell *)[self.tableView cellForRowAtIndexPath:self.currentTapIndexPath];
+                if ([cell isKindOfClass:ContactTableViewCell.class]) {
+                    cell.selectionStatus = ContactCellSelectionStatusUnselected;
+                }
+            } else {
+                [self.selectedAccountToolView reloadWithData:self.selectedMemberRecipientIdsArr];
+            }
             [self.tableView deselectRowAtIndexPath:self.currentTapIndexPath animated:true];
         }
-    }else {
+    } else {
         [self.selectedMemberRecipientIdsArr addObject:uid];
         [self.selectedRecipientIdsMap setValue:self.currentTapIndexPath forKey:uid];
-        [self.selectedAccountToolView reloadWithData:self.selectedMemberRecipientIdsArr];
+        if (isAdminType) {
+            ContactTableViewCell *cell = (ContactTableViewCell *)[self.tableView cellForRowAtIndexPath:self.currentTapIndexPath];
+            if ([cell isKindOfClass:ContactTableViewCell.class]) {
+                cell.selectionStatus = ContactCellSelectionStatusSelected;
+            }
+        } else {
+            [self.selectedAccountToolView reloadWithData:self.selectedMemberRecipientIdsArr];
+        }
         [self.tableView selectRowAtIndexPath:self.currentTapIndexPath animated:true scrollPosition:UITableViewScrollPositionNone];
     }
-    if (self.controllerType == DTGroupMemberSelectedType_AddAdminPeople || self.controllerType ==DTGroupMemberSelectedType_DeleteAdminPeople) {
-        if (self.selectedMemberRecipientIdsArr.count >0) {
+    if (!isAdminType) {
+        if (self.selectedMemberRecipientIdsArr.count > 0) {
             [self showBottomSelectedPersonContainView];
-        }else{
+        } else {
             [self hideBottomSelectedPersonContainView];
         }
     }
-    
 }
 
-- (NSString *)getSystermUpdateInfoWithOldGroupModel:(TSGroupModel *) oldGroupModel withNewGroupModel:(TSGroupModel *) newGroupModel isAdd:(BOOL) isAdd transaction:(SDSAnyReadTransaction *)transaction{
-    NSMutableSet *oldAdminSet = [[NSMutableSet alloc] initWithArray:oldGroupModel.groupAdmin];//老的群管理员的集
-    NSMutableSet *newAdminSet = [[NSMutableSet alloc] initWithArray:newGroupModel.groupAdmin];//新的群管理的集合
-    
-    //获取两个集合的交集
-    NSMutableSet *intersectSet = [oldAdminSet mutableCopy];
-    [intersectSet intersectSet:newAdminSet];
-    
-    //删除的用户id集合
-    NSMutableSet *removeedSet = [oldAdminSet mutableCopy];
-    [removeedSet minusSet:intersectSet];
-    
-    //增加的用户id集合
-    NSMutableSet *addedSet = [newAdminSet mutableCopy];
-    [addedSet minusSet:intersectSet];
-    NSString *updateGroupInfo;
-    if (isAdd) {
-        updateGroupInfo = [DTGroupUtils getMemberChangedInfoStringWithAddedAdminIds:addedSet.allObjects removedIds:nil transaction:transaction];
-    }else {
-        updateGroupInfo = [DTGroupUtils getMemberChangedInfoStringWithAddedAdminIds:nil removedIds:removeedSet.allObjects transaction:transaction];
-    }
-    return updateGroupInfo;
-}
 
 
 

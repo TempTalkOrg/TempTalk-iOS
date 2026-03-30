@@ -12,6 +12,7 @@
 #import "TSInfoMessage.h"
 #import "TSOutgoingMessage.h"
 #import "TSQuotedMessage.h"
+#import "TSAttachmentStream.h"
 #import "TextSecureKitEnv.h"
 #import "DTCombinedForwardingMessage.h"
 #import "TSGroupThread.h"
@@ -183,9 +184,19 @@ NS_ASSUME_NONNULL_BEGIN
     }
     
     NSString *msgUniqueId = [TSInteraction generateUniqueIdWithAuthorId:[self.tsAccountManager localNumberWithTransaction:transaction] deviceId:transcript.sourceDeviceId timestamp:(transcript.timestamp+index)];
-    NSArray<TSAttachmentPointer *> *pointers = [TSAttachmentPointer attachmentPointersFromProtos:singleAttachmentProtos relay:transcript.relay albumMessageId:msgUniqueId albumId:transcript.thread.uniqueId];
-    OWSAttachmentsProcessor *attachmentsProcessor =
-        [[OWSAttachmentsProcessor alloc] initWithAttachmentPointers:pointers transaction:transaction];
+
+    TSOutgoingMessage *existingMessage = [TSOutgoingMessage findSyncMessageWithTimestamp:transcript.timestamp + index
+                                                                             transaction:transaction];
+    BOOL localMessageAlreadyExists = (existingMessage != nil) && !self.handleUnsupportedMessage;
+
+    NSArray<TSAttachmentPointer *> *pointers = @[];
+    OWSAttachmentsProcessor *attachmentsProcessor;
+    if (localMessageAlreadyExists) {
+        attachmentsProcessor = [[OWSAttachmentsProcessor alloc] initWithAttachmentPointers:pointers transaction:transaction];
+    } else {
+        pointers = [TSAttachmentPointer attachmentPointersFromProtos:singleAttachmentProtos relay:transcript.relay albumMessageId:msgUniqueId albumId:transcript.thread.uniqueId];
+        attachmentsProcessor = [[OWSAttachmentsProcessor alloc] initWithAttachmentPointers:pointers transaction:transaction];
+    }
     
     
     if(transcript.dataMessage.card){
@@ -344,16 +355,14 @@ NS_ASSUME_NONNULL_BEGIN
         [transcript.thread updateWithLastMessage:outgoingMessage isInserted:YES transaction:transaction];
         
     }else{
-        
+        if (localMessageAlreadyExists) {
+            return;
+        }
         // outgoingMessage have not insert, change from updateWithTransaction to simple setting value
         [outgoingMessage updateWithWasSentFromLinkedDevice];
         OWSLogInfo(@"%@ will insert outgoingMessage message  timestamp: %llu", self.logTag, outgoingMessage.timestamp);
         [outgoingMessage anyInsertWithTransaction:transaction];
         OWSLogInfo(@"%@ did insert outgoingMessage message  timestamp: %llu", self.logTag, outgoingMessage.timestamp);
-        
-        //    [[OWSDisappearingMessagesJob shared] startAnyExpirationForMessage:outgoingMessage
-        //                                                  expirationStartedAt:transcript.expirationStartedAt
-        //                                                          transaction:transaction];
         
         [self.readReceiptManager applyEarlyReadReceiptsForOutgoingMessageFromLinkedDevice:outgoingMessage
                                                                               transaction:transaction];

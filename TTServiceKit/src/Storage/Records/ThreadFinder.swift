@@ -490,11 +490,10 @@ struct GRDBThreadFinder: ThreadFinder {
             WHERE \(threadColumn: .removedFromConversation) = 0
             AND \(threadColumn: .shouldBeVisible) = 1
             AND \(threadColumn: .recordType) != ?
-            AND \(threadColumn: .isArchived) = ?
             AND \(threadColumn: .stickCallingDate) > 0
         """
 
-        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue, false]
+        let arguments: StatementArguments = [SDSRecordType.dTVirtualThread.rawValue]
         let cursor = TSThread.grdbFetchCursor(sql: sql, arguments: arguments, transaction: transaction)
         while let thread = try cursor.next() {
             if SDSDataFilter.filterThread(thread, chartFolder: currentFolder, transaction: transaction.asAnyRead) {

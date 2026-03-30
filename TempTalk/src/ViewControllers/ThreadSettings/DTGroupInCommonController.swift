@@ -23,7 +23,7 @@ class DTGroupInCommonController: OWSViewController {
     
     lazy var tableView: UITableView = {
         let tableView = UITableView(frame: .zero, style: .plain)
-        tableView.backgroundColor = Theme.bg1Color
+        tableView.backgroundColor = Theme.bgpageSecondaryColor
         tableView.delegate = self
         tableView.dataSource = self
         tableView.estimatedRowHeight = 0
@@ -47,12 +47,14 @@ class DTGroupInCommonController: OWSViewController {
     override func applyTheme() {
         super.applyTheme()
         updateTableContents()
-        tableView.backgroundColor = Theme.bg1Color
+        tableView.backgroundColor = Theme.bgpageSecondaryColor
+        view.backgroundColor = Theme.bgpageSecondaryColor
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         navigationItem.title = resultGroups.count > 1 ? Localized("GROUP_IN_COMMON_TITLE_GROUPS"): Localized("GROUP_IN_COMMON_TITLE_GROUP")
+        view.backgroundColor = Theme.bgpageSecondaryColor
         view.addSubview(tableView)
         tableView.autoPinEdgesToSuperviewSafeArea()
         filteredResultGroups = resultGroups
@@ -88,10 +90,6 @@ extension DTGroupInCommonController: UISearchBarDelegate {
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
         searchBar.endEditing(true)
     }
-    
-//    func searchBar(_ searchBar: UISearchBar, selectedScopeButtonIndexDidChange selectedScope: Int) {
-//        updateTableContents()
-//    }
     
 }
 

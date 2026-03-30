@@ -84,6 +84,7 @@ import TTServiceKit
     @objc var inputToolbarState: InputToolbarState {
         didSet {
             guard oldValue != inputToolbarState else { return }
+            attachmentKeyboardIfLoaded?.inputToolbarState = inputToolbarState
             ensureButtonVisibility(withAnimation: true, doLayout: true)
         }
     }
@@ -304,8 +305,16 @@ import TTServiceKit
     }()
 
     private let mainPanelWrapperView = UIView.container()
-    
-    private let topSepLine = UIView()
+
+    private let extendedBackgroundView = UIView()
+
+    private let blurEffectView = UIVisualEffectView(effect: Theme.barBlurEffect)
+
+    private weak var blurTintingView: UIView?
+
+    private let topSepLine = DashedLineView()
+
+    private let bottomSepLine = UIView()
 
     private var isConfigurationComplete = false
 
@@ -420,13 +429,11 @@ import TTServiceKit
         // the animation. Extend the background below the toolbar's bounds
         // by this much to mask that extra space.
         let backgroundExtension: CGFloat = 500
-        let extendedBackgroundView = UIView()
         if UIAccessibility.isReduceTransparencyEnabled {
             extendedBackgroundView.backgroundColor = Theme.bg1Color
         } else {
             extendedBackgroundView.backgroundColor = Theme.bg1Color.withAlphaComponent(OWSNavigationBar.backgroundBlurMutingFactor)
 
-            let blurEffectView = UIVisualEffectView(effect: Theme.barBlurEffect)
             // Alter the visual effect view's tint to match our background color
             // so the input bar, when over a solid color background matching `toolbarBackgroundColor`,
             // exactly matches the background color. This is brittle, but there is no way to get
@@ -435,6 +442,7 @@ import TTServiceKit
                 String(describing: type(of: $0)) == "_UIVisualEffectSubview"
             }) {
                 tintingView.backgroundColor = extendedBackgroundView.backgroundColor
+                blurTintingView = tintingView
             }
             extendedBackgroundView.addSubview(blurEffectView)
             blurEffectView.autoPinEdgesToSuperviewEdges()
@@ -444,11 +452,11 @@ import TTServiceKit
         extendedBackgroundView.autoPinEdge(toSuperviewEdge: .top)
         extendedBackgroundView.autoPinEdge(toSuperviewEdge: .bottom, withInset: -backgroundExtension)
 
-        topSepLine.backgroundColor = .confidential == inputToolbarState ? .ows_themeBlue : Theme.bg2Color
+        let initConfidential = .confidential == inputToolbarState
+        topSepLine.setDashed(initConfidential, color: initConfidential ? .ows_themeBlue : Theme.bg2Color)
         addSubview(topSepLine)
         topSepLine.autoPinEdgesToSuperviewEdges(with: .zero, excludingEdge: .bottom)
         topSepLine.autoSetDimension(.height, toSize: 0.5)
-        let bottomSepLine = UIView()
         bottomSepLine.backgroundColor = Theme.bg2Color
         addSubview(bottomSepLine)
         bottomSepLine.autoPinEdgesToSuperviewEdges(with: .zero, excludingEdge: .top)
@@ -546,7 +554,10 @@ import TTServiceKit
             inputTextView.placeholder = placeholderText
         }
         confideButton.isSelected = isConfidentialMode
-        topSepLine.backgroundColor = isConfidentialMode ? .ows_themeBlue : Theme.bg2Color
+        topSepLine.setDashed(isConfidentialMode, color: isConfidentialMode ? .ows_themeBlue : Theme.bg2Color)
+        let extBgColor = isConfidentialMode ? Theme.bgConfidentialCompensatedColor : (UIAccessibility.isReduceTransparencyEnabled ? Theme.bg1Color : Theme.bg1Color.withAlphaComponent(OWSNavigationBar.backgroundBlurMutingFactor))
+        extendedBackgroundView.backgroundColor = extBgColor
+        blurTintingView?.backgroundColor = extBgColor
 
         let animator: UIViewPropertyAnimator?
         if isAnimated {
@@ -1046,6 +1057,7 @@ import TTServiceKit
     }
 
     @objc func clearTextMessage(animated: Bool) {
+        Logger.info("[Keyboard] clearTextMessage, textLen=\(inputTextView.text?.count ?? 0)")
         setMessageBody(nil, animated: animated)
         inputTextView.undoManager?.removeAllActions()
     }
@@ -1490,6 +1502,13 @@ import TTServiceKit
 
     @objc var isInputViewFirstResponder: Bool {
         return inputTextView.isFirstResponder
+            || attachmentKeyboardIfLoaded?.isFirstResponder == true
+    }
+
+    /// 用户正在使用输入区域（多维度判断：first responder + 非测量状态）
+    @objc var isUserActivelyTyping: Bool {
+        guard !isMeasuringKeyboardHeight else { return false }
+        return isInputViewFirstResponder
     }
 
     private func ensureFirstResponderState() {
@@ -1822,5 +1841,38 @@ extension ConversationInputToolbar: RecordingLimitProcessorDelegate {
 
     func recordingLimitProcessorDidReachLimit() {
         stopRecording()
+    }
+}
+
+private class DashedLineView: UIView {
+    private let dashLayer = CAShapeLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        layer.addSublayer(dashLayer)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func setDashed(_ dashed: Bool, color: UIColor) {
+        backgroundColor = dashed ? .clear : color
+        dashLayer.isHidden = !dashed
+        if dashed {
+            dashLayer.strokeColor = color.cgColor
+            dashLayer.fillColor = UIColor.clear.cgColor
+            dashLayer.lineWidth = 0.5
+            dashLayer.lineDashPattern = [4, 4]
+            setNeedsLayout()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard !dashLayer.isHidden else { return }
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: 0, y: bounds.midY))
+        path.addLine(to: CGPoint(x: bounds.width, y: bounds.midY))
+        dashLayer.path = path.cgPath
+        dashLayer.frame = bounds
     }
 }

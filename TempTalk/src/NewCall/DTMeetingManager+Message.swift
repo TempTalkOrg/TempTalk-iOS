@@ -61,20 +61,21 @@ extension DTMeetingManager {
     ) async -> (cipherMessages: [[String: Any]], encInfos: [[String: Any]], keyResult: DTEncryptedKeyResult)? {
 
         await requestPublicKeysIfNeed(identifiers: recipientIds)
-        
+
         let sessionRecords = await loadSessionRecords(identifiers: recipientIds)
+
         guard let result = encryptKeyResult(sessionRecords: sessionRecords, mKey: mKey) else {
             await DTToastHelper.dismiss(withInfo: Localized("SINGLE_CALL_APPLY_MEETING_FAIL"))
             Logger.error("encryptKey error")
             return nil
         }
-    
+
         let publicKey = result.eKey
         let encInfos = result.eMKeys.map { key, value in
             let stringEmk = value.base64EncodedString()
             return ["uid": key, "emk": stringEmk]
         }
-        
+
         var cipherMessages = [[String: Any]]()
         // 不需要同步给另一段的消息类型
         var igonreSelfMsgTypes: [DTCallMessageType] = []
@@ -85,14 +86,14 @@ extension DTMeetingManager {
                 igonreSelfMsgTypes = [.calling, .cancel]
             }
         }
-        
+
         do {
             try sessionRecords.forEach { [self] key, value in
-                
+
                 if key == localNumber && igonreSelfMsgTypes.contains(msgType) {
                     return
                 }
-                
+
                 var cipherMessage = [String: Any]()
                 cipherMessage["uid"] = key
                 cipherMessage["registrationId"] = value.remoteRegistrationId
@@ -309,7 +310,8 @@ extension DTMeetingManager {
             roomId: roomId,
             msgType: msgType,
             cipherMessages: callMessage.cipherMessages,
-            forceEndGroupMeeting: forceEndGroupMeeting
+            forceEndGroupMeeting: forceEndGroupMeeting,
+            callType: targetCall.callType
         )
 
         if let tmpNeedsSync = data["needsSync"],
@@ -540,12 +542,6 @@ extension DTMeetingManager: DTCallMessageDelegate {
                 return
             }
             
-            DispatchMainThreadSafe {
-                if self.hasMeeting, OWSWindowManager.shared().hasCall() {
-                    return
-                }
-            }
-
             let isPrivateCall = newCall.callType == .private
             let sound: OWSSound = isPrivateCall ? .callIncomming1v1 : .callIncommingGroup
             showAnswer(call: newCall) { [self] in
@@ -673,7 +669,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
         
         if roomId == currentCall.roomId {
             Task {
-                await othersideHungupCall(roomId: roomId, isRemoveBar: true)
+                await othersideHungupCall(roomId: roomId)
             }
         } else {
             // TODO: call remove 多个 call 的悬浮小窗
@@ -805,38 +801,58 @@ extension DTMeetingManager: DTCallMessageDelegate {
     
     // 解析 textPresets 格式的消息，返回 (文本, emoji)
     private func parseTextPresetMessage(_ message: String) -> (text: String, emoji: String)? {
-        // textPresets 格式: "文本 emoji"，例如 "Agree ✅"
-        let components = message.components(separatedBy: " ")
-        guard components.count >= 2 else {
+        let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedMessage.glyphCount == 1 && trimmedMessage.containsEmoji {
+            Logger.info("[BulletChat] parseTextPresetMessage - pure emoji: \(trimmedMessage)")
+            return (text: "", emoji: trimmedMessage)
+        }
+
+        var emojiEndIndex = trimmedMessage.endIndex
+        var emojiStartIndex = trimmedMessage.endIndex
+        var foundEmoji = false
+
+        // 从后往前遍历，找到第一个 emoji 序列
+        for char in trimmedMessage.reversed() {
+            emojiEndIndex = emojiStartIndex
+            emojiStartIndex = trimmedMessage.index(before: emojiStartIndex)
+
+            let substring = String(trimmedMessage[emojiStartIndex..<emojiEndIndex])
+            if substring.containsEmoji {
+                foundEmoji = true
+            } else if foundEmoji {
+                emojiStartIndex = trimmedMessage.index(after: emojiStartIndex)
+                break
+            }
+        }
+
+        guard foundEmoji else {
+            Logger.info("[BulletChat] parseTextPresetMessage - no emoji found")
             return nil
         }
 
-        // 最后一个元素是 emoji
-        let emoji = components.last ?? ""
-        // 其余部分是文本
-        let text = components.dropLast().joined(separator: " ")
+        let emoji = String(trimmedMessage[emojiStartIndex..<trimmedMessage.endIndex])
+        let textPart = String(trimmedMessage[..<emojiStartIndex])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // 验证最后一个元素是否包含 emoji
-        guard emoji.containsEmoji else {
+        guard !textPart.isEmpty else {
+            Logger.info("[BulletChat] parseTextPresetMessage - text part is empty")
             return nil
         }
-
-        return (text, emoji)
+        return (text: textPart, emoji: emoji)
     }
 
     // 处理气泡消息的发送（支持 textPresets 格式）
     private func sendBubbleMessageWithFormat(pid: String, message: String) {
         if let parsed = parseTextPresetMessage(message) {
-            // textPresets 格式：解析并格式化
             var senderName = "You"
             if let localNumber = TSAccountManager.localNumber(), localNumber != pid {
                 senderName = Environment.shared.contactsManager.displayName(forPhoneIdentifier: pid)
             }
             let truncatedName = String(senderName.prefix(5))
-            let formattedText = "\(truncatedName): \(parsed.text)"
+            let formattedText = parsed.text.isEmpty ? truncatedName : "\(truncatedName): \(parsed.text)"
             RoomDataManager.shared.sendBubbleMessage(pid: pid, text: formattedText, emoji: parsed.emoji)
         } else {
-            // 原有格式：按原样发送
             RoomDataManager.shared.sendBubbleMessage(pid: pid, message: message)
         }
     }
@@ -1307,13 +1323,9 @@ extension DTMeetingManager: DTCallMessageDelegate {
                     }
                     
                     // 调用继续的逻辑
-                    DispatchMainThreadSafe {
-                        DTMeetingManager.shared.hostRoomContentVC?.autoLeaveTipView?.removeFromSuperview()
-                        DTMeetingManager.shared.hostRoomContentVC?.hasShowLeaveTipView = false
-                        DTMeetingManager.shared.hostRoomContentVC?.autoLeaveTipView?.stopTimeoutTimer()
-                        DTMeetingManager.shared.stopCheckTalking()
-                        DTMeetingManager.shared.currentCallTalkingPop()
-                    }
+                    DTMeetingManager.shared.dismissAutoLeaveTipView()
+                    DTMeetingManager.shared.stopCheckTalking()
+                    DTMeetingManager.shared.currentCallTalkingPop()
                 }
             }
         } catch {

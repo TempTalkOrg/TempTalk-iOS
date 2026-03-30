@@ -42,7 +42,7 @@ static NSInteger const kAttachmentAutoDownloadMaxSize = 10 * 1024 * 1024;
             appearInMediaGallery:(BOOL)appearInMediaGallery
          attachmentSchemaVersion:(NSUInteger)attachmentSchemaVersion
                   attachmentType:(TSAttachmentType)attachmentType
-                       byteCount:(unsigned int)byteCount
+                       byteCount:(unsigned long long)byteCount
                      contentType:(NSString *)contentType
                    encryptionKey:(NSData *)encryptionKey
                           height:(unsigned int)height
@@ -63,7 +63,7 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessag
 - (instancetype)initWithServerId:(UInt64)serverId
                              key:(NSData *)key
                           digest:(nullable NSData *)digest
-                       byteCount:(UInt32)byteCount
+                       byteCount:(UInt64)byteCount
                      contentType:(NSString *)contentType
                            relay:(NSString *)relay
                   sourceFilename:(nullable NSString *)sourceFilename

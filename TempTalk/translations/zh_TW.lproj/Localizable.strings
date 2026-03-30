@@ -574,6 +574,7 @@
 "CONVERSATION_SETTINGS_SAVE_TO_ALBUM_NEVER" = "从不";
 "CONVERSATION_SETTINGS_SAVE_TO_ALBUM_TIP" = "自动将收到的照片和视频保存到「照片」应用；在保密模式下，内容不会被保存。";
 
+"CONVERSATION_SETTINGS_NAME_CARD" = "個人名片";
 "CONVERSATION_SETTINGS_SEARCH_HISTORY" = "查找聊天内容";
 
 "CONVERSATION_SETTINGS_GROUP_IN_COMMON" = "共同群组";
@@ -1616,7 +1617,7 @@
 "new_message" = "消息";
 
 /* No comment provided by engineer. */
-"Confidential_message" = "机密消息";
+"Confidential_message" = "機密訊息";
 
 /* A label for the 'add by phone number' button in the 'new non-contact conversation' view */
 "NEW_NONCONTACT_CONVERSATION_VIEW_BUTTON" = "搜索";
@@ -2128,7 +2129,7 @@
 "ENTER_CODE_TITLE" = "添加联系人";
 "ENTER_CODE_TIPS" = "输入邀请码添加新朋友";
 "ENTER_CODE_PLACEHOLDER" = "输入 4 位邀请码或联系人 ID";
-"ENTER_CODE_ADD_BUTTON" = "添加";
+"ENTER_CODE_ADD_BUTTON" = "搜索";
 "ENTER_CODE_ERRORTIPS" = "邀请码不正确，请再试一次";
 "ENTER_CODE_CONTACT_NAME_ERROR" = "联系人 ID不正确，请再试一次";
 "ENTER_CODE_MYCODE" = "我的邀请码";
@@ -3212,7 +3213,9 @@
 "PERSON_CARD_LIKE_SUCESS" = "点赞成功!";
 "PERSON_CARD_LIKE_FAILED" = "点赞失败!";
 "PERSON_CARD_SEND_MESSAGE" = "发消息";
+"PERSON_CARD_ADD_AND_SEND_MESSAGE" = "添加并发消息";
 "PERSON_CARD_VOICE_CALL" = "语音通话";
+"NON_FRIEND_ONLY_TEXT_MESSAGE" = "非好友仅支持发送文本消息";
 "PERSON_CARD_SHARE_CARD" = "分享名片";
 
 "LOGIN_ERROR" = "邮箱/邀请码/手机号 错误";
@@ -3759,7 +3762,7 @@
 "CONFIDENTIAL_MESSAGE_VIEW_ALERT_TITLE" = "机密消息";
 
 /* Alert message when first time viewing confidential message */
-"CONFIDENTIAL_MESSAGE_VIEW_ALERT_MESSAGE" = "查看后，消息将消失。";
+"CONFIDENTIAL_MESSAGE_VIEW_ALERT_MESSAGE" = "查看后，消息将消失";
 
 "IMAGE_PREVIEW_ADD_MESSAGE" = "添加消息";
 "CONFIRM_DISBAND_GROUP_DESCRIPTION" = "此群组的数据将被删除，群组中的所有成员也将同时被移除。";
@@ -3954,13 +3957,17 @@
 "NOTIFICATIONS_CRITICAL_DESCRIPTION" = "前往「设置」→「通知」→「Yelling」→「重要提醒」，并将其开启。开启后，紧急联络可突破静音和勿扰模式。";
 "NOTIFICATIONS_CRITICAL_ALERT_TITLE_ON" = "开启紧急联络";
 "NOTIFICATIONS_CRITICAL_ALERT_TITLE_OFF" = "关闭紧急联络";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "前往 设置 → 通知 → Yelling →紧急联络，并开启紧急联络。";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "前往 设置 → 通知 → Yelling →紧急联络，并关闭紧急联络。";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "前往「设置」→「通知」→「Yelling」→「重要提醒」，并将其开启。";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "前往「设置」→「通知」→「Yelling」→「重要提醒」，并将其关闭。";
 "NOTIFICATIONS_CRITICAL_ALERT_CANCEL" = "取消";
 "NOTIFICATIONS_CRITICAL_ALERT_SETTING" = "设置";
 "NOTIFICATIONS_CRITICAL_EXTENSION_TITLE" = "%@的未接呼叫";
 "NOTIFICATIONS_CRITICAL_EXTENSION_CONTENT" = "紧急：请立即接听。";
 "MEETING_CRITICAL_ALERT_FREQUENTLY" = "发送过于频繁，请稍后再试。";
+
+"PERSON_CARD_OFFICIAL_ACCOUNT" = "官方帳號";
+
+"PERSON_CARD_WEBSITE" = "網站";
 
 "ATTACHMENT_ERROR_FILE_SIZE_TOO_LARGE_TIPS" = "抱歉，您选择的文件超过了200M，无法发送。";
 

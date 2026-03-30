@@ -33,6 +33,7 @@ class RoomDataManager: NSObject, ObservableObject {
     @Published var handsData: [String] = []
     @Published var hasRaiseHands: Bool = false
     @Published var localRaiseHand: Bool = false
+    @Published var participantCount: Int = 0
 
     // 气泡消息相关
     @Published var bubbleMessage: String = ""
@@ -105,11 +106,12 @@ class RoomDataManager: NSObject, ObservableObject {
                 self.participantId = pid.components(separatedBy: ".").first ?? ""
                 self.onBulletMessageUpdate?()
             }
+            self.participantCount = DTMeetingManager.shared.roomContext?.room.allParticipants.count ?? 0
             self.onMeetingUpdate?()
             self.onPipUpdate?()
         }
     }
-    
+
     func disconnectParticipant(participant: Participant) {
         updateParticipantRoomStatus(participant: participant)
     }
@@ -189,8 +191,11 @@ class RoomDataManager: NSObject, ObservableObject {
     }
     
     private func updateParticipantRoomStatus(participant: Participant) {
-        self.onMeetingUpdate?()
-        self.onPipUpdate?()
+        DispatchMainThreadSafe {
+            self.participantCount = DTMeetingManager.shared.roomContext?.room.allParticipants.count ?? 0
+            self.onMeetingUpdate?()
+            self.onPipUpdate?()
+        }
     }
     
     // 倒计时pip刷新

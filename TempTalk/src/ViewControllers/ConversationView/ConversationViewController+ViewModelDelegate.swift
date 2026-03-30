@@ -178,38 +178,34 @@ extension ConversationViewController: ConversationViewModelDelegate {
         AssertIsOnMainThread()
         self.layout.prepare()
 
-        guard let scrollState = self.scrollStateBeforeLoadingMore else {
-            owsFailDebug("scrollState was unexpectedly nil")
-            isLoadingOlderItems = false
-            isLoadingNewerItems = false
+        isLoadingOlderItems = false
+        isLoadingNewerItems = false
+
+        // scroll-to-top 动画期间不调整 contentOffset，避免与系统动画冲突导致闪烁
+        guard !isScrollingToTop else {
+            scrollStateBeforeLoadingMore = nil
             return
         }
 
-        guard let newIndexPath = conversationViewModel.indexPath(for: scrollState.referenceViewItem) else {
-            owsFailDebug("newIndexPath was unexpectedly nil")
-            isLoadingOlderItems = false
-            isLoadingNewerItems = false
+        guard let scrollState = self.scrollStateBeforeLoadingMore else {
+            return
+        }
+
+        guard let newIndexPath = conversationViewModel.indexPath(for: scrollState.referenceViewItem),
+              let layoutAttributes = collectionView.layoutAttributesForItem(at: newIndexPath) else {
+            scrollStateBeforeLoadingMore = nil
             return
         }
 
         // 强制布局更新，确保 cell 的位置是正确的
         collectionView.layoutIfNeeded()
 
-        // 使用 layoutAttributesForItem 而不是 cell.frame，因为它总是返回正确的布局信息
-        guard let layoutAttributes = collectionView.layoutAttributesForItem(at: newIndexPath) else {
-            owsFailDebug("layoutAttributes was unexpectedly nil")
-            return
-        }
-
         let newFrame = layoutAttributes.frame
-        // distance from top of cell to top of content pane.
         let previousDistance = scrollState.referenceFrame.origin.y - scrollState.contentOffset.y
         let newDistance = newFrame.origin.y - previousDistance
 
-        let newContentOffset = CGPointMake(0, newDistance)
-        collectionView.contentOffset = newContentOffset
-        isLoadingOlderItems = false
-        isLoadingNewerItems = false
+        collectionView.contentOffset = CGPoint(x: 0, y: newDistance)
+        scrollStateBeforeLoadingMore = nil
     }
     
     public func conversationViewModelDidUpdateLoadMoreStatus() {

@@ -487,29 +487,35 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)databaseChangesDidUpdateWithDatabaseChanges:(id<DatabaseChanges>)databaseChanges
 {
     OWSAssertIsOnMainThread();
-    
+
     // 避免数据未初始化完成时，因 db 变更触发的数据加载
     if (self.isLoadingInitialMessages) {
         OWSLogInfo(@"[Conversation] skip databaseChangesDidUpdate before the initial messages are loaded");
         return;
     }
 
-    OWSLogDebug(@"------> collectionView databaseChanges.threadUniqueIds:%@ \n interactionUniqueIds:%@", databaseChanges.threadUniqueIds, databaseChanges.interactionUniqueIds);
-    
-    if (![databaseChanges.threadUniqueIds containsObject:self.thread.uniqueId]) {
+    // Retain strongly and snapshot sets to prevent Swift ARC from releasing the
+    // bridged object while ObjC is still accessing its properties.
+    id<DatabaseChanges> changes = databaseChanges;
+    NSSet<NSString *> *threadIds = changes.threadUniqueIds;
+    NSSet<NSString *> *interactionIds = changes.interactionUniqueIds;
+
+    OWSLogDebug(@"------> collectionView databaseChanges.threadUniqueIds:%@ \n interactionUniqueIds:%@", threadIds, interactionIds);
+
+    if (![threadIds containsObject:self.thread.uniqueId]) {
         // Ignoring irrelevant update.
-        
+
         OWSLogDebug(@"[hot data] thread:%@ Ignoring irrelevant update. isFetchingData:%d.", self.thread.debugName, [self.messageMapping.isFetchingData get]);
         return;
     }
 
 //    if (!databaseChanges.interactionUniqueIds.count && !self.shouldShowThreadDetails) {
-    if (!databaseChanges.interactionUniqueIds.count) {
+    if (!interactionIds.count) {
         [self.delegate conversationViewModelDidUpdate:ConversationUpdate.minorUpdate transaction:nil completion:nil];
         return;
     }
 
-    [self anyDBDidUpdateWithUpdatedInteractionIds:databaseChanges.interactionUniqueIds];
+    [self anyDBDidUpdateWithUpdatedInteractionIds:interactionIds];
 }
 
 - (void)anyDBDidUpdateWithUpdatedInteractionIds:(NSSet<NSString *> *)updatedInteractionIds
@@ -1422,7 +1428,7 @@ NS_ASSUME_NONNULL_BEGIN
             && !self.thread.isWithoutReadRecipt
             && self.recipientReadPositions.count) {
             TSOutgoingMessage *message = (TSOutgoingMessage *)viewItem.interaction;
-            BOOL ignoreReadStatus = message.isConfidentialMessage && !self.thread.isGroupThread;
+            BOOL ignoreReadStatus = message.isConfidentialMessage;
             if ([message isKindOfClass:[TSOutgoingMessage class]] && !ignoreReadStatus){
                 //fix readstatus issue: The first time I received the group sync message, and the group members have not been synchronized to it.
                 if (message.sourceDeviceId != [OWSDevice currentDeviceId] &&

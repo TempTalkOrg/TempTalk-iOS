@@ -14,7 +14,7 @@ extension DTMeetingManager {
         if checkCloseAutoLeaveTimer() {
             //如果有弹窗，弹窗就取消掉
             Task { @MainActor in
-                self.hostRoomContentVC?.dismissAutoLipView()
+                self.dismissAutoLeaveTipView()
             }
             //有人在会 重置 倒计时等数据
             stopCheckTalking()
@@ -28,7 +28,7 @@ extension DTMeetingManager {
                 if DTMeetingManager.countDownInterval > self.meetingTimeoutResult {
                     //超过时间展示弹窗
                     Task { @MainActor in
-                        self.hostRoomContentVC?.showAutoLipView(self.checkSoloMember())
+                        self.showAutoLeaveTipView(self.checkSoloMember())
                     }
                     self.stopCheckTalking()
                 }
@@ -53,7 +53,7 @@ extension DTMeetingManager {
         if checkUpdateParticipantsCount() {
             Logger.info("\(logTag) auto leave meeting Participants change")
             Task { @MainActor in
-                self.hostRoomContentVC?.dismissAutoLipView()
+                self.dismissAutoLeaveTipView()
             }
             stopCheckTalking()
         }
@@ -119,5 +119,80 @@ extension DTMeetingManager {
     func banMicAlertCountdownDuration() -> Int {
         let callConfig = CallConfigManager.fetchCallConfig()
         return callConfig.runAfterReminderTimeoutResult / 1000
+    }
+
+    // MARK: - Background Lifecycle
+
+    func suspendAutoLeaveForBackground() {
+        Logger.info("\(logTag) suspending auto-leave for background")
+        stopCheckTalking()
+        Task { @MainActor in
+            self.dismissAutoLeaveTipView()
+        }
+    }
+
+    func resumeAutoLeaveIfNeeded() {
+        guard hasMeeting, roomContext != nil else { return }
+        Logger.info("\(logTag) resuming auto-leave check after foreground")
+        currentCallTalkingPop()
+    }
+
+    // MARK: - Auto Leave Tip View
+
+    @MainActor
+    func showAutoLeaveTipView(_ isSoloMember: Bool) {
+        guard !hasShowLeaveTipView else { return }
+        guard CurrentAppContext().isMainAppAndActive else {
+            Logger.info("\(logTag) skip showing auto-leave tip view in background")
+            return
+        }
+
+        let tipView = DTAutoLeaveTipView(confirmBlock: { [weak self] in
+            guard let self else { return }
+            self.autoLeaveTipView?.removeFromSuperview()
+            self.hasShowLeaveTipView = false
+            self.autoLeaveTipView?.stopTimeoutTimer()
+            self.autoLeaveTipView = nil
+            self.stopCheckTalking()
+            self.currentCallTalkingPop()
+            if self.currentCall.callType == .private {
+                Task { [weak self] in
+                    await self?.sendRemoteSyncContinueStatus()
+                }
+            }
+        }, timeoutBlock: { [weak self] in
+            guard let self else { return }
+            self.autoLeaveTipView?.removeFromSuperview()
+            self.hasShowLeaveTipView = false
+            self.autoLeaveTipView?.stopTimeoutTimer()
+            self.autoLeaveTipView = nil
+            self.stopCheckTalking()
+            Task { [weak self] in
+                guard let self else { return }
+                Logger.info("\(self.logTag) hangup auto leave meeting")
+                await self.hangupCall(needSyncCallKit: true, isByLocal: true)
+            }
+        })
+
+        let callWindow = OWSWindowManager.shared().callViewWindow
+        let topVC = callWindow.findTopViewController()
+
+        tipView.frame = topVC.view.bounds
+        tipView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        tipView.updateTipsLabel(isSoloMember)
+        tipView.startTimeoutTimer(UInt(reminderTimeoutResult))
+        topVC.view.addSubview(tipView)
+
+        self.autoLeaveTipView = tipView
+        hasShowLeaveTipView = true
+    }
+
+    @MainActor
+    func dismissAutoLeaveTipView() {
+        guard hasShowLeaveTipView else { return }
+        autoLeaveTipView?.stopTimeoutTimer()
+        autoLeaveTipView?.removeFromSuperview()
+        autoLeaveTipView = nil
+        hasShowLeaveTipView = false
     }
 }

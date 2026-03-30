@@ -355,19 +355,18 @@ extension ConversationViewController: UICollectionViewDelegate {
         _ collectionView: UICollectionView,
         targetContentOffsetForProposedContentOffset proposedContentOffset: CGPoint
     ) -> CGPoint {
-        
-        var newProposedContentOffset = proposedContentOffset
-        
-        if let lastKnownDistanceFromBottom,
-           (scrollContinuity == .top) {
-            
-            Logger.info("------1 proposedContentOffset:\(proposedContentOffset) lastKnownDistance:\(lastKnownDistanceFromBottom)")
-            
-            newProposedContentOffset = contentOffsetForLastKnownDistanceFromBottom(lastKnownDistanceFromBottom)
-            
-            Logger.info("------1 proposedContentOffset:\(newProposedContentOffset)")
+        guard !isScrollingToTop else { return proposedContentOffset }
+
+        guard let lastKnownDistanceFromBottom, scrollContinuity == .top else {
+            return proposedContentOffset
         }
-        
+
+        Logger.info("------1 proposedContentOffset:\(proposedContentOffset) lastKnownDistance:\(lastKnownDistanceFromBottom)")
+
+        let newProposedContentOffset = contentOffsetForLastKnownDistanceFromBottom(lastKnownDistanceFromBottom)
+
+        Logger.info("------1 proposedContentOffset:\(newProposedContentOffset)")
+
         return newProposedContentOffset
     }
     

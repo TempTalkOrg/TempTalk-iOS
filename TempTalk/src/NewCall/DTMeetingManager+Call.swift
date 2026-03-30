@@ -240,23 +240,25 @@ extension DTMeetingManager {
     {
         Logger.info("\(logTag) accept call base, current state: \(lifecycleState)")
 
-        // 防止重复调用
         guard !isAnswering else {
             DispatchMainThreadSafe {
                 DTToastHelper.hide()
                 DTToastHelper.dismiss(withInfo: Localized("ROOM_CONNECT_FAILED"))
             }
             Logger.error("\(logTag) already answering, ignore duplicate acceptCall")
+            if fromCallKit, let caller = currentCall.caller {
+                DTCallKitManager.shared().endCallAction(caller, onlyForCallKit: true)
+            }
             return
         }
 
-        // 状态恢复：如果状态卡在 disconnecting 但没有活跃的 roomContext，强制重置
+        isAnswering = true
+
         if lifecycleState == .disconnecting && roomContext == nil {
             Logger.warn("\(logTag) State stuck at disconnecting without roomContext, forcing reset to idle")
             forceTransition(to: .idle)
         }
 
-        // 检查状态：idle 或 connecting（showAnswer 已设置为 connecting）都可以接听
         let currentState = lifecycleState
         guard currentState == .idle || currentState == .connecting else {
             DispatchMainThreadSafe {
@@ -264,11 +266,12 @@ extension DTMeetingManager {
                 DTToastHelper.dismiss(withInfo: Localized("ROOM_CONNECT_FAILED"))
             }
             Logger.error("\(logTag) cannot accept call, current state: \(currentState)")
+            isAnswering = false
+            if fromCallKit, let caller = currentCall.caller {
+                DTCallKitManager.shared().endCallAction(caller, onlyForCallKit: true)
+            }
             return
         }
-
-        // 设置 isAnswering 标志，防止后续重复调用
-        isAnswering = true
 
         // 如果是 idle 状态，转换到 connecting
         if currentState == .idle {
@@ -283,20 +286,42 @@ extension DTMeetingManager {
 
         Logger.info("\(logTag) accept call with direct LiveKit connection, roomId: \(roomId)")
 
-        // Performance optimization: Clear critical alert messages asynchronously.
-        // This avoids blocking the CallKit callback chain (6s watchdog limit).
-        clearCriticalHightMessages()
+        let capturedRoomId = roomId
+        let capturedConversationId = currentCall.conversationId
+
+        clearCriticalHightMessagesAsync()
 
         Task {
             fromSource = "acceptCall"
 
-            // 检查并清理旧的连接
-            await ensureCleanConnectionState(roomId: roomId)
+            guard lifecycleState == .connecting else {
+                Logger.warn("\(logTag) state changed during async wait, aborting acceptCall")
+                isAnswering = false
+                if fromCallKit, let caller = currentCall.caller {
+                    await MainActor.run {
+                        DTCallKitManager.shared().endCallAction(caller, onlyForCallKit: true)
+                    }
+                }
+                return
+            }
+
+            await ensureCleanConnectionState(roomId: capturedRoomId)
+
+            guard lifecycleState == .connecting else {
+                Logger.warn("\(logTag) state changed during cleanup, aborting acceptCall")
+                isAnswering = false
+                if fromCallKit, let caller = currentCall.caller {
+                    await MainActor.run {
+                        DTCallKitManager.shared().endCallAction(caller, onlyForCallKit: true)
+                    }
+                }
+                return
+            }
 
             await connectDirectlyToLiveKit(
                 callType: type,
-                roomId: roomId,
-                conversationId: currentCall.conversationId,
+                roomId: capturedRoomId,
+                conversationId: capturedConversationId,
                 timestamp: Date.ows_millisecondTimestamp(),
                 isCaller: false,
                 fromCallKit: fromCallKit,
@@ -311,6 +336,26 @@ extension DTMeetingManager {
     func clearCriticalHightMessages() {
         if let conversationId = currentCall.conversationId, !conversationId.isEmpty {
             let callType = currentCall.callType
+            databaseStorage.asyncWrite { writeTransaction in
+                if callType == .private {
+                    if let contactThread = TSContactThread.getThread(contactId: conversationId, transaction: writeTransaction) {
+                        contactThread.removeCriticalAlertMsg(with: writeTransaction)
+                    }
+                } else {
+                    if let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId),
+                       let groupThread = TSGroupThread.getWithGroupId(localGroupId, transaction: writeTransaction)
+                    {
+                        groupThread.removeCriticalAlertMsg(with: writeTransaction)
+                    }
+                }
+            }
+        }
+    }
+
+    private func clearCriticalHightMessagesAsync() {
+        if let conversationId = currentCall.conversationId, !conversationId.isEmpty {
+            let callType = currentCall.callType
+            // 在后台异步执行，不阻塞当前流程
             databaseStorage.asyncWrite { writeTransaction in
                 if callType == .private {
                     if let contactThread = TSContactThread.getThread(contactId: conversationId, transaction: writeTransaction) {
@@ -369,8 +414,12 @@ extension DTMeetingManager {
                     DTToastHelper.hide()
                     DTToastHelper.dismiss(withInfo: Localized("ROOM_CONNECT_FAILED"))
                 }
-                // 创建 roomContext 失败时重置 isAnswering 标志
                 isAnswering = false
+                await hangupCall(needSyncCallKit: fromCallKit,
+                                 isByLocal: true,
+                                 forceEndGroupMeeting: false,
+                                 roomId: currentCall.roomId,
+                                 showErrorToast: false)
                 return
             }
 
@@ -382,15 +431,20 @@ extension DTMeetingManager {
 
             // 后连接
             await connectRoomSafely(fromCallKit: fromCallKit, connectOptions: connectOptions)
+
+            // 连接完成后，主动检查屏幕共享（onAppear 时 room 未连接，检测不到）
+            if fromCallKit {
+                await MainActor.run {
+                    roomContext?.checkAndPresentScreenShareIfNeeded()
+                }
+            }
         } catch {
             Logger.error("\(logTag) request token error: \(error)")
-            // 请求 token 失败时重置 isAnswering 标志
             isAnswering = false
-            await hangupCall(needSyncCallKit: false,
+            await hangupCall(needSyncCallKit: fromCallKit,
                              isByLocal: true,
                              forceEndGroupMeeting: false,
                              roomId: currentCall.roomId,
-                             removeMeetingBar: false,
                              showErrorToast: true)
         }
     }
@@ -462,7 +516,7 @@ extension DTMeetingManager {
     @MainActor
     private func ensureCleanConnectionState(roomId _: String?) async {
         guard let roomContext else {
-            Logger.error("\(logTag) no existing roomContext, connection state is clean")
+            Logger.info("\(logTag) no existing roomContext, connection state is clean")
             return
         }
 
@@ -470,33 +524,15 @@ extension DTMeetingManager {
         Logger.info("\(logTag) existing roomContext found, connectionState: \(connectionState)")
 
         if case .disconnected = connectionState {
-            Logger.info("\(logTag) roomContext already disconnected, cleaning up")
-            // 已断开，清理 roomContext
             self.roomContext = nil
         } else {
-            Logger.info("\(logTag) roomContext still connected/connecting")
-            // 正在连接或已连接，先断开
+            // Initiate disconnect but don't wait — clear reference immediately
             await roomContext.disconnect()
-
-            // Performance optimization: Reduced wait time from 2.0s to 0.5s
-            // to avoid CallKit watchdog timeout (6s limit).
-            // If disconnect takes longer, force cleanup anyway.
-            let maxWaitTime: TimeInterval = 0.5
-            let startTime = Date()
-            while roomContext.room.connectionState != .disconnected {
-                if Date().timeIntervalSince(startTime) > maxWaitTime {
-                    Logger.error("\(logTag) timeout waiting for disconnect, forcing cleanup")
-                    break
-                }
-                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms (reduced from 100ms)
-            }
-
-            Logger.info("\(logTag) disconnect completed, final state: \(roomContext.room.connectionState)")
-            // 清理 roomContext
             self.roomContext = nil
+            Logger.info("\(logTag) disconnect initiated, roomContext cleared immediately")
         }
-        // Performance optimization: Reduced delay from 200ms to 50ms
-        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        // Minimal yield to let RunLoop process once
+        try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
     }
 
     @MainActor
@@ -587,9 +623,15 @@ extension DTMeetingManager {
             Logger.info("\(logTag) hangup callkit room connect failed, error: \(error)")
             // 连接失败时重置 isAnswering 标志，允许重新尝试
             isAnswering = false
+            // 先捕获 roomId，hangupCall 执行后 currentCall 会被清空
+            let failedRoomId = currentCall.roomId
             await hangupCall(needSyncCallKit: fromCallKit)
             if let lkError = error as? LiveKitError, lkError.type == .startCall {
                 if lkError.response?.base.status == 22001 {
+                    // 会议已结束，无论 callType 都移除 meetingBar
+                    if let roomId = failedRoomId {
+                        handleMeetingBar(roomId: roomId, action: .remove)
+                    }
                     await DTToastHelper.dismiss(withInfo: Localized("CALL_NO_CONNECT_ENDED"))
                 } else {
                     await DTToastHelper.dismiss(withInfo: lkError.response?.base.reason ?? Localized("ROOM_CONNECT_FAILED"))
@@ -602,10 +644,18 @@ extension DTMeetingManager {
 
     func showAnswer(call: DTLiveKitCallModel, fromCallKit: Bool = false, onPlaySound: (() -> Void)? = nil) {
         Logger.info("\(logTag) show answer controller: fromCallKit=\(fromCallKit)")
+
+        if !fromCallKit, isFromCallkit, currentCall.roomId == call.roomId {
+            Logger.info("\(logTag) already answered via CallKit, skipping incoming call UI")
+            return
+        }
+
         currentCall = call
         hasMeeting = true
         hasTriggeredRating = false
-        isFromCallkit = fromCallKit
+        if fromCallKit {
+            isFromCallkit = true
+        }
 
         guard let publicKey = call.publicKey, let emk = call.emk else {
             Logger.error("\(logTag) publicKey or emk is nil.")
@@ -628,11 +678,24 @@ extension DTMeetingManager {
         Task {
             if fromCallKit {
                 Logger.info("\(logTag) answer from CallKit")
-                handleMeetingBar(call: call, action: .add)
+
+                if let existingAnswerVC = answerVC {
+                    Logger.info("\(logTag) dismissing existing answerVC before CallKit answer")
+                    await MainActor.run {
+                        OWSWindowManager.shared().endCall(existingAnswerVC) {}
+                        self.answerVC = nil
+                    }
+                }
 
                 answerCall(caller: caller, roomId: roomId, publicKey: publicKey, emk: emk, fromCallKit: true)
                 onPlaySound?()
 
+                // ✅ UI update runs async, doesn't block the answer flow
+                Task { @MainActor in
+                    handleMeetingBar(call: call, action: .add)
+                }
+
+                // ✅ Async room validity check — doesn't block answering
                 Task.detached { [weak self] in
                     guard let self else { return }
                     if let result = await DTMeetingManager.checkRoomIdValid(roomId) {
@@ -642,7 +705,6 @@ extension DTMeetingManager {
                                 needSyncCallKit: true,
                                 isByLocal: true,
                                 roomId: roomId,
-                                removeMeetingBar: true,
                                 showErrorToast: true
                             )
                         }
@@ -658,11 +720,77 @@ extension DTMeetingManager {
                     return
                 }
 
+                // Final check after network call completes
+                if isFromCallkit, currentCall.roomId == roomId {
+                    Logger.info("\(logTag) already answered via CallKit (post-network check), skipping incoming call UI")
+                    return
+                }
+
                 onPlaySound?()
 
                 DispatchMainThreadSafe {
                     self.startCallTimeoutTimer()
                     self.presentAnswerVC(call: call, caller: caller, roomId: roomId, publicKey: publicKey, emk: emk)
+                }
+            }
+        }
+    }
+
+    /// CallKit 专用接听入口 — 在 Swift concurrency Task 上下文中调用，不经过主线程
+    /// 避免 DispatchMainThreadSafe 导致的主线程阻塞，防止 0xBAADCA11 watchdog timeout
+    func showAnswerFromCallKit(call: DTLiveKitCallModel) async {
+        Logger.info("\(logTag) showAnswerFromCallKit entry")
+
+        await MainActor.run {
+            currentCall = call
+            hasMeeting = true
+            hasTriggeredRating = false
+            isFromCallkit = true
+        }
+
+        guard let publicKey = call.publicKey, let emk = call.emk else {
+            Logger.error("\(logTag) publicKey or emk is nil.")
+            DTToastHelper.showCallToast("Unkonwn caller information")
+            return
+        }
+
+        guard let caller = call.caller else {
+            Logger.error("\(logTag) No caller information.")
+            DTToastHelper.showCallToast("Unkonwn caller information")
+            return
+        }
+
+        guard let roomId = call.roomId else {
+            Logger.error("\(logTag) No roomId information.")
+            DTToastHelper.showCallToast("Unkonwn call information")
+            return
+        }
+
+        Logger.info("\(logTag) answer from CallKit (async path)")
+
+        // ✅ Start answering on cooperative thread pool — not main thread
+        answerCall(caller: caller, roomId: roomId, publicKey: publicKey, emk: emk, fromCallKit: true)
+
+        // ✅ MeetingBar DB write is already async internally, fire-and-forget
+        Task.detached { [weak self] in
+            guard let self else { return }
+            await MainActor.run {
+                self.handleMeetingBar(call: call, action: .add)
+            }
+        }
+
+        // ✅ Room validity check — fully detached, doesn't block answering
+        Task.detached { [weak self] in
+            guard let self else { return }
+            if let result = await DTMeetingManager.checkRoomIdValid(roomId) {
+                if result.anotherDeviceJoined || result.userStopped {
+                    Logger.info("\(self.logTag) roomId invalid, hanging up after CallKit answer")
+                    await self.hangupCall(
+                        needSyncCallKit: true,
+                        isByLocal: true,
+                        roomId: roomId,
+                        showErrorToast: true
+                    )
                 }
             }
         }

@@ -461,8 +461,7 @@ extension AppSettingsViewController : UITableViewDelegate,UITableViewDataSource 
     }
     
     func presentFeedbackView() {
-        let thread = TSContactThread.getOrCreateThread(contactId: TSConstants.officialBotId)
-        SignalApp.shared().presentTargetConversation(for: thread, action: .none, focusMessageId: nil)
+        showProfileCardInfo(with: TSConstants.officialBotId, isFromSameThread: false, isPresent: false, isFromContacts: true)
     }
 }
 

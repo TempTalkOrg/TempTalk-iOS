@@ -34,7 +34,7 @@ public class DTRTCAudioSession: NSObject {
 
     private weak var observer: DTRTCAudioSessionObserver?
 
-    private var activeObjects = NSHashTable<AnyObject>.weakObjects()
+    private weak var currentActiveObject: AnyObject?
 
     private let rtcConfVoice = AudioSessionConfiguration(
         category: OWSAudioSession.shared.rtcCategory,
@@ -64,7 +64,8 @@ public class DTRTCAudioSession: NSObject {
 
     private var routeChangeToken: NSObjectProtocol?
     private var hasCalledDisconnect: Bool = false
-    private var hasInCalling: Bool = false
+    private var hasInCalling: Bool { currentActiveObject != nil }
+    private var prepareToProcessNewCallkitCall: Bool = false
 
     override private init() {
         super.init()
@@ -101,7 +102,7 @@ public class DTRTCAudioSession: NSObject {
             Logger.error("set microphoneMuteMode failed with error: \(error)")
         }
 
-        setAudioManagerEngineAvailability(false, "RTC init")
+        setAudioManagerEngineAvailability(.none, "RTC init")
     }
 
     deinit {
@@ -116,22 +117,22 @@ public class DTRTCAudioSession: NSObject {
         objc_sync_enter(self)
         defer { objc_sync_exit(self) }
 
-        Logger.info("step1: speaker: \(speaker), hasInCalling: \(hasInCalling), activeObjects.count: \(activeObjects.count)")
+        Logger.info("step1: speaker: \(speaker), hasInCalling: \(hasInCalling)")
+
+        if hasInCalling {
+            Logger.info("callkitReceiveCall: already in calling, ignore")
+            return
+        }
 
         isAutomaticConfigurationEnabled = false
-        setAudioManagerEngineAvailability(false, "callkit receive call")
+        setAudioManagerEngineAvailability(.none, "callkit receive call")
 
-        do {
-            let config = if speaker, Self.callkitUseVideoMode {
-                rtcConfVideo
-            } else {
-                rtcConfVoice
-            }
-            Logger.info("AudioSession configuring category to: \(config)")
-            try session.setCategory(config.category, mode: config.mode, options: config.categoryOptions)
-        } catch {
-            Logger.error("failed with error: \(error)")
+        let config = if speaker, Self.callkitUseVideoMode {
+            rtcConfVideo
+        } else {
+            rtcConfVoice
         }
+        safeSetAudioSessionCategory(config, "callkit receive call")
     }
 
     @objc
@@ -139,22 +140,21 @@ public class DTRTCAudioSession: NSObject {
         objc_sync_enter(self)
         defer { objc_sync_exit(self) }
 
-        Logger.info("step1: speaker: \(speaker), hasInCalling: \(hasInCalling), activeObjects.count: \(activeObjects.count)")
+        Logger.info("step1: speaker: \(speaker), hasInCalling: \(hasInCalling)")
+
+        if hasInCalling {
+            return
+        }
 
         isAutomaticConfigurationEnabled = false
-        setAudioManagerEngineAvailability(false, "callkit start call")
+        setAudioManagerEngineAvailability(.none, "callkit start call")
 
-        do {
-            let config = if speaker, Self.callkitUseVideoMode {
-                rtcConfVideo
-            } else {
-                rtcConfVoice
-            }
-            Logger.info("AudioSession configuring category to: \(config)")
-            try session.setCategory(config.category, mode: config.mode, options: config.categoryOptions)
-        } catch {
-            Logger.error("failed with error: \(error)")
+        let config = if speaker, Self.callkitUseVideoMode {
+            rtcConfVideo
+        } else {
+            rtcConfVoice
         }
+        safeSetAudioSessionCategory(config, "callkit start call")
     }
 
     @objc
@@ -162,45 +162,31 @@ public class DTRTCAudioSession: NSObject {
         objc_sync_enter(self)
         defer { objc_sync_exit(self) }
 
+        prepareToProcessNewCallkitCall = true
+        isAutomaticConfigurationEnabled = false
+
         Logger.info("step2: answer: \(answer), hasInCalling: \(hasInCalling)")
         // do nothing
     }
 
     @objc
     func callkitDidActivateAudioSession(_: AVAudioSession, speaker: Bool) {
-        Logger.info("step3: speaker: \(speaker), hasInCalling: \(hasInCalling), activeObjects.count: \(activeObjects.count)")
-
         objc_sync_enter(self)
         defer { objc_sync_exit(self) }
 
+        Logger.info("step3: speaker: \(speaker), hasInCalling: \(hasInCalling) in")
+
         isAutomaticConfigurationEnabled = false
 
-        do {
-            let config = if speaker, Self.callkitUseVideoMode {
-                rtcConfVideo
-            } else {
-                rtcConfVoice
-            }
-            Logger.info("AudioSession configuring category to: \(config)")
-            try session.setCategory(config.category, mode: config.mode, options: config.categoryOptions)
-        } catch {
-            Logger.error("failed with error: \(error)")
+        let config = if speaker, Self.callkitUseVideoMode {
+            rtcConfVideo
+        } else {
+            rtcConfVoice
         }
+        safeSetAudioSessionCategory(config, "callkit active audio session")
 
         if !Self.callkitUseVideoMode {
-            do {
-                Logger.info("AudioSession overrideOutputAudioPort(\(speaker))...")
-                try session.overrideOutputAudioPort(speaker ? .speaker : .none)
-            } catch {
-                Logger.error("AudioSession failed to overrideOutputAudioPort(\(speaker)) with error: \(error)")
-            }
-        }
-
-        setAudioManagerEngineAvailability(true, "callkit active audio session")
-
-        Task {
-            // 解决没有本地没有开启mic采集的时候无法播放其他人声音， only for inputMixer
-            await setAudioManagerRecordingAlwaysPreparedMode(true, "callkit active audio session")
+            safeAudioSessionOverrideOutputAudioPort(speaker, "callkit active audio session")
         }
 
         Logger.info("step3: speaker: \(speaker) end")
@@ -211,22 +197,31 @@ public class DTRTCAudioSession: NSObject {
         objc_sync_enter(self)
         defer { objc_sync_exit(self) }
 
-        setAudioManagerEngineAvailability(false, "callkit deactive audio session")
+        if prepareToProcessNewCallkitCall {
+            Logger.info("ignore deactivation due to prepareToProcessNewCallkitCall")
+        } else {
+            // TODO: Temporary fallback for a no-audio issue after answering the first CallKit call. When returning to the foreground and receiving a new incoming call,
+            // audio may fail to play because OWSAudioSession.inCalling is set to true too early. Remove this fallback after fixing the early state update.
+            safeSetAudioSessionCategory(rtcConfPlayback, "callkit deactive audio session")
+
+            setAudioManagerEngineAvailability(.none, "callkit deactive audio session")
+        }
     }
 
     public func connectRoomConfig(_ obj: AnyObject, fromCallKit: Bool) async {
         objc_sync_enter(self)
         defer { objc_sync_exit(self) }
 
-        let hasObj = activeObjects.contains(obj)
+        guard currentActiveObject == nil else {
+            let currentObj = currentActiveObject.map { Unmanaged.passUnretained($0).toOpaque() }
+            Logger.info("connectRoomConfig ignored: currentObj=\(String(describing: currentObj)) newObj=\(Unmanaged.passUnretained(obj).toOpaque())")
+            return
+        }
 
-        Logger.info("fromCallKit: \(fromCallKit) hasObj=\(hasObj) obj=\(Unmanaged.passUnretained(obj).toOpaque())")
+        currentActiveObject = obj
+        Logger.info("fromCallKit: \(fromCallKit) newObj=\(Unmanaged.passUnretained(obj).toOpaque())")
 
-        guard !hasObj else { return }
-
-        activeObjects.add(obj)
-
-        let speaker = DTMeetingManager.shared.currentCall.callType != .private
+        let speaker = shouldUseSpeakerInternal(DTMeetingManager.shared.currentCall.callType != .private)
 
         Logger.info("speaker: \(speaker), hasInCalling: \(hasInCalling)")
 
@@ -234,37 +229,30 @@ public class DTRTCAudioSession: NSObject {
             $0.isAutomaticConfigurationEnabled = !fromCallKit
             $0.isSpeakerOutputPreferred = speaker
             hasCalledDisconnect = false
-            // 这样可以正确处理多个会议同时存在的情况
-            hasInCalling = (activeObjects.count > 0)
+            prepareToProcessNewCallkitCall = false
         }
 
         if fromCallKit { return }
 
-        setAudioManagerEngineAvailability(true, "pre connect room")
-        // 解决没有本地没有开启mic采集的时候无法播放其他人声音， only for inputMixer
-        await setAudioManagerRecordingAlwaysPreparedMode(true, "pre connect room")
+        // TODO: implement the rest of the connectRoomConfig logic
     }
 
     public func disconnectRoomConfig(_ obj: AnyObject) async {
         objc_sync_enter(self)
         defer { objc_sync_exit(self) }
 
-        let hasObj = activeObjects.contains(obj)
+        guard let currentObj = currentActiveObject, currentObj === obj else {
+            let currentObjPtr = currentActiveObject.map { Unmanaged.passUnretained($0).toOpaque() }
+            Logger.info("disconnectRoomConfig ignored: currentObj=\(String(describing: currentObjPtr)) incomingObj=\(Unmanaged.passUnretained(obj).toOpaque())")
+            return
+        }
 
-        Logger.info("hasObj=\(hasObj) obj=\(Unmanaged.passUnretained(obj).toOpaque())")
-
-        guard hasObj else { return }
-
-        activeObjects.remove(obj)
+        currentActiveObject = nil
+        Logger.info("obj=\(Unmanaged.passUnretained(obj).toOpaque())")
 
         hasCalledDisconnect = true
 
-        let stillHasActiveCalls = (activeObjects.count > 0)
-        hasInCalling = stillHasActiveCalls
-
-        if !stillHasActiveCalls {
-            await setAudioManagerRecordingAlwaysPreparedMode(false, "disconnect room - no more calls")
-        }
+        await setAudioManagerRecordingAlwaysPreparedMode(false, "disconnect room")
     }
 
     public func switchToSpeaker(_ speaker: Bool) {
@@ -284,22 +272,32 @@ public class DTRTCAudioSession: NSObject {
             }
 
             if needOverride {
-                do {
-                    Logger.info("switchToSpeaker overrideOutputAudioPort(\(speaker))...")
-                    try session.overrideOutputAudioPort(speaker ? .speaker : .none)
-                } catch {
-                    Logger.error("switchToSpeaker failed to overrideOutputAudioPort(\(speaker)) with error: \(error)")
-                }
+                safeAudioSessionOverrideOutputAudioPort(speaker, "switchToSpeaker")
             }
         }
     }
 
-    private func setAudioManagerEngineAvailability(_ enable: Bool, _ reason: String) {
+    @objc
+    func shouldUseSpeaker(_ speaker: Bool) -> Bool {
+        objc_sync_enter(self)
+        defer { objc_sync_exit(self) }
+
+        return shouldUseSpeakerInternal(speaker)
+    }
+
+    public func connectRoomSuccessConfig() async {
+        setAudioManagerEngineAvailability(.default, "connect room success")
+
+        // Ensure remote audio can still play even when local mic capture is not started; only for inputMixer.
+        await setAudioManagerRecordingAlwaysPreparedMode(true, "connect room success")
+    }
+
+    private func setAudioManagerEngineAvailability(_ availability: AudioEngineAvailability, _ reason: String) {
         do {
-            try AudioManager.shared.setEngineAvailability(enable ? .default : .none)
-            Logger.info("setEngineAvailability success: \(enable ? ".default" : ".none"), reason=\(reason)")
+            try AudioManager.shared.setEngineAvailability(availability)
+            Logger.info("setEngineAvailability success: \(availability.pretty), reason=\(reason)")
         } catch {
-            Logger.error("setEngineAvailability failed with error: \(enable ? ".default" : ".none"), reason=\(reason), error=\(error)")
+            Logger.error("setEngineAvailability failed with availability: \(availability.pretty), reason=\(reason), error=\(error)")
         }
     }
 
@@ -310,6 +308,37 @@ public class DTRTCAudioSession: NSObject {
             Logger.info("setRecordingAlwaysPreparedMode end success: \(enable), reason=\(reason)")
         } catch {
             Logger.error("setRecordingAlwaysPreparedMode end failed with error: \(enable), reason=\(reason), error=\(error)")
+        }
+    }
+
+    private func safeSetAudioSessionCategory(_ config: AudioSessionConfiguration, _ reason: String) {
+        do {
+            Logger.info("setAudioSessionCategory(reason=\(reason)) to: \(config)")
+            try session.setCategory(config.category, mode: config.mode, options: config.categoryOptions)
+        } catch {
+            Logger.error("setAudioSessionCategory(reason=\(reason)) failed with error: \(error)")
+        }
+    }
+
+    private func safeAudioSessionOverrideOutputAudioPort(_ speaker: Bool, _ reason: String) {
+        do {
+            Logger.info("overrideOutputAudioPort(reason=\(reason)): \(speaker ? "speaker" : "none")")
+            try session.overrideOutputAudioPort(speaker ? .speaker : .none)
+        } catch {
+            Logger.error("overrideOutputAudioPort(reason=\(reason)) failed with error: \(error)")
+        }
+    }
+
+    private func safeSetAudioSessionActive(_ active: Bool, _ reason: String) {
+        do {
+            Logger.info("setAudioSessionActive(reason=\(reason)): \(active)")
+            if active {
+                try session.setActive(true)
+            } else {
+                try session.setActive(false, options: .notifyOthersOnDeactivation)
+            }
+        } catch {
+            Logger.error("setAudioSessionActive(reason=\(reason)) failed with error: \(error)")
         }
     }
 }
@@ -378,6 +407,10 @@ public extension DTRTCAudioSession {
         } else {
             isExternalDeviceConnected()
         }
+    }
+
+    internal func shouldUseSpeakerInternal(_ speaker: Bool) -> Bool {
+        speaker && !isExternalConnected()
     }
 
     internal func checkOutputStatus() {
@@ -556,17 +589,10 @@ extension DTRTCAudioSession: AudioEngineObserver, @unchecked Sendable {
             if newState.isAutomaticDeactivationEnabled {
                 do {
                     if hasCalledDisconnect {
-                        do {
-                            let config = rtcConfPlayback
-                            Logger.info("AudioSession deactive configuring category to: \(config)")
-                            try session.setCategory(config.category, mode: config.mode, options: config.categoryOptions)
-                        } catch {
-                            Logger.error("AudioSession deactive failed to configure with error: \(error)")
-                        }
+                        safeSetAudioSessionCategory(rtcConfPlayback, "configuring")
                     }
 
-                    Logger.info("AudioSession deactivating...")
-                    try session.setActive(false, options: .notifyOthersOnDeactivation)
+                    safeSetAudioSessionActive(false, "configuring")
                 } catch {
                     Logger.error("AudioSession failed to deactivate with error: \(error)")
                 }
@@ -583,36 +609,21 @@ extension DTRTCAudioSession: AudioEngineObserver, @unchecked Sendable {
                 playAndRecord
             }
 
-            do {
-                Logger.info("AudioSession configuring category to: \(config)")
-                try session.setCategory(config.category, mode: config.mode, options: config.categoryOptions)
-            } catch {
-                Logger.error("AudioSession failed to configure with error: \(error)")
-            }
+            safeSetAudioSessionCategory(config, "configuring")
 
             if !oldState.isPlayoutEnabled, !oldState.isRecordingEnabled {
-                do {
-                    Logger.info("AudioSession activating...")
-                    try session.setActive(true)
-                } catch {
-                    Logger.error("AudioSession failed to activate AudioSession with error: \(error)")
-                }
+                safeSetAudioSessionActive(true, "configuring")
             }
 
-            // 修复使用了系统音频路由切换[AVRoutePickerView], 仅设置setConfiguration不会切换的问题
+            // Fix route switching via AVRoutePickerView: setConfiguration alone may not apply the output route change.
             if config != rtcConfPlayback, newState.isEngineWillEnable == true, newState.isSpeakerOutputPreferred == oldState.isSpeakerOutputPreferred, forceSet {
-                do {
-                    Logger.info("AudioSession overrideOutputAudioPort(\(newState.isSpeakerOutputPreferred))...")
-                    try session.overrideOutputAudioPort(newState.isSpeakerOutputPreferred ? .speaker : .none)
-                } catch {
-                    Logger.error("AudioSession failed to overrideOutputAudioPort(\(newState.isSpeakerOutputPreferred)) with error: \(error)")
-                }
+                safeAudioSessionOverrideOutputAudioPort(newState.isSpeakerOutputPreferred, "configuring")
             }
         }
     }
 
     public func engineWillEnable(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
-        // session 配置需要在这个方法之前完成，否则可能错误导致没有声音
+        // The audio session must be configured before this method; otherwise it may cause no-audio issues.
         Logger.info("engineWillEnable beg: isPlayoutEnabled=\(isPlayoutEnabled) isRecordingEnabled=\(isRecordingEnabled)")
         _state.mutate {
             $0.isPlayoutEnabled = isPlayoutEnabled
@@ -709,4 +720,23 @@ extension AVAudioSession.RouteChangeReason {
     }
 
     var prettyWithRaw: String { "\(pretty)(\(rawValue))" }
+}
+
+extension AudioEngineAvailability {
+    static let onlyOutput = AudioEngineAvailability(isInputAvailable: false, isOutputAvailable: true)
+
+    var pretty: String {
+        let mode = switch (isInputAvailable, isOutputAvailable) {
+        case (false, false):
+            "none"
+        case (true, true):
+            "default"
+        case (false, true):
+            "onlyOutput"
+        case (true, false):
+            "onlyInput"
+        }
+
+        return mode
+    }
 }

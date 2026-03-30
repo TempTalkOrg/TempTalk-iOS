@@ -296,7 +296,8 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
 
         Logger.info("\(logTag) Presenting initial root view controller")
 
-        if ScreenLock.shared.isScreenLockOpened() {
+        let isMeetingActive = CurrentAppContext().appUserDefaults().bool(forKey: TSConstants.kSharedMeetingActiveKey)
+        if ScreenLock.shared.isScreenLockOpened() && !isMeetingActive {
             presentScreenLock()
         } else {
             presentContentView()

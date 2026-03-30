@@ -573,6 +573,7 @@
 "CONVERSATION_SETTINGS_SAVE_TO_ALBUM_NEVER" = "Never";
 "CONVERSATION_SETTINGS_SAVE_TO_ALBUM_TIP" = "Automatically save received photos and videos to Photos; items won’t be saved in Confidential Mode.";
 
+"CONVERSATION_SETTINGS_NAME_CARD" = "Name Card";
 "CONVERSATION_SETTINGS_SEARCH_HISTORY" = "Search Chat History";
 
 "CONVERSATION_SETTINGS_GROUP_IN_COMMON" = "Group in Common";
@@ -2129,7 +2130,7 @@
 "ENTER_CODE_TITLE" = "Add Contact";
 "ENTER_CODE_TIPS" = "Enter a code to add a new friend";
 "ENTER_CODE_PLACEHOLDER" = "Enter a 4-digit code or contact ID";
-"ENTER_CODE_ADD_BUTTON" = "Add";
+"ENTER_CODE_ADD_BUTTON" = "Search";
 "ENTER_CODE_ERRORTIPS" = "The code is not correct, please try again";
 "ENTER_CODE_CONTACT_NAME_ERROR" = "The contact ID is not correct, please try again";
 "ENTER_CODE_MYCODE" = "My Code";
@@ -3211,7 +3212,9 @@
 "PERSON_CARD_LIKE_SUCESS" = "Liked successfully!";
 "PERSON_CARD_LIKE_FAILED" = "Liked failed!";
 "PERSON_CARD_SEND_MESSAGE" = "Message";
+"PERSON_CARD_ADD_AND_SEND_MESSAGE" = "Add & Message";
 "PERSON_CARD_VOICE_CALL" = "Call";
+"NON_FRIEND_ONLY_TEXT_MESSAGE" = "Non-friends can only send text messages";
 "PERSON_CARD_SHARE_CARD" = "Share";
 
 "LOGIN_ERROR" = "Email/Code/Phone Error";
@@ -3730,7 +3733,7 @@
 "CONFIDENTIAL_MESSAGE_VIEW_ALERT_TITLE" = "Confidential Messages";
 
 /* Alert message for confidential message (first time enable or view) */
-"CONFIDENTIAL_MESSAGE_VIEW_ALERT_MESSAGE" = "Read once, then gone.";
+"CONFIDENTIAL_MESSAGE_VIEW_ALERT_MESSAGE" = "Read once, then gone";
 
 "IMAGE_PREVIEW_ADD_MESSAGE" = "Add Message";
 "CONFIRM_DISBAND_GROUP_DESCRIPTION" = "The data of this group will be deleted and all of the members in this group will be removed at the same time.";
@@ -3967,3 +3970,7 @@
 "CRITICAL_ALERT_CONFIRM_DESC_GROUP_WITH_INVITED_MORE" = "Send to group members who have not joined and invited users (%@, and %d more)";
 
 "CONVERSATION_CONFIDENTIAL_INFO_MESSAGE" = "Confidential message has been viewed";
+
+"PERSON_CARD_OFFICIAL_ACCOUNT" = "Official Account";
+
+"PERSON_CARD_WEBSITE" = "Website";

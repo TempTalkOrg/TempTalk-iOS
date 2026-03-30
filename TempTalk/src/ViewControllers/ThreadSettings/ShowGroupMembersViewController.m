@@ -422,6 +422,12 @@ OWSTableViewControllerDelegate>
 
 - (void)showContactInfoViewForRecipientId:(NSString *)recipientId
 {
+    // Convert thread.uniqueId to groupModel.groupId using transformToServerGroupId
+    if ([self.thread isKindOfClass:[TSGroupThread class]]) {
+        TSGroupThread *groupThread = (TSGroupThread *)self.thread;
+        NSString *groupIdStr = [TSGroupThread transformToServerGroupIdWithLocalGroupId:groupThread.groupModel.groupId];
+        [[DTAddFriendSourceManager shared] setGroupSource:DTSourceToPersonalCardTypeInGroupMemberUserIcon groupId:groupIdStr ?: @""];
+    }
     [self showProfileCardInfoWith:recipientId isFromSameThread:false isPresent:false isFromContacts:true];
 }
 

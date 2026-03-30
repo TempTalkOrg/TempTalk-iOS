@@ -18,8 +18,10 @@ final class ConversationViewController: OWSViewController {
     var conversationViewModel: ConversationViewModel
     /// 存储已经处理过的cell
     var handledMessageIds: Set<String> = []
-    /// 存储已查看的机密占位消息ID
+    /// 存储已查看的机密占位消息ID（用于离开会话时批量删除兜底）
     private var viewedPlaceholderIds: Set<String> = []
+    /// 存储机密占位消息的定时删除 timer，key 为 uniqueId
+    private var placeholderDismissTimers: [String: Timer] = [:]
 
     var joinCallView = ConversationJoinCallView()
 
@@ -308,11 +310,7 @@ final class ConversationViewController: OWSViewController {
         animated flag: Bool,
         completion: (() -> Void)? = nil
     ) {
-        // 尝试收起键盘，如果保护启用会被拦截
         dismissKeyBoard()
-        if viewState.isKeyboardProtectionEnabled {
-            Logger.info("[Keyboard] Present ViewController, keyboard protected and not dismissed")
-        }
         super.present(viewControllerToPresent, animated: flag, completion: completion)
     }
     
@@ -323,9 +321,12 @@ final class ConversationViewController: OWSViewController {
 
     // MARK: - Confidential Placeholder Management
 
+    /// 兜底：离开会话时删除所有还未被定时器处理的占位消息
     private func batchDeleteViewedPlaceholders() {
-        guard !viewedPlaceholderIds.isEmpty else { return }
+        placeholderDismissTimers.values.forEach { $0.invalidate() }
+        placeholderDismissTimers.removeAll()
 
+        guard !viewedPlaceholderIds.isEmpty else { return }
         let placeholderIds = viewedPlaceholderIds
         viewedPlaceholderIds.removeAll()
 
@@ -338,17 +339,36 @@ final class ConversationViewController: OWSViewController {
                       placeholder.messageType == .confidentialViewed else {
                     continue
                 }
-
-                // Remove the placeholder directly without redundant update
                 placeholder.anyRemove(transaction: transaction)
             }
         }
     }
 
     func addViewedPlaceholder(_ uniqueId: String) {
-        // Check if already processed to avoid duplicate database operations
         guard !viewedPlaceholderIds.contains(uniqueId) else { return }
         viewedPlaceholderIds.insert(uniqueId)
+
+        // 3s 后自动删除，触发 collection view 的单条删除动画
+        let timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+            self?.deletePlaceholder(uniqueId: uniqueId)
+        }
+        placeholderDismissTimers[uniqueId] = timer
+    }
+
+    private func deletePlaceholder(uniqueId: String) {
+        placeholderDismissTimers.removeValue(forKey: uniqueId)
+        viewedPlaceholderIds.remove(uniqueId)
+
+        databaseStorage.asyncWrite { transaction in
+            guard let placeholder = TSInfoMessage.anyFetch(
+                uniqueId: uniqueId,
+                transaction: transaction
+            ) as? TSInfoMessage,
+                  placeholder.messageType == .confidentialViewed else {
+                return
+            }
+            placeholder.anyRemove(transaction: transaction)
+        }
     }
 }
 
@@ -391,6 +411,10 @@ extension ConversationViewController {
     override func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
         
+        if view.safeAreaInsets.bottom > 50 {
+            return
+        }
+
         updateContentInsets(animated: false)
     }
 }
@@ -438,7 +462,8 @@ extension ConversationViewController {
                     groupNotifyEntity: nil,
                     transaction: transaction
                 )
-                transaction.addAsyncCompletionOnMain {
+                transaction.addAsyncCompletionOnMain { [weak self] in
+                    guard let self else { return }
                     guard let newThread else {
                         self.navigationController?.popViewController(animated: true)
                         return
@@ -749,11 +774,7 @@ extension ConversationViewController {
     }
     
     private func applyThemeForInputToolBar() {
-        // 尝试收起键盘，如果保护启用会被拦截
-        dismissKeyBoard()
-        if viewState.isKeyboardProtectionEnabled {
-            Logger.info("[Keyboard] Apply theme for input toolbar, keyboard protected and not dismissed")
-        }
+        Logger.info("[Keyboard] applyThemeForInputToolBar, isFirstResponder=\(inputToolbar.inputTextView.isFirstResponder), textLen=\(inputToolbar.inputTextView.text?.count ?? 0)")
         recreateInputToolbar()
         reloadBottomBar()
     }

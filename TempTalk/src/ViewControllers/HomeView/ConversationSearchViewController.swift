@@ -260,11 +260,13 @@ class ConversationSearchViewController: UITableViewController {
             let date = TimeZoneUntil.timeZoneFrom(contact: contact).orEmpty
             let remarkName = item.signalAccount.remarkName
 
-            if contact.fullName.lowercased().contains(keyword) || searcher.noteSearchKey.contains(keyword) {
+            let hasRealName = contact.fullName != item.recipientId
+            let nameMatches = hasRealName && contact.fullName.lowercased().contains(keyword)
+            if nameMatches || searcher.noteSearchKey.contains(keyword) {
                 var name = contact.fullName
-                                if item.recipientId == TSAccountManager.localNumber() {
-                                    name = Localized("LOCAL_ACCOUNT_DISPLAYNAME")
-                                }
+                if item.recipientId == TSAccountManager.localNumber() {
+                    name = Localized("LOCAL_ACCOUNT_DISPLAYNAME")
+                }
 
                 let attribute = gengertAttribute(name, match: keyword, font: SearchFonts.body, color: Theme.tprimaryColor)
                 let others: [String] = [
@@ -290,21 +292,23 @@ class ConversationSearchViewController: UITableViewController {
                 let attribute = gengertAttribute(signature, match: keyword)
                 let others: [String?] = [remarkName, contact.email]
                 let shouldRender = others.first { $0?.isEmpty == false } ?? .empty
-                renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: .attribute(attribute), email: .normal(shouldRender.orEmpty), date: date))
+                let displayName = hasRealName ? contact.fullName : (remarkName ?? item.recipientId)
+                renderRows.append(.contact(icon: iconRender, name: .normal(displayName), sign: .attribute(attribute), email: .normal(shouldRender.orEmpty), date: date))
 
             } else if let email = contact.email, email.lowercased().contains(keyword) {
                 let attribute = gengertAttribute(email, match: keyword)
+                let displayName = hasRealName ? contact.fullName : (remarkName ?? item.recipientId)
                 let others: [String] = [
                     remarkName.orEmpty, contact.signature.orEmpty
                 ]
                 guard let firstIndex = others.firstIndex(where: { !$0.isEmpty }) else {
-                    renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: .attribute(attribute), email: .normal(.empty), date: date))
+                    renderRows.append(.contact(icon: iconRender, name: .normal(displayName), sign: .attribute(attribute), email: .normal(.empty), date: date))
                     continue
                 }
                 let shouldRender = others[safe: firstIndex].orEmpty
                 let sign: RenderText = firstIndex == 0 ? .normal(shouldRender) : .attribute(attribute)
                 let email: RenderText = firstIndex == 0 ? .attribute(attribute) : .normal(shouldRender)
-                renderRows.append(.contact(icon: iconRender, name: .normal(contact.fullName), sign: sign, email: email, date: date))
+                renderRows.append(.contact(icon: iconRender, name: .normal(displayName), sign: sign, email: email, date: date))
             }
         }
         if renderRows.count >= kDefaultShowMoreNum && contacts.count > renderRows.count {

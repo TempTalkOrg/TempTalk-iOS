@@ -200,6 +200,11 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
         let verticalSwipe = UISwipeGestureRecognizer(target: self, action: #selector(didSwipeView))
         verticalSwipe.direction = [.up, .down]
         view.addGestureRecognizer(verticalSwipe)
+
+        // 机密消息：显示查看提示 toast
+        if currentItem?.message.messageModeType == .confidential {
+            DTConfidentialHintToast().show(in: view)
+        }
     }
 
     override func didReceiveMemoryWarning() {
@@ -444,9 +449,11 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
         }
 
         let previousItem = previousDetailViewController.galleryItem
+        guard previousItem.message.messageModeType != .confidential else { return nil }
         guard let nextItem: MediaGalleryItem = mediaGalleryDataSource.galleryItem(before: previousItem) else {
             return nil
         }
+        guard nextItem.message.messageModeType != .confidential else { return nil }
 
         guard let nextPage: MediaDetailViewController = buildGalleryPage(galleryItem: nextItem) else {
             return nil
@@ -469,10 +476,12 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
         }
 
         let previousItem = previousDetailViewController.galleryItem
+        guard previousItem.message.messageModeType != .confidential else { return nil }
         guard let nextItem = mediaGalleryDataSource.galleryItem(after: previousItem) else {
             // no more pages
             return nil
         }
+        guard nextItem.message.messageModeType != .confidential else { return nil }
 
         guard let nextPage: MediaDetailViewController = buildGalleryPage(galleryItem: nextItem) else {
             return nil

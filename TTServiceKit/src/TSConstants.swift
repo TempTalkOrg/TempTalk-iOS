@@ -162,7 +162,10 @@ public class TSConstants: NSObject {
     @objc public static var officialBotId: String { shared.officialBotId }
     
     @objc public static var applicationGroup: String { shared.applicationGroup }
-    
+
+    // MARK: - Shared UserDefaults Keys (main app ↔ extensions)
+    @objc public static let kSharedMeetingActiveKey = "kDTMeetingIsActive"
+
     private static let shared: TSConstantsProtocol = sharedTemp
 
     private static let sharedTemp: TSConstantsProtocol = {

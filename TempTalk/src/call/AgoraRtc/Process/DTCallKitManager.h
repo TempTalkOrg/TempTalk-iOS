@@ -9,39 +9,12 @@
 #import <CallKit/CallKit.h>
 @class DSKProtoCallMessageCalling;
 
-typedef enum : NSUInteger {
-    CallStatus_None,
-    CallStatus_BuildCallerFail, //拨打方创建通话失败
-    CallStatus_BuildAnswerFail,//接听方创建通话失败
-    CallStatus_End,//结束通话
-    CallStatus_ReadyToEnd,//准备结束通话 （手动调用结束的 api）
-    CallStatus_TimeOut,//等待超时
-    CallStatus_Accept,// 按下接听按钮
-    CallStatus_ReadyStart,// 准备拨出
-    CallStatus_Busy,//正在忙碌
-    CallStatus_StartConnect,//开始连接
-    CallStatus_Connected,//连接成功 显示时间
-} CallStatus;
-
-
-@protocol DTCallKitManagerDelegate <NSObject>
-
-@required
-- (void)refreshCurrentCallStatus:(CallStatus)status callerId:(NSString *_Nullable)callerId;
-
-@optional
-- (void)refreshCurrentCallMuteState:(BOOL)isMute;
-
-@end
-
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface DTCallKitManager : NSObject
 
 + (DTCallKitManager *)shared;
-
-@property (nonatomic, weak) id<DTCallKitManagerDelegate>delegate;
 
 @property (nonatomic, strong, nullable) NSTimer *callKitTimeOutTimer;
 @property (nonatomic, strong, nullable) NSTimer *detectiveStatusTimer;
@@ -90,6 +63,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)muteCurrentCall:(BOOL)isMute callerId:(NSString *)callerId;
 
 - (void)handleVoipCallNotify:(NSDictionary *)apnsInfo completion:(void (^__nullable)(void))completion;
+
+- (void)rejectCallFromCallKit:(DSKProtoCallMessageCalling *)calling;
 
 @end
 

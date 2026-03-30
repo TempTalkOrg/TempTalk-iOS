@@ -29,6 +29,7 @@ extension DTMeetingManager {
             currentCall.isPresentedShare = false
 
             // 重要：必须先清理视图层次结构，再释放 roomContext
+            dismissAutoLeaveTipView()
             clearCurrentCall()
             await removeCallWindow()
             hostRoomContentVC = nil

@@ -169,9 +169,7 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
     ) {
         AssertIsOnMainThread()
 
-        handleConfidentialMessageTap(viewItem: viewItem) { [weak self] in
-            self?.previewAttachment(attachmentStream: attachmentStream, viewItem: viewItem)
-        }
+        previewAttachment(attachmentStream: attachmentStream, viewItem: viewItem)
     }
     
     /// 点击 incoming message 中加载失败的附件
@@ -288,19 +286,23 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
     }
 
     private func showConfidentialMessageDetail(message: TSMessage, viewItem: ConversationViewItem) {
-        // Check if it's a voice message
-        if viewItem.messageCellType() == .audio,
-           let attachmentStream = viewItem.attachmentStream() {
-            // Show confidential voice message controller
-            let voiceMessageVC = DTConfidentialVoiceMessageController(
-                message: message,
-                viewItem: viewItem
-            )
+        let cellType = viewItem.messageCellType()
+
+        if cellType == .audio, viewItem.attachmentStream() != nil {
+            let voiceMessageVC = DTConfidentialVoiceMessageController(message: message, viewItem: viewItem)
             let nav = OWSNavigationController(rootViewController: voiceMessageVC)
             nav.modalPresentationStyle = .fullScreen
             navigationController?.presentFormSheet(nav, animated: true)
+        } else if cellType == .genericAttachment,
+                  let attachmentStream = viewItem.attachmentStream(),
+                  let filePath = attachmentStream.filePath() {
+            let incomingMessage = message as? TSIncomingMessage
+            let filePreviewVC = DTConfidentialFilePreviewController(
+                fileURL: URL(fileURLWithPath: filePath),
+                incomingMessage: incomingMessage
+            )
+            filePreviewVC.present(from: self)
         } else {
-            // Show confidential text message controller
             let confideMessageVC = DTConfideMessageController(message)
             let nav = OWSNavigationController(rootViewController: confideMessageVC)
             nav.modalPresentationStyle = .fullScreen

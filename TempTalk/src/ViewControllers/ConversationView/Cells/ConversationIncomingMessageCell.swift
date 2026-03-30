@@ -138,6 +138,11 @@ class ConversationIncomingMessageCell: ConversationMessageCell {
         guard !isTouchInHeaderView(gesture: sender) else {
             return
         }
+        //通过用户头像进入
+        if let groupThread = self.renderItem?.viewItem.thread as? TSGroupThread {
+            let groupIdStr = TSGroupThread.transformToServerGroupId(withLocalGroupId: groupThread.groupModel.groupId)
+            DTAddFriendSourceManager.shared.setGroupSource(.inGroupUserIcon, groupId: groupIdStr ?? "")
+        }
         delegate?.messageCell?(self, didTapAvatarWith: recipientId)
     }
     
@@ -201,11 +206,12 @@ extension ConversationIncomingMessageCell {
                 make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
             }
         } else {
-            
+
             footerTimeLabel.snp.remakeConstraints { make in
-                make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace*1.5)
                 make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace*2)
+                make.centerY.equalTo(footerView.snp.centerY)
             }
+
             footerView.snp.remakeConstraints { make in
                 make.leading.equalTo(footerTimeLabel.snp.leading).offset(-CVMessageFooterRenderItem.footerViewSpace)
                 make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)

@@ -38,13 +38,25 @@ extension DTPersonalCardController: SelectThreadViewControllerDelegate, DTForwar
     }
     
     func requestAddFriend() {
+        // 从单例获取添加好友来源和上下文信息
+        let sourceManager = DTAddFriendSourceManager.shared
+        let sourceType = sourceManager.addFriendSource
+        let groupId = sourceManager.groupId
+        let shareContactCardUid = sourceManager.shareContactCardUid
+
         AddFriendHandler.handleRequestAddFriend(identifier: account.recipientId,
-                                                sourceType: .inUserCard,
-                                                sourceConversationID: nil,
-                                                shareContactCardUId: nil,
+                                                sourceType: sourceType,
+                                                sourceConversationID: groupId,
+                                                shareContactCardUId: shareContactCardUid,
                                                 action: nil,
+                                                success: {
+            // 添加好友成功后，重置来源
+            DTAddFriendSourceManager.shared.resetAddFriendSource()
+        },
                                                 failure:  { errorString in
             OWSLogger.error("ask friend error in personal card error: \(errorString)")
+            // 添加好友失败后，也重置来源
+            DTAddFriendSourceManager.shared.resetAddFriendSource()
         })
     }
     

@@ -11,38 +11,16 @@ public struct OWSMessageDecryptResult: Dependencies {
     public let envelope: DSKProtoEnvelope
     public let envelopeData: Data?
     public let plaintextData: Data?
-//    public let identity: OWSIdentity
     
     fileprivate init(
         envelope: DSKProtoEnvelope,
         envelopeData: Data?,
         plaintextData: Data?,
-//        identity: OWSIdentity,
         transaction: SDSAnyWriteTransaction
     ) {
         self.envelope = envelope
         self.envelopeData = envelopeData
         self.plaintextData = plaintextData
-//        self.identity = identity
-        
-//        guard let sourceAddress = envelope.sourceDevice else {
-//            owsFailDebug("missing source address")
-//            return
-//        }
-//        owsAssertDebug(envelope.sourceDevice > 0)
-        
-        // Self-sent messages should be discarded during the decryption process.
-//        let localDeviceId = Self.tsAccountManager.storedDeviceId()
-//        owsAssertDebug(!(sourceAddress.isLocalAddress && envelope.sourceDevice == localDeviceId))
-        
-        // Having received a valid (decryptable) message from this user,
-        // make note of the fact that they have a valid Signal account.
-//        SignalRecipient.mark(
-//            asRegisteredAndGet: sourceAddress,
-//            deviceId: envelope.sourceDevice,
-//            trustLevel: .high,
-//            transaction: transaction
-//        )
     }
 }
 
@@ -53,23 +31,7 @@ public class OWSMessageDecrypter: OWSMessageHandler {
         super.init()
         
         SwiftSingletons.register(self)
-        
-//        NotificationCenter.default.addObserver(
-//            self,
-//            selector: #selector(messageProcessorDidFlushQueue),
-//            name: MessageProcessor.messageProcessorDidFlushQueue,
-//            object: nil
-//        )
-        
     }
-    
-//    @objc
-//    func messageProcessorDidFlushQueue() {
-//        // We don't want to send additional resets until we
-//        // have received the "empty" response from the WebSocket
-//        // or finished at least one REST fetch.
-//        guard Self.messageFetcherJob.hasCompletedInitialFetch else { return }
-//    }
     
     let identityManager : OWSIdentityManager = OWSIdentityManager.shared()
     
@@ -84,47 +46,53 @@ public class OWSMessageDecrypter: OWSMessageHandler {
             return .failure(OWSAssertionError("Incoming envelope is missing type."))
         }
         
-        guard SDS.fitsInInt64(envelope.timestamp) else {
-            return .failure(OWSAssertionError("Invalid timestamp."))
+        let builder = envelope.asBuilder()
+        if !SDS.fitsInInt64(envelope.timestamp) {
+            owsFailDebug("Invalid timestamp, will use 0.")
+            builder.setTimestamp(0)
         }
-        
-        guard !envelope.hasSystemShowTimestamp || SDS.fitsInInt64(envelope.systemShowTimestamp) else {
-            return .failure(OWSAssertionError("Invalid serverTimestamp."))
+        if envelope.hasSystemShowTimestamp && !SDS.fitsInInt64(envelope.systemShowTimestamp) {
+            owsFailDebug("Invalid systemShowTimestamp, will use 0.")
+            builder.setSystemShowTimestamp(0)
         }
-        
-        if !envelope.hasSource && envelope.type != .notify {
+        if envelope.hasSequenceID && !SDS.fitsInInt64(envelope.sequenceID) {
+            owsFailDebug("Invalid sequenceID, will use 0.")
+            builder.setSequenceID(0)
+        }
+        if envelope.hasNotifySequenceID && !SDS.fitsInInt64(envelope.notifySequenceID) {
+            owsFailDebug("Invalid notifySequenceID, will use 0.")
+            builder.setNotifySequenceID(0)
+        }
+        let fixedEnvelope = (try? builder.build()) ?? envelope
+
+        if !fixedEnvelope.hasSource && fixedEnvelope.type != .notify {
             return .failure(OWSAssertionError("envelope has no Source nor notify msg."))
         }
         
-        guard let encryptedData = envelope.content else {
+        guard let encryptedData = fixedEnvelope.content else {
             owsFailDebug("no envelope content")
             return .failure(OWSAssertionError("Envelope has no content."))
         }
-               
-        owsAssertDebug(envelope.source != nil)
-        
-        if envelope.type != .unknown {
-            guard let source = envelope.source, source.count > 0 else {
+
+        owsAssertDebug(fixedEnvelope.source != nil)
+
+        if fixedEnvelope.type != .unknown {
+            guard let source = fixedEnvelope.source, source.count > 0 else {
                 return .failure(OWSAssertionError("incoming envelope has invalid source"))
             }
-            
-            // TODO: server 发送消息没有 sourceDevice 确认好哪种情况没有做判断过滤
-//            guard envelope.hasSourceDevice(), envelope.sourceDevice > 0 else {
-//                return .failure(OWSAssertionError("incoming envelope has invalid source device"))
-//            }
         }
         
         let plaintextDataOrError: Result<Data, Error>
-        switch envelope.type {
+        switch fixedEnvelope.type {
         case .ciphertext:
-            owsProdErrorWithEnvelope("received ciphertext message.", envelope)
+            owsProdErrorWithEnvelope("received ciphertext message.", fixedEnvelope)
             let wrappedError = OWSError(error: .failedToDecryptMessage,
                                         description: "Decryption error",
                                         isRetryable: false,
                                         userInfo: [NSUnderlyingErrorKey: "ciphertext error"])
             plaintextDataOrError = .failure(wrappedError)
         case .prekeyBundle:
-            owsProdErrorWithEnvelope("received prekeyBundle message.", envelope)
+            owsProdErrorWithEnvelope("received prekeyBundle message.", fixedEnvelope)
             let wrappedError = OWSError(error: .failedToDecryptMessage,
                                         description: "Decryption error",
                                         isRetryable: false,
@@ -132,31 +100,31 @@ public class OWSMessageDecrypter: OWSMessageHandler {
             plaintextDataOrError = .failure(wrappedError)
         case .notify, .plaintext:
             return .success(OWSMessageDecryptResult(
-                envelope: envelope,
+                envelope: fixedEnvelope,
                 envelopeData: envelopeData,
-                plaintextData: envelope.content,
+                plaintextData: fixedEnvelope.content,
                 transaction: transaction
             ))
         case .etoee:
-            
-            guard let source = envelope.source else {
+
+            guard let source = fixedEnvelope.source else {
                 owsFailDebug("no source")
                 return .failure(OWSError(error: .failedToDecryptMessage,
                                          description: "Envelope has no source address",
                                          isRetryable: false))
             }
-            
-            let sourceDevice = envelope.sourceDevice
+
+            let sourceDevice = fixedEnvelope.sourceDevice
             guard sourceDevice > 0 else {
                 owsFailDebug("no sourceDevice")
                 return .failure(OWSError(error: .failedToDecryptMessage,
                                          description: "Envelope has no source device",
                                          isRetryable: false))
             }
-            
+
             let sessionCipher: DTSessionCipher
             let eRMKey: Data?
-            if let peerContext = envelope.peerContext {
+            if let peerContext = fixedEnvelope.peerContext {
                 sessionCipher = DTSessionCipher.init(recipientId: source, type: .group)
                 sessionCipher.sourceDevice = sourceDevice;
                 eRMKey = Data.data(FromBase64String: peerContext)
@@ -165,9 +133,9 @@ public class OWSMessageDecrypter: OWSMessageHandler {
                 sessionCipher.sourceDevice = sourceDevice;
                 eRMKey = nil
             }
-            
+
             do {
-                guard let identityKey = envelope.identityKey else {
+                guard let identityKey = fixedEnvelope.identityKey else {
                     return .failure(OWSError(error: .failedToDecryptMessage,
                                              description: "Envelope identityKey is nil",
                                              isRetryable: false))
@@ -180,23 +148,23 @@ public class OWSMessageDecrypter: OWSMessageHandler {
             }
         case .receipt, .keyExchange, .unknown:
             return .success(OWSMessageDecryptResult(
-                envelope: envelope,
+                envelope: fixedEnvelope,
                 envelopeData: envelopeData,
                 plaintextData: nil,
                 transaction: transaction
             ))
         default:
-            Logger.warn("Received unhandled envelope type: \(envelope.type?.rawValue ?? 0)")
-            return .failure(OWSGenericError("Received unhandled envelope type: \(envelope.type?.rawValue ?? 0)"))
+            Logger.warn("Received unhandled envelope type: \(fixedEnvelope.type?.rawValue ?? 0)")
+            return .failure(OWSGenericError("Received unhandled envelope type: \(fixedEnvelope.type?.rawValue ?? 0)"))
         }
-        
+
         if case let .failure(error) = plaintextDataOrError {
-            _ = processError(error, envelope: envelope, untrustedGroupId: nil, transaction: transaction)
+            _ = processError(error, envelope: fixedEnvelope, untrustedGroupId: nil, transaction: transaction)
         }
-        
+
         return plaintextDataOrError.map {
             OWSMessageDecryptResult(
-                envelope: envelope,
+                envelope: fixedEnvelope,
                 envelopeData: envelopeData,
                 plaintextData: $0,
                 transaction: transaction

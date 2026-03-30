@@ -114,6 +114,8 @@ extension ConversationViewController {
         let wasFirstResponder = inputToolbar.inputTextView.isFirstResponder
         let savedText = inputToolbar.inputTextView.text
 
+        Logger.info("[Keyboard] recreateInputToolbar, wasFirstResponder=\(wasFirstResponder), currentTextLen=\(savedText?.count ?? 0)")
+
         let inputToolbar = ConversationInputToolbar(conversationStyle: self.conversationStyle,
                                                     messageDraft: self.thread.messageDraft,
                                                     quotedReplyDraft: quotedReplyDraft,
@@ -127,9 +129,9 @@ extension ConversationViewController {
         // Update confidential button visibility based on group size
         updateConfidentialButtonVisibility()
 
-        // 如果键盘保护已启用且之前是 first responder，恢复键盘状态
-        if viewState.isKeyboardProtectionEnabled && wasFirstResponder {
-            Logger.info("[Keyboard] Restoring keyboard state after recreateInputToolbar")
+        // 之前是 first responder，恢复文字和键盘状态
+        if wasFirstResponder {
+            Logger.info("[Keyboard] recreateInputToolbar → restoring keyboard and text")
             DispatchQueue.main.async {
                 inputToolbar.inputTextView.text = savedText
                 inputToolbar.beginEditingMessage()
@@ -174,7 +176,7 @@ extension ConversationViewController {
         }
 
         guard isGroupConversation, let groupThread = thread as? TSGroupThread else {
-            inputToolbar.shouldHideConfidentialButton = false
+            inputToolbar.shouldHideConfidentialButton = !isFriend
             return
         }
 
@@ -422,6 +424,11 @@ extension ConversationViewController {
             draft = self.thread.currentDraft(with: transaction)
             mentionsDraft = self.thread.currentMentionsDraft(with: transaction)
         }
+        let currentTextLen = self.inputToolbar.inputTextView.text?.count ?? 0
+        if isUserActivelyTyping && currentTextLen > 0 && draft != self.inputToolbar.inputTextView.text {
+            Logger.warn("[Keyboard] loadDraftInCompose skipped: user is typing, currentTextLen=\(currentTextLen), draftLen=\(draft.count)")
+            return
+        }
         self.inputToolbar.setMessageBody(draft, animated: false)
         if !draft.isEmpty, !mentionsDraft.isEmpty {
             self.inputToolbar.atCache.setMentions(mentionsDraft, body: draft)
@@ -477,29 +484,22 @@ extension ConversationViewController {
 @objc
 extension ConversationViewController {
     @objc func popKeyBoard() {
-        // 键盘弹出时启用保护
-        viewState.isKeyboardProtectionEnabled = true
         self.inputToolbar.beginEditingMessage()
     }
 
     func dismissKeyBoard(byUserAction: Bool = false) {
-        // 如果键盘保护已启用，且不是用户主动操作，则不收起键盘
-        if viewState.isKeyboardProtectionEnabled && !byUserAction {
+        // 用户正在输入时，非用户主动操作不收起键盘
+        if isUserActivelyTyping && !byUserAction {
             return
         }
-
-        // 用户主动收起键盘，清除保护状态
-        if byUserAction {
-            viewState.isKeyboardProtectionEnabled = false
-        }
-
+        Logger.info("[Keyboard] dismissKeyBoard byUserAction=\(byUserAction), isFirstResponder=\(inputToolbar.inputTextView.isFirstResponder), textLen=\(inputToolbar.inputTextView.text?.count ?? 0)")
         self.inputToolbar.endEditingMessage()
         self.inputToolbar.clearDesiredKeyboard()
     }
 
-    /// 强制收起键盘（用于特殊场景，如页面即将消失）
+    /// 强制收起键盘（仅用于页面消失、退群等真正需要强制收起的场景）
     func forceDissmissKeyBoard() {
-        viewState.isKeyboardProtectionEnabled = false
+        Logger.info("[Keyboard] forceDissmissKeyBoard, isFirstResponder=\(inputToolbar.inputTextView.isFirstResponder), textLen=\(inputToolbar.inputTextView.text?.count ?? 0)")
         self.inputToolbar.endEditingMessage()
         self.inputToolbar.clearDesiredKeyboard()
     }

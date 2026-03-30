@@ -84,7 +84,9 @@
             }
         }
     }
-    TSAttachment *attachment = [TSAttachmentStream anyFetchWithUniqueId:attachmentInfo.attachmentId transaction:transaction];
+    TSAttachment *attachment = attachmentInfo.attachmentId.length > 0
+        ? [TSAttachmentStream anyFetchWithUniqueId:attachmentInfo.attachmentId transaction:transaction]
+        : nil;
     TSAttachmentStream *attachmentStream = nil;
     if (attachment && [attachment isKindOfClass:[TSAttachmentStream class]]) {
         attachmentStream = (TSAttachmentStream *)attachment;

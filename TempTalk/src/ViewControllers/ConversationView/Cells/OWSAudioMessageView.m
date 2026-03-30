@@ -212,7 +212,7 @@ NS_ASSUME_NONNULL_BEGIN
         }
         waveform = [AudioWaveformManagerImpl.shared audioWaveformSyncForAudioPath:[self.attachmentStream filePath] error:&error];
         OWSLogInfo(@"get attachmentStream file path: %@", [self.attachmentStream filePath]);
-        OWSLogInfo(@"get attachmentStream file byteCount: %d", [self.attachmentStream byteCount]);
+        OWSLogInfo(@"get attachmentStream file byteCount: %llu", [self.attachmentStream byteCount]);
         if (error) {
             OWSLogError(@"voice draw error:%@.", error);
         }

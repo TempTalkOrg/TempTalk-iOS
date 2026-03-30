@@ -15,7 +15,7 @@ extension DTMeetingManager {
     
     func loadSessionRecords(identifiers: [String]) async -> [String: DTSessionRecord] {
         return await withCheckedContinuation { continuation in
-           
+
             var records = [String: DTSessionRecord]()
             databaseStorage.asyncRead { transaction in
                 identifiers.forEach({

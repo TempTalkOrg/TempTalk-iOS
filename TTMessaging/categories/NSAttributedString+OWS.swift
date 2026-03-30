@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import UIKit
 
 @objc
 public extension NSAttributedString {
@@ -33,6 +34,19 @@ public extension NSAttributedString {
         return result.copy() as! NSAttributedString
     }
     
+    @objc(appendingBotIconWithFont:)
+    func appendingBotIcon(font: UIFont) -> NSAttributedString {
+        guard let iconImage = UIImage(named: "setting_support") else { return self }
+        let iconSize: CGFloat = 16
+        let attachment = NSTextAttachment()
+        attachment.image = iconImage
+        attachment.bounds = CGRect(x: 0, y: (font.capHeight - iconSize) / 2, width: iconSize, height: iconSize)
+        let result = mutableCopy() as! NSMutableAttributedString
+        result.append(NSAttributedString(string: " "))
+        result.append(NSAttributedString(attachment: attachment))
+        return result.copy() as! NSAttributedString
+    }
+
     @objc(covertString:withMatch:attributes:matchAttributes:)
     class func covertString(_ string: String!, match: String!, attributes: [NSAttributedString.Key: Any]?, matchAttributes: [NSAttributedString.Key: Any]?) -> NSMutableAttributedString {
         

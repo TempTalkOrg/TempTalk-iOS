@@ -230,6 +230,7 @@
 		5B0F3ADE2E9CFA9300E01BFD /* DTRatingFeedbackController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0F3ADD2E9CFA9300E01BFD /* DTRatingFeedbackController.swift */; };
 		5B0F3AE02E9E897700E01BFD /* FeedbackReasonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0F3ADF2E9E896F00E01BFD /* FeedbackReasonsView.swift */; };
 		5B2039562E54B9D700C4460C /* ConversationJoinCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2039552E54B9C200C4460C /* ConversationJoinCallView.swift */; };
+		5B2AA2C12F0F64210009D03A /* DTAddFriendSourceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2AA2C02F0F64210009D03A /* DTAddFriendSourceManager.swift */; };
 		5B2AA2C32F0FA2FE0009D03A /* VoicePlaybackSpeedViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2AA2C22F0FA2FE0009D03A /* VoicePlaybackSpeedViewController.swift */; };
 		5B2AA2D92F14D5FE0009D03A /* GrayReleaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2AA2D62F14D5FE0009D03A /* GrayReleaseManager.swift */; };
 		5B2AA2DA2F14D5FE0009D03A /* DTGrayReleaseAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2AA2D52F14D5FE0009D03A /* DTGrayReleaseAPI.swift */; };
@@ -252,6 +253,7 @@
 		5B7F7E952DDC5F3800B2C3E9 /* LiveKitContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B7F7E942DDC5F3500B2C3E9 /* LiveKitContext.swift */; };
 		5B7F7E972DDC6A4900B2C3E9 /* DTRTCAudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B7F7E962DDC6A4900B2C3E9 /* DTRTCAudioSession.swift */; };
 		5B82415D2F27D0DA00C6E441 /* DTConfidentialVoiceMessageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B82415C2F27D0DA00C6E441 /* DTConfidentialVoiceMessageController.swift */; };
+		5B82415E2F27D0DA00C6E442 /* DTConfidentialFilePreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B82415F2F27D0DA00C6E442 /* DTConfidentialFilePreviewController.swift */; };
 		5B826FFF2E81300D0045B767 /* ScreenLockSelectedViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B826FFE2E812FD40045B767 /* ScreenLockSelectedViewController.swift */; };
 		5B8270042E82DE4E0045B767 /* DTGestureLockViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8270032E82DE490045B767 /* DTGestureLockViewController.swift */; };
 		5B886A5F2EE0193600A886B3 /* DTImageDownloadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B886A5E2EE0193600A886B3 /* DTImageDownloadingView.swift */; };
@@ -871,6 +873,7 @@
 		DCEE7F8C2810F9A100D7507D /* MessageReactionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEE7F8B2810F9A100D7507D /* MessageReactionPicker.swift */; };
 		DCEE7F912811AE5400D7507D /* UnreadIndicatorInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEE7F902811AE5400D7507D /* UnreadIndicatorInteraction.swift */; };
 		DCEE7FAE28159B4900D7507D /* InputAccessoryViewPlaceholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCEE7FAD28159B4900D7507D /* InputAccessoryViewPlaceholder.swift */; };
+		DD8837A5D9E2441EAC7C037E /* DTConfidentialHintToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F5F019F34DB43FEBB967E03 /* DTConfidentialHintToast.swift */; };
 		DE703E566E6721B2CBE83E44 /* Pods_TTMessaging.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B6E5B1084195C4C43C049AFC /* Pods_TTMessaging.framework */; };
 		E1368CBE18A1C36B00109378 /* MessageUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B9EB5ABC1884C002007CBB57 /* MessageUI.framework */; };
 		EF764C351DB67CC5000D9A87 /* UIViewController+Permissions.m in Sources */ = {isa = PBXBuildFile; fileRef = EF764C341DB67CC5000D9A87 /* UIViewController+Permissions.m */; };
@@ -1246,6 +1249,7 @@
 		5B0F3ADD2E9CFA9300E01BFD /* DTRatingFeedbackController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTRatingFeedbackController.swift; sourceTree = "<group>"; };
 		5B0F3ADF2E9E896F00E01BFD /* FeedbackReasonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackReasonsView.swift; sourceTree = "<group>"; };
 		5B2039552E54B9C200C4460C /* ConversationJoinCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationJoinCallView.swift; sourceTree = "<group>"; };
+		5B2AA2C02F0F64210009D03A /* DTAddFriendSourceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTAddFriendSourceManager.swift; sourceTree = "<group>"; };
 		5B2AA2C22F0FA2FE0009D03A /* VoicePlaybackSpeedViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePlaybackSpeedViewController.swift; sourceTree = "<group>"; };
 		5B2AA2D52F14D5FE0009D03A /* DTGrayReleaseAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTGrayReleaseAPI.swift; sourceTree = "<group>"; };
 		5B2AA2D62F14D5FE0009D03A /* GrayReleaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrayReleaseManager.swift; sourceTree = "<group>"; };
@@ -1270,6 +1274,7 @@
 		5B7F7E942DDC5F3500B2C3E9 /* LiveKitContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitContext.swift; sourceTree = "<group>"; };
 		5B7F7E962DDC6A4900B2C3E9 /* DTRTCAudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTRTCAudioSession.swift; sourceTree = "<group>"; };
 		5B82415C2F27D0DA00C6E441 /* DTConfidentialVoiceMessageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTConfidentialVoiceMessageController.swift; sourceTree = "<group>"; };
+		5B82415F2F27D0DA00C6E442 /* DTConfidentialFilePreviewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTConfidentialFilePreviewController.swift; sourceTree = "<group>"; };
 		5B826FFE2E812FD40045B767 /* ScreenLockSelectedViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenLockSelectedViewController.swift; sourceTree = "<group>"; };
 		5B8270032E82DE490045B767 /* DTGestureLockViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTGestureLockViewController.swift; sourceTree = "<group>"; };
 		5B886A5E2EE0193600A886B3 /* DTImageDownloadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTImageDownloadingView.swift; sourceTree = "<group>"; };
@@ -1365,6 +1370,7 @@
 		606E427D26678B4D005AE7A5 /* ChooseAtMembersViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ChooseAtMembersViewController.h; sourceTree = "<group>"; };
 		606E427E26678B4D005AE7A5 /* ChooseAtMembersViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ChooseAtMembersViewController.m; sourceTree = "<group>"; };
 		6C418898360BCFB6DD3B87A4 /* Pods-TempTalk.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TempTalk.release.xcconfig"; path = "Target Support Files/Pods-TempTalk/Pods-TempTalk.release.xcconfig"; sourceTree = "<group>"; };
+		6F5F019F34DB43FEBB967E03 /* DTConfidentialHintToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTConfidentialHintToast.swift; sourceTree = "<group>"; };
 		70377AAA1918450100CAF501 /* MobileCoreServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MobileCoreServices.framework; path = System/Library/Frameworks/MobileCoreServices.framework; sourceTree = SDKROOT; };
 		746788AF4068D9BF796C720B /* Pods-Yelling.debug_test.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Yelling.debug_test.xcconfig"; path = "Target Support Files/Pods-Yelling/Pods-Yelling.debug_test.xcconfig"; sourceTree = "<group>"; };
 		768A1A2A17FC9CD300E00ED8 /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = usr/lib/libz.dylib; sourceTree = SDKROOT; };
@@ -3195,6 +3201,7 @@
 				CE7F2FEA2757B0FA00A574E1 /* DTEditPersonInfoController.h */,
 				CE7F2FE92757B0FA00A574E1 /* DTEditPersonInfoController.m */,
 				CE7ED60D2B84A4E7008224A1 /* DTPersonalCardController+ShareContact.swift */,
+				5B2AA2C02F0F64210009D03A /* DTAddFriendSourceManager.swift */,
 			);
 			path = PersonalCard;
 			sourceTree = "<group>";
@@ -3845,6 +3852,8 @@
 				CEE973A72D0FD9EA0028D1AF /* NSObject+UILabelHelper.m */,
 				5BBF9F0F2F24658F002526BC /* DTConfidentialMessageContentViewController.swift */,
 				5B82415C2F27D0DA00C6E441 /* DTConfidentialVoiceMessageController.swift */,
+				5B82415F2F27D0DA00C6E442 /* DTConfidentialFilePreviewController.swift */,
+				6F5F019F34DB43FEBB967E03 /* DTConfidentialHintToast.swift */,
 			);
 			path = Confidential;
 			sourceTree = "<group>";
@@ -5128,6 +5137,8 @@
 				CEA87F022CF8128A007480A1 /* DTLoginWithEmailCodeApi.swift in Sources */,
 				CEA87F032CF8128A007480A1 /* DeviceTransferService+URL.swift in Sources */,
 				5B82415D2F27D0DA00C6E441 /* DTConfidentialVoiceMessageController.swift in Sources */,
+				5B82415E2F27D0DA00C6E442 /* DTConfidentialFilePreviewController.swift in Sources */,
+				DD8837A5D9E2441EAC7C037E /* DTConfidentialHintToast.swift in Sources */,
 				CEA87F042CF8128A007480A1 /* SelfSignedIdentity.swift in Sources */,
 				CEA87F052CF8128A007480A1 /* DTVerificationEmailCodeApi.swift in Sources */,
 				CEA87F062CF8128A007480A1 /* UIImage+Extension.swift in Sources */,
@@ -5369,6 +5380,7 @@
 				CEB228F92C75EAA8002408E1 /* ConversationQuotedMessageView.swift in Sources */,
 				CE0409B02C2BB9D0004E9915 /* DTTextSelectionHighlightingView.swift in Sources */,
 				F2A32C8C2695B41D008AA536 /* DTInputAtCache.m in Sources */,
+				5B2AA2C12F0F64210009D03A /* DTAddFriendSourceManager.swift in Sources */,
 				CEB0951B2CAA964200A65F14 /* DTPanGestureRecognizer.swift in Sources */,
 				45D2AC02204885170033C692 /* OWS2FAReminderViewController.swift in Sources */,
 				CEF26B91299E1B9E00D7CDD8 /* DTGroupSettingChangedProcessor.m in Sources */,
@@ -5752,7 +5764,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
@@ -5831,7 +5843,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -6177,7 +6189,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -6335,7 +6347,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
@@ -6636,7 +6648,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6710,7 +6722,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -6996,7 +7008,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -7152,7 +7164,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -7296,7 +7308,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7352,7 +7364,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7409,7 +7421,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7467,7 +7479,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.6.7;
+				MARKETING_VERSION = 3.7.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7568,7 +7580,7 @@
 			repositoryURL = "https://github.com/difftim/client-sdk-swift";
 			requirement = {
 				kind = exactVersion;
-				version = "2.10.2-a8";
+				version = "2.10.2-a9";
 			};
 		};
 		CE45C7A82D71CD36008B8452 /* XCRemoteSwiftPackageReference "SFSafeSymbols" */ = {

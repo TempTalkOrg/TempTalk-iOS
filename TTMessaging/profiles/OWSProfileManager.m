@@ -386,7 +386,7 @@ const NSUInteger kOWSProfileManager_MaxAvatarDiameter = 640;
         // 2 request upload url from server, and then upload it.
         TSAttachmentStream *attachmentStream =
         [[TSAttachmentStream alloc] initWithContentType:OWSMimeTypeImageJpeg
-                                              byteCount:(UInt32)encryptedAvatarData.length
+                                              byteCount:(UInt64)encryptedAvatarData.length
                                          sourceFilename:avatarFileName
                                          albumMessageId:nil
                                                 albumId:nil];

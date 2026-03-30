@@ -49,8 +49,7 @@ extension DTMeetingManager {
                 await hangupCall(needSyncCallKit: true,
                                  isByLocal: true,
                                  forceEndGroupMeeting: forceEndGroupMeeting,
-                                 roomId: roomId,
-                                 removeMeetingBar: true)
+                                 roomId: roomId)
                 Logger.info("endcall need remove join")
             } else {
                 // 无会议的时候删除
@@ -58,14 +57,12 @@ extension DTMeetingManager {
                     await hangupCall(needSyncCallKit: true,
                                      isByLocal: true,
                                      forceEndGroupMeeting: forceEndGroupMeeting,
-                                     roomId: currentCall.roomId,
-                                     removeMeetingBar: true)
+                                     roomId: currentCall.roomId)
                 } else {
                     await hangupCall(needSyncCallKit: true,
                                      isByLocal: true,
                                      forceEndGroupMeeting: forceEndGroupMeeting,
-                                     roomId: currentCall.roomId,
-                                     removeMeetingBar: false)
+                                     roomId: currentCall.roomId)
                 }
                 Logger.info("endcall hangup exception")
             }
@@ -79,7 +76,6 @@ extension DTMeetingManager {
                     isByLocal: Bool = false,
                     forceEndGroupMeeting: Bool = false,
                     roomId: String? = nil,
-                    removeMeetingBar: Bool = false,
                     showErrorToast: Bool = false,
                     isFromCallKit: Bool = false) async
     {
@@ -98,10 +94,14 @@ extension DTMeetingManager {
         Logger.info("\(logTag) hangupCall entry, callType: \(currentCall.callType), isByLocal:\(isByLocal), state: \(lifecycleState), isFromCallKit: \(isFromCallKit), roomId: \(roomId ?? "nil"), currentCall.roomId: \(currentCall.roomId ?? "nil")")
 
         // 0). 移除meeting bar, 传入roomId才去移除，callModel在 3).时已经清空, 会找不到对应的call
+        // 规则：1on1 通话或强制结束群组会议时移除，否则保留（群组会议可能还在进行）
         if let roomId {
-            if removeMeetingBar {
-                Logger.info("\(logTag) hangup remove meetingbar")
+            let shouldRemoveMeetingBar = currentCall.callType == .private || forceEndGroupMeeting
+            if shouldRemoveMeetingBar {
+                Logger.info("\(logTag) hangup remove meetingbar (callType: \(currentCall.callType), forceEnd: \(forceEndGroupMeeting))")
                 handleMeetingBar(roomId: roomId, action: .remove)
+            } else {
+                Logger.info("\(logTag) hangup keep meetingbar (group/instant call, not force ending)")
             }
 
             // 如果是 CallKit 触发的挂断，即使 roomId 不匹配也要执行完整流程
@@ -156,6 +156,11 @@ extension DTMeetingManager {
         let roomContextToClean = self.roomContext
         let currentRoomId = currentCall.roomId
 
+        // 连接失败说明会议已不存在，无论 callType 都移除 meetingBar
+        if let roomId = currentRoomId {
+            handleMeetingBar(roomId: roomId, action: .remove)
+        }
+
         if let roomContextToClean {
             Logger.info("\(logTag) will disconnect")
             await roomContextToClean.disconnect()
@@ -202,8 +207,7 @@ extension DTMeetingManager {
     /// 1on1 对端挂断 call
     /// - Parameters:
     ///   - roomId: The ID of the meeting room
-    ///   - isRemoveBar: Whether to remove the meeting bar, defaults to false
-    func othersideHungupCall(roomId: String, isRemoveBar: Bool = false) async {
+    func othersideHungupCall(roomId: String) async {
         Logger.info("\(logTag) otherside HungupCall needSyncCallKit \(!currentCall.isCaller), current state: \(lifecycleState), hasRoomContext: \(roomContext != nil)")
 
         let currentRoomId = currentCall.roomId
@@ -225,8 +229,8 @@ extension DTMeetingManager {
         // 捕获当前 roomContext 引用
         let roomContextToClean = self.roomContext
 
-        if DTParamsUtils.validateString(roomId).boolValue, isRemoveBar {
-            // 对端挂断，移除meetingBar
+        // 因此收到 hangup 时，无论 callType，都应该移除 meetingBar
+        if DTParamsUtils.validateString(roomId).boolValue {
             handleMeetingBar(roomId: roomId, action: .remove)
         }
 
@@ -266,14 +270,27 @@ extension DTMeetingManager {
         let roomContextToClean = self.roomContext
         let currentRoomId = currentCall.roomId
 
-        // 1). send reject msg (1on1时发给caller和自己其他端，多人时只发自己另外一端)
+        // 1). remove meeting bar (1on1 only; group/instant bar is managed by caller)
+        if currentCall.callType == .private, let roomId = currentRoomId {
+            handleMeetingBar(roomId: roomId, action: .remove)
+        }
+
+        // 2). send reject msg (1on1时发给caller和自己其他端，多人时只发自己另外一端)
         await sendCallMessage(.reject)
 
-        // 2). sync CallKit State
+        // 3). sync CallKit State
         syncCallKitState(needSyncCallKit: true)
 
-        // 3). clear Call State
+        // 4). clear Call State
         await clearCallState(roomContextToClean: roomContextToClean, roomIdToClean: currentRoomId)
+    }
+
+    /// CallKit 拒接专用重载 — 使用显式 call model，避免依赖 currentCall（锁屏时可能尚未设置）
+    /// 注意：此方法用于拒绝第二个来电（假通话），不应同步 CallKit 状态，否则会误挂第一个通话
+    func rejectRemoteCall(with call: DTLiveKitCallModel) async {
+        Logger.info("\(logTag) reject remote call (callkit) caller:\(call.caller ?? "") roomId:\(call.roomId ?? "")")
+
+        await sendCallMessage(.reject, call)
     }
 
     /// 本地 1on1 发出的 call 被拒接
@@ -286,6 +303,11 @@ extension DTMeetingManager {
         // 捕获当前 roomContext 引用
         let roomContextToClean = self.roomContext
         let currentRoomId = currentCall.roomId
+
+        // 规则：1on1 通话移除 meetingBar；群组/即时通话保留（会议可能还在进行）
+        if currentCall.callType == .private, let roomId = currentRoomId {
+            handleMeetingBar(roomId: roomId, action: .remove)
+        }
 
         // 1). trigger disconnect if needed
         if let roomContextToClean {
@@ -309,6 +331,11 @@ extension DTMeetingManager {
         // 捕获当前 roomContext 引用
         let roomContextToClean = self.roomContext
         let currentRoomId = currentCall.roomId
+
+        // 规则：1on1 通话移除 meetingBar；群组/即时通话保留（会议可能还在进行）
+        if currentCall.callType == .private, let roomId = currentRoomId {
+            handleMeetingBar(roomId: roomId, action: .remove)
+        }
 
         // 1). send cancel msg
         if case .private = currentCall.callType { // 1on1
@@ -346,6 +373,11 @@ extension DTMeetingManager {
         // 捕获当前 roomContext 引用
         let roomContextToClean = self.roomContext
         let currentRoomId = currentCall.roomId
+
+        // 规则：1on1 通话移除 meetingBar；群组/即时通话保留（会议可能还在进行）
+        if currentCall.callType == .private, let roomId = currentRoomId {
+            handleMeetingBar(roomId: roomId, action: .remove)
+        }
 
         // 1). trigger disconnect if needed
         if let roomContextToClean {

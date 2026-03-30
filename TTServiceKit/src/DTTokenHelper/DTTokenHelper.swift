@@ -236,34 +236,59 @@ public class DTTokenHelper: NSObject {
             Logger.error("\(self.logTag) Invalid format JWT string: \(jwtString)")
             return nil
         }
-        
+
         let payloadSegment = segments[1]
-        
+
         var base64String = String(payloadSegment)
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
-        
+
         // 补充 Base64 的 "=" 以使长度符合要求
         while base64String.count % 4 != 0 {
             base64String.append("=")
         }
-        
+
         guard let data = Data(base64Encoded: base64String) else {
             Logger.error("\(self.logTag) Base64 string encode failed, string: \(base64String)")
             return nil
         }
-        
+
         guard let jsonObj = try? JSONSerialization.jsonObject(with: data, options: []) else {
             Logger.error("\(self.logTag) Json serialization failed, string: \(base64String)")
             return nil
         }
-        
+
         guard let result = jsonObj as? [String: Any] else {
             Logger.error("\(self.logTag) Json serialization failed, string: \(base64String)")
             return nil
         }
-        
+
         return result
+    }
+
+    /// 异步获取全局 token (async/await 版本)
+    public func asyncFetchGlobalAuthToken() async throws -> String {
+        try await asyncFetchAuthTokenAsync(appId: "")
+    }
+
+    /// 异步获取 appId 对应的 token (async/await 版本)
+    private func asyncFetchAuthTokenAsync(appId: String) async throws -> String {
+        return try await withCheckedThrowingContinuation { continuation in
+            self.asyncFetchAuthToken(appId: appId) { token, error in
+                if let token, !token.isEmpty {
+                    continuation.resume(returning: token)
+                } else if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    let error = NSError(
+                        domain: "AuthTokenError",
+                        code: -20000,
+                        userInfo: [NSLocalizedDescriptionKey: "token is empty"]
+                    )
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 }
 

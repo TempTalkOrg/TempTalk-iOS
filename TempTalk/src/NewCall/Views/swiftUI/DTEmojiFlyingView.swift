@@ -169,7 +169,7 @@ class DTEmojiFlyingView: UIView {
         let padding: CGFloat = 6
 
         let nameTextWidth = lbName.frame.width
-        let totalWidth = min(128, nameTextWidth + padding * 2)
+        let totalWidth = min(200, nameTextWidth + padding * 2)
         
         // 背景视图的宽度等于总宽度
         nameBgView.frame = CGRect(x: 0, y: 0, width: totalWidth, height: 24)

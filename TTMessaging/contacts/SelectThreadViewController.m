@@ -271,6 +271,9 @@ NS_ASSUME_NONNULL_BEGIN
             if (thread.isRemovedFromConversation) {
                 continue;
             }
+            if ([self.selectThreadViewDelegate respondsToSelector:@selector(shouldFilterThread:)] && [self.selectThreadViewDelegate shouldFilterThread:thread]) {
+                continue;
+            }
             if (thread.isGroupThread) {
                 TSGroupThread *groupThread = (TSGroupThread *)thread;
                 if (!groupThread.isLocalUserInGroup) {

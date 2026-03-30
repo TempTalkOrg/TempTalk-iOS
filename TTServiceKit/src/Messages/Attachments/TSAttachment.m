@@ -36,7 +36,7 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
             appearInMediaGallery:(BOOL)appearInMediaGallery
          attachmentSchemaVersion:(NSUInteger)attachmentSchemaVersion
                   attachmentType:(TSAttachmentType)attachmentType
-                       byteCount:(unsigned int)byteCount
+                       byteCount:(unsigned long long)byteCount
                      contentType:(NSString *)contentType
                    encryptionKey:(NSData *)encryptionKey
                           height:(unsigned int)height
@@ -77,7 +77,7 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
 // i.e. undownloaded incoming attachments.
 - (instancetype)initWithServerId:(UInt64)serverId
                    encryptionKey:(NSData *)encryptionKey
-                       byteCount:(UInt32)byteCount
+                       byteCount:(UInt64)byteCount
                      contentType:(NSString *)contentType
                   sourceFilename:(nullable NSString *)sourceFilename
                   albumMessageId:(nullable NSString *)albumMessageId
@@ -118,7 +118,7 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
 // This constructor is used for new instances of TSAttachmentStream
 // that represent new, un-uploaded outgoing attachments.
 - (instancetype)initWithContentType:(NSString *)contentType
-                          byteCount:(UInt32)byteCount
+                          byteCount:(UInt64)byteCount
                      sourceFilename:(nullable NSString *)sourceFilename
                      albumMessageId:(nullable NSString *)albumMessageId
                             albumId:(nullable NSString *)albumId

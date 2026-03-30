@@ -83,3 +83,10 @@ libdtproto_ffi.a
 
 # idea
 .idea/*
+
+# Firebase
+firebase-debug.log
+
+# Claude Code local state
+.claude/.DS_Store
+.claude/sync-state.json

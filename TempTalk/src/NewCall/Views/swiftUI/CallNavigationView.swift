@@ -13,7 +13,6 @@ import LiveKit
 struct CallNavigationView: View {
 
     @ObservedObject var currentCall: DTLiveKitCallModel
-    @ObservedObject private var timerManager = TimerDataManager.shared
     @Binding var cameraRotateItemHidden: Bool
     @EnvironmentObject var room: Room
     @EnvironmentObject var roomCtx: RoomContext
@@ -32,38 +31,48 @@ struct CallNavigationView: View {
                         .contentShape(Rectangle())
                 }
                 Spacer()
-                centerContent()
+                // 独立子 view 持有自己的 @ObservedObject，不受父 view 重建影响
+                CallNavigationCenterView(currentCall: currentCall)
+                    .environmentObject(room)
                 Spacer().frame(width: 64)
             }
             .padding(.horizontal, 10)
-            .frame(height: 44) // 固定高度，和系统导航栏一致
-            .padding(.top, safeAreaInsetsTop) // 自动加上状态栏/刘海高度
-            .background(Color.black.opacity(currentCall.callType == .private ? 0 : 0.2))
+            .frame(minHeight: 44)
         }
-        .ignoresSafeArea(edges: .top) // 内容顶到屏幕最上方
+        .background(
+            Color.black.opacity(currentCall.callType == .private ? 0 : 0.2)
+                .ignoresSafeArea(edges: .top)
+        )
     }
+}
 
-    @ViewBuilder
-    private func centerContent() -> some View {
+// MARK: - Center content 独立子 view
+// 持有自己的 @ObservedObject，SwiftUI 保证其生命周期独立于父 view 的重建
+private struct CallNavigationCenterView: View {
+
+    @ObservedObject var currentCall: DTLiveKitCallModel
+    @ObservedObject private var timerManager = TimerDataManager.shared
+    @ObservedObject private var dataManager = RoomDataManager.shared
+    @EnvironmentObject var room: Room
+
+    var body: some View {
         let connectState = room.connectionState
         let isPrivateOutgoing = currentCall.callType == .private && currentCall.callState == .outgoing
         let shouldShow = isPrivateOutgoing ? DTMeetingManager.shared.inMeeting : true
         let shouldShowRoomName = currentCall.callType != .private
         let reconnectingCount = DTMeetingManager.shared.reconnectingParticipants?.count ?? 0
-        let participantCount = connectState == .reconnecting ? reconnectingCount : room.allParticipants.count
+        let displayCount = connectState == .reconnecting ? reconnectingCount : dataManager.participantCount
 
         if shouldShow {
             VStack(spacing: 2) {
-                // 房间名 + 人数
                 if shouldShowRoomName {
-                    Text("\(currentCall.roomName)(\(participantCount))")
+                    Text("\(currentCall.roomName)(\(displayCount))")
                         .font(.system(size: 15))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(maxWidth: .infinity)
                 }
 
-                // 网络状态 or 通话时长
                 switch connectState {
                 case .reconnecting:
                     statusText(Localized("MEETING_NAVAGATION_CONNECTING"))
@@ -99,11 +108,6 @@ struct CallNavigationView: View {
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - SafeArea Helper
-    private var safeAreaInsetsTop: CGFloat {
-        UIApplication.shared.safeAreaInsets.top
     }
 }
 

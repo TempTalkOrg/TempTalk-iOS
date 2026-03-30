@@ -70,7 +70,7 @@ import Foundation
         if allActiveRoomIds.contains(targetRoomId) {
             // Normal case: call is still active, do full cleanup
             Task {
-                await DTMeetingManager.shared.othersideHungupCall(roomId: targetRoomId, isRemoveBar: true)
+                await DTMeetingManager.shared.othersideHungupCall(roomId: targetRoomId)
             }
         } else {
             // State already cleared, but CallKit might still be showing

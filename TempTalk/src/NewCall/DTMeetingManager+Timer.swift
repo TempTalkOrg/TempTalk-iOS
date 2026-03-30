@@ -44,14 +44,19 @@ extension DTMeetingManager {
     @objc
     private func callTimeoutAction(_ timer: Timer) {
         guard hasMeeting else { return }
+        guard !inMeeting else { return }
         
         if currentCall.isCaller {
             DTToastHelper.showCallToast(Localized("SINGLE_CALL_TIMEOUT"))
-        }
-        
-        Task {
-            Logger.info("\(logTag) call timeout need remoteCallHaveBeenCanceled")
-            await remoteCallHaveBeenCanceled()
+            Task {
+                Logger.info("\(logTag) caller timeout, canceling local call")
+                await cancelLocalCall()
+            }
+        } else {
+            Task {
+                Logger.info("\(logTag) callee timeout, remoteCallHaveBeenCanceled")
+                await remoteCallHaveBeenCanceled()
+            }
         }
     }
     
@@ -67,7 +72,7 @@ extension DTMeetingManager {
     // MARK: 会议计时器
     func startCallDurationTimer() {
         stopCallDurationTimer()
-        
+
         callDurationTimer = Timer.weakTimer(
             withTimeInterval: 1,
             target: self,
@@ -83,10 +88,8 @@ extension DTMeetingManager {
     
     @objc
     private func callDurationTimerAction(_ timer: Timer) {
-        guard inMeeting else {
-            return
-        }
-        
+        guard inMeeting else { return }
+
         if var duration = TimerDataManager.shared.duration {
             duration += 1
             TimerDataManager.shared.duration = duration
@@ -105,7 +108,7 @@ extension DTMeetingManager {
     
     func stopCallDurationTimer() {
         DispatchMainThreadSafe {
-            TimerDataManager.shared.duration = 1
+            TimerDataManager.shared.duration = nil
         }
         guard let callDurationTimer else {
             return

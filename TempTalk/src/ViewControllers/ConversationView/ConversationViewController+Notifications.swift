@@ -290,6 +290,10 @@ private extension ConversationViewController {
     }
     
     func saveDraftDidSuccess(_ notification: Notification) {
+        guard !isUserActivelyTyping else {
+            Logger.info("[Keyboard] saveDraftDidSuccess skipped: user is typing")
+            return
+        }
         loadDraftInCompose()
     }
     
@@ -310,6 +314,9 @@ private extension ConversationViewController {
 
             if !self.isGroupConversation {
                 self.updateNavigationBarSubtitleLabel()
+                let isEditing = self.inputToolbar.inputTextView.isFirstResponder
+                let textLen = self.inputToolbar.inputTextView.text?.count ?? 0
+                Logger.info("[Keyboard] signalAccountsDidChanged → recreateInputToolbar, isEditing=\(isEditing), currentTextLen=\(textLen)")
                 self.recreateInputToolbar()
                 self.reloadBottomBar()
             }

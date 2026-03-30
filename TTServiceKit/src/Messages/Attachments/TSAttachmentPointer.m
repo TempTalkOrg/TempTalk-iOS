@@ -41,7 +41,7 @@ NS_ASSUME_NONNULL_BEGIN
             appearInMediaGallery:(BOOL)appearInMediaGallery
          attachmentSchemaVersion:(NSUInteger)attachmentSchemaVersion
                   attachmentType:(TSAttachmentType)attachmentType
-                       byteCount:(unsigned int)byteCount
+                       byteCount:(unsigned long long)byteCount
                      contentType:(NSString *)contentType
                    encryptionKey:(NSData *)encryptionKey
                           height:(unsigned int)height
@@ -89,7 +89,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithServerId:(UInt64)serverId
                              key:(NSData *)key
                           digest:(nullable NSData *)digest
-                       byteCount:(UInt32)byteCount
+                       byteCount:(UInt64)byteCount
                      contentType:(NSString *)contentType
                            relay:(NSString *)relay
                   sourceFilename:(nullable NSString *)sourceFilename
@@ -136,7 +136,9 @@ NS_ASSUME_NONNULL_BEGIN
     
     albumMessageId = albumMessageId;
 
-    TSAttachmentPointer *pointer = [[TSAttachmentPointer alloc] initWithServerId:attachmentProto.id
+    uint64_t serverId = [SDS fitsInInt64:attachmentProto.id] ? attachmentProto.id : 0;
+
+    TSAttachmentPointer *pointer = [[TSAttachmentPointer alloc] initWithServerId:serverId
                                                                              key:attachmentProto.key
                                                                           digest:digest
                                                                        byteCount:attachmentProto.size

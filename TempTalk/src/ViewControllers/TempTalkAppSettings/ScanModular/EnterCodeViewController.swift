@@ -280,7 +280,7 @@ final class EnterCodeViewController: OWSViewController {
                     }
                 }
 
-                self.showPersonalCardView(recipientId: recipientId, account: account)
+                self.showPersonalCardView(recipientId: recipientId, account: account, isInviteCode: true)
             }
         }, failure: { [weak self] error, entity in
             guard let self = self else { return }
@@ -333,7 +333,7 @@ final class EnterCodeViewController: OWSViewController {
                     }
                 }
 
-                self.showPersonalCardView(recipientId: result.uid, account: account)
+                self.showPersonalCardView(recipientId: result.uid, account: account, isInviteCode: false)
             }
         }, failure: { [weak self] error in
             guard let self = self else { return }
@@ -346,10 +346,17 @@ final class EnterCodeViewController: OWSViewController {
         })
     }
 
-    private func showPersonalCardView(recipientId: String, account: SignalAccount?) {
+    private func showPersonalCardView(recipientId: String, account: SignalAccount?, isInviteCode: Bool) {
         var cardType = DTPersonalCardType.other
         if recipientId == TSAccountManager.localNumber() {
             cardType = .selfNoneEdit
+        }
+
+        // Set correct source based on input type
+        if isInviteCode {
+            DTAddFriendSourceManager.shared.setOtherSource(.randomCode)
+        } else {
+            DTAddFriendSourceManager.shared.setOtherSource(.inSearchUserId)
         }
 
         let cardVC = DTPersonalCardController(type: cardType, recipientId: recipientId, account: account)

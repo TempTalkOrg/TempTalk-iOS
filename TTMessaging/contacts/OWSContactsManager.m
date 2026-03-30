@@ -888,7 +888,6 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     !successHandler ?: successHandler(manualEditResult, finished);
 }
 
-// TODO dependency inject, avoid circular dependencies.
 - (OWSProfileManager *)profileManager
 {
     return [OWSProfileManager sharedManager];
@@ -901,30 +900,17 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
 
     SignalAccount *_Nullable signalAccount = [self signalAccountForRecipientId:recipientId];
     if (!signalAccount) {
-        // search system contacts for no-longer-registered signal users, for which there will be no SignalAccount
-//        OWSLogDebug(@"%@ no signal account", self.logTag);
         Contact *_Nullable nonSignalContact = self.allContactsMap[recipientId];
         if (!nonSignalContact) {
             return nil;
         }
         return nonSignalContact.fullName;
     }
-    
-    NSString *name = signalAccount.remarkName;
-    if (!shouldPreferRemarkName ||
-        !DTParamsUtils.validateString(name)) {
-        name = signalAccount.contactFullName;
-        if (!DTParamsUtils.validateString(name)) {
-            return nil;
-        }
-    }
 
-    NSString *multipleAccountLabelText = signalAccount.multipleAccountLabelText;
-    if (multipleAccountLabelText.length == 0) {
-        return name;
-    }
-
-    return [NSString stringWithFormat:@"%@ (%@)", name, multipleAccountLabelText];
+    return [self cachedContactNameForRecipientId:recipientId
+                                preferRemarkName:shouldPreferRemarkName
+                                   signalAccount:signalAccount
+                                     transaction:nil];
 }
 
 - (NSString *_Nullable)cachedContactNameForRecipientId:(NSString *)recipientId
@@ -955,13 +941,34 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
                                          signalAccount:(SignalAccount *)signalAccount
                                            transaction:(SDSAnyReadTransaction *)transaction {
     if (!signalAccount) {
-        // search system contacts for no-longer-registered signal users, for which there will be no SignalAccount
-        //        OWSLogDebug(@"%@ no signal account", self.logTag);
         Contact *_Nullable nonSignalContact = self.allContactsMap[recipientId];
         if (!nonSignalContact) {
             return nil;
         }
         return nonSignalContact.fullName;
+    }
+
+    if ([signalAccount isBot]) {
+        if (shouldPreferRemarkName) {
+            NSString *displayName = signalAccount.remarkName;
+            if (!DTParamsUtils.validateString(displayName)) {
+                displayName = signalAccount.contactFullName;
+            }
+            return displayName;
+        } else {
+            NSString *officialAccountText = Localized(@"PERSON_CARD_OFFICIAL_ACCOUNT", @"");
+
+            if (DTParamsUtils.validateString(signalAccount.remarkName)) {
+                NSString *nameLabel = Localized(@"CONTACT_PROFILE_NAME", @"");
+                NSString *botName = signalAccount.contactFullName;
+
+                if (DTParamsUtils.validateString(botName) && ![botName isEqualToString:recipientId]) {
+                    return [NSString stringWithFormat:@"%@・%@: %@", officialAccountText, nameLabel, botName];
+                }
+            }
+
+            return officialAccountText;
+        }
     }
 
     NSString *name = signalAccount.remarkName;

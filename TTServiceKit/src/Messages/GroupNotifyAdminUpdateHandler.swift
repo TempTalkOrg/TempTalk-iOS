@@ -76,23 +76,23 @@ class GroupNotifyAdminUpdateHandler : GroupNotifyHandler {
                               timeStamp: UInt64,
                               transaction: SDSAnyWriteTransaction) {
         
-        // 过滤出所有添加到群中的管理员成员
         let addedAdminIds = getAddedAdminIds(from: groupNotifyEntity, in: newGroupModel)
+        guard !addedAdminIds.isEmpty else { return }
         
-        // 更新管理员列表
         updateGroupAdminIds(with: addedAdminIds, in: newGroupModel)
         
         newGroupThread.anyUpdateGroupThread(transaction: transaction) { groupThread in
             groupThread.groupModel = newGroupModel
         }
 
-        // 创建并插入系统信息消息
         let infoMessageDesc = DTGroupUtils.getMemberChangedInfoString(withAddedAdminIds: addedAdminIds, removedIds: nil, transaction: transaction)
-        let systemInfoMsg = TSInfoMessage(timestamp: timeStamp,
-                                          in: newGroupThread,
-                                          messageType:.typeGroupUpdate,
-                                          customMessage: infoMessageDesc)
-        systemInfoMsg.anyInsert(transaction: transaction)
+        if !infoMessageDesc.isEmpty {
+            let systemInfoMsg = TSInfoMessage(timestamp: timeStamp,
+                                              in: newGroupThread,
+                                              messageType:.typeGroupUpdate,
+                                              customMessage: infoMessageDesc)
+            systemInfoMsg.anyInsert(transaction: transaction)
+        }
     }
 
     // 获取添加的管理员 ID
@@ -182,8 +182,10 @@ class GroupNotifyAdminUpdateHandler : GroupNotifyHandler {
         let infoMessageDesc = DTGroupUtils.getMemberChangedInfoString(withAddedAdminIds: nil,
                                                                       removedIds: removedAdminIds,
                                                                       transaction: transaction)
-        let systemInfoMsg = TSInfoMessage.init(timestamp: timeStamp, in: newGroupThread, messageType: .typeGroupUpdate, customMessage: infoMessageDesc)
-        systemInfoMsg.anyInsert(transaction: transaction)
+        if !infoMessageDesc.isEmpty {
+            let systemInfoMsg = TSInfoMessage(timestamp: timeStamp, in: newGroupThread, messageType: .typeGroupUpdate, customMessage: infoMessageDesc)
+            systemInfoMsg.anyInsert(transaction: transaction)
+        }
     }
     
     func updaterGoupOwnerChange(envelope: DSKProtoEnvelope,

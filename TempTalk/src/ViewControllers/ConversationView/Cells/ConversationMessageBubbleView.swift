@@ -295,7 +295,6 @@ class ConversationMessageBubbleView: UIView {
         textView.textContainerInset = .zero
         textView.contentInset = .zero
         textView.textContainer.lineFragmentPadding = 0
-        textView.dataDetectorTypes = .link
         textView.delegate = self
         textView.isHidden = true
 
@@ -327,11 +326,11 @@ class ConversationMessageBubbleView: UIView {
         return visualView
     }()
     
-    private lazy var tapToViewLabel: UILabel = {
-        let label = UILabel()
+    private lazy var tapToViewLabel: PaddingLabel = {
+        let label = PaddingLabel(insets: UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12))
         label.textAlignment = .center
         label.font = UIFont.systemFont(ofSize: 14)
-        label.layer.cornerRadius = 3
+        label.layer.cornerRadius = 8
         label.layer.masksToBounds = true
         return label
     }()
@@ -413,11 +412,14 @@ extension ConversationMessageBubbleView {
                     bodyMediaView.addSubview(confidentialView)
                     confidentialView.autoPinEdgesToSuperviewEdges()
                     confidentialView.contentView.addSubview(tapToViewLabel)
-                    tapToViewLabel.sizeToFit()
-                    tapToViewLabel.autoCenterInSuperview()
                     tapToViewLabel.textColor = UIColor.white
                     tapToViewLabel.backgroundColor = UIColor.color(rgbHex: 0x000000, alpha: 0.3)
                     tapToViewLabel.text = Localized("CONVERSATION_VIEW_CONFIDETIAL_TAP_TO_VIEW")
+                    tapToViewLabel.snp.remakeConstraints { make in
+                        make.center.equalToSuperview()
+                        make.leading.greaterThanOrEqualToSuperview().offset(12)
+                        make.trailing.lessThanOrEqualToSuperview().offset(-12)
+                    }
                 }
             } else {
                 confidentialView.isHidden = true
@@ -438,11 +440,14 @@ extension ConversationMessageBubbleView {
             addSubview(confidentialView)
             confidentialView.autoPinEdgesToSuperviewEdges()
             confidentialView.contentView.addSubview(tapToViewLabel)
-            tapToViewLabel.sizeToFit()
-            tapToViewLabel.autoCenterInSuperview()
             tapToViewLabel.textColor = UIColor.white
             tapToViewLabel.backgroundColor = UIColor.color(rgbHex: 0x000000, alpha: 0.3)
             tapToViewLabel.text = Localized("CONVERSATION_VIEW_CONFIDETIAL_TAP_TO_VIEW")
+            tapToViewLabel.snp.remakeConstraints { make in
+                make.center.equalToSuperview()
+                make.leading.greaterThanOrEqualToSuperview().offset(12)
+                make.trailing.lessThanOrEqualToSuperview().offset(-12)
+            }
         }
     }
     
@@ -584,7 +589,10 @@ extension ConversationMessageBubbleView: UITextViewDelegate {
 
         let mentionsAll = "\(CVBodyTextRenderItem.kVisitingCardScheme)://\(MENTIONS_ALL)"
         guard !URL.absoluteString.contains(mentionsAll) else { return false }
-
+        if let groupThread = self.renderItem?.viewItem.thread as? TSGroupThread {
+            let groupIdStr = TSGroupThread.transformToServerGroupId(withLocalGroupId: groupThread.groupModel.groupId)
+            DTAddFriendSourceManager.shared.setGroupSource(.inGroupUserID, groupId: groupIdStr ?? "")
+        }
         delegate.messageBubbleView?(self, didTapLinkWith: viewItem, url: URL)
         return false
     }
@@ -601,6 +609,25 @@ extension ConversationMessageBubbleView: ConversationEmojiReactionViewDelegate {
     func reactionView(_ reactionView: ConversationEmojiReactionView, didLongPressWith emoji: String) {
         guard let viewItem = renderItem?.viewItem else { return }
         delegate?.messageBubbleView?(self, didLongPressReactionViewWith: viewItem, emoji: emoji)
+    }
+}
+
+// MARK: - PaddingLabel
+
+private final class PaddingLabel: UILabel {
+    private let insets: UIEdgeInsets
+    init(insets: UIEdgeInsets) {
+        self.insets = insets
+        super.init(frame: .zero)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func drawText(in rect: CGRect) {
+        super.drawText(in: rect.inset(by: insets))
+    }
+    override var intrinsicContentSize: CGSize {
+        let size = super.intrinsicContentSize
+        return CGSize(width: size.width + insets.left + insets.right,
+                      height: size.height + insets.top + insets.bottom)
     }
 }
 

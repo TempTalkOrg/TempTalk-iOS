@@ -1168,6 +1168,7 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     NSAttributedString *name;
+    SignalAccount *account = nil;
     if (thread.isGroupThread) {
         if (thread.name.length == 0) {
             name = [[NSAttributedString alloc] initWithString:[MessageStrings newGroupDefaultTitle]];
@@ -1203,6 +1204,7 @@ NS_ASSUME_NONNULL_BEGIN
         name = fetchedName;
         
         NSDictionary <NSString *, SignalAccount *> *signalAccountMap = contactsManager.signalAccountMap;
+        account = signalAccountMap[contactIdentifier];
         if (signalAccountMap.allKeys.count > 1) {
             if (self.thread.threadRecord.isNoteToSelf) {
                 self.nameView.external = NO;
@@ -1215,7 +1217,13 @@ NS_ASSUME_NONNULL_BEGIN
     if (self.thread.threadRecord.isNoteToSelf) {
         self.nameView.name = MessageStrings.noteToSelf;
     } else {
-        if ([thread.threadRecord messageExpiresInSeconds] > 0){
+        BOOL isBot = [account isBot];
+
+        if (isBot) {
+            name = [name appendingBotIconWithFont:self.nameFont];
+        }
+
+        if ([thread.threadRecord messageExpiresInSeconds] > 0) {
             name = [DTConversactionSettingUtils msgDisappearingTipsOnThreadWithMessageExpiry:thread.threadRecord.messageExpiresInSeconds threadName:name font:self.nameFont];
         }
         self.nameView.attributeName = name;

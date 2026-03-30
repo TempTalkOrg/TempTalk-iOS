@@ -66,7 +66,7 @@
     
     TSAttachmentStream *attachmentStream =
         [[TSAttachmentStream alloc] initWithContentType:contentType
-                                              byteCount:(UInt32)dataSource.dataLength
+                                              byteCount:(UInt64)dataSource.dataLength
                                          sourceFilename:sourceFilename
                                          albumMessageId:nil
                                                 albumId:nil];
@@ -114,7 +114,7 @@
     
     TSAttachmentStream *attachmentStream =
         [[TSAttachmentStream alloc] initWithContentType:contentType
-                                              byteCount:(UInt32)dataSource.dataLength
+                                              byteCount:(UInt64)dataSource.dataLength
                                          sourceFilename:sourceFilename
                                          albumMessageId:nil
                                                 albumId:nil];
@@ -166,7 +166,7 @@
     if(attachmentStream.digest.length){
         avatarInfo[@"digest"] = [attachmentStream.digest base64EncodedString];
     }
-    avatarInfo[@"byteCount"] = [NSString stringWithFormat:@"%u",(unsigned int)attachmentStream.byteCount];
+    avatarInfo[@"byteCount"] = [NSString stringWithFormat:@"%llu", attachmentStream.byteCount];
     avatarInfo[@"contentType"] = attachmentStream.contentType;
     avatarInfo[@"sourceFilename"] = attachmentStream.sourceFilename;
     avatarInfo[@"attachmentType"] = @(attachmentStream.attachmentType);

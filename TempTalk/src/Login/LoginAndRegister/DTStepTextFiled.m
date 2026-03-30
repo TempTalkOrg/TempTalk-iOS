@@ -46,6 +46,7 @@
 @implementation DTStepTextFiled
 
 - (void)dealloc{
+    [_textView resignFirstResponder];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
@@ -208,7 +209,14 @@
 - (void)xx_didBecomeActive{
     // restart Flicker Animation
     if (_config.showFlickerAnimation && _textView.text.length < self.subviews.count) {
-        UITextField *textField = self.subviews[_textView.text.length];
+        UIView *subview = self.subviews[_textView.text.length];
+        if (![subview isKindOfClass:[UITextField class]]) {
+            return;
+        }
+        UITextField *textField = (UITextField *)subview;
+        if (textField.layer.sublayers.count == 0) {
+            return;
+        }
         CALayer *layer = textField.layer.sublayers[0];
         [layer removeAnimationForKey:kFlickerAnimation];
         [layer addAnimation:[self xx_alphaAnimation] forKey:kFlickerAnimation];
@@ -230,13 +238,20 @@
 - (void)xx_setDefault
 {
     for (NSUInteger i = 0; i < _config.inputBoxNumber; ++i) {
-        UITextField *textField = self.subviews[i];
+        if (i >= self.subviews.count) {
+            break;
+        }
+        UIView *subview = self.subviews[i];
+        if (![subview isKindOfClass:[UITextField class]]) {
+            continue;
+        }
+        UITextField *textField = (UITextField *)subview;
         textField.text = @"";
-        
+
         if (_config.inputBoxColor) {
             textField.layer.borderColor = _config.inputBoxColor.CGColor;
         }
-        if (_config.showFlickerAnimation) {
+        if (_config.showFlickerAnimation && textField.layer.sublayers.count > 0) {
             CALayer *layer = textField.layer.sublayers[0];
             layer.hidden = YES;
             [layer removeAnimationForKey:kFlickerAnimation];
@@ -251,7 +266,14 @@
 - (void)xx_flickerAnimation:(NSString *)text
 {
     if (_config.showFlickerAnimation && text.length < self.subviews.count) {
-        UITextField *textField = self.subviews[text.length];
+        UIView *subview = self.subviews[text.length];
+        if (![subview isKindOfClass:[UITextField class]]) {
+            return;
+        }
+        UITextField *textField = (UITextField *)subview;
+        if (textField.layer.sublayers.count == 0) {
+            return;
+        }
         CALayer *layer = textField.layer.sublayers[0];
         layer.hidden = NO;
         [layer addAnimation:[self xx_alphaAnimation] forKey:kFlickerAnimation];
@@ -261,32 +283,47 @@
 - (void)xx_setValue:(NSString *)text
 {
     _inputFinish = (text.length == _config.inputBoxNumber);
-    
+
     //修改光标位置
     if (_config.tintColor && text.length < _config.inputBoxNumber) {
         [self clearFieldLayers];
-        UITextField *nextTextField = self.subviews[text.length];
-        if (_config.inputBoxWidth > 2 && _config.inputBoxHeight > 8) {
-            CGFloat w = 2, y = 10, x = (_config.inputBoxWidth-w)/2, h = _config.inputBoxHeight-2*y;
-            [nextTextField.layer addSublayer:({
-                UIBezierPath *path = [UIBezierPath bezierPathWithRect:CGRectMake(x,y,w,h)];
-                CAShapeLayer *layer = [CAShapeLayer layer];
-                layer.path = path.CGPath;
-                layer.fillColor = _config.tintColor.CGColor;
-                [layer addAnimation:[self xx_alphaAnimation] forKey:kFlickerAnimation];
-                layer;
-            })];
+        if (text.length < self.subviews.count) {
+            UIView *nextSubview = self.subviews[text.length];
+            if ([nextSubview isKindOfClass:[UITextField class]]) {
+                UITextField *nextTextField = (UITextField *)nextSubview;
+                CGFloat w = 2, y = 10, x = (_config.inputBoxWidth-w)/2, h = _config.inputBoxHeight-2*y;
+                [nextTextField.layer addSublayer:({
+                    UIBezierPath *path = [UIBezierPath bezierPathWithRect:CGRectMake(x,y,w,h)];
+                    CAShapeLayer *layer = [CAShapeLayer layer];
+                    layer.path = path.CGPath;
+                    layer.fillColor = _config.tintColor.CGColor;
+                    [layer addAnimation:[self xx_alphaAnimation] forKey:kFlickerAnimation];
+                    layer;
+                })];
+            }
         }
     } else {
         [self clearFieldLayers];
     }
-    
+
     for (NSUInteger i = 0; i < text.length; ++i) {
+        if (i >= self.subviews.count) {
+            break;
+        }
+
+        UIView *subview = self.subviews[i];
+        if (![subview isKindOfClass:[UITextField class]]) {
+            continue;
+        }
+
         unichar c = [text characterAtIndex:i];
-        UITextField *textField = self.subviews[i];
-        textField.text = [NSString stringWithFormat:@"%c",c];
+        UITextField *textField = (UITextField *)subview;
+
+        // 安全地设置 text，避免在 dealloc 或不稳定状态下操作
         if (!textField.secureTextEntry && _config.customInputHolder.length > 0) {
             textField.text = _config.customInputHolder;
+        } else {
+            textField.text = [NSString stringWithFormat:@"%c",c];
         }
         
         // Input Status
@@ -326,8 +363,19 @@
 
 - (void)clearFieldLayers {
     for (int i = 0; i < _config.inputBoxNumber; i++) {
-        UITextField *field = self.subviews[i];
-        [field.layer removeAllSublayers];
+        if (i >= self.subviews.count) {
+            break;
+        }
+        UIView *subview = self.subviews[i];
+        if ([subview isKindOfClass:[UITextField class]]) {
+            UITextField *field = (UITextField *)subview;
+            NSArray *sublayers = [field.layer.sublayers copy];
+            for (CALayer *layer in sublayers) {
+                if ([layer isKindOfClass:[CAShapeLayer class]]) {
+                    [layer removeFromSuperlayer];
+                }
+            }
+        }
     }
 }
 

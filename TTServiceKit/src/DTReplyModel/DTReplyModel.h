@@ -7,6 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
+@class UIImage;
 @protocol ConversationViewItem;
 @class TSAttachmentPointer;
 @class TSAttachmentStream;
@@ -82,6 +83,17 @@ typedef NS_ENUM(NSInteger, DTInputPreviewType) {//输入框引用的类型
                  attachmentStream:(nullable TSAttachmentStream *)attachmentStream
        thumbnailAttachmentPointer:(nullable TSAttachmentPointer *)thumbnailAttachmentPointer
           thumbnailDownloadFailed:(BOOL)thumbnailDownloadFailed;
+
+- (instancetype)initWithTimestamp:(uint64_t)timestamp
+                         authorId:(NSString *)authorId
+                             body:(nullable NSString *)body
+                   thumbnailImage:(nullable UIImage *)thumbnailImage
+                      contentType:(nullable NSString *)contentType
+                   sourceFilename:(nullable NSString *)sourceFilename
+                 attachmentStream:(nullable TSAttachmentStream *)attachmentStream
+       thumbnailAttachmentPointer:(nullable TSAttachmentPointer *)thumbnailAttachmentPointer
+          thumbnailDownloadFailed:(BOOL)thumbnailDownloadFailed
+             conversationViewItem:(nullable id<ConversationViewItem>)conversationItem;
 
 // Builds a not-yet-sent QuotedReplyModel
 + (nullable instancetype)replyModelForConversationViewItem:(id<ConversationViewItem>)conversationItem

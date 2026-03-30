@@ -26,9 +26,10 @@ enum BulletMessageType: String {
 
 @objcMembers
 class DTBulletChatView: UIView {
-    
+
     lazy var origionMsgs: Array<DTBulletChatModel> = []
     var displayMsgs: Array<DTBulletChatModel> = []
+    private var disappearTimers: [String: Timer] = [:]
 
     private lazy var tableView: UITableView = {
         let tableView = UITableView(frame: .zero, style: .plain)
@@ -111,27 +112,28 @@ class DTBulletChatView: UIView {
         Logger.info("[BulletChat] DTBulletChatView insertBulletChat - added to displayMsgs, count: \(displayMsgs.count)")
 
         reloadData()
-        let disappearDuration = DispatchTimeInterval.seconds(DTMeetingManager.shared.autoHideTimeoutDuration())
-        DispatchQueue.main.asyncAfter(deadline: .now() + disappearDuration) { [weak self] in
+        disappearTimers[messageKey]?.invalidate()
+        let duration = TimeInterval(DTMeetingManager.shared.autoHideTimeoutDuration())
+        let timer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
             guard let self else { return }
-
-            if (displayMsgs.contains(chatModel)) {
-                let targetKey = "\(chatModel.timestamp)_\(chatModel.id)"
-                displayMsgs.removeAll { msg in
-                    let msgKey = "\(msg.timestamp)_\(msg.id)"
-                    return msgKey == targetKey
-                }
-            }
+            displayMsgs.removeAll { "\($0.timestamp)_\($0.id)" == messageKey }
+            disappearTimers.removeValue(forKey: messageKey)
             reloadData()
         }
+        disappearTimers[messageKey] = timer
 
     }
     
     func reloadData() {
-        
         tableView.reloadData()
     }
-    
+
+    override func removeFromSuperview() {
+        super.removeFromSuperview()
+        disappearTimers.values.forEach { $0.invalidate() }
+        disappearTimers.removeAll()
+    }
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         return nil
     }

@@ -7,6 +7,9 @@
 //
 
 import Foundation
+import UIKit
+import TTMessaging
+import TTServiceKit
 
 @objc
 public class DTConversactionSettingUtils: NSObject {
@@ -38,8 +41,7 @@ public class DTConversactionSettingUtils: NSObject {
         var msgDisappearingTips = msgDisappearingTips(messageExpiry: messageExpiry)
         if !msgDisappearingTips.isEmpty {
             msgDisappearingTips = " [\(msgDisappearingTips)]"
-            return threadName.stringByAppendingString(msgDisappearingTips, attributes: [.foregroundColor: Theme.tthirdColor,
-                                                                         .font: font])
+            return threadName.stringByAppendingString(msgDisappearingTips, attributes: [.foregroundColor: Theme.tthirdColor, .font: font])
         }
         return nil
     }

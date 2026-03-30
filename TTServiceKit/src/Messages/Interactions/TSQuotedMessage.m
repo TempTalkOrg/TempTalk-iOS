@@ -299,7 +299,9 @@ NS_ASSUME_NONNULL_BEGIN
 
     for (OWSAttachmentInfo *info in self.quotedAttachments) {
 
-//        OWSAssertDebug(info.attachmentId);
+        if (!info.attachmentId.length) {
+            continue;
+        }
         TSAttachment *attachment = [TSAttachment anyFetchWithUniqueId:info.attachmentId transaction:transaction];
         if (![attachment isKindOfClass:[TSAttachmentStream class]]) {
             continue;

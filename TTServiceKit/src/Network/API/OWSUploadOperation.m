@@ -664,7 +664,7 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
                 NSError *error;
                 waveform = [AudioWaveformManagerImpl.shared audioWaveformSyncForAudioPath:[attachmentStream filePath] error:&error];
                 OWSLogInfo(@"send voice get attachmentStream file path: %@", [attachmentStream filePath]);
-                OWSLogInfo(@"send voice get attachmentStream file byteCount: %d", [attachmentStream byteCount]);
+                OWSLogInfo(@"send voice get attachmentStream file byteCount: %llu", [attachmentStream byteCount]);
                 if (error) {
                     OWSLogError(@"send voice draw error:%@.", error);
                     error.isRetryable = YES;

@@ -46,7 +46,7 @@ NS_ASSUME_NONNULL_BEGIN
             appearInMediaGallery:(BOOL)appearInMediaGallery
          attachmentSchemaVersion:(NSUInteger)attachmentSchemaVersion
                   attachmentType:(TSAttachmentType)attachmentType
-                       byteCount:(unsigned int)byteCount
+                       byteCount:(unsigned long long)byteCount
                      contentType:(NSString *)contentType
                    encryptionKey:(NSData *)encryptionKey
                           height:(unsigned int)height
@@ -106,7 +106,7 @@ NS_ASSUME_NONNULL_BEGIN
 // --- CODE GENERATION MARKER
 
 - (instancetype)initWithContentType:(NSString *)contentType
-                          byteCount:(UInt32)byteCount
+                          byteCount:(UInt64)byteCount
                      sourceFilename:(nullable NSString *)sourceFilename
                      albumMessageId:(nullable NSString *)albumMessageId
                             albumId:(nullable NSString *)albumId
@@ -316,7 +316,7 @@ NS_ASSUME_NONNULL_BEGIN
     }
     
     if (![[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
-        OWSFailDebug(@"%@ File not exists for encryptedFilePath.", self.logTag);
+        OWSLogWarn(@"%@ Encrypted file already removed: %@", self.logTag, filePath);
         return YES;
     }
     
@@ -523,6 +523,9 @@ NS_ASSUME_NONNULL_BEGIN
             return nil;
         }
         NSData *data = [NSData dataWithContentsOfURL:mediaUrl];
+        if (!data) {
+            return nil;
+        }
         if (![self isValidImageWithData:data]) {
             return nil;
         }
@@ -549,6 +552,9 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     NSData *data = [NSData dataWithContentsOfURL:mediaUrl];
+    if (!data) {
+        return nil;
+    }
     if (![self isValidImageWithData:data]) {
         return nil;
     }
@@ -916,7 +922,7 @@ NS_ASSUME_NONNULL_BEGIN
     NSString *thumbnailName = [NSString stringWithFormat:@"quoted-thumbnail-%@", self.sourceFilename];
     TSAttachmentStream *thumbnailAttachment =
         [[TSAttachmentStream alloc] initWithContentType:OWSMimeTypeImageJpeg
-                                              byteCount:(uint32_t)thumbnailData.length
+                                              byteCount:(uint64_t)thumbnailData.length
                                          sourceFilename:thumbnailName albumMessageId:nil
                                                 albumId:nil];
 

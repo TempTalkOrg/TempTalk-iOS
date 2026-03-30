@@ -556,7 +556,7 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
         
         TSAttachmentStream *attachmentStream =
             [[TSAttachmentStream alloc] initWithContentType:contentType
-                                                  byteCount:(UInt32)dataSource.dataLength
+                                                  byteCount:(UInt64)dataSource.dataLength
                                              sourceFilename:sourceFilename
                                              albumMessageId:message.uniqueId
                                                     albumId:thread.uniqueId];

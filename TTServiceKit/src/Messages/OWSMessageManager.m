@@ -982,11 +982,7 @@ NS_ASSUME_NONNULL_BEGIN
             }
         }
         
-        // 3.1.3
-        // 如果同步消息是发送到 note 的，serverTimestamp 取 envelope 上的 systemShowTimestamp，
-        // 同步 note 的 syncMessage.sent 中的 serverTimestamp 是端上随便设置的
-        BOOL isSendToNote = [localNumber isEqualToString:syncMessage.sent.destination];
-        uint64_t syncMessageServerTimestamp = isSendToNote ? envelope.systemShowTimestamp : (syncMessage.sent.serverTimestamp ?: envelope.systemShowTimestamp);
+        uint64_t syncMessageServerTimestamp = envelope.systemShowTimestamp;
         
         OWSIncomingSentMessageTranscript *transcript =
             [[OWSIncomingSentMessageTranscript alloc] initWithProto:syncMessage.sent

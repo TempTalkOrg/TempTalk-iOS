@@ -378,10 +378,12 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
                 title: Localized("MESSAGE_ACTION_COPY_TEXT", comment: "Action sheet button title"),
                 subtitle: nil,
                 block: { _ in
-                    if let selectedRange = selectionView.getSelection() {
-                        let selectedString = textView.text.substring(withRange: selectedRange)
-                        DTSecurePasteboard.setString(selectedString)
-                    }
+                    guard let selectedRange = selectionView.getSelection() else { return }
+                    guard let text = textView.text, !text.isEmpty else { return }
+                    guard selectedRange.location + selectedRange.length <= text.count else { return }
+                    
+                    let selectedString = text.substring(withRange: selectedRange)
+                    UIPasteboard.general.string = selectedString
                 }
             )
             let forwardAction = MenuAction(
@@ -390,10 +392,12 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
                 subtitle: nil,
                 block: { [weak self] _ in
                     guard let self else { return }
-                    if let selectedRange = selectionView.getSelection() {
-                        let selectedString = textView.text.substring(withRange: selectedRange)
-                        self.forward(text: selectedString)
-                    }
+                    guard let selectedRange = selectionView.getSelection() else { return }
+                    guard let text = textView.text, !text.isEmpty else { return }
+                    guard selectedRange.location + selectedRange.length <= text.count else { return }
+                    
+                    let selectedString = text.substring(withRange: selectedRange)
+                    self.forward(text: selectedString)
                 }
             )
             let selectAllAction = MenuAction(

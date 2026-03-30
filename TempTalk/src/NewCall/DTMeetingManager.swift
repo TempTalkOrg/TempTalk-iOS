@@ -29,6 +29,8 @@ import DTProto
     static var countDownInterval: Int32 = 0;
     var hostRoomContentVC: DTHostingController<AnyView>?
     var lastParticipantsCount: Int32 = 0;
+    var autoLeaveTipView: DTAutoLeaveTipView?
+    var hasShowLeaveTipView: Bool = false
     // Timer
     var callTimeoutTimer: Timer?
     var callDurationTimer: Timer?
@@ -163,6 +165,11 @@ import DTProto
 
     /// 处理状态变化的副作用（在锁内调用，保持简单）
     private func handleStateChange(to newState: MeetingLifecycleState) {
+        let isActive = newState.isActive
+        DispatchQueue.main.async {
+            CurrentAppContext().appUserDefaults().set(isActive, forKey: TSConstants.kSharedMeetingActiveKey)
+        }
+
         switch newState {
         case .idle:
             DispatchQueue.main.async {

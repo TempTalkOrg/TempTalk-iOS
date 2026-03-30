@@ -47,6 +47,8 @@ import Foundation
     static var bgpopupColor: UIColor { get } // tableSettingCellBackgroundColor
     static var bgelevateColor: UIColor { get } // blankBackgroundColor
     static var bgskyColor: UIColor { get } // bubleOutgoingBackgroundColor
+    static var bgskyAlphaColor: UIColor { get } // confide mode bubble background color
+    static var bgConfidentialCompensatedColor: UIColor { get } // confide mode input toolbar background color
     static var bgspaceColor: UIColor { get }
     static var defaultColor: UIColor { get }
     static var bgpagePrimaryColor: UIColor { get }

@@ -101,7 +101,7 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
     if(!forceDownload){
         for (TSAttachmentPointer *attachmentPointer in items) {
             
-            UInt32 byteCount = attachmentPointer.byteCount;
+            UInt64 byteCount = attachmentPointer.byteCount;
             
             if (byteCount >= kAttachmentAutoDownloadMaxSize) {
                 OWSLogInfo(@"Ignore download for message: %@, reason: over max file size", message.uniqueId);

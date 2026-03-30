@@ -132,10 +132,9 @@ public extension DTCallKitManager {
             newCall.inviteCallees = inviteCallees
             newCall.timestamp = timestamp
 
-            Logger.info("\(logTag) from callkit show Livekit answer")
-            DispatchMainThreadSafe {
-                DTMeetingManager.shared.showAnswer(call: newCall, fromCallKit: true)
-            }
+            Logger.info("\(logTag) from callkit accepting call directly without blocking main thread")
+
+            await DTMeetingManager.shared.showAnswerFromCallKit(call: newCall)
         }
 
         let manager = DTMeetingManager.shared
@@ -146,8 +145,7 @@ public extension DTCallKitManager {
                     Logger.info("\(self.logTag) hangup last call meeting")
                     await DTMeetingManager.shared.hangupCall(needSyncCallKit: true,
                                                              isByLocal: true,
-                                                             roomId: oldRoomId,
-                                                             removeMeetingBar: true)
+                                                             roomId: oldRoomId)
 
                     // 清理旧会议的 alert view，防止在接听新会议后显示
                     Logger.info("\(self.logTag) remove alert view for old call: \(oldRoomId)")
@@ -290,8 +288,27 @@ public extension DTCallKitManager {
             await DTMeetingManager.shared.hangupCall(needSyncCallKit: false,
                                                      isByLocal: true,
                                                      roomId: roomId,
-                                                     removeMeetingBar: true,
                                                      isFromCallKit: true)
+            DTMeetingManager.shared.syncServerCalls()
+        }
+    }
+
+    @objc(rejectCallFromCallKit:) func rejectCallFromCallKit(calling: DSKProtoCallMessageCalling) {
+        guard let caller = calling.caller, let roomId = calling.roomID else {
+            Logger.error("\(logTag) rejectCallFromCallKit: missing caller or roomId")
+            return
+        }
+        let callType = calling.conversationID.map { $0.getCallInfo().callType } ?? .instant
+        Task {
+            Logger.info("\(self.logTag) rejectCallFromCallKit caller:\(caller) roomId:\(roomId)")
+            let tempCall = DTLiveKitCallModel()
+            tempCall.caller = caller
+            tempCall.roomId = roomId
+            tempCall.callType = callType
+            if callType == .private, let localNumber = TSAccountManager.localNumber() {
+                tempCall.callees = [localNumber]
+            }
+            await DTMeetingManager.shared.rejectRemoteCall(with: tempCall)
             DTMeetingManager.shared.syncServerCalls()
         }
     }

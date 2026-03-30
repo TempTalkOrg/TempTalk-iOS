@@ -235,9 +235,10 @@
 //        __block NSString *secondUserName = nil;
         NSMutableSet <NSString *> *authorNames = [NSMutableSet new];
         [subForwardingMessages enumerateObjectsUsingBlock:^(DTCombinedForwardingMessage * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-            [authorNames addObject:obj.authorName];
-            if(idx == 0){
-                firstUserName = obj.authorName;
+            NSString *name = obj.authorName ?: @"";
+            [authorNames addObject:name];
+            if (idx == 0) {
+                firstUserName = name;
             }
         }];
         NSString *overviewFormat = Localized(@"FORWARD_MESSAGE_COMBINE_CONTACT_OVERVIEW", @"");

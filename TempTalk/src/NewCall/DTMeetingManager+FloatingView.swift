@@ -38,6 +38,10 @@ extension DTMeetingManager {
                 }
                 
                 NotificationCenter.default.post(name: Notification.Name("CallShareZoomDidChange"), object: nil)
+
+                Task { @MainActor in
+                    self.roomContext?.checkAndPresentScreenShareIfNeeded()
+                }
             }
             
             objc_setAssociatedObject(self, &AssociatedKeys.floatingViewKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)

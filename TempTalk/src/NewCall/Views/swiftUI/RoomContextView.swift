@@ -8,24 +8,25 @@ struct RoomContextView: View {
     @EnvironmentObject var roomCtx: RoomContext
 
     @ObservedObject private var currentCall = DTMeetingManager.shared.currentCall
-    @ObservedObject private var dataManager = RoomDataManager.shared
-    
+
     @State private var isRightItemHidden: Bool = true
     @State private var isGroupMembers: Bool = false
     @State private var showQuickPanel = false
     @State private var isPopupPresented = false
-    
+    @State private var hasRaiseHands: Bool = RoomDataManager.shared.hasRaiseHands
+    @State private var localRaiseHand: Bool = RoomDataManager.shared.localRaiseHand
+
     @State private var delayTask: Task<Void, Never>?
-    
+
     var body: some View {
-        let safeBottom = bottomSafeArea()
         let toolbarHeight: CGFloat = 60
-        let overlayBottomInset = safeBottom + toolbarHeight
+        let toolbarBottomPadding: CGFloat = 24
+        let overlayBottomInset = toolbarHeight + toolbarBottomPadding
 
         ZStack {
             // 背景色
             backgroundView
-            
+
             // 主内容
             CallContentView(currentCall: currentCall)
                 .environmentObject(appCtx)
@@ -35,9 +36,9 @@ struct RoomContextView: View {
             BulletOverlayView(
                 bottomInset: overlayBottomInset,
                 showQuickPanel: $showQuickPanel,
-                hasRaiseHand: $dataManager.hasRaiseHands
+                hasRaiseHand: $hasRaiseHands
             )
-            
+
             // 顶部导航
             CallNavigationView(
                 currentCall: roomCtx.currentCall,
@@ -60,18 +61,19 @@ struct RoomContextView: View {
                     DTMeetingManager.shared.presentMicNoiseVC()
                 },
                 isGroupMembers: $isGroupMembers,
-                localRaiseHand: $dataManager.localRaiseHand
+                localRaiseHand: $localRaiseHand
             )
             .environmentObject(appCtx)
             .environmentObject(roomCtx)
             .environmentObject(roomCtx.room)
             .frame(maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, safeBottom > 0 ? 24 : 20)
+            .padding(.bottom, toolbarBottomPadding)
         }
+        .onReceive(RoomDataManager.shared.$hasRaiseHands) { hasRaiseHands = $0 }
+        .onReceive(RoomDataManager.shared.$localRaiseHand) { localRaiseHand = $0 }
         .onAppear {
             delayTask = Task {
-                // 检查启动的视频分享
-                if  DTMeetingManager.shared.isFromCallkit && needLayoutTopVCScreenShare() {
+                if DTMeetingManager.shared.isFromCallkit && needLayoutTopVCScreenShare() {
                     Logger.info("[newCall] callkit open sharePresent")
                     DTMeetingManager.shared.isFromCallkit = false
                     roomCtx.presentShareView()
@@ -116,28 +118,6 @@ struct RoomContextView: View {
         return false
     }
 
-    private func bottomSafeArea() -> CGFloat {
-        // 优先使用通话窗口的 safeAreaInsets，更稳定
-        let callWindow = OWSWindowManager.shared().callViewWindow
-        let bottom = callWindow.safeAreaInsets.bottom
-
-        // 如果通话窗口的值有效，使用它
-        if bottom.isFinite && bottom > 0 {
-            let maxBottomInset: CGFloat = 34 // avoid pathological values
-            return min(bottom, maxBottomInset)
-        }
-
-        // 降级方案：从 windowScene 获取
-        guard
-            let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-            let window = windowScene.windows.first(where: { $0.isKeyWindow })
-        else {
-            return 0
-        }
-        let windowBottom = window.safeAreaInsets.bottom
-        guard windowBottom.isFinite else { return 0 }
-        return max(0, min(windowBottom, 34))
-    }
 }
 
 struct CallContentView: View {
@@ -328,6 +308,7 @@ struct BulletOverlayView: View {
     let bottomInset: CGFloat
     @Binding var showQuickPanel: Bool
     @Binding var hasRaiseHand: Bool
+    @State private var raiseHandsWidth: CGFloat = DTMeetingManager.shared.calculateRaiseHandsWidth()
 
     var body: some View {
         let paddingLeading: CGFloat = 30
@@ -344,7 +325,7 @@ struct BulletOverlayView: View {
 
         return ZStack {
             DTBulletChatViewRepresentable()
-                .frame(width: bulletChatWidth)
+                .frame(width: bulletChatWidth, height: 320)
                 .padding(.leading, paddingLeading)
                 .padding(.bottom, bulletBottom - 5)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -400,7 +381,7 @@ struct BulletOverlayView: View {
             if hasRaiseHand {
                 HandsControlViewRepresentable()
                     .frame(height: controlViewHeight)
-                    .frame(width: DTMeetingManager.shared.calculateRaiseHandsWidth())
+                    .frame(width: raiseHandsWidth)
                     .padding(.leading, paddingOverlayLeading)
                     .padding(.bottom, bottomInset + controlViewHeight + spacing)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -414,6 +395,9 @@ struct BulletOverlayView: View {
                 .padding(.bottom, bottomInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .allowsHitTesting(true)
+        }
+        .onReceive(RoomDataManager.shared.raiseHandsPublisher) { _ in
+            raiseHandsWidth = DTMeetingManager.shared.calculateRaiseHandsWidth()
         }
     }
 }

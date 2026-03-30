@@ -15,6 +15,8 @@ class AttachmentCollectionView: UICollectionView {
 
     weak var moreAttachmentDelegate: MoreAttachmentDelegate?
 
+    private var inputToolbarState: InputToolbarState = .normal
+
     private lazy var collectionContents: [DTInputToolBarMoreItem] = [DTInputToolBarMoreItem]()
 
     // Cell Sizing
@@ -54,13 +56,6 @@ class AttachmentCollectionView: UICollectionView {
 
     private func recalculateCellSize() {
         guard lastKnownHeight > 0 else { return }
-
-//        if lastKnownHeight > 250 {
-//            cellSize = CGSize(square: 0.5 * (lastKnownHeight - RecentPhotosCollectionView.itemSpacing))
-//        // Otherwise, assume the recent photos take up the full height of the collection view.
-//        } else {
-//            cellSize = CGSize(square: lastKnownHeight)
-//        }
         
         let itemHeight = 113.0 // 128
         cellSize = CGSize(width: itemWidth, height: itemHeight)
@@ -79,7 +74,8 @@ class AttachmentCollectionView: UICollectionView {
         dataSource = self
         delegate = self
 
-        backgroundColor = Theme.defaultColor
+        self.inputToolbarState = inputToolbarState
+        backgroundColor = inputToolbarState == .confidential ? Theme.bgskyAlphaColor : Theme.defaultColor
         showsHorizontalScrollIndicator = false
         isPagingEnabled = true
         bounces = false
@@ -95,6 +91,8 @@ class AttachmentCollectionView: UICollectionView {
     }
     
     func updateDataSource(inputToolbarState: InputToolbarState) {
+        self.inputToolbarState = inputToolbarState
+        backgroundColor = inputToolbarState == .confidential ? Theme.bgskyAlphaColor : Theme.defaultColor
         if let index = collectionContents.firstIndex(where: { DTToolBarMoreItemTypeConfide == $0.itemType }) {
             let confidImageName = InputToolbarState.confidential == inputToolbarState ? "input_attachment_confide_select" : "input_attachment_confide"
             let confide = DTInputToolBarMoreItem(title: OWSLocalizedString("INPUTTOOL_ATTACHMENT_CONFIDENTIAL_BUTTON",
@@ -102,8 +100,8 @@ class AttachmentCollectionView: UICollectionView {
                                                  imageName:confidImageName,
                                                  itemType: DTToolBarMoreItemTypeConfide)
             collectionContents[index] = confide
-            reloadData()
         }
+        reloadData()
     }
     
     private func configDataSource(inputToolbarState: InputToolbarState,
@@ -181,11 +179,6 @@ extension AttachmentCollectionView: UICollectionViewDelegate, UICollectionViewDe
         self.moreAttachmentDelegate?.didSelectAttachment(itemView: nil, attachment: item)
 
     }
-
-//    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-//        Logger.debug("[keyboard] 1 \(cellSize)")
-//        return cellSize
-//    }
 }
 
 // MARK: - UICollectionViewDataSource
@@ -267,24 +260,6 @@ private class RecentPhotoCell: UICollectionViewCell {
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
-//    override var frame: CGRect {
-//        didSet {
-//            updateCornerRadius()
-//        }
-//    }
-//
-//    override var bounds: CGRect {
-//        didSet {
-//            updateCornerRadius()
-//        }
-//    }
-//
-//    private func updateCornerRadius() {
-//        let cellSize = min(bounds.width, bounds.height)
-//        guard cellSize > 0 else { return }
-//        layer.cornerRadius = (cellSize * 13 / 84).rounded()
-//    }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)

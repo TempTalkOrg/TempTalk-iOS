@@ -14,32 +14,39 @@ extension ConversationViewController: DTRequestBarDelegate {
     func didTapConversationRequestBarDelegate(_ requestBar: DTRequestBar, ignoreSender: UIButton) {
         self.navigationController?.popViewController(animated: true)
     }
-    
+
     func didTapConversationRequestBarDelegate(_ requestBar: DTRequestBar, acceptSender: UIButton) {
-        
+
         guard let contactThread = self.thread as? TSContactThread else {
             return
         }
-        
-        DTToastHelper.show()
-        AddFriendHandler.requestAddFriend(identifier: contactThread.contactIdentifier(),
-                                          sourceType: .inUserCard,
-                                          sourceConversationID: nil,
-                                          shareContactCardUId: nil,
-                                          action: nil,
-                                          success: {
-            DTToastHelper.hide()
-            // Remove warning header when friend request is accepted
-            self.removeWarningHeaderIfNeeded(force: true)
-        }) { errorString in
-            OWSLogger.error("request accept friend error: \(errorString)!")
-            DTToastHelper.hide()
-            DTToastHelper.toast(withText: errorString, in: self.view, durationTime: 3.0, afterDelay: 0.2)
-        }
 
+        DTToastHelper.show()
+
+        Task {
+            do {
+                try await AddFriendHandler.requestAddFriend(
+                    identifier: contactThread.contactIdentifier(),
+                    source: .search
+                )
+                DTToastHelper.hide()
+                // Remove warning header when friend request is accepted
+                self.removeWarningHeaderIfNeeded(force: true)
+            } catch {
+                DTToastHelper.hide()
+                let errorString = (error as NSError).localizedDescription
+                DTToastHelper.toast(
+                    withText: errorString,
+                    in: self.view,
+                    durationTime: 3.0,
+                    afterDelay: 0.2
+                )
+                OWSLogger.error("request accept friend error: \(errorString)!")
+            }
+        }
     }
-    
-    
+
+
     var friendReqBar: DTRequestBar {
 
         if let requestBar = viewState.friendReqBar {
@@ -69,11 +76,16 @@ extension ConversationViewController: DTRequestBarDelegate {
     }
     
     var isBot: Bool {
-        if self.thread.isKind(of: TSContactThread.self) {
-            let isNotBot = (self.thread.contactIdentifier()?.count ?? 0) > 6
-            return !isNotBot
+        guard let contactThread = self.thread as? TSContactThread else {
+            return false
         }
-        return false
+        var isBot = false
+        databaseStorage.read { transaction in
+            if let account = self.contactsManager.signalAccount(forRecipientId: contactThread.contactIdentifier(), transaction: transaction) {
+                isBot = account.isBot()
+            }
+        }
+        return isBot
     }
     
     var showRequestBar: Bool {
@@ -147,43 +159,72 @@ extension ConversationViewController: DTRequestBarDelegate {
                                 sourceConversationID: String?,
                                 shareContactCardUId: String?,
                                 action: String?) {
-        
+
         guard let contactThread = self.thread as? TSContactThread else {
             return
         }
-        
+
         if message is DTScreenShotOutgoingMessage {
             return
         }
-        
+
         if isFriend {
             return
         }
-        
+
         let diffTime = TimeInterval(NSDate.ows_millisecondTimeStamp()) - viewState.friendReqTime
-        
+
         if diffTime < 2 * kSecondInterval {
             return
         }
-        
-        AddFriendHandler.requestAddFriend(identifier: contactThread.contactIdentifier(),
-                                          sourceType: sourceType,
-                                          sourceConversationID: sourceConversationID,
-                                          shareContactCardUId: shareContactCardUId,
-                                          action: action,
-                                          success: {
-            self.markSendAddFriendAction()
-        }) { errorString in
-            OWSLogger.error("requestAddFriend after message error: \(errorString)!")
+
+        // Convert old enum to new AddFriendSource
+        let source = convertSourceType(sourceType, conversationID: sourceConversationID, shareContactCardUId: shareContactCardUId)
+
+        Task {
+            do {
+                try await AddFriendHandler.requestAddFriend(
+                    identifier: contactThread.contactIdentifier(),
+                    source: source
+                )
+                self.markSendAddFriendAction()
+            } catch {
+                OWSLogger.error("requestAddFriend after message error: \((error as NSError).localizedDescription)!")
+            }
         }
-        
     }
-    
+
     func markSendAddFriendAction() {
         guard self.thread is TSContactThread else {
             return
         }
         self.viewState.friendReqTime = TimeInterval(NSDate.ows_millisecondTimeStamp())
     }
-    
+
+    // MARK: - Helper
+
+    @nonobjc
+    private func convertSourceType(
+        _ sourceType: DTSourceToPersonalCardType,
+        conversationID: String?,
+        shareContactCardUId: String?
+    ) -> AddFriendSource {
+        switch sourceType {
+        case .inGroupUserIcon, .inGroupUserID, .inGroupMemberUserIcon:
+            return .fromGroup(
+                groupId: conversationID ?? DTAddFriendSourceManager.shared.groupId ?? ""
+            )
+        case .inUserCard:
+            return .shareContact(
+                uid: shareContactCardUId ?? DTAddFriendSourceManager.shared.shareContactCardUid ?? ""
+            )
+        case .randomCode:
+            return .randomCode
+        case .inSearchUserId, .unknow:
+            return .search
+        @unknown default:
+            return .search
+        }
+    }
 }
+

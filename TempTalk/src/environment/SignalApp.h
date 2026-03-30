@@ -45,6 +45,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)presentTargetConversationForThread:(TSThread *)thread
                               action:(ConversationViewAction)action
                             focusMessageId:(nullable NSString *)focusMessageId;
+- (void)presentTargetProfileCardForRecipientId:(NSString *)recipientId;
 
 #pragma mark - Methods
 

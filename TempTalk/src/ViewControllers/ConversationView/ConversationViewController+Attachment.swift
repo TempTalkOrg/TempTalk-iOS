@@ -43,17 +43,7 @@ import TTServiceKit
         currentPreviewFileURL = url
         previewController.reloadData()
 
-        // 机密文档阅后即焚：预览展示完成后立即删除消息
-        present(previewController, animated: true) {
-            if viewItem.isConfidentialMessage, let incomingMessage = viewItem.interaction as? TSIncomingMessage {
-                OWSReadReceiptManager.shared().confidentialMessageWasReadLocally(incomingMessage)
-                self.databaseStorage.asyncWrite { wTransaction in
-                    incomingMessage.anyRemove(transaction: wTransaction)
-                } completion: {
-                    self.genericAttachmenViewItem = nil
-                }
-            }
-        }
+        present(previewController, animated: true)
     }
     
     /// 点击 incoming message 中下载失败的附件

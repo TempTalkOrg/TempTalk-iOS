@@ -135,7 +135,7 @@ class ConversationQuotedMessageView: UIView, Themeable {
         attachmentContainerView.snp.makeConstraints { make in
             make.centerY.equalToSuperview()
             make.right.equalToSuperview().offset(CVQuotedMessageRenderItem.backgroundSubviewsPadding)
-            make.width.equalTo(CVQuotedMessageRenderItem.attachmentSize)
+            make.width.height.equalTo(CVQuotedMessageRenderItem.attachmentSize)
         }
         
         backgroundContainerView.addSubview(vStackVeiw)

@@ -198,17 +198,18 @@ extension ConversationViewController {
 
     
     func updateNavigationTitle() {
-        func titleForContactThread(_ thread: TSContactThread) -> NSAttributedString? {
+        func titleForContactThread(_ thread: TSContactThread) -> (title: NSAttributedString?, isBot: Bool) {
             if thread.isNoteToSelf {
                 headerView.isExternal = false
-                return NSAttributedString(
+                return (NSAttributedString(
                     string: MessageStrings.noteToSelf(),
                     attributes: [.foregroundColor: Theme.tprimaryColor]
-                )
+                ), false)
             }
-            
+
             let contactIdentifier = thread.contactIdentifier()
             var attributedName: NSAttributedString?
+            var account: SignalAccount?
             databaseStorage.read { transaction in
                 attributedName = self.contactsManager.attributedContactOrProfileName(
                     forPhoneIdentifier: contactIdentifier,
@@ -216,12 +217,14 @@ extension ConversationViewController {
                     secondaryFont: self.headerView.titleSecondaryFont,
                     transaction: transaction
                 )
+                account = self.contactsManager.signalAccount(forRecipientId: contactIdentifier, transaction: transaction)
                 self.thread.anyReload(transaction: transaction)
             }
+            let isBot = account?.isBot() ?? false
             headerView.isExternal = SignalAccount.isExt(contactIdentifier)
-            return attributedName
+            return (attributedName, isBot)
         }
-        
+
         func titleForGroupThread(_ thread: TSGroupThread) -> NSAttributedString? {
             var groupThread: TSGroupThread?
             databaseStorage.read { transaction in
@@ -255,8 +258,11 @@ extension ConversationViewController {
         let attributedTitle: NSAttributedString? = {
 
             var title: NSAttributedString?
+            var isBot = false
             if let contractThread = self.thread as? TSContactThread {
-                title = titleForContactThread(contractThread)
+                let result = titleForContactThread(contractThread)
+                title = result.title
+                isBot = result.isBot
                 Logger.info("[Conversation] contactThread theadName \(title)")
             } else if let groupThread = self.thread as? TSGroupThread {
                 title = titleForGroupThread(groupThread)
@@ -265,10 +271,18 @@ extension ConversationViewController {
                 Logger.error("[Conversation] failure: unexpected thread: \(self.thread)")
             }
 
-            if let currentTitle = title,
-               thread.messageExpiresInSeconds() > 0 {
-                title = DTConversactionSettingUtils.msgDisappearingTipsOnThread(messageExpiry: TimeInterval(thread.messageExpiresInSeconds()), threadName: currentTitle, font: headerView.titlePrimaryFont)
+            guard let currentTitle = title else { return nil }
+
+            // Add bot icon if needed (even without expiry time)
+            if isBot {
+                title = currentTitle.appendingBotIcon(font: headerView.titlePrimaryFont)
             }
+
+            // Add expiry time if needed
+            if thread.messageExpiresInSeconds() > 0, let titleWithIcon = title {
+                title = DTConversactionSettingUtils.msgDisappearingTipsOnThread(messageExpiry: TimeInterval(thread.messageExpiresInSeconds()), threadName: titleWithIcon, font: headerView.titlePrimaryFont)
+            }
+
             return title
         }()
 
@@ -448,7 +462,7 @@ extension ConversationViewController {
             return
         }
         AddFriendHandler.handleRequestAddFriend(identifier: contactThread.contactIdentifier(),
-                                                sourceType: .inUserCard,
+                                                sourceType: .unknow,
                                                 sourceConversationID: nil,
                                                 shareContactCardUId: nil,
                                                 action: nil,

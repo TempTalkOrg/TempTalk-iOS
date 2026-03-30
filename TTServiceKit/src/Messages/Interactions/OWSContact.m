@@ -501,7 +501,7 @@ NSString *NSStringForContactAddressType(OWSContactAddressType value)
     NSData *imageData = UIImageJPEGRepresentation(image, (CGFloat)0.9);
 
     TSAttachmentStream *attachmentStream = [[TSAttachmentStream alloc] initWithContentType:OWSMimeTypeImageJpeg
-                                                                                 byteCount:(UInt32)imageData.length
+                                                                                 byteCount:(UInt64)imageData.length
                                                                             sourceFilename:nil
                                                                             albumMessageId:nil
                                                                                    albumId:nil];

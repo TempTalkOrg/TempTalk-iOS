@@ -240,6 +240,8 @@ extension Theme: ThemeProtocol {
     @objc public static var bgpopupColor: UIColor  { current.bgpopupColor }
     @objc public static var bgelevateColor: UIColor  { current.bgelevateColor }
     @objc public static var bgskyColor: UIColor  { current.bgskyColor }
+    @objc public static var bgskyAlphaColor: UIColor  { current.bgskyAlphaColor }
+    @objc public static var bgConfidentialCompensatedColor: UIColor  { current.bgConfidentialCompensatedColor }
     @objc public static var bgspaceColor: UIColor  { current.bgspaceColor }
     @objc public static var defaultColor: UIColor  { current.defaultColor }
     @objc public static var bgpagePrimaryColor: UIColor  { current.bgpagePrimaryColor }

@@ -22,11 +22,17 @@ struct DTBulletChatViewRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: DTBulletChatView, context: Context) {
-        for participant in roomCtx.room.remoteParticipants.values.compactMap({ $0 }) {
-            if participant.videoTracks.contains(where: { $0.source == .screenShareVideo }) {
-                let defaultChatModel = DTBulletChatModel.generate(withMessage: "", type: BulletMessageType.start_screen.rawValue, receiptId: participant.identity?.stringValue.components(separatedBy: ".").first ?? "")
-                uiView.insertBulletChat(defaultChatModel)
-            }
+        let current: Set<String> = Set(
+            roomCtx.room.remoteParticipants.values
+                .compactMap { $0 }
+                .filter { $0.videoTracks.contains(where: { $0.source == .screenShareVideo }) }
+                .compactMap { $0.identity?.stringValue.components(separatedBy: ".").first }
+        )
+        let newIds = current.subtracting(context.coordinator.lastScreenShareParticipantIds)
+        context.coordinator.lastScreenShareParticipantIds = current
+        for id in newIds {
+            let model = DTBulletChatModel.generate(withMessage: "", type: BulletMessageType.start_screen.rawValue, receiptId: id)
+            uiView.insertBulletChat(model)
         }
     }
 
@@ -36,6 +42,7 @@ struct DTBulletChatViewRepresentable: UIViewRepresentable {
 
     class Coordinator: NSObject {
         private var cancellables = Set<AnyCancellable>()
+        var lastScreenShareParticipantIds: Set<String> = []
 
         func setupSubscription(for bulletChatView: DTBulletChatView) {
             Logger.info("[BulletChat] DTBulletChatViewRepresentable - setting up subscription")

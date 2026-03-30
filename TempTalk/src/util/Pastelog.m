@@ -452,7 +452,7 @@ typedef void (^DebugLogUploadFailure)(DebugLogUploader *uploader, NSError *error
         // 2 request upload url from server, and then upload it.
         TSAttachmentStream *attachmentStream =
         [[TSAttachmentStream alloc] initWithContentType:OWSMimeTypeApplicationZip
-                                              byteCount:(UInt32)encryptedLogData.length
+                                              byteCount:(UInt64)encryptedLogData.length
                                          sourceFilename:logFileName
                                          albumMessageId:nil
                                                 albumId:nil];

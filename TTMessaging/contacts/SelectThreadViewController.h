@@ -15,6 +15,8 @@ NS_ASSUME_NONNULL_BEGIN
 @optional
 - (BOOL)forwordThreadCanBeSelested:(TSThread *)thread;
 
+- (BOOL)shouldFilterThread:(TSThread *)thread;
+
 - (BOOL)canSelectBlockedContact;
 
 - (nullable UIView *)createHeaderWithSearchBar:(UISearchBar *)searchBar;

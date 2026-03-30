@@ -1,0 +1,6 @@
+{
+  "enabledMcpjsonServers": [
+    "markitdown"
+  ],
+  "enableAllProjectMcpServers": true
+}

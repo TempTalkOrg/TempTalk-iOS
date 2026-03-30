@@ -348,12 +348,13 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
             readReceiptEntity.messageModeType = message.messageModeType;
             readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.serverTimestamp notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
             readReceiptEntity.readPosition = readPosition;
-            OWSReadReceiptsForSenderMessage *receiptMessage = [[OWSReadReceiptsForSenderMessage alloc] initWithThread:thread
+            TSThread *senderThread = [TSContactThread getOrCreateThreadWithContactId:messageAuthorId];
+            OWSReadReceiptsForSenderMessage *receiptMessage = [[OWSReadReceiptsForSenderMessage alloc] initWithThread:senderThread
                                                                                                     messageTimestamps:@[@(message.timestamp)]
                                                                                                          readPosition:readReceiptEntity.readPosition
                                                                                                       messageModeType:TSMessageModeTypeConfidential];
             
-            OWSLogInfo(@"will send read receipt:%@, contactThread: %@", readReceiptEntity.readPosition, thread.contactIdentifier);
+            OWSLogInfo(@"will send read receipt:%@, contactThread: %@", readReceiptEntity.readPosition, senderThread.contactIdentifier);
             
             receiptMessage.associatedUniqueThreadId = readReceiptEntity.associatedUniqueThreadId;
 

@@ -106,10 +106,6 @@ class CVViewState: NSObject {
     var scrollDownButton: ConversationScrollButton?
     var dateSeparatorView: ConversationDateSeparatorView?
 
-    // MARK: - Keyboard Protection
-    /// 键盘保护状态：当键盘弹出后，防止非用户操作导致的键盘收起
-    var isKeyboardProtectionEnabled = false
-
     // MARK: - Initial Scroll Position Protection
     /// 存储初始滚动到未读消息的目标位置，用于防止键盘闪现导致的位置偏移
     var initialScrollTargetOffset: CGFloat?
@@ -127,6 +123,8 @@ class CVViewState: NSObject {
     var scrollContinuity: ScrollContinuity = .bottom
     var scrollUpdateTimer: Timer?
     var hideDateTimer: Timer?
+
+    var isScrollingToTop = false
     
     var actionOnOpen: ConversationViewAction = .none
     
@@ -342,18 +340,18 @@ extension ConversationViewController {
     }
     
     var isUserLeftGroup: Bool {
-        guard let _ = self.thread as? TSGroupThread else {
+        guard let groupThread = self.thread as? TSGroupThread else {
             return false
         }
-        
-        var groupThread: TSGroupThread?
-        databaseStorage.read { transaction in
-            groupThread = TSGroupThread.anyFetchGroupThread(
-                uniqueId: self.thread.uniqueId,
-                transaction: transaction
-            )
-        }
-        return !(groupThread?.isLocalUserInGroup() ?? false)
+        return !groupThread.isLocalUserInGroup()
+    }
+
+    var isUserActivelyTyping: Bool {
+        guard let inputToolbar = viewState.inputToolbar else { return false }
+
+        guard inputToolbar.isUserActivelyTyping else { return false }
+
+        return inputAccessoryPlaceholder.keyboardOverlap > 0
     }
     
     var serverGroupId: String? {

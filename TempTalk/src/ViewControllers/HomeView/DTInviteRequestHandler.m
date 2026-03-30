@@ -72,6 +72,9 @@
 }
 
 - (void)showPersonalCardView:(NSString *)recipientId account:(SignalAccount * __nullable)account {
+    // Set randomCode source before showing personal card
+    [DTAddFriendSourceManager.shared setOtherSource:DTSourceToPersonalCardTypeRandomCode];
+
     DTPersonalCardType cardType = DTPersonalCardTypeOther;
     if ([recipientId isEqualToString:TSAccountManager.localNumber]) {
         cardType = DTPersonalCardTypeSelfNoneEdit;

@@ -115,7 +115,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     // 是否正在展示 screen share
     var isPresentingShareView = false
     // 是否存在待展示的UI
-    private var pendingShowUI = false
+    var pendingShowUI = false
 
     // MARK: - Init / Deinit
 
@@ -133,9 +133,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         // callManager 不需要在 init 中赋 weak；使用计算属性访问单例
 
         #if os(iOS)
-        DispatchMainThreadSafe {
-            UIApplication.shared.isIdleTimerDisabled = true
-        }
+        UIApplication.shared.isIdleTimerDisabled = true
         #endif
 
         DTRTCAudioSession.shared.addObserver(self)
@@ -146,14 +144,24 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             queue: .main
         ) { _ in
             Task { @MainActor in
-                if self.pendingShowUI {
-                    Logger.info("\(self.logTag) RoomContext become active show share view")
-                    self.pendingShowUI = false
-                    self.presentShareViewVC()
+                let hadPendingShareUI = self.pendingShowUI
+                self.pendingShowUI = false
+
+                if hadPendingShareUI {
+                    Logger.info("\(self.logTag) RoomContext become active retry show share view")
+                    self.tryPresentShareView(maxRetryCount: 0)
                 }
 
                 // 检查是否存在屏幕共享但未展示，尝试弹出
                 self.checkAndPresentScreenShareIfNeeded()
+
+                // 强制更新方向，确保屏幕共享时保持横屏
+                if #available(iOS 16, *) {
+                    if self.isShareViewPresented {
+                        let callWindow = OWSWindowManager.shared().callViewWindow
+                        callWindow.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+                    }
+                }
             }
         }
     }
@@ -179,22 +187,18 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             Logger.info("\(logTag) this denoise filter not same as audio manager's, skip clear")
         }
 
-        // 清理可能存在的循环引用
-        // 虽然disconnect()应该已经清理过，但如果有bug导致这里还有引用，必须清理
-        DispatchMainThreadSafe {
-            self.shareVC?.dismiss(animated: false)
-            self.shareVC = nil
-
-            self.inviteVC?.dismiss(animated: false)
-            self.inviteVC = nil
-
-            self.noiseVC?.dismiss(animated: false)
-            self.noiseVC = nil
+        let capturedShareVC = shareVC
+        let capturedInviteVC = inviteVC
+        let capturedNoiseVC = noiseVC
+        Task { @MainActor in
+            (capturedShareVC ?? findPresentedShareViewController())?.dismiss(animated: false)
+            capturedInviteVC?.dismiss(animated: false)
+            capturedNoiseVC?.dismiss(animated: false)
         }
 
         // 恢复设备状态
         #if os(iOS)
-        DispatchMainThreadSafe {
+        Task { @MainActor in
             UIApplication.shared.isIdleTimerDisabled = false
         }
         #endif
@@ -404,8 +408,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         // 清理ViewController，打破循环引用
         // 这些ViewController的SwiftUI视图通过environmentObject持有self，必须清理
         await MainActor.run {
-            shareVC?.dismiss(animated: false)
-            shareVC = nil
+            dismissPresentedShareViewControllerIfNeeded()
 
             inviteVC?.dismiss(animated: false)
             inviteVC = nil
@@ -455,12 +458,87 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         callVC.present(vc, animated: animated, completion: completion)
     }
 
-    func presentShareView(completion: (() -> Void)? = nil) {
-        // 确保在主线程执行
-        guard Thread.isMainThread else {
-            DispatchMainThreadSafe { [weak self] in
-                self?.presentShareView(completion: completion)
+    @MainActor
+    func isShareViewController(_ viewController: UIViewController?) -> Bool {
+        guard let viewController else { return false }
+        let className = String(describing: type(of: viewController))
+        return className.contains("DTHostingController") && className.contains("CallScreenShareView")
+    }
+
+    @MainActor
+    func findPresentedShareViewController() -> UIViewController? {
+        let callWindow = OWSWindowManager.shared().callViewWindow
+        var currentViewController: UIViewController? = callWindow.findTopViewController()
+        var shareViewController: UIViewController?
+
+        while let viewController = currentViewController {
+            if isShareViewController(viewController) {
+                shareViewController = viewController
             }
+            currentViewController = viewController.presentingViewController
+        }
+
+        return shareViewController
+    }
+
+    @MainActor
+    @discardableResult
+    func syncShareViewReferenceIfNeeded() -> Bool {
+        guard let existingShareVC = findPresentedShareViewController() else {
+            return false
+        }
+
+        if shareVC !== existingShareVC {
+            Logger.info("\(logTag) found existing screen share view controller, syncing reference")
+            shareVC = existingShareVC
+        }
+
+        pendingShowUI = false
+        return true
+    }
+
+    @MainActor
+    var isShareViewPresented: Bool {
+        shareVC?.presentingViewController != nil
+    }
+
+    @MainActor
+    func hasActiveScreenShareToPresent() -> Bool {
+        if let publication = screenSharePublication, publication.source == .screenShareVideo {
+            return true
+        }
+
+        let roomActive = room.isScreenShareActive()
+        if !roomActive {
+            Logger.info("\(logTag) hasActiveScreenShareToPresent: false (publication: \(screenSharePublication != nil), roomActive: \(roomActive))")
+        }
+        return roomActive
+    }
+
+    @MainActor
+    func resetSharePresentationState() {
+        isPresentingShareView = false
+        pendingShowUI = false
+    }
+
+    @MainActor
+    func dismissPresentedShareViewControllerIfNeeded() {
+        if let existingShareVC = findPresentedShareViewController() {
+            existingShareVC.dismiss(animated: false)
+        } else {
+            shareVC?.dismiss(animated: false)
+        }
+
+        shareVC = nil
+        resetSharePresentationState()
+    }
+
+    @MainActor
+    func presentShareView(completion: (() -> Void)? = nil) {
+        syncShareViewReferenceIfNeeded()
+        if isShareViewPresented {
+            Logger.info("\(logTag) screen share view already exists, skipping present")
+            completion?()
             return
         }
 
@@ -474,7 +552,14 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         presentShareViewVC(completion: completion)
     }
 
+    @MainActor
     private func presentShareViewVC(completion: (() -> Void)? = nil) {
+        if syncShareViewReferenceIfNeeded() {
+            Logger.info("\(logTag) screen share view already presented, skip creating a new controller")
+            completion?()
+            return
+        }
+
         let shareView = CallScreenShareView(minimizeAction: { [weak self] in
             guard let self else { return }
             toolbarMinimizeTaped()
@@ -486,19 +571,24 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         presentOnTop(shareVC, animated: false, completion: completion)
     }
 
-    /// 检查是否存在屏幕共享但未展示，如果存在则尝试弹出
     @MainActor
-    private func checkAndPresentScreenShareIfNeeded() {
-        // 防御性检查：如果屏幕共享已结束但视图仍存在，则 dismiss
-        if screenSharePublication == nil, shareVC != nil {
-            Logger.info("\(logTag) Screen share ended but view still exists, dismissing")
-            shareVC?.dismiss(animated: false)
-            shareVC = nil
-            callManager.currentCall.isPresentedShare = false
-            return
+    func checkAndPresentScreenShareIfNeeded() {
+        syncShareViewReferenceIfNeeded()
+
+        if screenSharePublication == nil || screenShareParticipant == nil {
+            recoverScreenShareReferenceFromRoom()
         }
 
-        // 检查是否存在屏幕共享
+        if !hasActiveScreenShareToPresent(), isShareViewPresented {
+            if callManager.currentCall.isPresentedShare {
+                Logger.info("\(logTag) No active tracks but isPresentedShare=true, room may be reconnecting - skipping premature dismiss")
+            } else {
+                Logger.info("\(logTag) Screen share ended but view still exists, dismissing")
+                dismissShareViewIfNeeded()
+                return
+            }
+        }
+
         guard let publication = screenSharePublication,
               let participant = screenShareParticipant,
               publication.source == .screenShareVideo
@@ -507,27 +597,41 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             return
         }
 
-        // 检查参与者是否仍然启用屏幕共享
-        guard participant.isScreenShareEnabled() else {
-            Logger.info("\(logTag) Participant screen share is not enabled")
+        if !participant.isScreenShareEnabled() {
+            Logger.info("\(logTag) Participant screen share not yet enabled (track may be resubscribing), still presenting share view")
+        }
+
+        if isShareViewPresented {
+            refreshScreenShareReference()
+            Logger.info("\(logTag) Screen share view already presented, refreshed reference")
             return
         }
 
-        // 如果已经展示，不需要重复弹出
-        if shareVC != nil {
-            Logger.info("\(logTag) Screen share view already presented")
-            return
-        }
-
-        // 如果存在屏幕共享但未展示（可能是之前在后台时尝试失败），尝试弹出
         Logger.info("\(logTag) App became active, found screen share but view not presented - attempting to present")
-        // 确保状态正确
         if !callManager.currentCall.isPresentedShare {
             callManager.currentCall.isPresentedShare = true
         }
         tryPresentShareView(maxRetryCount: 3)
     }
 
+    @MainActor
+    private func recoverScreenShareReferenceFromRoom() {
+        for participant in room.remoteParticipants.values {
+            for pub in participant.videoTracks where pub.source == .screenShareVideo {
+                screenSharePublication = pub
+                screenShareParticipant = participant
+                Logger.info("\(logTag) Recovered screen share reference from room participant (isScreenShareEnabled: \(participant.isScreenShareEnabled()))")
+                return
+            }
+        }
+    }
+
+    @MainActor
+    func refreshScreenShareReference() {
+        recoverScreenShareReferenceFromRoom()
+    }
+
+    @MainActor
     func presentInviteView() {
         let inviteVC = DTCallInviteMemberVC()
         inviteVC.isLiveKitCall = true
@@ -536,6 +640,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         presentOnTop(inviteNav, animated: false)
     }
 
+    @MainActor
     func presentMuteActionSheet(_ participant: Participant) {
         guard DTMeetingManager.shared.openMuteOtherEnabled() else {
             Logger.info("\(logTag) remoteConfig not open muteOtherEnabled")
@@ -557,6 +662,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         presentOnTop(actionSheet, animated: true)
     }
 
+    @MainActor
     func presentMuteAlertVC(_ participantId: String) {
         guard DTMeetingManager.shared.openMuteOtherEnabled() else {
             Logger.info("\(logTag) remoteConfig not open muteOtherEnabled")
@@ -586,6 +692,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         presentOnTop(alertVC, animated: true)
     }
 
+    @MainActor
     func presentHangupActionSheet() {
         if DTMeetingManager.shared.isPresentedShare() || DTMeetingManager.shared.showScreenShare() {
             var alertActions: [UIAlertAction] = []
@@ -654,11 +761,9 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 extension RoomContext {
     func toolbarEndCallTaped(forceEndGroupMeeting: Bool = false) async {
         Logger.info("\(logTag) click end call button")
-        DispatchMainThreadSafe {
-            let callWindow = OWSWindowManager.shared().callViewWindow
-            let callVC = callWindow.findTopViewController()
-            DTToastHelper.show01LoadingHudIsDark(true, in: callVC.view)
-        }
+        let callWindow = OWSWindowManager.shared().callViewWindow
+        let callVC = callWindow.findTopViewController()
+        DTToastHelper.show01LoadingHudIsDark(true, in: callVC.view)
         await callManager.endCallAction(forceEndGroupMeeting: forceEndGroupMeeting)
     }
 
@@ -724,18 +829,16 @@ extension RoomContext {
                                                              localPriKey: localPriKey,
                                                              eMKey: emk)
                 k_e2eeKey = result.mKey
-                DispatchMainThreadSafe {
+                Task { @MainActor in
                     self.currentCall.mKey = k_e2eeKey
                 }
             } catch {
                 // 捕获当前 roomContext（即 self），避免清理新创建的 roomContext
                 let roomContextToClean = self
-                DispatchMainThreadSafe {
-                    Task {
-                        await self.callManager.performCompleteCleanup(roomContextToClean: roomContextToClean)
-                        DTToastHelper.showCallToast(Localized("MEETING_JOINED_FAILURE_TIPS"))
-                        Logger.error("\(self.logTag) decrypt error: \(error.localizedDescription)")
-                    }
+                Task { @MainActor in
+                    await self.callManager.performCompleteCleanup(roomContextToClean: roomContextToClean)
+                    DTToastHelper.showCallToast(Localized("MEETING_JOINED_FAILURE_TIPS"))
+                    Logger.error("\(self.logTag) decrypt error: \(error.localizedDescription)")
                 }
             }
         }

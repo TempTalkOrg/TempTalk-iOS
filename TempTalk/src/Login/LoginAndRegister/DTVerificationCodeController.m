@@ -290,11 +290,15 @@ static dispatch_source_t _timer;
             self.errorTipLabel.hidden = true;
             self.errorTipLabel.text = @"";
             // 安全地移除约束，添加类型检查防止崩溃
+            if (self.errorTipLabelTopConstraint && [self.errorTipLabelTopConstraint isKindOfClass:[NSLayoutConstraint class]]) {
+                [self.errorTipLabelTopConstraint autoRemove];
+                self.errorTipLabelTopConstraint = nil;
+            }
             if (self.nextButtonTopConstraint && [self.nextButtonTopConstraint isKindOfClass:[NSLayoutConstraint class]]) {
                 [self.nextButtonTopConstraint autoRemove];
             }
             self.nextButtonTopConstraint = [self.nextButton autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.stepTextFiled withOffset:32];
-            [self.errorTipLabel autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.stepTextFiled withOffset:8];
+            self.errorTipLabelTopConstraint = [self.errorTipLabel autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.stepTextFiled withOffset:8];
             [self.view layoutIfNeeded];
         }
     });

@@ -145,7 +145,7 @@ struct ParticipantLayout<Data: RandomAccessCollection, Content: View>: View {
     private let items: [(id: String, view: AnyView)]
     let spacing: CGFloat
     
-    let edgeSpacing: CGFloat = 16.0
+    let edgeSpacing: CGFloat = 20.0
     let bottomPadding: CGFloat = 64.0
     
     init(

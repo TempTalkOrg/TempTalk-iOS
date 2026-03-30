@@ -110,11 +110,22 @@ extension ConversationViewController {
                 // Focus message: center it for emphasis
                 collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: animated)
             } else {
-                // Unread message: position near top with padding to avoid navigation bar
-                collectionView.scrollToItem(at: indexPath, at: .top, animated: false)
+                if let unreadAttributes = collectionView.layoutAttributesForItem(at: indexPath) {
+                    let bottomOffset = maxContentOffsetY
+                    let unreadIndicatorY = unreadAttributes.frame.minY
+                    let unreadIndicatorScreenY = unreadIndicatorY - bottomOffset
 
-                // Add padding from the top (40pt) to position message higher on screen
-                // Smaller padding = less scroll adjustment = message appears higher
+                    // If unread indicator would be visible when at bottom, scroll to bottom
+                    if unreadIndicatorScreenY >= 40 && unreadIndicatorScreenY < collectionView.bounds.height {
+                        scrollToBottom(animated: animated)
+                        viewState.initialScrollTargetOffset = collectionView.contentOffset.y
+                        viewState.initialScrollProtectionDeadline = Date().addingTimeInterval(2.0)
+                        viewState.hasCompletedInitialScroll = true
+                        return
+                    }
+                }
+
+                collectionView.scrollToItem(at: indexPath, at: .top, animated: false)
                 let topPadding: CGFloat = 40
                 let currentOffset = collectionView.contentOffset.y
                 let adjustedOffset = max(currentOffset - topPadding, -collectionView.adjustedContentInset.top)
@@ -462,14 +473,71 @@ extension ConversationViewController: UIScrollViewDelegate {
         get { viewState.hideDateTimer }
         set { viewState.hideDateTimer = newValue }
     }
-    
+
+    var isScrollingToTop: Bool {
+        get { viewState.isScrollingToTop }
+        set { viewState.isScrollingToTop = newValue }
+    }
+
+    public func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        performCustomScrollToTop()
+        return false
+    }
+
+    private func performCustomScrollToTop() {
+        isScrollingToTop = true
+        viewState.scrollStateBeforeLoadingMore = nil
+
+        let topOffset = -collectionView.adjustedContentInset.top
+        let currentOffset = collectionView.contentOffset.y
+        let twoScreenHeight = collectionView.bounds.height * 2
+        let distance = currentOffset - topOffset
+
+        if distance <= twoScreenHeight {
+            // 短距离，直接动画
+            UIView.animate(withDuration: 0.3, animations: {
+                self.collectionView.setContentOffset(CGPoint(x: 0, y: topOffset), animated: false)
+            }, completion: { _ in
+                self.finishScrollToTop()
+            })
+        } else {
+            // 长距离：先无动画跳到接近顶部（一屏距离），再短距离动画滑到顶部
+            let nearTopOffset = topOffset + collectionView.bounds.height
+            collectionView.setContentOffset(CGPoint(x: 0, y: nearTopOffset), animated: false)
+
+            DispatchQueue.main.async {
+                UIView.animate(withDuration: 0.3, animations: {
+                    self.collectionView.setContentOffset(CGPoint(x: 0, y: topOffset), animated: false)
+                }, completion: { _ in
+                    self.finishScrollToTop()
+                })
+            }
+        }
+    }
+
+    private func finishScrollToTop() {
+        isScrollingToTop = false
+        isScrollUp = false
+        autoLoadMoreIfNecessary()
+        updateLastVisibleSortIdWithSneakyAsyncTransaction()
+    }
+
+    public func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
+        finishScrollToTop()
+    }
+
+    // MARK: - scrollViewDidScroll
+
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         if viewHasEverAppeared {
             updateLastKnownDistanceFromBottom()
         }
-        
+
+        guard !isScrollingToTop else { return }
+
         scheduleScrollUpdateTimer()
-        
+
+        // 更新滚动方向
         let position = scrollView.contentOffset.y
         if position - lastPosition > 5, position > 0 {
             lastPosition = position
@@ -483,27 +551,27 @@ extension ConversationViewController: UIScrollViewDelegate {
     }
     
     public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        // 用户手指触摸会打断 scroll-to-top 动画
+        if isScrollingToTop {
+            isScrollingToTop = false
+        }
+
         userHasScrolled = true
         isUserScrolling = true
-
         actionMenuController?.hideMenu(animation: false)
 
-        // Only dismiss keyboard if user is actively typing
-        // Don't dismiss on minor scrolls while keyboard is up
+        // 只在键盘未激活时收起键盘
         if !inputToolbar.isInputViewFirstResponder {
-            // Keyboard is not active, safe to dismiss
             dismissKeyBoard(byUserAction: true)
         }
-        // If keyboard is active, let the system's interactive dismissal handle it
 
-        // Clear focus message when user manually scrolls, but only after initial scroll-to-focus completes
-        // This prevents clearing the focus during the initial navigation from search results
+        // 清除搜索跳转的焦点消息
         if viewState.hasCompletedInitialScroll {
             conversationViewModel.clearFocusMessageIndex()
             conversationViewModel.focusMessageIdOnOpen = nil
         }
 
-        // Clear initial scroll protection when user manually scrolls
+        // 清除初始滚动保护
         if viewState.initialScrollTargetOffset != nil {
             viewState.initialScrollTargetOffset = nil
             viewState.initialScrollProtectionDeadline = nil
@@ -617,6 +685,9 @@ extension ConversationViewController {
     }
     
     private func autoLoadMoreIfNecessary() {
+        // scroll-to-top 动画期间不触发加载更多
+        guard !isScrollingToTop else { return }
+
         let isMainAppAndActive = CurrentAppContext().isMainAppAndActive
         if isUserScrolling || isWaitingForDeceleration || !isViewVisible || !isMainAppAndActive {
             return

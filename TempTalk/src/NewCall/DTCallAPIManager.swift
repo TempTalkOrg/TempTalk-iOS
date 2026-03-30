@@ -36,7 +36,8 @@ enum DTCallEndpoint {
                         msgType: DTCallMessageType,
                         timestamp: UInt64,
                         cipherMessages: [[String: Any]],
-                        forceEndGroupMeeting: Bool = false)
+                        forceEndGroupMeeting: Bool = false,
+                        callType: CallType = .instant)
     
     case checkCall(roomId: String)
 
@@ -120,20 +121,22 @@ enum DTCallEndpoint {
                              let msgType,
                              let timestamp,
                              let cipherMessages,
-                             let forceEndGroupMeeting):
+                             let forceEndGroupMeeting,
+                             let callType):
 
             var params = ["roomId": roomId,
                           "timestamp": timestamp,
                           "cipherMessages": cipherMessages] as [String : Any]
 
             let detailMessageType: Int
-            if forceEndGroupMeeting && msgType == .hangup && DTMeetingManager.shared.currentCall.callType != .private {
-                Logger.info("[newcall] End Group Meeting")
+            if forceEndGroupMeeting && msgType == .hangup && callType != .private {
+                Logger.info("[newcall] controlMessage End Group Meeting")
                 detailMessageType = 1002
             } else if [.cancel, .reject, .hangup].contains(msgType) {
-                Logger.info("[newcall] Leave Group Meeting")
-                detailMessageType = DTMeetingManager.shared.currentCall.callType == .private ? 1001 : 0
+                Logger.info("[newcall] controlMessage Leave Group Meeting callType \(callType)")
+                detailMessageType = callType == .private ? 1001 : 0
             } else {
+                Logger.info("[newcall] controlMessage other callType \(callType)")
                 detailMessageType = 0
             }
             params["detailMessageType"] = detailMessageType
@@ -297,16 +300,18 @@ extension DTCallAPIManager {
         roomId: String,
         msgType: DTCallMessageType,
         cipherMessages: [[String: Any]],
-        forceEndGroupMeeting: Bool = false
+        forceEndGroupMeeting: Bool = false,
+        callType: CallType = .instant
     ) async -> Dictionary<String, AnyCodable> {
-        
+
         let timestamp = Date.ows_millisecondTimestamp()
         let endpoint: DTCallEndpoint = .controlMessage(
             roomId: roomId,
             msgType: msgType,
             timestamp: timestamp,
             cipherMessages: cipherMessages,
-            forceEndGroupMeeting: forceEndGroupMeeting
+            forceEndGroupMeeting: forceEndGroupMeeting,
+            callType: callType
         )
         
         let result = await sendRequest(endpoint: endpoint)

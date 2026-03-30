@@ -569,6 +569,7 @@
 "CONVERSATION_SETTINGS_SAVE_TO_ALBUM_NEVER" = "从不";
 "CONVERSATION_SETTINGS_SAVE_TO_ALBUM_TIP" = "自动将收到的照片和视频保存到「照片」应用；在保密模式下，内容不会被保存。";
 
+"CONVERSATION_SETTINGS_NAME_CARD" = "个人名片";
 "CONVERSATION_SETTINGS_SEARCH_HISTORY" = "查找聊天内容";
 
 "CONVERSATION_SETTINGS_GROUP_IN_COMMON" = "共同群组";
@@ -2125,7 +2126,7 @@
 "ENTER_CODE_TITLE" = "添加联系人";
 "ENTER_CODE_TIPS" = "输入邀请码添加新朋友";
 "ENTER_CODE_PLACEHOLDER" = "输入 4 位邀请码或联系人 ID";
-"ENTER_CODE_ADD_BUTTON" = "添加";
+"ENTER_CODE_ADD_BUTTON" = "搜索";
 "ENTER_CODE_ERRORTIPS" = "邀请码不正确，请再试一次";
 "ENTER_CODE_CONTACT_NAME_ERROR" = "联系人 ID不正确，请再试一次";
 "ENTER_CODE_MYCODE" = "我的邀请码";
@@ -3206,7 +3207,9 @@
 "PERSON_CARD_LIKE_SUCESS" = "点赞成功!";
 "PERSON_CARD_LIKE_FAILED" = "点赞失败!";
 "PERSON_CARD_SEND_MESSAGE" = "发消息";
+"PERSON_CARD_ADD_AND_SEND_MESSAGE" = "添加并发消息";
 "PERSON_CARD_VOICE_CALL" = "语音通话";
+"NON_FRIEND_ONLY_TEXT_MESSAGE" = "非好友仅支持发送文本消息";
 "PERSON_CARD_SHARE_CARD" = "分享名片";
 
 "LOGIN_ERROR" = "邮箱/邀请码/手机号 错误";
@@ -3718,7 +3721,7 @@
 "CONFIDENTIAL_MESSAGE_VIEW_ALERT_TITLE" = "机密消息";
 
 /* Alert message for confidential message (first time enable or view) */
-"CONFIDENTIAL_MESSAGE_VIEW_ALERT_MESSAGE" = "查看后，消息将消失。";
+"CONFIDENTIAL_MESSAGE_VIEW_ALERT_MESSAGE" = "查看后，消息将消失";
 
 "IMAGE_PREVIEW_ADD_MESSAGE" = "添加消息";
 "CONFIRM_DISBAND_GROUP_DESCRIPTION" = "此群组的数据将被删除，群组中的所有成员也将同时被移除。";
@@ -3916,8 +3919,8 @@
 "NOTIFICATIONS_CRITICAL_DESCRIPTION" = "前往「设置」→「通知」→「Yelling」→「重要提醒」，并将其开启。开启后，紧急联络可突破静音和勿扰模式。";
 "NOTIFICATIONS_CRITICAL_ALERT_TITLE_ON" = "开启紧急联络";
 "NOTIFICATIONS_CRITICAL_ALERT_TITLE_OFF" = "关闭紧急联络";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "前往 设置 → 通知 → Yelling →紧急联络，并开启紧急联络。";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "前往 设置 → 通知 → Yelling →紧急联络，并关闭紧急联络。";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "前往「设置」→「通知」→「Yelling」→「重要提醒」，并将其开启。";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "前往「设置」→「通知」→「Yelling」→「重要提醒」，并将其关闭。";
 "NOTIFICATIONS_CRITICAL_ALERT_CANCEL" = "取消";
 "NOTIFICATIONS_CRITICAL_ALERT_SETTING" = "设置";
 "NOTIFICATIONS_CRITICAL_EXTENSION_TITLE" = "%@的未接呼叫";
@@ -3956,3 +3959,7 @@
 "CRITICAL_ALERT_CONFIRM_DESC_GROUP_WITH_INVITED_MORE" = "发送给未入会的群成员和邀请的人（%@ 和其他 %d 人）";
 
 "CONVERSATION_CONFIDENTIAL_INFO_MESSAGE" = "机密消息已被查看";
+
+"PERSON_CARD_OFFICIAL_ACCOUNT" = "官方账号";
+
+"PERSON_CARD_WEBSITE" = "网站";

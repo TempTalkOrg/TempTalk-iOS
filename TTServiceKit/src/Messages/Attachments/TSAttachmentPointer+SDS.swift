@@ -65,7 +65,7 @@ class TSAttachmentPointerSerializer: SDSSerializer {
         // Properties
         let attachmentSchemaVersion: UInt = model.attachmentSchemaVersion
         let attachmentType: TSAttachmentType = model.attachmentType
-        let byteCount: UInt32 = model.byteCount
+        let byteCount: UInt64 = model.byteCount
         let cachedAudioDurationSeconds: UInt64? = nil
         let cachedImageHeight: UInt64? = nil
         let cachedImageWidth: UInt64? = nil

@@ -15,8 +15,6 @@ struct CallScreenShareView: View {
     
     @EnvironmentObject var roomCtx: RoomContext
     @State private var isRendering = false
-    @State private var scale: CGFloat = 1.0
-    @State private var lastScale: CGFloat = 1.0
     @State private var isGroupMembers: Bool = false
     // 展示快速点击的弹幕
     @State private var showQuickPanel = false
@@ -38,6 +36,7 @@ struct CallScreenShareView: View {
     
     @State private var isPopupPresented = false
     @State private var showCriticalAlertConfirm = false
+    @State private var raiseHandsWidth: CGFloat = DTMeetingManager.shared.calculateRaiseHandsWidth()
 
     public var body: some View {
         GeometryReader { geometry in
@@ -46,11 +45,12 @@ struct CallScreenShareView: View {
                 screenShareContentView(geometry: geometry)
 
                 // 顶部控制栏
-                if viewModel.showControls {
-                    topBarView
-                }
+                topBarView
+                    .opacity(viewModel.showControls ? 1 : 0)
+                    .allowsHitTesting(viewModel.showControls)
+                    .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
 
-                // 右上角“举手”按钮
+                // 右上角”举手”按钮
                 if roomDataManager.hasRaiseHands {
                     raiseHandButtonView
                 }
@@ -59,9 +59,10 @@ struct CallScreenShareView: View {
                 bulletChatOverlay
 
                 // 底部工具栏
-                if viewModel.showControls {
-                    bottomToolbarView
-                }
+                bottomToolbarView(geometry: geometry)
+                    .opacity(viewModel.showControls ? 1 : 0)
+                    .allowsHitTesting(viewModel.showControls)
+                    .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
                 
                 if isPopupPresented {
                     BottomPopupView(
@@ -93,42 +94,58 @@ struct CallScreenShareView: View {
                 // 右侧滑出成员列表
                 memberListOverlay
             }
-            .ignoresSafeArea()
             .onAppear {
                 DTMeetingManager.shared.setCameraRotation(orientation: .landscapeRight)
                 viewModel.hiddenTopBottomBar()
             }
             .onDisappear {
                 DTMeetingManager.shared.setCameraRotation(orientation: .portrait)
+                // 清理邀请好友页面（如果存在）
+                roomCtx.inviteVC?.dismiss(animated: false)
+                roomCtx.inviteVC = nil
                 Task { await cleanUpResources() }
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                handleAppDidBecomeActive()
+            }
+            .onReceive(RoomDataManager.shared.raiseHandsPublisher) { _ in
+                raiseHandsWidth = DTMeetingManager.shared.calculateRaiseHandsWidth()
+            }
         }
+        .ignoresSafeArea()
+    }
+    
+    private func handleAppDidBecomeActive() {
+        Logger.info("[newcall] screen share view did become active, refreshing reference")
+        roomCtx.refreshScreenShareReference()
     }
     
     private func screenShareContentView(geometry: GeometryProxy) -> some View {
-        ZStack {
+        let screenSize = geometry.size
+        let maxDimension = max(screenSize.width, screenSize.height)
+        let minDimension = min(screenSize.width, screenSize.height)
+
+        return ZStack {
             if let publication = roomCtx.screenSharePublication,
                !publication.isMuted,
                let track = publication.track as? VideoTrack
             {
                 ZoomableScrollView {
-                    let notchOffset = geometry.safeAreaInsets.leading
-
-                    ZStack {
-                        SwiftUIVideoView(
-                            track,
-                            layoutMode: .fit,
-                            pinchToZoomOptions: .resetOnRelease,
-                            didRenderFirstFrame: $isRendering
-                        )
-                        .id(track.sid)
-                        .frame(
-                            maxWidth: max(screenWidth, screenHeight) - 200,
-                            maxHeight: min(screenWidth, screenHeight),
-                            alignment: .center
-                        )
-                        .offset(x: notchOffset > 0 ? -notchOffset : 0)
-                    }
+                    SwiftUIVideoView(
+                        track,
+                        layoutMode: .fit,
+                        renderMode: .sampleBuffer,
+                        isAutoPauseResumeSampleBuffer: true,
+                        pinchToZoomOptions: .resetOnRelease,
+                        didRenderFirstFrame: $isRendering
+                    )
+                    .id(track.sid)
+                    .frame(
+                        width: maxDimension - 200,
+                        height: minDimension,
+                        alignment: .center
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .onChange(of: isRendering) { rendering in
                     debounceTask?.cancel()
@@ -141,7 +158,6 @@ struct CallScreenShareView: View {
                         }
                     }
                 }
-                .ignoresSafeArea()
             }
             
             if showPlaceholder {
@@ -149,13 +165,12 @@ struct CallScreenShareView: View {
                         .transition(.opacity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation {
-                viewModel.showControls.toggle()
-                if viewModel.showControls {
-                    viewModel.hiddenTopBottomBar()
-                }
+            viewModel.showControls.toggle()
+            if viewModel.showControls {
+                viewModel.hiddenTopBottomBar()
             }
         }
     }
@@ -233,7 +248,7 @@ struct CallScreenShareView: View {
                 HandsControlViewRepresentable {
                     isGroupMembers.toggle()
                 }
-                .frame(width: DTMeetingManager.shared.calculateRaiseHandsWidth())
+                .frame(width: raiseHandsWidth)
                 .frame(height: 36)
             }
             .padding(.top, 10)
@@ -252,25 +267,25 @@ struct CallScreenShareView: View {
         return ZStack(alignment: .bottomLeading) {
             VStack(alignment: .leading, spacing: 0) {
                 DTBulletChatViewRepresentable()
-                    .frame(width: bulletChatWidth)
+                    .frame(width: bulletChatWidth, height: 320)
                     .padding(.top, 20)
                     .padding(.leading, -15)
                     .allowsHitTesting(false)
 
-                if viewModel.showControls {
-                    DTBulletChatControlViewRepresentable(
-                        showQuickPanel: $showQuickPanel,
-                        onClickInput: {
-                            viewModel.userPressedButton()
-                        }
-                    )
-                    .frame(height: 36)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.bottom, 30)
-                    .padding(.leading, 30)
-                    .allowsHitTesting(viewModel.showControls)
-                }
-            }.frame(maxWidth: .infinity, alignment: .leading)
+                DTBulletChatControlViewRepresentable(
+                    showQuickPanel: $showQuickPanel,
+                    onClickInput: {
+                        viewModel.userPressedButton()
+                    }
+                )
+                .frame(height: 36)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.bottom, 30)
+                .padding(.leading, 30)
+                .opacity(viewModel.showControls ? 1 : 0)
+                .allowsHitTesting(viewModel.showControls)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             DTEmojiFlyingViewRepresentable(containerSize: CGSize(width: bulletChatWidth, height: 0))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -301,55 +316,51 @@ struct CallScreenShareView: View {
                 .allowsHitTesting(showQuickPanel && viewModel.showControls)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         .padding(.leading, 15) // 整体向右偏移15px，避开灵动岛和摄像头
     }
     
     
-    private var bottomToolbarView: some View {
-        VStack {
-            Spacer()
-            BottomToolbarView(
-                isScreenSharing: true,
-                cameraPublishHandler: { _ in },
-                barClickHandler: {
-                    viewModel.userPressedButton()
-                },
-                moreClickHandler: {
-                    isPopupPresented = true
-                },
-                isGroupMembers: $isGroupMembers,
-                localRaiseHand: $roomDataManager.localRaiseHand
-            )
-            .environmentObject(appCtx!)
-            .environmentObject(roomCtx)
-            .environmentObject(roomCtx.room)
-            .environment(\.colorScheme, .dark)
-            .frame(
-                maxWidth: min(screenWidth, screenHeight),
-                maxHeight: .infinity,
-                alignment: .bottom
-            )
-            .padding(.bottom, 20)
-        }
-        .animation(.easeInOut, value: viewModel.showControls)
+    private func bottomToolbarView(geometry: GeometryProxy) -> some View {
+        let bottomInset: CGFloat = OWSWindowManager.shared().callViewWindow.safeAreaInsets.bottom
+        return BottomToolbarView(
+            isScreenSharing: true,
+            cameraPublishHandler: { _ in },
+            barClickHandler: {
+                viewModel.userPressedButton()
+            },
+            moreClickHandler: {
+                isPopupPresented = true
+            },
+            isGroupMembers: $isGroupMembers,
+            localRaiseHand: $roomDataManager.localRaiseHand
+        )
+        .environmentObject(appCtx!)
+        .environmentObject(roomCtx)
+        .environmentObject(roomCtx.room)
+        .environment(\.colorScheme, .dark)
+        .padding(.bottom, max(20, bottomInset + 10))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
     
     
     private var memberListOverlay: some View {
         HStack {
             Spacer()
-            VStack {
-                MemberContainerView(
-                    onCancel: { isGroupMembers = false },
-                    onAddMember: { roomCtx.presentInviteView() }
-                )
-                .environmentObject(roomCtx)
+            if isGroupMembers {
+                VStack {
+                    MemberContainerView(
+                        onCancel: { isGroupMembers = false },
+                        onAddMember: { roomCtx.presentInviteView() }
+                    )
+                    .environmentObject(roomCtx)
+                }
+                .frame(width: 200)
+                .frame(maxHeight: .infinity)
+                .background(Color(rgbHex: 0x2B3139))
+                .transition(.move(edge: .trailing))
+                .animation(.easeOut(duration: 0.2), value: isGroupMembers)
             }
-            .frame(width: 200)
-            .frame(maxHeight: .infinity)
-            .background(Color(rgbHex: 0x2B3139))
-            .offset(x: isGroupMembers ? 0 : 200)
-            .animation(.easeOut(duration: 0.2), value: isGroupMembers)
         }
     }
     
@@ -360,6 +371,7 @@ struct CallScreenShareView: View {
         isRendering = false
         showQuickPanel = false
         isGroupMembers = false
+        RoomDataManager.shared.onPipUpdate = nil
         if let track = roomCtx.screenSharePublication?.track as? VideoTrack {
             try? await track.stop()
         }
@@ -377,37 +389,42 @@ struct ZoomableScrollView<Content: View>: UIViewRepresentable {
         let scrollView = UIScrollView()
         scrollView.delegate = context.coordinator
         scrollView.minimumZoomScale = 1.0
-        scrollView.maximumZoomScale = 2.0
+        scrollView.maximumZoomScale = 8.0
         scrollView.zoomScale = 1.0
         scrollView.bouncesZoom = true
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
-        scrollView.contentInsetAdjustmentBehavior = .always
-        
-        // 创建 UIHostingController 以加载 SwiftUI 视图
-        let hostedView = UIHostingController(rootView: content).view!
+        scrollView.contentInsetAdjustmentBehavior = .never
+
+        let hostingController = UIHostingController(rootView: content)
+        if #available(iOS 16.4, *) {
+            hostingController.safeAreaRegions = []
+        }
+        context.coordinator.hostingController = hostingController
+        let hostedView = hostingController.view!
         hostedView.backgroundColor = .clear
         hostedView.translatesAutoresizingMaskIntoConstraints = false
 
         scrollView.addSubview(hostedView)
 
         hostedView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-            make.width.equalTo(scrollView.frameLayoutGuide.snp.width)
-            make.height.equalTo(scrollView.frameLayoutGuide.snp.height)
+            make.edges.equalTo(scrollView.contentLayoutGuide)
+            make.width.equalTo(scrollView.frameLayoutGuide)
+            make.height.equalTo(scrollView.frameLayoutGuide)
         }
-        
+
         let pipView = DTPIPView()
         let callWindow = OWSWindowManager.shared().callViewWindow
         let topVC = callWindow.findTopViewController()
-        if NSStringFromClass(type(of: topVC)).contains("DTHostingController"), NSStringFromClass(type(of: topVC)).contains("CallScreenShareView"){
+        if NSStringFromClass(type(of: topVC)).contains("DTHostingController"), NSStringFromClass(type(of: topVC)).contains("CallScreenShareView") {
             pipView.addToSuperview(topVC.view)
             pipView.updatePipViewCountDown()
             if let shareItem = DTMeetingManager.shared.fetchSharingItem() {
                 pipView.setNewSpeakingItem(shareItem)
             }
-            RoomDataManager.shared.onPipUpdate = {
+            RoomDataManager.shared.onPipUpdate = { [weak pipView] in
                 DispatchQueue.main.async {
+                    guard let pipView else { return }
                     if let speakingItem = DTMeetingManager.shared.fetchSpeakingItem() {
                         pipView.setNewSpeakingItem(speakingItem)
                     } else if let shareItem = DTMeetingManager.shared.fetchSharingItem() {
@@ -419,16 +436,17 @@ struct ZoomableScrollView<Content: View>: UIViewRepresentable {
                 }
             }
         }
+
+        context.coordinator.observeZoomChange(for: scrollView)
+
         return scrollView
     }
 
     func updateUIView(_ uiView: UIScrollView, context: Context) {
-        NotificationCenter.default.addObserver(forName: Notification.Name("CallShareZoomDidChange"), object: nil, queue: .main) { notification in
-            context.coordinator.restoreZoomState(scrollView: uiView)
-        }
-        
-        if let hosting = uiView.subviews.first {
-            hosting.setNeedsLayout()
+        context.coordinator.hostingController?.rootView = content
+        if context.coordinator.needsInitialLayout, uiView.bounds.size != .zero {
+            context.coordinator.needsInitialLayout = false
+            uiView.contentOffset = .zero
         }
     }
 
@@ -437,32 +455,48 @@ struct ZoomableScrollView<Content: View>: UIViewRepresentable {
     }
 
     class Coordinator: NSObject, UIScrollViewDelegate {
-        var lastContentOffset: CGPoint = .zero  // 记录 contentOffset
-        
+        var lastContentOffset: CGPoint = .zero
+        var hostingController: UIHostingController<Content>?
+        var needsInitialLayout = true
+        private var zoomChangeObserver: NSObjectProtocol?
+
+        deinit {
+            if let observer = zoomChangeObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+        }
+
+        func observeZoomChange(for scrollView: UIScrollView) {
+            guard zoomChangeObserver == nil else { return }
+            zoomChangeObserver = NotificationCenter.default.addObserver(
+                forName: Notification.Name("CallShareZoomDidChange"),
+                object: nil,
+                queue: .main
+            ) { [weak self, weak scrollView] _ in
+                guard let self, let scrollView else { return }
+                self.restoreZoomState(scrollView: scrollView)
+            }
+        }
+
         func viewForZooming(in scrollView: UIScrollView) -> UIView? {
             return scrollView.subviews.first
         }
-        
-        func scrollViewDidLayoutSubviews(_ scrollView: UIScrollView) {
-            if let hostedView = scrollView.subviews.first {
-                hostedView.frame = CGRect(origin: .zero, size: scrollView.bounds.size)
-            }
-        }
-        
+
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
             if scrollView.zoomScale < 1.0 {
                 scrollView.zoomScale = 1.0
             }
         }
-        
+
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             if scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating {
                 lastContentOffset = scrollView.contentOffset
             }
         }
-        
+
         func restoreZoomState(scrollView: UIScrollView) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                guard let self else { return }
                 scrollView.contentOffset = self.lastContentOffset
             }
         }

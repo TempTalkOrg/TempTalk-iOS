@@ -382,8 +382,6 @@ extension DTMeetingManager {
                 }
             }
         } else {
-            // 没有 call 信息，清理所有 sticked threads 作为兜底
-            // 注意：这可能会清理其他 room 的 bar，但这是竞态条件下的安全兜底
             Logger.info("\(logTag) removeAllMeetingBarTypes: no call info, clearing all sticked threads as fallback")
             let finder = AnyThreadFinder()
             var threadsToUnstick: [TSThread] = []

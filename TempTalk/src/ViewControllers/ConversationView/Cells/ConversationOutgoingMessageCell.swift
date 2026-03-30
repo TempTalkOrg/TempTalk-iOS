@@ -168,29 +168,32 @@ extension ConversationOutgoingMessageCell {
             }
             
         } else {
-                        
-            readStatusImageView.snp.remakeConstraints { make in
-                make.width.height.equalTo(ConversationOutgoingMessageRenderItem.readStatusImageSize)
-                make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace*2.0)
-                make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace*1.5)
-            }
-            
+
             var leadingView: UIView = readStatusImageView
             if !footerTimeLabel.isHidden {
                 leadingView = footerTimeLabel
-                footerTimeLabel.snp.remakeConstraints { make in
-                    make.trailing.equalTo(readStatusImageView.snp.leading).offset(-CVMessageFooterRenderItem.footerViewSpace/2.0)
-                    make.centerY.equalTo(readStatusImageView.snp.centerY)
-                }
             }
-            
+
             footerView.snp.remakeConstraints { make in
                 make.leading.equalTo(leadingView.snp.leading).offset(-CVMessageFooterRenderItem.footerViewSpace)
                 make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
                 make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace)
                 make.height.equalTo(CVMessageFooterRenderItem.footerViewHeight)
             }
-            
+
+            readStatusImageView.snp.remakeConstraints { make in
+                make.width.height.equalTo(ConversationOutgoingMessageRenderItem.readStatusImageSize)
+                make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace*2.0)
+                make.centerY.equalTo(footerView.snp.centerY)
+            }
+
+            if !footerTimeLabel.isHidden {
+                footerTimeLabel.snp.remakeConstraints { make in
+                    make.trailing.equalTo(readStatusImageView.snp.leading).offset(-CVMessageFooterRenderItem.footerViewSpace/2.0)
+                    make.centerY.equalTo(footerView.snp.centerY)
+                }
+            }
+
         }
     }
     

@@ -15,6 +15,10 @@ import TTServiceKit
 
 extension ConversationViewController: ConversationInputTextViewDelegate {
     public func didPaste(_ attachment: SignalAttachment?) {
+        guard isFriend || thread.isGroupThread() else {
+            DTToastHelper.toast(withText: Localized("NON_FRIEND_ONLY_TEXT_MESSAGE"))
+            return
+        }
         showApprovalDialog(forAttachment: attachment)
     }
     
@@ -179,6 +183,10 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
     }
     
     func confideButtonPressed() {
+        performConfidentialModeToggleIfNeeded(completion: nil)
+    }
+
+    private func performConfidentialModeToggleIfNeeded(completion: (() -> Void)?) {
         let isEnabling: Bool
         let confidentialMode: Int
         let inputToolbarState: InputToolbarState
@@ -193,7 +201,6 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
             isEnabling = true
         }
 
-        // Show alert when first time enabling confidential mode
         if isEnabling {
             var shouldShowAlert = false
             databaseStorage.read { transaction in
@@ -202,17 +209,17 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
 
             if shouldShowAlert {
                 DTConfidentialMessageAlertController.present(from: self) {
-                    self.performConfidentialModeToggle(confidentialMode: confidentialMode, inputToolbarState: inputToolbarState)
+                    self.performConfidentialModeToggle(confidentialMode: confidentialMode, inputToolbarState: inputToolbarState, completion: completion)
                 }
             } else {
-                performConfidentialModeToggle(confidentialMode: confidentialMode, inputToolbarState: inputToolbarState)
+                performConfidentialModeToggle(confidentialMode: confidentialMode, inputToolbarState: inputToolbarState, completion: completion)
             }
         } else {
-            performConfidentialModeToggle(confidentialMode: confidentialMode, inputToolbarState: inputToolbarState)
+            performConfidentialModeToggle(confidentialMode: confidentialMode, inputToolbarState: inputToolbarState, completion: completion)
         }
     }
 
-    private func performConfidentialModeToggle(confidentialMode: Int, inputToolbarState: InputToolbarState) {
+    private func performConfidentialModeToggle(confidentialMode: Int, inputToolbarState: InputToolbarState, completion: (() -> Void)? = nil) {
         let configApi = DTSetConversationApi()
         configApi.requestConfigConfidentialMode(withConversationID: self.thread.serverThreadId,
                                                 confidentialMode: confidentialMode) { conversationEntity in
@@ -221,13 +228,14 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
             self.databaseStorage.asyncWrite { wTransaction in
                 self.thread.anyUpdate(transaction: wTransaction) { thread in
                     thread.conversationEntity = conversationEntity
-                    
+
                     DataUpdateUtil.shared.updateConversation(thread: thread,
                                                              expireTime: conversationEntity.messageExpiry,
                                                              messageClearAnchor: NSNumber(value: conversationEntity.messageClearAnchor))
                 }
                 wTransaction.addAsyncCompletionOnMain {
                     NotificationCenter.default.post(name: .DTConversationDidChange, object: nil)
+                    completion?()
                 }
             }
         } failure: { error in
@@ -543,8 +551,10 @@ extension ConversationViewController {
     func showApprovalDialog(forAttachments attachments: [SignalAttachment]) {
         AssertIsOnMainThread()
 
+        let isConfidential = thread.conversationEntity?.confidentialMode == .confidential
         let approvalVC = AttachmentApprovalViewController.wrappedInNavController(
             attachments: attachments,
+            isConfidential: isConfidential,
             delegate: self
         )
         present(approvalVC, animated: true)
@@ -557,32 +567,41 @@ extension ConversationViewController: AttachmentApprovalViewControllerDelegate {
     public func attachmentApproval(_ attachmentApproval: AttachmentApprovalViewController, didCancelAttachments attachments: [SignalAttachment]) {
         dismiss(animated: true)
     }
-    
-    public func attachmentApproval(_ attachmentApproval: AttachmentApprovalViewController, didApproveAttachments attachments: [SignalAttachment]) {
-        // 因为多文件上传的过程中 ，如果有文字 会在最后一个附件上拼上文字，所以这块如果存在指令，会主动在每一个附件的文本后面拼接上指令（除了最后一个，最后一个中已经包含文本，在对应的DTQuickCommand 会对相应的治理进行处理,例如删除对应的指令或则保留对应的指令）
-        let lastAttachment = attachments.last
-        var quickCommand: DTQuickCommand?
-        if let lastCaptionText = lastAttachment?.captionText, !lastCaptionText.isEmpty {
-            quickCommand = DTQuickCommandAdapter.matchKeyboardCommand(with: lastCaptionText)
+
+    public func attachmentApprovalDidTapConfide(_ attachmentApproval: AttachmentApprovalViewController) {
+        ImpactHapticFeedback.impactOccurred(style: .light)
+        performConfidentialModeToggleIfNeeded { [weak self, weak attachmentApproval] in
+            guard let self, let toolbar = attachmentApproval?.bottomToolbar as? CaptioningToolbar else { return }
+            toolbar.isConfidential = self.thread.conversationEntity?.confidentialMode == .confidential
         }
-        
+    }
+
+    public func attachmentApproval(_ attachmentApproval: AttachmentApprovalViewController, didApproveAttachments attachments: [SignalAttachment]) {
+        let captionText = attachments.last?.captionText
+        attachments.forEach { $0.captionText = nil }
         attachments.enumerated().forEach { index, attachment in
-            if let quickCommand, attachment !== lastAttachment {
-                attachment.captionText = quickCommand.keyCommand
-            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 * Double(index)) { [weak self] in
                 guard let self else { return }
-                self.tryToSendAttachments([attachment], preSendMessageCallBack: { preSendMessage in
-                    
-                }, messageText: nil, completion: nil)
+                self.tryToSendAttachments([attachment], preSendMessageCallBack: { _ in }, messageText: nil, completion: nil)
             }
         }
-        
+
+        if let text = captionText, !text.isEmpty {
+            let textDelay = 0.1 * Double(attachments.count)
+            DispatchQueue.main.asyncAfter(deadline: .now() + textDelay) { [weak self] in
+                guard let self else { return }
+                _ = ThreadUtil.sendMessage(
+                    withText: text,
+                    atPersons: nil,
+                    mentions: nil,
+                    in: self.thread,
+                    quotedReplyModel: nil,
+                    messageSender: self.messageSender
+                )
+            }
+        }
+
         dismiss(animated: true)
-        // We always want to scroll to the bottom of the conversation after the local user
-        // sends a message.  Normally, this is taken care of in yapDatabaseModified:, but
-        // we don't listen to db modifications when this view isn't visible, i.e. when the
-        // attachment approval view is presented.
         scrollToBottom(animated: false)
     }
 }

@@ -32,7 +32,7 @@ public struct AttachmentRecord: SDSRecord {
     // Properties
     public let attachmentSchemaVersion: UInt
     public let attachmentType: TSAttachmentType
-    public let byteCount: UInt32
+    public let byteCount: UInt64
     public let cachedAudioDurationSeconds: UInt64?
     public let cachedImageHeight: UInt64?
     public let cachedImageWidth: UInt64?
@@ -178,7 +178,7 @@ extension TSAttachment {
             let appearInMediaGallery: Bool = record.appearInMediaGallery
             let attachmentSchemaVersion: UInt = record.attachmentSchemaVersion
             let attachmentType: TSAttachmentType = record.attachmentType
-            let byteCount: UInt32 = record.byteCount
+            let byteCount: UInt64 = record.byteCount
             let contentType: String = record.contentType
             let encryptionKey: Data = record.encryptionKey
             let height: UInt32 = record.height
@@ -211,7 +211,7 @@ extension TSAttachment {
             let appearInMediaGallery: Bool = record.appearInMediaGallery
             let attachmentSchemaVersion: UInt = record.attachmentSchemaVersion
             let attachmentType: TSAttachmentType = record.attachmentType
-            let byteCount: UInt32 = record.byteCount
+            let byteCount: UInt64 = record.byteCount
             let contentType: String = record.contentType
             let encryptionKey: Data = record.encryptionKey
             let height: UInt32 = record.height
@@ -254,7 +254,7 @@ extension TSAttachment {
             let appearInMediaGallery: Bool = record.appearInMediaGallery
             let attachmentSchemaVersion: UInt = record.attachmentSchemaVersion
             let attachmentType: TSAttachmentType = record.attachmentType
-            let byteCount: UInt32 = record.byteCount
+            let byteCount: UInt64 = record.byteCount
             let contentType: String = record.contentType
             let encryptionKey: Data = record.encryptionKey
             let height: UInt32 = record.height
@@ -364,7 +364,7 @@ extension TSAttachment: DeepCopyable {
             let appearInMediaGallery: Bool = modelToCopy.appearInMediaGallery
             let attachmentSchemaVersion: UInt = modelToCopy.attachmentSchemaVersion
             let attachmentType: TSAttachmentType = modelToCopy.attachmentType
-            let byteCount: UInt32 = modelToCopy.byteCount
+            let byteCount: UInt64 = modelToCopy.byteCount
             let contentType: String = modelToCopy.contentType
             let encryptionKey: Data = modelToCopy.encryptionKey
             let height: UInt32 = modelToCopy.height
@@ -432,7 +432,7 @@ extension TSAttachment: DeepCopyable {
             let appearInMediaGallery: Bool = modelToCopy.appearInMediaGallery
             let attachmentSchemaVersion: UInt = modelToCopy.attachmentSchemaVersion
             let attachmentType: TSAttachmentType = modelToCopy.attachmentType
-            let byteCount: UInt32 = modelToCopy.byteCount
+            let byteCount: UInt64 = modelToCopy.byteCount
             let contentType: String = modelToCopy.contentType
             let encryptionKey: Data = modelToCopy.encryptionKey
             let height: UInt32 = modelToCopy.height
@@ -475,7 +475,7 @@ extension TSAttachment: DeepCopyable {
             let appearInMediaGallery: Bool = modelToCopy.appearInMediaGallery
             let attachmentSchemaVersion: UInt = modelToCopy.attachmentSchemaVersion
             let attachmentType: TSAttachmentType = modelToCopy.attachmentType
-            let byteCount: UInt32 = modelToCopy.byteCount
+            let byteCount: UInt64 = modelToCopy.byteCount
             let contentType: String = modelToCopy.contentType
             let encryptionKey: Data = modelToCopy.encryptionKey
             let height: UInt32 = modelToCopy.height
@@ -994,7 +994,7 @@ class TSAttachmentSerializer: SDSSerializer {
         // Properties
         let attachmentSchemaVersion: UInt = model.attachmentSchemaVersion
         let attachmentType: TSAttachmentType = model.attachmentType
-        let byteCount: UInt32 = model.byteCount
+        let byteCount: UInt64 = model.byteCount
         let cachedAudioDurationSeconds: UInt64? = nil
         let cachedImageHeight: UInt64? = nil
         let cachedImageWidth: UInt64? = nil

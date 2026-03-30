@@ -230,11 +230,7 @@ extension ConversationViewController {
             Logger.info("Discarding voice message too short.")
             self.audioRecorder = nil
 
-            // 尝试收起键盘，如果保护启用会被拦截
             dismissKeyBoard()
-            if viewState.isKeyboardProtectionEnabled {
-                Logger.info("[Keyboard] Voice message too short, keyboard protected and not dismissed")
-            }
 
             OWSActionSheets.showActionSheet(
                 title: Localized("VOICE_MESSAGE_TOO_SHORT_ALERT_TITLE"),

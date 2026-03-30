@@ -128,6 +128,15 @@ typedef void (^SendMessageBlock)(SendCompletionBlock completion);
 
 #pragma mark - SelectThreadViewControllerDelegate
 
+- (BOOL)shouldFilterThread:(TSThread *)thread
+{
+    if ([thread isKindOfClass:[TSContactThread class]]) {
+        TSContactThread *contactThread = (TSContactThread *)thread;
+        return !contactThread.isFriend;
+    }
+    return NO;
+}
+
 - (nullable NSString *)convertAttachmentToMessageTextIfPossible
 {
 //    OWSAssertDebug(self.attachments.count == 1);

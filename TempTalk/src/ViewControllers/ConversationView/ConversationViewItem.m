@@ -736,8 +736,14 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
                 self.messageCellType = OWSMessageCellType_GenericAttachment;
             }
         } else if ([attachment isKindOfClass:[TSAttachmentPointer class]]) {
-            self.messageCellType = OWSMessageCellType_DownloadingAttachment;
-            self.attachmentPointer = (TSAttachmentPointer *)attachment;
+            TSAttachmentPointer *pointer = (TSAttachmentPointer *)attachment;
+            BOOL isOutgoingMessage = [self.interaction isKindOfClass:[TSOutgoingMessage class]];
+            if (isOutgoingMessage && self.isCombindedForwardMessage) {
+                self.messageCellType = OWSMessageCellType_GenericAttachment;
+            } else {
+                self.messageCellType = OWSMessageCellType_DownloadingAttachment;
+                self.attachmentPointer = pointer;
+            }
         } else {
             OWSFailDebug(@"%@ Unknown attachment type", self.logTag);
         }

@@ -33,12 +33,9 @@ extension ConversationMessageBubbleView {
             return
         }
         
-        //tap confidentialMessage, 文本消息和语音消息需要特殊处理，附件走普通流程（已有 handleConfidentialMessageTap 包装）
         if viewItem.isConfidentialMessage {
-            if viewItem.messageCellType() == .textMessage || viewItem.messageCellType() == .oversizeTextMessage {
-                delegate?.messageBubbleView?(self, didTapConfidentialTextMessageWith: viewItem)
-                return
-            } else if viewItem.messageCellType() == .audio {
+            let cellType = viewItem.messageCellType()
+            if cellType == .textMessage || cellType == .oversizeTextMessage || cellType == .audio {
                 delegate?.messageBubbleView?(self, didTapConfidentialTextMessageWith: viewItem)
                 return
             }
@@ -88,6 +85,18 @@ extension ConversationMessageBubbleView {
             
         case .contactShare:
             if viewItem.messageCellType() == .contactShare, viewItem.contactShare != nil {
+                // 获取分享名片的用户ID（消息发送者）
+                var shareContactCardUid: String?
+
+                if let incomingMessage = viewItem.interaction as? TSIncomingMessage {
+                    shareContactCardUid = incomingMessage.authorId
+                }
+
+                if let uid = shareContactCardUid {
+                    DTAddFriendSourceManager.shared.setShareContactSource(shareContactCardUid: uid)
+                } else {
+                    DTAddFriendSourceManager.shared.setOtherSource(.inUserCard)
+                }
                 delegate?.messageBubbleView?(self, didTapContactShareViewWith: viewItem)
             }
             
@@ -174,6 +183,10 @@ extension ConversationMessageBubbleView {
                 imageView: bodyMediaView
             )
         case .genericAttachment:
+            if viewItem.isConfidentialMessage {
+                delegate?.messageBubbleView?(self, didTapConfidentialTextMessageWith: viewItem)
+                return
+            }
             // Check if attachment is downloaded (Stream) or not (Pointer)
             if let attachmentStream = viewItem.attachmentStream() {
                 // Attachment is downloaded, preview it

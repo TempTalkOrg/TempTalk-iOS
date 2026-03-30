@@ -12,6 +12,7 @@ import TTServiceKit
 public protocol AttachmentApprovalViewControllerDelegate: AnyObject {
     func attachmentApproval(_ attachmentApproval: AttachmentApprovalViewController, didApproveAttachments attachments: [SignalAttachment])
     func attachmentApproval(_ attachmentApproval: AttachmentApprovalViewController, didCancelAttachments attachments: [SignalAttachment])
+    func attachmentApprovalDidTapConfide(_ attachmentApproval: AttachmentApprovalViewController)
 }
 
 @objc
@@ -33,8 +34,9 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
     // MARK: Properties
 
     let attachments: [SignalAttachment]
+    private let initialIsConfidential: Bool
 
-    private(set) var bottomToolbar: UIView?
+    public private(set) var bottomToolbar: UIView?
     private(set) var collectionView: UICollectionView?
     // MARK: Initializers
 
@@ -44,17 +46,21 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
     }
 
     @objc
-    required public init(attachments: [SignalAttachment], delegate: AttachmentApprovalViewControllerDelegate) {
-        
+    required public convenience init(attachments: [SignalAttachment], delegate: AttachmentApprovalViewControllerDelegate) {
+        self.init(attachments: attachments, isConfidential: false, delegate: delegate)
+    }
+
+    public init(attachments: [SignalAttachment], isConfidential: Bool, delegate: AttachmentApprovalViewControllerDelegate) {
         for attachment in attachments {
             assert(!attachment.hasError)
         }
         self.attachments = attachments
+        self.initialIsConfidential = isConfidential
         self.delegate = delegate
 
         super.init()
     }
-    
+
     // MARK: Autorotate
     
     public override var shouldAutorotate: Bool {
@@ -73,8 +79,6 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
 
     override public func viewDidLoad() {
         super.viewDidLoad()
-        
-//        navigationController?.setNavigationBarHidden(true, animated: false)
 
         let cancelButton = RoundMediaButton(image: .init(named: "x-28"), backgroundStyle: .blur)
         cancelButton.addTarget(self, action: #selector(cancelPressed(sender:)), for: .touchUpInside)
@@ -83,15 +87,27 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
             make.top.equalTo(view.safeAreaLayoutGuide.snp.top)
             make.leading.equalToSuperview().offset(8)
         }
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
+    }
+
+    @objc private func dismissKeyboard() {
+        (bottomToolbar as? CaptioningToolbar)?.dismissKeyboard()
     }
 
     @objc
     public class func wrappedInNavController(attachments: [SignalAttachment], delegate: AttachmentApprovalViewControllerDelegate) -> OWSNavigationController {
-        let vc = AttachmentApprovalViewController(attachments: attachments, delegate: delegate)
+        return wrappedInNavController(attachments: attachments, isConfidential: false, delegate: delegate)
+    }
+
+    public class func wrappedInNavController(attachments: [SignalAttachment], isConfidential: Bool, delegate: AttachmentApprovalViewControllerDelegate) -> OWSNavigationController {
+        let vc = AttachmentApprovalViewController(attachments: attachments, isConfidential: isConfidential, delegate: delegate)
         let navController = OWSNavigationController(rootViewController: vc)
         navController.modalPresentationStyle = .overFullScreen
         navController.navigationBar.isHidden = true
-        
+
         return navController
     }
 
@@ -165,6 +181,7 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
         // Bottom Toolbar
         let captioningToolbar = CaptioningToolbar()
         captioningToolbar.captioningToolbarDelegate = self
+        captioningToolbar.isConfidential = initialIsConfidential
         self.bottomToolbar = captioningToolbar
 
         // Hide the play button embedded in the MediaView and replace it with our own.
@@ -218,16 +235,20 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
 
     // MARK: CaptioningToolbarDelegate
 
-    func captioningToolbarDidBeginEditing(_ captioningToolbar: CaptioningToolbar) {
+    public func captioningToolbarDidBeginEditing(_ captioningToolbar: CaptioningToolbar) {
         self.scaleAttachmentView(.compact)
     }
 
-    func captioningToolbarDidEndEditing(_ captioningToolbar: CaptioningToolbar) {
+    public func captioningToolbarDidEndEditing(_ captioningToolbar: CaptioningToolbar) {
         self.scaleAttachmentView(.fullsize)
     }
 
-    func captioningToolbarDidTapSend(_ captioningToolbar: CaptioningToolbar, captionText: String?) {
+    public func captioningToolbarDidTapSend(_ captioningToolbar: CaptioningToolbar, captionText: String?) {
         self.approveAttachment(captionText: captionText)
+    }
+
+    public func captioningToolbarDidTapConfide(_ captioningToolbar: CaptioningToolbar) {
+        delegate?.attachmentApprovalDidTapConfide(self)
     }
 
     // MARK: Helpers
@@ -247,11 +268,8 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
             self.sendApproveAttachments(captionText: captionText)
         }
     }
-    
+
     private func sendApproveAttachments(captionText: String?) {
-        // Toolbar flickers in and out if there are errors
-        // and remains visible momentarily after share extension is dismissed.
-        // It's easiest to just hide it at this point since we're done with it.
         shouldAllowAttachmentViewResizing = false
         bottomToolbar?.isUserInteractionEnabled = false
         bottomToolbar?.isHidden = true
@@ -300,18 +318,34 @@ public class AttachmentApprovalViewController: OWSViewController, CaptioningTool
     }
 }
 
-protocol CaptioningToolbarDelegate: AnyObject {
+public protocol CaptioningToolbarDelegate: AnyObject {
     func captioningToolbarDidTapSend(_ captioningToolbar: CaptioningToolbar, captionText: String?)
+    func captioningToolbarDidTapConfide(_ captioningToolbar: CaptioningToolbar)
     func captioningToolbarDidBeginEditing(_ captioningToolbar: CaptioningToolbar)
     func captioningToolbarDidEndEditing(_ captioningToolbar: CaptioningToolbar)
 }
 
-class CaptioningToolbar: UIView, UITextViewDelegate {
+public class CaptioningToolbar: UIView, UITextViewDelegate {
 
     weak var captioningToolbarDelegate: CaptioningToolbarDelegate?
     private let sendButton: UIButton
+    private let confideButton: UIButton
     private let textView: UITextView
     private let lengthLimitLabel: UILabel
+    private let backgroundView = UIView()
+    private let topSepLine = CaptioningDashedLineView()
+
+    public var isConfidential: Bool = false {
+        didSet {
+            confideButton.isSelected = isConfidential
+            placeholderLabel.text = isConfidential
+                ? Localized("Confidential_message", comment: "")
+                : Localized("IMAGE_PREVIEW_ADD_MESSAGE")
+            backgroundView.backgroundColor = isConfidential ? UIColor(rgbHex: 0x051732) : UIColor(rgbHex: 0x181A20)
+            topSepLine.setDashed(isConfidential, color: isConfidential ? .ows_themeBlue : UIColor(rgbHex: 0x181A20))
+        }
+    }
+
     // Layout Constants
 
     let kMinTextViewHeight: CGFloat = 36
@@ -321,9 +355,8 @@ class CaptioningToolbar: UIView, UITextViewDelegate {
         return UIDevice.current.orientation.isPortrait ? 160 : 100
     }
     var textViewHeightConstraint: NSLayoutConstraint?
-    var sendButtonConstraint: NSLayoutConstraint?
     var textViewHeight: CGFloat
-    
+
     private lazy var placeholderLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.ows_dynamicTypeBody
@@ -332,7 +365,7 @@ class CaptioningToolbar: UIView, UITextViewDelegate {
         return label
     }()
 
-    required init?(coder aDecoder: NSCoder) {
+    public required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
@@ -346,7 +379,7 @@ class CaptioningToolbar: UIView, UITextViewDelegate {
         }
     }
 
-    override var intrinsicContentSize: CGSize {
+    public override var intrinsicContentSize: CGSize {
         get {
             // Since we have `self.autoresizingMask = UIViewAutoresizingFlexibleHeight`, we must specify
             // an intrinsicContentSize. Specifying CGSize.zero causes the height to be determined by autolayout.
@@ -354,8 +387,9 @@ class CaptioningToolbar: UIView, UITextViewDelegate {
         }
     }
 
-    init() {
+    public init() {
         self.sendButton = UIButton(type: .system)
+        self.confideButton = UIButton(type: .custom)
         self.textView =  MessageTextView()
         self.textViewHeight = kMinTextViewHeight
         self.lengthLimitLabel = UILabel()
@@ -369,10 +403,8 @@ class CaptioningToolbar: UIView, UITextViewDelegate {
         self.backgroundColor = UIColor.clear
 
         textView.delegate = self
-        textView.backgroundColor = UIColor(rgbHex: 0x2E2E2E)
-        textView.layer.cornerRadius = 5;
+        textView.backgroundColor = .clear
         textView.textColor = .white
-        textView.addBorder(with: UIColor.ows_black.withAlphaComponent(0.12))
         textView.font = UIFont.ows_dynamicTypeBody
         textView.returnKeyType = .default
         textView.textContainerInset = UIEdgeInsets(top: 7, left: 8, bottom: 7, right: 8)
@@ -380,84 +412,93 @@ class CaptioningToolbar: UIView, UITextViewDelegate {
         textView.tintColor = .white
         textView.addSubview(placeholderLabel)
 
-//        let sendTitle = Localized("ATTACHMENT_APPROVAL_SEND_BUTTON", comment: "Label for 'send' button in the 'attachment approval' dialog.")
-//        sendButton.setTitle(sendTitle, for: .normal)
         sendButton.addTarget(self, action: #selector(didTapSend), for: .touchUpInside)
-
-        sendButton.titleLabel?.font = UIFont.ows_semiboldFont(withSize: 16)
-        sendButton.titleLabel?.textAlignment = .center
         sendButton.tintColor = UIColor.white
         sendButton.backgroundColor = UIColor.clear
-        sendButton.setBackgroundImage(UIImage.init(named: "ic_inputbar_send"), for: UIControl.State.normal)
+        sendButton.setBackgroundImage(UIImage(named: "ic_inputbar_send"), for: .normal)
         sendButton.layer.cornerRadius = 4
         sendButton.layer.masksToBounds = true
 
-        // Increase hit area of send button
-        sendButton.contentEdgeInsets = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
+        confideButton.setImage(UIImage(named: "input_attachment_confide"), for: .normal)
+        confideButton.setImage(UIImage(named: "input_attachment_confide_select"), for: .selected)
+        confideButton.addTarget(self, action: #selector(didTapConfide), for: .touchUpInside)
 
-        // Length Limit Label shown when the user inputs too long of a message
         lengthLimitLabel.textColor = .white
         lengthLimitLabel.text = Localized("ATTACHMENT_APPROVAL_CAPTION_LENGTH_LIMIT_REACHED", comment: "One line label indicating the user can add no more text to the attachment caption.")
         lengthLimitLabel.textAlignment = .center
-
-        // Add shadow in case overlayed on white content
         lengthLimitLabel.layer.shadowColor = UIColor.black.cgColor
         lengthLimitLabel.layer.shadowOffset = CGSize(width: 0.0, height: 0.0)
         lengthLimitLabel.layer.shadowOpacity = 0.8
         self.lengthLimitLabel.isHidden = true
 
-        let contentView = UIView()
-        contentView.backgroundColor = UIColor(red: 20/255.0, green: 20/255.0, blue: 20/255.0, alpha: 1.0)
-        addSubview(contentView)
-        contentView.autoPinEdgesToSuperviewEdges()
-        contentView.addSubview(sendButton)
-        contentView.addSubview(textView)
-        contentView.addSubview(lengthLimitLabel)
+        // inputContainer: textView + confideButton share the same background/border
+        let inputContainer = UIView()
+        inputContainer.backgroundColor = UIColor(rgbHex: 0x1E2329)
+        inputContainer.layer.cornerRadius = 5
+        inputContainer.addBorder(with: UIColor.ows_black.withAlphaComponent(0.12))
+        inputContainer.addSubview(textView)
+        inputContainer.addSubview(confideButton)
 
-        // Layout
-        let kToolbarMargin: CGFloat = 8
+        backgroundView.backgroundColor = UIColor(rgbHex: 0x181A20)
+        addSubview(backgroundView)
+        backgroundView.autoPinEdgesToSuperviewEdges()
 
-        // We have to wrap the toolbar items in a content view because iOS (at least on iOS10.3) assigns the inputAccessoryView.layoutMargins
-        // when resigning first responder (verified by auditing with `layoutMarginsDidChange`).
-        // The effect of this is that if we were to assign these margins to self.layoutMargins, they'd be blown away if the
-        // user dismisses the keyboard, giving the input accessory view a wonky layout.
-        contentView.layoutMargins = UIEdgeInsets(top: kToolbarMargin + 2, left: kToolbarMargin, bottom: kToolbarMargin, right: kToolbarMargin)
+        topSepLine.setDashed(false, color: Theme.bg2Color)
+        addSubview(topSepLine)
+        topSepLine.autoPinEdgesToSuperviewEdges(with: .zero, excludingEdge: .bottom)
+        topSepLine.autoSetDimension(.height, toSize: 0.5)
 
+        backgroundView.addSubview(inputContainer)
+        backgroundView.addSubview(sendButton)
+        backgroundView.addSubview(lengthLimitLabel)
+
+        let kMargin: CGFloat = 8
+        let kButtonSize: CGFloat = 36
+
+        backgroundView.layoutMargins = UIEdgeInsets(top: kMargin, left: kMargin, bottom: kMargin, right: kMargin)
+
+        // inputContainer: left-aligned, stretches to fill space left of sendButton
+        inputContainer.autoPinEdge(toSuperviewMargin: .top)
+        inputContainer.autoPinEdge(toSuperviewMargin: .left)
+        inputContainer.autoPinEdge(toSuperviewMargin: .bottom)
+        inputContainer.autoPinEdge(.right, to: .left, of: sendButton, withOffset: -kMargin)
+
+        // textView fills the container, leaving room for confideButton on the right
         self.textViewHeightConstraint = textView.autoSetDimension(.height, toSize: kMinTextViewHeight)
+        textView.autoPinEdge(toSuperviewEdge: .top)
+        textView.autoPinEdge(toSuperviewEdge: .left)
+        textView.autoPinEdge(toSuperviewEdge: .bottom)
+        textView.autoPinEdge(.right, to: .left, of: confideButton)
 
-        // We pin all three edges explicitly rather than doing something like:
-        //  textView.autoPinEdges(toSuperviewMarginsExcludingEdge: .right)
-        // because that method uses `leading` / `trailing` rather than `left` vs. `right`.
-        // So it doesn't work as expected with RTL layouts when we explicitly want something
-        // to be on the right side for both RTL and LTR layouts, like with the send button.
-        // I believe this is a bug in PureLayout. Filed here: https://github.com/PureLayout/PureLayout/issues/209
-        textView.autoPinEdge(toSuperviewMargin: .left, withInset: 8)
-        textView.autoPinEdge(toSuperviewMargin: .top)
-        textView.autoPinEdge(toSuperviewMargin: .bottom)
+        // confideButton pinned to right edge of container, vertically centered
+        confideButton.autoPinEdge(toSuperviewEdge: .right)
+        confideButton.autoAlignAxis(toSuperviewAxis: .horizontal)
+        confideButton.autoSetDimensions(to: CGSize(width: kButtonSize, height: kButtonSize))
 
-        sendButton.autoPinEdge(.left, to: .right, of: textView, withOffset: kToolbarMargin)
+        // sendButton: fixed to the right margin, bottom-aligned with inputContainer
+        sendButton.autoPinEdge(toSuperviewMargin: .right)
+        sendButton.autoPinEdge(.bottom, to: .bottom, of: inputContainer)
+        sendButton.autoSetDimensions(to: CGSize(width: kButtonSize, height: kButtonSize))
 
-        // Because the textview has a border, the sendButton feels unaligned without this shadow and offset
-        sendButtonConstraint = sendButton.autoPinEdge(.bottom, to: .bottom, of: textView)
-
-        sendButton.autoPinEdge(toSuperviewMargin: .right, withInset: 8)
-//        sendButton.setContentHuggingHigh()
-//        sendButton.setCompressionResistanceHigh()
-        sendButton.autoSetDimension(.height, toSize: 36)
-        sendButton.autoSetDimension(.width, toSize: 36)
-        sendButton.setCompressionResistanceHigh()
-        
         lengthLimitLabel.autoPinEdge(toSuperviewMargin: .left)
         lengthLimitLabel.autoPinEdge(toSuperviewMargin: .right)
-        lengthLimitLabel.autoPinEdge(.bottom, to: .top, of: textView, withOffset: -6)
+        lengthLimitLabel.autoPinEdge(.bottom, to: .top, of: inputContainer, withOffset: -6)
         lengthLimitLabel.setContentHuggingHigh()
         lengthLimitLabel.setCompressionResistanceHigh()
-        
+
         updatePlaceholder()
     }
 
     @objc func didTapSend() {
         self.captioningToolbarDelegate?.captioningToolbarDidTapSend(self, captionText: self.textView.text)
+    }
+
+    func dismissKeyboard() {
+        textView.resignFirstResponder()
+    }
+
+    @objc func didTapConfide() {
+        self.captioningToolbarDelegate?.captioningToolbarDidTapConfide(self)
     }
 
     // MARK: - UITextViewDelegate
@@ -538,14 +579,10 @@ class CaptioningToolbar: UIView, UITextViewDelegate {
         // compute new height assuming width is unchanged
         let currentSize = textView.frame.size
         let newHeight = clampedTextViewHeight(fixedWidth: currentSize.width)
-        if (newHeight > kMinTextViewHeight){
-            sendButtonConstraint?.constant = 0
-        }
         if newHeight != self.textViewHeight {
             Logger.debug("\(self.logTag) TextView height changed: \(self.textViewHeight) -> \(newHeight)")
             self.textViewHeight = newHeight
             self.textViewHeightConstraint?.constant = textViewHeight
-            
             self.invalidateIntrinsicContentSize()
         }
     }
@@ -874,5 +911,40 @@ extension DFAttachmentApprovalCollectionCell: PlayerProgressBarDelegate, OWSVide
             videoPlayer.play()
         }
     }
-    
+
+}
+
+// MARK: - CaptioningDashedLineView
+
+private class CaptioningDashedLineView: UIView {
+    private let dashLayer = CAShapeLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        layer.addSublayer(dashLayer)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func setDashed(_ dashed: Bool, color: UIColor) {
+        backgroundColor = dashed ? .clear : color
+        dashLayer.isHidden = !dashed
+        if dashed {
+            dashLayer.strokeColor = color.cgColor
+            dashLayer.fillColor = UIColor.clear.cgColor
+            dashLayer.lineWidth = 0.5
+            dashLayer.lineDashPattern = [4, 4]
+            setNeedsLayout()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard !dashLayer.isHidden else { return }
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: 0, y: bounds.midY))
+        path.addLine(to: CGPoint(x: bounds.width, y: bounds.midY))
+        dashLayer.path = path.cgPath
+        dashLayer.frame = bounds
+    }
 }

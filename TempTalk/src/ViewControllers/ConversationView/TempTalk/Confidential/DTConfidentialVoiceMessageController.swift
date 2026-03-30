@@ -95,6 +95,8 @@ import TTMessaging
         containerView.layer.masksToBounds = true
         view.addSubview(containerView)
 
+        DTConfidentialHintToast().show(in: view)
+
         // Create audio message view (same as in conversation)
         if let attachmentStream = attachmentStream {
             var thread: TSThread?

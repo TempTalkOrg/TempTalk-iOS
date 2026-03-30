@@ -277,8 +277,16 @@ const CGFloat kContactCellAvatarTextMargin = 12;
         self.nameView.external = NO;
         self.nameView.name = MessageStrings.noteToSelf;
     } else {
+        SignalAccount *account = [contactsManager signalAccountForRecipientId:recipientId];
+        BOOL isBot = [account isBot];
         self.nameView.external = [SignalAccount isExt:recipientId];
         NSMutableAttributedString *attributeName = [[contactsManager formattedFullNameForRecipientId:recipientId font:self.nameView.nameFont] mutableCopy];
+
+        // Add bot icon if needed
+        if (isBot) {
+            attributeName = [[attributeName appendingBotIconWithFont:self.nameView.nameFont] mutableCopy];
+        }
+
         if (self.isMentionOtherContacts) {
             NSAttributedString *otherContactsMentionSuffix = [[NSAttributedString alloc] initWithString:@"*" attributes:@{NSForegroundColorAttributeName : Theme.tprimaryColor, NSFontAttributeName : self.nameView.nameFont}];
             [attributeName appendAttributedString:otherContactsMentionSuffix];
@@ -339,11 +347,17 @@ const CGFloat kContactCellAvatarTextMargin = 12;
         threadName = MessageStrings.newGroupDefaultTitle;
     }
 
-    NSAttributedString *attributedText =
-        [[NSAttributedString alloc] initWithString:threadName
+    NSMutableAttributedString *attributedText =
+        [[NSMutableAttributedString alloc] initWithString:threadName
                                         attributes:@{
                                             NSForegroundColorAttributeName : Theme.tprimaryColor,
                                         }];
+
+    // Add bot icon if needed
+    if (isContactThread && account && [account isBot]) {
+        attributedText = [[attributedText appendingBotIconWithFont:self.nameView.nameFont] mutableCopy];
+    }
+
     self.nameView.attributeName = attributedText;
 
     if (isContactThread) {
