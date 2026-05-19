@@ -636,11 +636,17 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
 - (void)updateWithMarkingAllUnsentRecipientsAsSendingWithTransaction:(SDSAnyWriteTransaction *)transaction
 {
     OWSAssertDebug(transaction);
-    
+
     if (self.isReactionMessage) {
         return;
     }
-    
+
+    // Allow ConversationViewController to refresh the UI after re-marking
+    // failed recipients as "sending" while still offline; otherwise
+    // DatabaseChangeObserver.publishUpdatesIfNecessary skips publishing
+    // when the socket is closed and the user sees no state change.
+    [DatabaseOfflineManager shared].canOfflineUpdateDatabase = true;
+
     [self anyUpdateOutgoingMessageWithTransaction:transaction
                                             block:^(TSOutgoingMessage *message) {
         // Mark any "sending" recipients as "failed."
@@ -865,11 +871,17 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
             case TSGroupMessageNew: {
                 if (gThread.groupModel.groupImage != nil && self.attachmentIds.count == 1) {
                     attachmentWasGroupAvatar = YES;
-                    [groupBuilder setAvatar:[TSAttachmentStream buildProtoForAttachmentId:self.attachmentIds.firstObject]];
+                    if (!gThread.groupModel.isEncryptedGroup) {
+                        [groupBuilder setAvatar:[TSAttachmentStream buildProtoForAttachmentId:self.attachmentIds.firstObject]];
+                    } else {
+                        OWSLogInfo(@"[GroupCrypto] Skip plaintext avatar attach to GroupContext for encrypted group: %@", gThread.serverThreadId);
+                    }
                 }
-                
+
                 [groupBuilder setMembers:gThread.groupModel.groupMemberIds];
-                [groupBuilder setName:gThread.groupModel.groupName];
+                if (!gThread.groupModel.isEncryptedGroup) {
+                    [groupBuilder setName:gThread.groupModel.groupName];
+                }
                 [groupBuilder setType:DSKProtoGroupContextTypeUpdate];
                 break;
             }
@@ -878,7 +890,15 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
                 break;
         }
         [groupBuilder setId:gThread.groupModel.groupId];
-        
+
+        if (gThread.groupModel.isEncryptedGroup) {
+            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                [DTGroupKeyMessageHandler.shared attachRGroupToGroupContextWithBuilder:groupBuilder
+                                                                                   gid:gThread.serverThreadId
+                                                                           transaction:transaction];
+            }];
+        }
+
         [builder setGroup:[groupBuilder buildAndReturnError:nil]];
     }
     

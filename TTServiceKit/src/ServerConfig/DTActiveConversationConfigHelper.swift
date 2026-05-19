@@ -14,17 +14,18 @@ import Foundation
         let entity = DTDisappearanceTimeIntervalConfig.fetchDisappearanceTimeInterval()
 
         // 根据 thread 类型返回对应的间隔
+        let interval: TimeInterval
         if thread.isNoteToSelf {
-            return entity.activeConversationMe.doubleValue
+            interval = entity.activeConversationMe.doubleValue
         } else if thread.isGroupThread() {
-            return entity.activeConversationGroup.doubleValue
+            interval = entity.activeConversationGroup.doubleValue
         } else {
-            return entity.activeConversationOthers.doubleValue
+            interval = entity.activeConversationOthers.doubleValue
         }
+        return interval
     }
 
     @objc public static func shouldSkipCleanup(forThread thread: TSThread) -> Bool {
-        // saved (NoteToSelf) 或 stick 的会话不受影响
         return thread.isNoteToSelf || thread.isSticked
     }
 }

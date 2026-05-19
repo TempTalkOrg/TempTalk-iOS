@@ -110,7 +110,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
 @synthesize displayName = _displayName;
 @synthesize conversationStyle = _conversationStyle;
 @synthesize conversationViewMode = _conversationViewMode;
-@synthesize didCellMediaFailToLoad = _didCellMediaFailToLoad;
+@synthesize cellMediaLoadFailureCount = _cellMediaLoadFailureCount;
 @synthesize isFirstInCluster = _isFirstInCluster;
 @synthesize isLastInCluster = _isLastInCluster;
 @synthesize isUseForMessageList = _isUseForMessageList;
@@ -586,9 +586,19 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
     }
     
     if (attachmentId.length == 0) {
+        DDLogWarn(@"%@ firstAttachment: attachmentId is empty for message %llu, isCombinedForward=%d, messageAttExist=%d, fwdAttExist=%d",
+                  self.logTag, message.timestamp, self.isCombindedForwardMessage, messageAttachmentExist, forwardMessageAttachmentExist);
         return nil;
     }
-    return [TSAttachment anyFetchWithUniqueId:attachmentId transaction:transaction];
+    TSAttachment *result = [TSAttachment anyFetchWithUniqueId:attachmentId transaction:transaction];
+    if (!result) {
+        DDLogError(@"%@ firstAttachment: attachment NOT FOUND for id=%@, message=%llu, isCombinedForward=%d",
+                   self.logTag, attachmentId, message.timestamp, self.isCombindedForwardMessage);
+    } else {
+        DDLogInfo(@"%@ firstAttachment: found %@ (grdbId=%@) for message=%llu",
+                  self.logTag, NSStringFromClass(result.class), result.grdbId, message.timestamp);
+    }
+    return result;
 }
 
 - (void)ensureViewState:(nullable SDSAnyReadTransaction *)transaction
@@ -615,7 +625,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
                 TSIncomingMessage *message = (TSIncomingMessage *)self.interaction;
                 NSString *authorId = [message messageAuthorId];
                 SignalAccount *account = [self.contactsManager signalAccountForRecipientId:authorId transaction:transaction];
-                self.avatar = account.contact.avatar;
+                self.avatar = account.contact.remarkAvatar ?: account.contact.avatar;
                 self.displayName = account.contactFullName;
             }
             break;

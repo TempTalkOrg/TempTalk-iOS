@@ -227,7 +227,11 @@ NS_ASSUME_NONNULL_BEGIN
     if (_privilegeConfidential != other.privilegeConfidential) {
         return NO;
     }
-    
+
+    if (_groupCryptoMode != other.groupCryptoMode) {
+        return NO;
+    }
+
     return YES;
 }
 
@@ -249,6 +253,10 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 #endif
+
+- (BOOL)isEncryptedGroup {
+    return self.groupCryptoMode > 0;
+}
 
 - (nullable NSString *)groupName
 {

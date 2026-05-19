@@ -524,7 +524,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
         messageBubbleView.delegate = self
         messageBubbleView.addTapGestureHandler()
         if let renderItem {
-            renderItem.confidentialEnable = false
+            // 机密消息在详情页也应保持遮罩，避免 "查看信息" 绕过机密保护直接看到内容
             messageBubbleView.configure(renderItem: renderItem, mediaCache: NSCache())
         }
         messageBubbleView.loadContent()
@@ -541,6 +541,12 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
 
         self.messageBubbleViewWidthLayoutConstraint = messageBubbleView.autoSetDimension(.width, toSize: 0)
         self.messageBubbleViewHeightLayoutConstraint = messageBubbleView.autoSetDimension(.height, toSize: 0)
+
+        // 机密消息：详情页 messageBubbleView 不经过 Cell,需要手动叠加机密图标 + 时间(原本 Cell 上的 confidentialIconView/footerTimeLabel)
+        if viewItem.isConfidentialMessage {
+            addConfidentialDecoration(to: messageBubbleView)
+        }
+
         rows.append(row)
 
         if rows.count == 0 {
@@ -556,6 +562,35 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
         rows.append(spacer)
 
         return rows
+    }
+
+    private func addConfidentialDecoration(to bubbleView: UIView) {
+        let footerSpace = CVMessageFooterRenderItem.footerViewSpace
+
+        let timeLabel = UILabel()
+        timeLabel.font = UIFont.systemFont(ofSize: 12.0)
+        timeLabel.textColor = Theme.tthirdColor
+        timeLabel.text = renderItem?.footerRenderItem?.footerViewTitle
+            ?? DateUtil.formatTimestampForConversationMessage(message.timestampForSorting())
+
+        let iconView = UIImageView()
+        iconView.image = UIImage(named: "confidential_mask_icon")?.withRenderingMode(.alwaysTemplate)
+        iconView.tintColor = Theme.twhiteColor
+        iconView.contentMode = .center
+        iconView.backgroundColor = Theme.isDarkThemeEnabled ? Theme.bg2Color : Theme.tthirdColor
+        iconView.layer.cornerRadius = 10
+        iconView.layer.masksToBounds = true
+
+        bubbleView.addSubview(timeLabel)
+        bubbleView.addSubview(iconView)
+
+        timeLabel.autoPinEdge(.bottom, to: .bottom, of: bubbleView, withOffset: -footerSpace)
+        timeLabel.autoPinEdge(.trailing, to: .trailing, of: bubbleView, withOffset: -footerSpace)
+
+        iconView.autoSetDimension(.width, toSize: 20)
+        iconView.autoSetDimension(.height, toSize: 20)
+        iconView.autoPinEdge(.trailing, to: .leading, of: timeLabel, withOffset: -5)
+        iconView.autoAlignAxis(.horizontal, toSameAxisOf: timeLabel)
     }
 
     private func fetchAttachment(transaction: SDSAnyReadTransaction) -> TSAttachment? {

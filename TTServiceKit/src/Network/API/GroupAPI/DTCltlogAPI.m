@@ -15,7 +15,7 @@
 }
 
 - (NSString *)requestUrl{
-    return @"/v1/cltlog";
+    return @"";
 }
 
 - (void)sendRequestWithEventName:(NSString *)eventName
@@ -23,26 +23,7 @@
                          success:(DTAPISuccessBlock)success
                          failure:(DTAPIFailureBlock)failure{
     
-    // TODO: 梳理出真正需要上报的时机再加回 && failure 回调
-//    if (!TSAccountManager.sharedInstance.isRegisteredAndReady) {
-//        return;
-//    }
-    
-    if(!DTParamsUtils.validateDictionary(params)){
-        failure(DTErrorWithCodeDescription(DTAPIRequestResponseStatusParamsError, kDTAPIParamsErrorDescription));
-        return;
-    }
-    
-    NSMutableDictionary *parameters = params.mutableCopy;
-    parameters[@"eventName"] = eventName;
-    
-    NSString *path = [self requestUrl];
-    TSRequest *request = [TSRequest requestWithUrl:[NSURL URLWithString:path]
-                                            method:[self requestMethod]
-                                        parameters:parameters.copy];
-//    request.shouldHaveAuthorizationHeaders = NO;
-                           
-    [self sendRequest:request success:success failure:failure];
+// do nothing.
     
 }
 

@@ -190,6 +190,7 @@ class ConversationMessageCell: ConversationCell {
             // skipToOrigionIcon
         ])
         messageContainerView.addSubview(footerView)
+        messageContainerView.addSubview(confidentialIconView)
         messageContainerView.addSubview(footerTimeLabel)
         
     }
@@ -200,12 +201,12 @@ class ConversationMessageCell: ConversationCell {
     
     func configure(renderItem: ConversationMessageRenderItem) {
         self.renderItem = renderItem
-        
+
         configureHeaderView(renderItem: renderItem)
         configureMessageBubbleView(renderItem: renderItem)
         configureTranslateView(renderItem: renderItem)
         configureMessageFooterView(renderItem: renderItem.messageBubbleRenderItem?.footerRenderItem)
-        
+        configureConfidentialIcon(renderItem: renderItem)
     }
     
     // MARK: - Actions
@@ -404,6 +405,9 @@ class ConversationMessageCell: ConversationCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         
+        isCellSelected = false
+        isMultiSelectMode = false
+        
         messageBubbleView.prepareForReuse()
         messageBubbleView.unloadContent()
         
@@ -503,6 +507,18 @@ class ConversationMessageCell: ConversationCell {
         let label = UILabel()
         label.font = UIFont.systemFont(ofSize: 12.0)
         return label
+    }()
+
+    lazy var confidentialIconView: UIImageView = {
+        let imageView = UIImageView()
+        imageView.image = UIImage(named: "confidential_mask_icon")?.withRenderingMode(.alwaysTemplate)
+        imageView.tintColor = Theme.twhiteColor
+        imageView.contentMode = .center
+        imageView.backgroundColor = Theme.isDarkThemeEnabled ? Theme.bg2Color : Theme.tthirdColor
+        imageView.layer.cornerRadius = 10
+        imageView.layer.masksToBounds = true
+        imageView.isHidden = true
+        return imageView
     }()
     
     lazy var footerView: UIView = {
@@ -609,32 +625,38 @@ extension ConversationMessageCell {
         footerTimeLabel.isHidden = false
         footerTimeLabel.text = footerItem.footerViewTitle
     }
-    
-    func footerViewApperanceCommon(renderItem: ConversationMessageRenderItem) {
-        
+
+    func configureConfidentialIcon(renderItem: ConversationMessageRenderItem) {
         let viewItem = renderItem.viewItem
-        if viewItem.isConfidentialMessage,
-            (renderItem.messageBubbleRenderItem?.confidentialEnable ?? false),
-            let message = viewItem.interaction as? TSMessage,
-           !message.isTextMessage() {
-            footerView.isHidden = false
-        } else {
-            footerView.isHidden = !(renderItem.messageBubbleRenderItem?.hasOnlyBodyMediaView ?? false)
-        }
+        let isConfidential = viewItem.isConfidentialMessage
+            && (renderItem.messageBubbleRenderItem?.confidentialEnable ?? false)
+        confidentialIconView.isHidden = !isConfidential
     }
-    
+
+    func footerViewApperanceCommon(renderItem: ConversationMessageRenderItem) {
+        footerView.isHidden = !(renderItem.messageBubbleRenderItem?.hasOnlyBodyMediaView ?? false)
+    }
+
     func footerViewApperanceCommon(isHidden: Bool) {
         footerView.isHidden = isHidden
         refreshFooterTheme()
     }
-    
+
     func refreshFooterTheme() {
+        // confidentialIcon: 图标固定 twhiteColor，背景跟随主题
+        confidentialIconView.tintColor = Theme.twhiteColor
+        confidentialIconView.backgroundColor = Theme.isDarkThemeEnabled ? Theme.bg2Color : Theme.tthirdColor
+
         if footerView.isHidden {
             if !footerTimeLabel.isHidden {
                 footerTimeLabel.textColor = Theme.tthirdColor
             }
         } else {
-            footerTimeLabel.textColor = UIColor.white
+            if renderItem?.viewItem.isConfidentialMessage == true {
+                footerTimeLabel.textColor = Theme.tthirdColor
+            } else {
+                footerTimeLabel.textColor = UIColor.white
+            }
         }
     }
 }

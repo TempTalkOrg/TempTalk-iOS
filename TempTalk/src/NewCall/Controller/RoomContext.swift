@@ -15,7 +15,7 @@
  */
 
 import AVFoundation
-import DenoisePluginFilter
+import AudioPipelineProcessor
 import DTProto
 import Foundation
 import LiveKit
@@ -63,7 +63,8 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
     let room = Room()
 
-    private let denoiseFilter = DenoisePluginFilter()
+    private let audioProcessor = AudioPipelineProcessor()
+    private var _denoiseEnabled: Bool = true
 
     var serviceUrlManager: TTCallServiceUrlManager?
 
@@ -71,10 +72,6 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     @Published var url: String = ""
     @Published var token: String = ""
     @Published var e2eeKey: Data?
-
-    // Room / Connect options
-    @Published var simulcast: Bool = true
-    @Published var autoSubscribe: Bool = true
 
     // UI / participants
     @Published var focusParticipant: Participant?
@@ -93,34 +90,54 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     private var isConnecting: Bool = false
 
     // 错误处理状态，用于协调 connect() 和 delegate 回调
-    var errorHandlingState: ErrorHandlingState = .idle
+    private(set) var errorHandlingState: ErrorHandlingState = .idle
 
     // ViewControllers held while presented
-    var shareVC: UIViewController?
+    var shareVC: UIViewController? {
+        didSet { _shareVCWeakRef = shareVC }
+    }
+    private weak var _shareVCWeakRef: UIViewController?
     var inviteVC: UIViewController?
     var noiseVC: UIViewController?
 
-    private var genrateTokenTimeDuration = 0
+    private var connectRetryCount: Int = 0
+    private let maxConnectRetry: Int = 5
+    private var tokenGeneratedAt: TimeInterval = 0
     private var lkContext: LiveKitContext?
 
     var lastPortName: String?
-    // 防说话人抖动
-    var lastParticipants: [Participant] = []
+
+    // Active speaker: set immediately, cleared after resetDelay
+    nonisolated(unsafe) weak var currentActiveSpeaker: Participant?
+    var lastSpeakerIdentities: Set<String> = []
     var activeSpeakerWorkItem: DispatchWorkItem?
     var resetToDefaultWorkItem: DispatchWorkItem?
     let activeSpeakerDelay: TimeInterval = 0.4
     let resetDelay: TimeInterval = 2.5
-    // 连接超时任务
+
     var connectTimeoutTask: Task<Void, Never>?
+    var unpublishScreenShareTask: Task<Void, Never>?
     // 是否正在展示 screen share
     var isPresentingShareView = false
     // 是否存在待展示的UI
     var pendingShowUI = false
+    // 重连后递增，用于强制 SwiftUI 重建视频视图树以恢复 adaptive stream 订阅
+    @Published var videoRefreshToken: UInt64 = 0
+    @Published var isRoomReconnecting: Bool = false
 
     // MARK: - Init / Deinit
 
     init(url: String, token: String, lkContext: LiveKitContext?) {
-        AudioManager.shared.capturePostProcessingDelegate = denoiseFilter
+        AudioManager.shared.capturePostProcessingDelegate = audioProcessor
+
+        if let cachedMode = CallSettingsManager.shared.getDenoiseMode() {
+            audioProcessor.activeModule = cachedMode == "enhanced" ? .deepfilternet : .rnnoise
+        } else {
+            let callConfig = CallConfigManager.fetchCallConfig()
+            audioProcessor.activeModule = callConfig.denoiseMode == "enhanced" ? .deepfilternet : .rnnoise
+        }
+
+        loadDefaultVoicePresetFromSettings()
 
         room.add(delegate: self)
 
@@ -128,8 +145,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         self.token = token
         e2eeKey = e2eeKey
         self.lkContext = lkContext
-        autoSubscribe = true
-        genrateTokenTimeDuration = Int(Date().timeIntervalSince1970)
+        tokenGeneratedAt = Date().timeIntervalSince1970
         // callManager 不需要在 init 中赋 weak；使用计算属性访问单例
 
         #if os(iOS)
@@ -142,8 +158,9 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             forName: UIApplication.didBecomeActiveNotification,
             object: nil,
             queue: .main
-        ) { _ in
-            Task { @MainActor in
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
                 let hadPendingShareUI = self.pendingShowUI
                 self.pendingShowUI = false
 
@@ -152,15 +169,30 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
                     self.tryPresentShareView(maxRetryCount: 0)
                 }
 
-                // 检查是否存在屏幕共享但未展示，尝试弹出
                 self.checkAndPresentScreenShareIfNeeded()
 
-                // 强制更新方向，确保屏幕共享时保持横屏
                 if #available(iOS 16, *) {
                     if self.isShareViewPresented {
                         let callWindow = OWSWindowManager.shared().callViewWindow
                         callWindow.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
                     }
+                }
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .ScreenLockDidUnlock,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let hadPendingShareUI = self.pendingShowUI
+                self.pendingShowUI = false
+
+                if hadPendingShareUI {
+                    Logger.info("\(self.logTag) Screen unlocked, presenting deferred share view")
+                    self.tryPresentShareView(maxRetryCount: 3)
                 }
             }
         }
@@ -172,6 +204,8 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         // 清理资源
         _connectTask?.cancel()
         _connectTask = nil
+        unpublishScreenShareTask?.cancel()
+        unpublishScreenShareTask = nil
 
         // 移除观察者
         DTRTCAudioSession.shared.removeObserver(self)
@@ -179,26 +213,30 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
         // 清理音频处理, 由于deinit的触发时机不可控，这里避免清理新的降噪库导致降噪不生效
         if let currentDelegate = AudioManager.shared.capturePostProcessingDelegate as AnyObject?,
-           currentDelegate === denoiseFilter
+           currentDelegate === audioProcessor
         {
-            Logger.info("\(logTag) clear denoise filter from audio manager")
+            Logger.info("\(logTag) clear audio processor from audio manager")
             AudioManager.shared.capturePostProcessingDelegate = nil
         } else {
-            Logger.info("\(logTag) this denoise filter not same as audio manager's, skip clear")
+            Logger.info("\(logTag) this audio processor not same as audio manager's, skip clear")
         }
 
-        let capturedShareVC = shareVC
+        let strongShareVC = shareVC
+        let weakShareVC = _shareVCWeakRef
+        let capturedShareVC = strongShareVC ?? weakShareVC
         let capturedInviteVC = inviteVC
         let capturedNoiseVC = noiseVC
-        Task { @MainActor in
-            (capturedShareVC ?? findPresentedShareViewController())?.dismiss(animated: false)
+
+        DispatchQueue.main.async {
+            capturedInviteVC?.view.endEditing(true)
+            capturedShareVC?.dismiss(animated: false)
             capturedInviteVC?.dismiss(animated: false)
             capturedNoiseVC?.dismiss(animated: false)
         }
 
         // 恢复设备状态
         #if os(iOS)
-        Task { @MainActor in
+        DispatchQueue.main.async {
             UIApplication.shared.isIdleTimerDisabled = false
         }
         #endif
@@ -214,14 +252,23 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         _connectTask = nil
         connectTimeoutTask?.cancel()
         connectTimeoutTask = nil
+        unpublishScreenShareTask?.cancel()
+        unpublishScreenShareTask = nil
         isConnecting = false
         // 取消连接时标记为已处理，防止后续 delegate 回调触发清理
+        markHandled()
+    }
+
+    func resetErrorHandlingState() {
+        errorHandlingState = .idle
+    }
+
+    func markHandled() {
         errorHandlingState = .handled
     }
 
-    /// 重置错误处理状态，用于开始新的连接
-    func resetErrorHandlingState() {
-        errorHandlingState = .idle
+    func markRetrying() {
+        errorHandlingState = .retrying
     }
 
     @MainActor
@@ -237,7 +284,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         Logger.info("\(logTag) room.connect fromCallKit: \(fromCallKit)")
         isConnecting = true
         // 开始新连接时重置错误处理状态
-        errorHandlingState = .idle
+        resetErrorHandlingState()
         // Ensure audio session observations and config are active
         DTRTCAudioSession.shared.addObserver(self)
         await DTRTCAudioSession.shared.connectRoomConfig(self, fromCallKit: fromCallKit)
@@ -247,16 +294,15 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         let e2eeOptions = E2EEOptions(keyProvider: keyProvider, ttEncryptor: self)
 
         let roomOptions = RoomOptions(
-            defaultCameraCaptureOptions: .init(dimensions: .h1080_169),
-            defaultScreenShareCaptureOptions: .init(dimensions: .h1080_169, useBroadcastExtension: true),
+            defaultCameraCaptureOptions: .init(dimensions: .h720_169, fps: 30),
             defaultVideoPublishOptions: .init(
-                encoding: VideoEncoding(
-                    maxBitrate: VideoParameters.presetH1080_169.encoding.maxBitrate,
-                    maxFps: 30
-                ),
-                simulcast: simulcast
+                encoding: VideoParameters.presetH1080_169.encoding,
+                simulcast: true,
+                preferredCodec: VideoCodec.vp8,
+                
             ),
             adaptiveStream: true,
+            dynacast: true,
             e2eeOptions: e2eeOptions,
             reportRemoteTrackStatistics: true
         )
@@ -270,12 +316,12 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
                     isConnecting = false
                     throw CancellationError()
                 }
-                // token 校验（短期校验策略）
-                let currentTime = Int(Date().timeIntervalSince1970)
-                guard currentTime - genrateTokenTimeDuration <= 30 else {
-                    Logger.info("\(logTag) token timeout")
+                let elapsed = Date().timeIntervalSince1970 - tokenGeneratedAt
+                guard elapsed <= 30 else {
+                    Logger.error("\(logTag) token expired after \(Int(elapsed))s, aborting connect")
                     isConnecting = false
-                    return
+                    markHandled()
+                    throw DTMeetingManager.CallError.tokenExpired
                 }
                 Logger.info("\(logTag): room connect currentURL=\(url)")
 
@@ -303,7 +349,6 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
                 }
                 // handleConnectError 在 MainActor 中执行
                 try await handleConnectError(error, connectOptions: connectOptions, fromCallKit: fromCallKit)
-//                throw error
             }
         }
 
@@ -322,7 +367,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         if shouldAbortConnect || Task.isCancelled {
             Logger.info("\(logTag): aborting connect retry due to disconnect request")
             isConnecting = false
-            errorHandlingState = .handled
+            markHandled()
             throw CancellationError()
         }
         // 连接失败就切换下一个url
@@ -330,8 +375,8 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             Logger.error("\(logTag): connect failed with \(error.localizedDescription)")
             isConnecting = false
             // 标记为已处理，防止 delegate 重复处理
-            errorHandlingState = .handled
-            DTMeetingManager.shared.showErrorTost = true
+            markHandled()
+            DTMeetingManager.shared.showErrorToast = true
             await DTMeetingManager.shared.clearDisconnectErrorData()
             throw error
         } else {
@@ -340,23 +385,27 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
                let nextUrl = await serviceUrlManager.getCurrentUrl()
             {
                 url = nextUrl
-                Logger.info("\(logTag): switched to next URL=\(nextUrl)")
-                // 标记为重试中，delegate 收到错误时应忽略
-                errorHandlingState = .retrying
-                // 切换 URL 重试时，需要先重置 isConnecting，因为 connect 方法会再次检查
+                tokenGeneratedAt = Date().timeIntervalSince1970
+                connectRetryCount += 1
+                guard connectRetryCount <= maxConnectRetry else {
+                    Logger.error("\(logTag): retry count \(connectRetryCount) exceeded limit \(maxConnectRetry), aborting")
+                    isConnecting = false
+                    markHandled()
+                    throw error
+                }
+                Logger.info("\(logTag): switched to next URL=\(nextUrl), refreshed token window")
+                markRetrying()
                 isConnecting = false
                 guard !shouldAbortConnect, !Task.isCancelled else {
                     Logger.info("\(logTag): aborting after URL switch due to disconnect request")
-                    isConnecting = false
-                    errorHandlingState = .handled
+                    markHandled()
                     throw CancellationError()
                 }
                 _ = try await connect(fromCallKit: fromCallKit, connectOptions: connectOptions)
             } else {
                 Logger.error("\(logTag): no more URLs to try")
                 isConnecting = false
-                // 标记为已处理，防止 delegate 重复处理
-                errorHandlingState = .handled
+                markHandled()
                 await DTMeetingManager.shared.clearDisconnectErrorData()
                 DTToastHelper.toast(withText: Localized("METTING_CONNECT_EXCEPTION_TIPS"))
                 throw error
@@ -403,11 +452,18 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         DTRTCAudioSession.shared.stopObserving(self)
 
         cancelConnect()
-        await room.disconnect()
 
-        // 清理ViewController，打破循环引用
-        // 这些ViewController的SwiftUI视图通过environmentObject持有self，必须清理
+        // detached: 不在主线程 await room.disconnect()，防止 LiveKit SDK 内部 DispatchQueue.main.sync 与主线程 await 形成死锁
+        await Task.detached { [room, logTag] in
+            Logger.info("\(logTag): room.disconnect() started on background")
+            await room.disconnect()
+            Logger.info("\(logTag): room.disconnect() completed on background")
+        }.value
+
         await MainActor.run {
+            screenSharePublication = nil
+            screenShareParticipant = nil
+
             dismissPresentedShareViewControllerIfNeeded()
 
             inviteVC?.dismiss(animated: false)
@@ -426,6 +482,11 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
     func syncLocalMicrophoneStateToCallKit(muted: Bool) {
         callManager.syncLocalMicrophoneStateToCallKit(muted)
+    }
+
+    func bumpVideoRefreshToken() {
+        videoRefreshToken &+= 1
+        Logger.info("\(logTag) videoRefreshToken bumped to \(videoRefreshToken)")
     }
 
     func sendMessage() {
@@ -460,31 +521,21 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
     @MainActor
     func isShareViewController(_ viewController: UIViewController?) -> Bool {
-        guard let viewController else { return false }
-        let className = String(describing: type(of: viewController))
-        return className.contains("DTHostingController") && className.contains("CallScreenShareView")
+        guard let viewController, let tracked = _shareVCWeakRef else { return false }
+        return viewController === tracked
     }
 
     @MainActor
     func findPresentedShareViewController() -> UIViewController? {
-        let callWindow = OWSWindowManager.shared().callViewWindow
-        var currentViewController: UIViewController? = callWindow.findTopViewController()
-        var shareViewController: UIViewController?
-
-        while let viewController = currentViewController {
-            if isShareViewController(viewController) {
-                shareViewController = viewController
-            }
-            currentViewController = viewController.presentingViewController
-        }
-
-        return shareViewController
+        guard let vc = _shareVCWeakRef, vc.presentingViewController != nil else { return nil }
+        return vc
     }
 
     @MainActor
     @discardableResult
     func syncShareViewReferenceIfNeeded() -> Bool {
-        guard let existingShareVC = findPresentedShareViewController() else {
+        guard let existingShareVC = _shareVCWeakRef,
+              existingShareVC.presentingViewController != nil else {
             return false
         }
 
@@ -499,7 +550,10 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
     @MainActor
     var isShareViewPresented: Bool {
-        shareVC?.presentingViewController != nil
+        if let vc = shareVC ?? _shareVCWeakRef {
+            return vc.presentingViewController != nil
+        }
+        return false
     }
 
     @MainActor
@@ -523,12 +577,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
     @MainActor
     func dismissPresentedShareViewControllerIfNeeded() {
-        if let existingShareVC = findPresentedShareViewController() {
-            existingShareVC.dismiss(animated: false)
-        } else {
-            shareVC?.dismiss(animated: false)
-        }
-
+        (shareVC ?? _shareVCWeakRef)?.dismiss(animated: false)
         shareVC = nil
         resetSharePresentationState()
     }
@@ -565,9 +614,11 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             toolbarMinimizeTaped()
         })
         .environmentObject(self)
+        .environmentObject(self.room)
         let shareVC = DTHostingController(rootView: shareView)
         self.shareVC = shareVC
         shareVC.modalPresentationStyle = .fullScreen
+        callManager.currentCall.isPresentedShare = true
         presentOnTop(shareVC, animated: false, completion: completion)
     }
 
@@ -575,10 +626,12 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     func checkAndPresentScreenShareIfNeeded() {
         syncShareViewReferenceIfNeeded()
 
+        // 先尝试从 room 恢复引用（返回前台后本地引用可能与 room 状态不同步）
         if screenSharePublication == nil || screenShareParticipant == nil {
             recoverScreenShareReferenceFromRoom()
         }
 
+        // 防御性检查：恢复后仍判断屏幕共享已结束但视图仍存在，则 dismiss
         if !hasActiveScreenShareToPresent(), isShareViewPresented {
             if callManager.currentCall.isPresentedShare {
                 Logger.info("\(logTag) No active tracks but isPresentedShare=true, room may be reconnecting - skipping premature dismiss")
@@ -614,13 +667,15 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         tryPresentShareView(maxRetryCount: 3)
     }
 
+    /// 从 room 的远端参与者中恢复屏幕共享的 publication/participant 引用
     @MainActor
     private func recoverScreenShareReferenceFromRoom() {
         for participant in room.remoteParticipants.values {
+            guard participant.isScreenShareEnabled() else { continue }
             for pub in participant.videoTracks where pub.source == .screenShareVideo {
                 screenSharePublication = pub
                 screenShareParticipant = participant
-                Logger.info("\(logTag) Recovered screen share reference from room participant (isScreenShareEnabled: \(participant.isScreenShareEnabled()))")
+                Logger.info("\(logTag) Recovered screen share reference from room participant")
                 return
             }
         }
@@ -647,10 +702,11 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             return
         }
 
+        let participantId = participant.identity?.stringValue ?? ""
         var actions = [ActionSheetAction]()
         let muteAction = ActionSheetAction(title: "Mute", style: .default) { _ in
             Task { @MainActor in
-                await DTMeetingManager.shared.sendRemoteMicOffRoom(targetParticentId: participant.identity?.stringValue ?? "")
+                await DTMeetingManager.shared.sendRemoteMicOffRoom(targetParticentId: participantId)
             }
         }
         actions.append(muteAction)
@@ -696,17 +752,17 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     func presentHangupActionSheet() {
         if DTMeetingManager.shared.isPresentedShare() || DTMeetingManager.shared.showScreenShare() {
             var alertActions: [UIAlertAction] = []
-            let endMeetingAction = UIAlertAction(title: Localized("HANGUP_END_MEETING"), style: .destructive) { _ in
+            let endMeetingAction = UIAlertAction(title: Localized("HANGUP_END_MEETING"), style: .destructive) { [weak self] _ in
                 Task { @MainActor in
-                    await self.toolbarEndCallTaped(forceEndGroupMeeting: true)
+                    await self?.toolbarEndCallTaped(forceEndGroupMeeting: true)
                 }
             }
             endMeetingAction.setValue(UIColor.color(rgbHex: 0xD9271E), forKey: "_titleTextColor")
             alertActions.append(endMeetingAction)
 
-            let leaveMeetingAction = UIAlertAction(title: Localized("HANGUP_LEAVE_MEETING"), style: .default) { _ in
+            let leaveMeetingAction = UIAlertAction(title: Localized("HANGUP_LEAVE_MEETING"), style: .default) { [weak self] _ in
                 Task { @MainActor in
-                    await self.toolbarEndCallTaped(forceEndGroupMeeting: false)
+                    await self?.toolbarEndCallTaped(forceEndGroupMeeting: false)
                 }
             }
             leaveMeetingAction.setValue(UIColor.color(rgbHex: 0xEAECEF), forKey: "_titleTextColor")
@@ -728,15 +784,15 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             let actionSheet = ActionSheetController()
             actionSheet.isDarkThemeOnly = true
 
-            let endMeetingAction = ActionSheetAction(title: Localized("HANGUP_END_MEETING"), style: .destructive) { _ in
+            let endMeetingAction = ActionSheetAction(title: Localized("HANGUP_END_MEETING"), style: .destructive) { [weak self] _ in
                 Task { @MainActor in
-                    await self.toolbarEndCallTaped(forceEndGroupMeeting: true)
+                    await self?.toolbarEndCallTaped(forceEndGroupMeeting: true)
                 }
             }
 
-            let leaveMeetingAction = ActionSheetAction(title: Localized("HANGUP_LEAVE_MEETING"), style: .default) { _ in
+            let leaveMeetingAction = ActionSheetAction(title: Localized("HANGUP_LEAVE_MEETING"), style: .default) { [weak self] _ in
                 Task { @MainActor in
-                    await self.toolbarEndCallTaped(forceEndGroupMeeting: false)
+                    await self?.toolbarEndCallTaped(forceEndGroupMeeting: false)
                 }
             }
 
@@ -748,11 +804,43 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     }
 
     func setDenoiseFilter(enabled: Bool) {
-        denoiseFilter.isEnabled = enabled
+        _denoiseEnabled = enabled
+        audioProcessor.setDenoiseEnabled(enabled)
     }
 
     func isDenoiseFilterEnabled() -> Bool {
-        denoiseFilter.isEnabled
+        _denoiseEnabled
+    }
+
+    func setAudioModule(_ module: AudioModule) {
+        audioProcessor.activeModule = module
+        CallSettingsManager.shared.updateDenoiseMode(module == .deepfilternet ? "enhanced" : "standard")
+        NotificationCenter.default.post(name: .denoiseModeDidChange, object: nil)
+    }
+
+    func currentAudioModule() -> AudioModule {
+        audioProcessor.activeModule
+    }
+
+    // MARK: - Voice Changer
+
+    private var _currentVoicePreset: String = "original"
+
+    func setVoiceChangerPreset(_ preset: String) {
+        _currentVoicePreset = preset
+        audioProcessor.setSoundTouchPreset(preset)
+        NotificationCenter.default.post(name: .voiceChangerPresetDidChange, object: nil)
+    }
+
+    func currentVoicePreset() -> String {
+        _currentVoicePreset
+    }
+
+    // 进入会议时优先读取设置里的默认变声预设；未设置则回退到 CallSettingsManager.defaultVoicePreset
+    fileprivate func loadDefaultVoicePresetFromSettings() {
+        let savedPreset = CallSettingsManager.shared.getVoicePreset() ?? CallSettingsManager.defaultVoicePreset
+        _currentVoicePreset = savedPreset
+        audioProcessor.setSoundTouchPreset(savedPreset)
     }
 }
 
@@ -829,16 +917,17 @@ extension RoomContext {
                                                              localPriKey: localPriKey,
                                                              eMKey: emk)
                 k_e2eeKey = result.mKey
-                Task { @MainActor in
-                    self.currentCall.mKey = k_e2eeKey
+                Task { @MainActor [weak self] in
+                    self?.currentCall.mKey = k_e2eeKey
                 }
             } catch {
-                // 捕获当前 roomContext（即 self），避免清理新创建的 roomContext
-                let roomContextToClean = self
+                let errorDesc = error.localizedDescription
                 Task { @MainActor in
-                    await self.callManager.performCompleteCleanup(roomContextToClean: roomContextToClean)
+                    await DTMeetingManager.shared.hangupCoordinator.terminate(
+                        reason: .callError
+                    )
                     DTToastHelper.showCallToast(Localized("MEETING_JOINED_FAILURE_TIPS"))
-                    Logger.error("\(self.logTag) decrypt error: \(error.localizedDescription)")
+                    Logger.error("[newcall] decrypt error: \(errorDesc)")
                 }
             }
         }

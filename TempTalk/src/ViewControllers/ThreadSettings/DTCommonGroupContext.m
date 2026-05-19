@@ -110,6 +110,7 @@
     groupInCommonVC.shouldUseTheme = YES;
     groupInCommonVC.resultGroups = self.inCommonGroups;
     groupInCommonVC.sortedGroupMembers = self.sortedGroupMembers;
+    groupInCommonVC.recipientId = self.thread.contactIdentifier;
     groupInCommonVC.leaveGroupHandler = ^(NSArray<GroupSearchResult *> * _Nonnull newResultGroups) {
         self.inCommonGroups = newResultGroups;
         self.completion();

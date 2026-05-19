@@ -27,7 +27,7 @@ extern NSString *const DTGroupMessageExpiryConfigChangedNotification;
                       targetVersion:(NSInteger)targetVersion
                         needSystemMessage:(BOOL)needSystemMessage
                            generate:(BOOL)gnerate
-                           envelope:(DSKProtoEnvelope *)envelope
+                           envelope:(nullable DSKProtoEnvelope *)envelope
                         transaction:(SDSAnyWriteTransaction *)transaction
                          completion:(void (^)(SDSAnyWriteTransaction *))completion;
 
@@ -52,7 +52,7 @@ extern NSString *const DTGroupMessageExpiryConfigChangedNotification;
                       targetVersion:(NSInteger)targetVersion
                   needSystemMessage:(BOOL)needSystemMessage
                            generate:(BOOL)generate
-                           envelope:(DSKProtoEnvelope *)envelope
+                           envelope:(nullable DSKProtoEnvelope *)envelope
                   groupNotifyEntity:(DTGroupNotifyEntity * _Nullable)groupNotifyEntity
                         transaction:(SDSAnyWriteTransaction *)transaction
                          completion:(void (^)(SDSAnyWriteTransaction *))completion;

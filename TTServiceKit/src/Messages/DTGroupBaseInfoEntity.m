@@ -20,8 +20,11 @@
                     anyoneRemove:(BOOL)anyoneRemove
                           avatar:(NSString *)avatar
                    criticalAlert:(BOOL)criticalAlert
+                 encryptedAvatar:(nullable NSString *)encryptedAvatar
+                   encryptedName:(nullable NSString *)encryptedName
                              ext:(BOOL)ext
                              gid:(NSString *)gid
+                 groupCryptoMode:(NSInteger)groupCryptoMode
                   invitationRule:(nullable NSNumber *)invitationRule
               messageClearAnchor:(unsigned long long)messageClearAnchor
                    messageExpiry:(nullable NSNumber *)messageExpiry
@@ -40,8 +43,11 @@
     _anyoneRemove = anyoneRemove;
     _avatar = avatar;
     _criticalAlert = criticalAlert;
+    _encryptedAvatar = encryptedAvatar;
+    _encryptedName = encryptedName;
     _ext = ext;
     _gid = gid;
+    _groupCryptoMode = groupCryptoMode;
     _invitationRule = invitationRule;
     _messageClearAnchor = messageClearAnchor;
     _messageExpiry = messageExpiry;

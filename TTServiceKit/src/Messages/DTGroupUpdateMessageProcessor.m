@@ -128,6 +128,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                                    targetVersion:targetVersion
                                          success:^(DTGetGroupInfoDataEntity * _Nonnull entity) {
         @strongify(self)
+        if (!self) return;
         if(entity){
             
             dispatch_async(self.class.serialQueue, ^{
@@ -139,6 +140,12 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                                                        groupInfo:entity
                                                groupNotifyEntity:groupNotifyEntity
                                                      transaction:writeTransaction];
+
+                    if (entity.groupCryptoMode > 0 && entity.members.count > 0) {
+                        [DTGroupCryptoManager.shared verifyMembersForGid:serverGId
+                                                                 members:entity.members
+                                                             transaction:writeTransaction];
+                    }
                 })
             });
         }else{
@@ -147,6 +154,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     } failure:^(NSError * _Nonnull error) {
         
         @strongify(self)
+        if (!self) return;
         dispatch_async(self.class.serialQueue, ^{
             DatabaseStorageWrite(self.databaseStorage, (^(SDSAnyWriteTransaction *writeTransaction) {
                 
@@ -283,7 +291,17 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
         [self.contactsManager updateWithSignalAccounts:signalAccounts];
     }
     
-    TSGroupModel *newGroupModel = [[TSGroupModel alloc] initWithTitle:groupInfo.name
+    NSString *resolvedGroupName = groupInfo.name;
+    if (groupInfo.groupCryptoMode > 0 && DTParamsUtils.validateString(groupInfo.encryptedName)) {
+        NSString *decryptedName = [DTGroupCryptoManager.shared decryptedGroupNameWithGid:newGroupThread.serverThreadId
+                                                                           encryptedName:groupInfo.encryptedName
+                                                                             transaction:transaction];
+        if (DTParamsUtils.validateString(decryptedName)) {
+            resolvedGroupName = decryptedName;
+        }
+    }
+
+    TSGroupModel *newGroupModel = [[TSGroupModel alloc] initWithTitle:resolvedGroupName
                                                             memberIds:newMemberIds.copy
                                                                 image:oldGroupModel.groupImage
                                                               groupId:groupId
@@ -307,7 +325,12 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     newGroupModel.autoClear = groupInfo.autoClear;
     newGroupModel.privilegeConfidential = groupInfo.privilegeConfidential;
 
-    
+    if (groupInfo.groupCryptoMode > 0) {
+        newGroupModel.groupCryptoMode = groupInfo.groupCryptoMode;
+    } else if (oldGroupModel.groupCryptoMode > 0) {
+        newGroupModel.groupCryptoMode = oldGroupModel.groupCryptoMode;
+    }
+
     newGroupModel.recommendRoles = [recommendRoles copy];
     newGroupModel.agreeRoles = [agreeRoles copy];
     newGroupModel.performRoles = [performRoles copy];
@@ -321,17 +344,34 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
         // 全量跟更新的thread信息（查询也在使用）
         [[DataUpdateUtil shared] updateConversationWithThread:instance
                                                    expireTime:groupNotifyEntity.group.messageExpiry
-                                           messageClearAnchor:@(groupNotifyEntity.group.messageClearAnchor)];
+                                           messageClearAnchor:@(groupNotifyEntity.group.messageClearAnchor)
+                                                  transaction:transaction];
     }];
     
     DTGroupBaseInfoEntity *baseInfo = [DTGroupBaseInfoEntity new];
     baseInfo.gid = newGroupThread.serverThreadId;
     baseInfo.name = newGroupModel.groupName;
+    baseInfo.avatar = groupInfo.avatar;
+
+    if (groupInfo.groupCryptoMode > 0) {
+        baseInfo.groupCryptoMode = groupInfo.groupCryptoMode;
+        baseInfo.encryptedName = groupInfo.encryptedName;
+        baseInfo.encryptedAvatar = groupInfo.encryptedAvatar;
+    } else {
+        DTGroupBaseInfoEntity *existingBaseInfo = [DTGroupBaseInfoEntity anyFetchWithUniqueId:newGroupThread.serverThreadId transaction:transaction];
+        if (existingBaseInfo.groupCryptoMode > 0) {
+            baseInfo.groupCryptoMode = existingBaseInfo.groupCryptoMode;
+            baseInfo.encryptedName = existingBaseInfo.encryptedName;
+            baseInfo.encryptedAvatar = existingBaseInfo.encryptedAvatar;
+        }
+    }
+
     // 全量跟更新的baseInfo
     [[DataUpdateUtil shared] updateConversationWithBaseInfo:baseInfo
                                                      thread:newGroupThread
                                                  expireTime:groupNotifyEntity.group.messageExpiry
-                                         messageClearAnchor:@(groupNotifyEntity.group.messageClearAnchor)];
+                                         messageClearAnchor:@(groupNotifyEntity.group.messageClearAnchor)
+                                                transaction:transaction];
     
     [DTGroupUtils upsertGroupBaseInfo:baseInfo transaction:transaction];
         
@@ -388,16 +428,24 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
 //                [publishRuleUpdateInfoMessage saveWithTransaction:transaction];
 //            }
 //        }
-    if(DTParamsUtils.validateString(groupInfo.avatar)){
-        [self avatarUpdate:groupInfo.avatar
+    NSString *gid = newGroupThread.serverThreadId;
+    BOOL isEncrypted = [DTGroupCryptoDisplayHelper.shared isEncryptedGroup:groupInfo.groupCryptoMode];
+    NSString *resolvedAvatar = [DTGroupCryptoDisplayHelper.shared prepareAvatarUpdateWithPlainAvatar:groupInfo.avatar
+                                                                                     encryptedAvatar:groupInfo.encryptedAvatar
+                                                                                     groupCryptoMode:groupInfo.groupCryptoMode
+                                                                                                 gid:gid
+                                                                                         transaction:transaction];
+    if (DTParamsUtils.validateString(resolvedAvatar)) {
+        BOOL isPlainFallback = isEncrypted && ![DTGroupCryptoDisplayHelper.shared hasGroupKeyWithGid:gid transaction:transaction];
+        [self avatarUpdate:resolvedAvatar
                    version:newGroupModel.version
                    groupId:groupId
+          encryptedAvatar:groupInfo.encryptedAvatar
                   envelope:envelope
               needSystemMessage:needSystemMessage
                groupThread:newGroupThread
-           completionBlock:^{
-            
-        }];
+            isPlainFallback:isPlainFallback
+           completionBlock:^{}];
     }
     
     return newGroupThread;
@@ -422,6 +470,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
         groupNotifyEntity.sourceDeviceId == OWSDevice.currentDeviceId) {
         if (groupNotifyEntity.groupNotifyDetailedType == DTGroupNotifyDetailTypeLeaveGroup ||
             groupNotifyEntity.groupNotifyDetailedType == DTGroupNotifyDetailTypeDismissGroup) {
+            OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: skip local leave/dismiss");
             return;
         }
     }
@@ -434,6 +483,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     
     if ([groupNotifyEntity.source isEqualToString:localNumber] &&
         groupNotifyEntity.sourceDeviceId == OWSDevice.currentDeviceId) {
+        OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: selfHandler path (source==local && deviceId==current)");
         
         uint64_t timestamp = [NSDate ows_millisecondTimeStamp];
         TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:oldGroupModel];
@@ -458,6 +508,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     //  DTGroupNotifyDetailTypeArchive
     
     if (![self isNeedTrackVersionWithGroupNotifyEntity:groupNotifyEntity]) {
+        OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: doNotTrackVersion path");
         [self handleDonotTrackVersioWithEnvelope:envelope
                                groupNotifyEntity:groupNotifyEntity
                                    oldGroupModel:oldGroupModel
@@ -469,7 +520,10 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     // 2.依赖群组版本号变更
     if(groupNotifyEntity.groupNotifyType != DTGroupNotifyTypePersonalConfig){
         NSInteger diff = groupNotifyEntity.groupVersion - oldGroupModel.version;
+        OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: versionCheck diff=%ld (notify=%ld - local=%ld)",
+                   (long)diff, (long)groupNotifyEntity.groupVersion, (long)oldGroupModel.version);
         if(diff > 1){
+            OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: fullSync path (diff > 1)");
             // 全量更新
             [self requestGroupInfoWithGroupId:groupId
                                 targetVersion:groupNotifyEntity.groupVersion
@@ -483,11 +537,41 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
             }];
             
             DTGroupBaseInfoEntity *baseInfo = [DTGroupBaseInfoEntity new];
-            baseInfo.name = [newGroupThread nameWithTransaction:nil];
+            baseInfo.name = [newGroupThread nameWithTransaction:transaction];
             baseInfo.gid = newGroupThread.serverThreadId;
+            DTGroupBaseInfoEntity *existingBaseInfo = [DTGroupBaseInfoEntity anyFetchWithUniqueId:baseInfo.gid transaction:transaction];
+            if (existingBaseInfo) {
+                baseInfo.avatar = existingBaseInfo.avatar;
+                if (existingBaseInfo.groupCryptoMode > 0) {
+                    baseInfo.groupCryptoMode = existingBaseInfo.groupCryptoMode;
+                    baseInfo.encryptedName = existingBaseInfo.encryptedName;
+                    baseInfo.encryptedAvatar = existingBaseInfo.encryptedAvatar;
+                }
+            }
             [DTGroupUtils addGroupBaseInfo:baseInfo transaction:transaction];
+
+            if (groupNotifyEntity.groupNotifyDetailedType == DTGroupNotifyDetailTypeUpgradeGroupCrypto
+                && display
+                && oldGroupModel.groupCryptoMode == 0) {
+                uint64_t ts = [NSDate ows_millisecondTimeStamp];
+                if (envelope.hasSystemShowTimestamp && envelope.systemShowTimestamp > 0) {
+                    ts = envelope.systemShowTimestamp;
+                }
+                TSInfoMessage *upgradeMsg = [[TSInfoMessage alloc] initWithTimestamp:ts
+                                                                            inThread:newGroupThread
+                                                                         messageType:TSInfoMessageGroupCryptoUpgrade
+                                                                       customMessage:Localized(@"GROUP_CRYPTO_UPGRADE_SYSTEM_MSG", @"")];
+                upgradeMsg.shouldAffectThreadSorting = YES;
+                [upgradeMsg anyInsertWithTransaction:transaction];
+                OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: fullSync inserted upgrade system message, gid=%@", groupNotifyEntity.gid);
+            } else {
+                OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: fullSync skipped upgrade msg, detailedType=%lu, display=%d, oldCryptoMode=%ld",
+                           (unsigned long)groupNotifyEntity.groupNotifyDetailedType, display, (long)oldGroupModel.groupCryptoMode);
+            }
+
             return;
         }else if (diff < 1){
+            OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: dropped (diff < 1)");
             //drop
             return;
         }
@@ -549,7 +633,16 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     if(!groupNotifyEntity.group){
         return nil;
     }
-    newGroupModel.groupName = groupNotifyEntity.group.name;
+    NSString *resolvedName = groupNotifyEntity.group.name;
+    if (groupNotifyEntity.group.groupCryptoMode > 0 && DTParamsUtils.validateString(groupNotifyEntity.group.encryptedName)) {
+        NSString *decrypted = [DTGroupCryptoManager.shared decryptedGroupNameWithGid:groupNotifyEntity.gid
+                                                                       encryptedName:groupNotifyEntity.group.encryptedName
+                                                                         transaction:transaction];
+        if (DTParamsUtils.validateString(decrypted)) {
+            resolvedName = decrypted;
+        }
+    }
+    newGroupModel.groupName = resolvedName;
     
     BOOL tmpShouldAffectSorting = NO;
     NSString *updateGroupInfo = [DTGroupUtils getBaseInfoStringWithOldGroupModel:oldGroupModel
@@ -564,27 +657,35 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
 - (void)avatarUpdate:(NSString *)avatar
              version:(NSInteger)version
              groupId:(NSData *)groupId
+     encryptedAvatar:(nullable NSString *)encryptedAvatar
             envelope:(DSKProtoEnvelope *)envelope
         needSystemMessage:(BOOL)needSystemMessage
          groupThread:(TSGroupThread *)groupThread
+     isPlainFallback:(BOOL)isPlainFallback
      completionBlock:(void(^)(void))completionBlock
 {
     if(!avatar.length || !groupId.length || !groupThread){
+        OWSLogInfo(@"[GroupAvatar] avatarUpdate skip: empty avatar/groupId/thread");
         return;
     }
-    
+
+    NSString *gidForLog = groupThread.serverThreadId;
+    // capture 本次发起下载时的密文，防止异步期间 DB 被新密文覆盖时把新密文误打为指纹
+    NSString *capturedEncryptedAvatar = [encryptedAvatar copy] ?: @"";
     self.groupAvatarUpdateProcessor.groupThread = groupThread;
-    
+    OWSLogInfo(@"[GroupAvatar] avatarUpdate starting, gid: %@, version: %ld", gidForLog, (long)version);
+
     [self.groupAvatarUpdateProcessor handleReceivedGroupAvatarUpdateWithAvatarUpdate:avatar
                                                                              success:^(TSAttachmentStream * _Nonnull attachmentStream) {
         dispatch_async(self.class.serialQueue, ^{
             UIImage *image = [attachmentStream image];
             if(image){
-                
+
                 DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-                    
+
                     TSGroupThread *newGroupThread = [TSGroupThread getOrCreateThreadWithGroupId:groupId transaction:writeTransaction];
                     if(version < newGroupThread.groupModel.groupAvatarVersion){
+                        OWSLogInfo(@"[GroupAvatar] avatarUpdate skip: older version %ld < local %ld, gid: %@", (long)version, (long)newGroupThread.groupModel.groupAvatarVersion, gidForLog);
                         return;
                     }
                     BOOL tmpShouldAffectSorting = NO;
@@ -602,7 +703,11 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                     }];
                     
                     [newGroupThread fireAvatarChangedNotification];
-                    
+                    OWSLogInfo(@"[GroupAvatar] avatarUpdate success, gid: %@, version: %ld", gidForLog, (long)version);
+                    if (!isPlainFallback) {
+                        [DTGroupCryptoDisplayHelper.shared markAvatarDownloadedWithGid:gidForLog encryptedAvatar:capturedEncryptedAvatar];
+                    }
+
                     if(needSystemMessage && updateGroupSting.length){
                         uint64_t timestamp = [NSDate ows_millisecondTimeStamp];
                         if(envelope.hasSystemShowTimestamp && envelope.systemShowTimestamp > 0){
@@ -623,7 +728,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                     }];
                 });
             }else{
-                DDLogInfo(@"update avatar data empty");
+                OWSLogError(@"[GroupAvatar] avatarUpdate: attachmentStream.image() nil, gid: %@", gidForLog);
                 OWSProdError(@"update avatar data empty");
                 if(completionBlock){
                     completionBlock();
@@ -632,7 +737,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
         });
 
     } failure:^(NSError * _Nonnull error) {
-        DDLogInfo(@"update avatar data error");
+        OWSLogError(@"[GroupAvatar] avatarUpdate failed, gid: %@, error: %@", gidForLog, error);
         OWSProdError(@"update avatar data error");
         if(completionBlock){
             completionBlock();
@@ -921,6 +1026,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     [self.getPersonalConfigAPI sendRequestWithWithGroupId:groupNotifyEntity.gid
                                                   success:^(DTGroupMemberEntity * _Nonnull entity) {
         @strongify(self);
+        if (!self) return;
         dispatch_async(self.class.serialQueue, ^{
            
             DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {

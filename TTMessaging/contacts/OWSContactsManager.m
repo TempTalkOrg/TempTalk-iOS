@@ -1388,7 +1388,7 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
         return [self displayNameForPhoneIdentifier:contactThread.contactIdentifier transaction:transaction];
     } else if ([thread isKindOfClass:TSGroupThread.class]) {
         TSGroupThread *groupThread = (TSGroupThread *)thread;
-        return groupThread.groupModel.groupName;
+        return [groupThread nameWithTransaction:transaction];
     } else {
         OWSFailDebug(@"unexpected thread: %@", thread);
         return @"";

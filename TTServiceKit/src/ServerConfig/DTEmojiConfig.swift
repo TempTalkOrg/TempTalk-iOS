@@ -21,7 +21,18 @@ open class DTEmojiConfig: NSObject {
             }
             resultEmojis = config
         }
-        
+
+        return resultEmojis
+    }
+
+    public class func serverEmojiConfig(transaction: SDSAnyReadTransaction) -> [String] {
+        var resultEmojis = defultConfig()
+        DTServerConfigManager.shared().fetchConfigFromLocal(withSpaceName: "emojiReaction", transaction: transaction) { config, error in
+            guard let config = config as? [String], error == nil else {
+                return
+            }
+            resultEmojis = config
+        }
         return resultEmojis
     }
     

@@ -28,8 +28,10 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertIsOnMainThread();
     OWSAssertDebug(self.delegate);
 
+    NSString *sheetTitle = self.delegate.avatarActionSheetTitle;
+    if (sheetTitle.length == 0) { sheetTitle = nil; }
     UIAlertController *actionSheetController =
-        [UIAlertController alertControllerWithTitle:self.delegate.avatarActionSheetTitle
+        [UIAlertController alertControllerWithTitle:sheetTitle
                                             message:nil
                                      preferredStyle:UIAlertControllerStyleActionSheet];
     [actionSheetController addAction:[OWSAlerts cancelAction]];

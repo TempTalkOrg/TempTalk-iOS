@@ -24,6 +24,7 @@ public class DTSetUpPasskeysController: OWSViewController {
     @objc public var email : String?
     @objc public var phoneNumber : String?
     @objc public var loginType: DTLoginModeType = DTLoginModeTypeRegisterEmailFromLogin
+    @objc public var onBindResult: ((_ success: Bool) -> Void)?
     public override func viewDidLoad() {
         super.viewDidLoad()
         setupNav()
@@ -139,7 +140,7 @@ public class DTSetUpPasskeysController: OWSViewController {
     }
     
     private func refreshTheme() {
-        view.backgroundColor = Theme.bg1Color
+        view.backgroundColor = Theme.bgpagePrimaryColor
         titleLabel.textColor = Theme.tprimaryColor
         safeTipLabel.textColor = Theme.tprimaryColor
         safeDecLabel.textColor = Theme.tsecondaryColor
@@ -153,8 +154,13 @@ public class DTSetUpPasskeysController: OWSViewController {
     
     @objc func setupButtonClick() {
         let keyWindow = OWSWindowManager.shared().rootWindow;
-        self.databaseStorage.asyncRead { transaction in
-            guard let localNum = TSAccountManager.sharedInstance().localNumber() else {return}
+        DTToastHelper.showHud(in: self.view)
+        self.databaseStorage.asyncRead { [weak self] transaction in
+            guard let self = self else { return }
+            guard let localNum = TSAccountManager.sharedInstance().localNumber() else {
+                DispatchQueue.main.async { DTToastHelper.hide() }
+                return
+            }
             
             let contactsManager = Environment.shared.contactsManager;
             let account = contactsManager?.signalAccount(forRecipientId: localNum, transaction: transaction)
@@ -165,18 +171,29 @@ public class DTSetUpPasskeysController: OWSViewController {
             }
             
             if #available(iOS 16.0, *) {
-                TSAccountManager.shared.passKeyManager.signUpWith(userName: userName!, anchor: keyWindow) { error in
-                    guard error == nil else {
-                        Logger.info("DTSetUpPasskeysController signUp error")
-                        if let errorMessage = error?.localizedDescription{
-                            DTToastHelper.toast(withText: errorMessage)
+                TSAccountManager.shared.passKeyManager.signUpWith(userName: userName!, anchor: keyWindow) { [weak self] error in
+                    DispatchQueue.main.async { DTToastHelper.hide() }
+                    guard let self = self else { return }
+                    if let error = error {
+                        if DTPasskeyManager.isUserCancelledError(error) {
+                            Logger.info("DTSetUpPasskeysController user cancelled passkey setup")
+                            return
                         }
+                        let errorMessage = DTPasskeyManager.localizedPasskeyErrorMessage(error)
+                        Logger.error("DTSetUpPasskeysController signUp error: \(error.localizedDescription)")
+                        DispatchQueue.main.async {
+                            DTToastHelper.toast(withText: errorMessage, in: self.view, durationTime: 3.0, afterDelay: 0.2)
+                        }
+                        self.onBindResult?(false)
                         return
                     }
+                    self.onBindResult?(true)
                     self.presentNextPage()
                 }
             } else {
+                DispatchQueue.main.async { DTToastHelper.hide() }
                 Logger.info("DTSetUpPasskeysController oS version error")
+                self.onBindResult?(false)
             }
         }
     }

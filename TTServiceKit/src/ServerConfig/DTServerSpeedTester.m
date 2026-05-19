@@ -13,7 +13,7 @@
 @property (nonatomic, strong) RESTSpeedtestSessionManager * speedtestMainService;
 @property (nonatomic, strong) OWSURLSession * speedtestNonMainService;
 
-@property (nonatomic, weak) DTServerStatusEntity *serverStatusEntity;
+@property (nonatomic, strong) DTServerStatusEntity *serverStatusEntity;
 @property (nonatomic, assign) DTServToType serverType;
 
 @property (assign, nonatomic, getter = isExecuting) BOOL executing;

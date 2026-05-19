@@ -75,6 +75,12 @@ class ConversationIncomingMessageCell: ConversationMessageCell {
             make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace)
             make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
         }
+
+        confidentialIconView.snp.makeConstraints { make in
+            make.width.height.equalTo(20)
+            make.trailing.equalTo(footerTimeLabel.snp.leading).offset(-5)
+            make.centerY.equalTo(footerTimeLabel.snp.centerY)
+        }
     }
     
     override func configure(renderItem: ConversationMessageRenderItem) {
@@ -201,22 +207,57 @@ extension ConversationIncomingMessageCell {
         
         
         if footerView.isHidden {
-            footerTimeLabel.snp.remakeConstraints { make in
-                make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace)
-                make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
+            if !footerTimeLabel.isHidden {
+                footerTimeLabel.snp.remakeConstraints { make in
+                    make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace)
+                    make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
+                }
+            }
+
+            if !confidentialIconView.isHidden {
+                if footerTimeLabel.isHidden {
+                    confidentialIconView.snp.remakeConstraints { make in
+                        make.width.height.equalTo(20)
+                        make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
+                        make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace + 3)
+                    }
+                } else {
+                    confidentialIconView.snp.remakeConstraints { make in
+                        make.width.height.equalTo(20)
+                        make.trailing.equalTo(footerTimeLabel.snp.leading).offset(-5)
+                        make.centerY.equalTo(footerTimeLabel.snp.centerY)
+                    }
+                }
             }
         } else {
 
-            footerTimeLabel.snp.remakeConstraints { make in
-                make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace*2)
-                make.centerY.equalTo(footerView.snp.centerY)
+            if !footerTimeLabel.isHidden {
+                footerTimeLabel.snp.remakeConstraints { make in
+                    make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace*2)
+                    make.centerY.equalTo(footerView.snp.centerY)
+                }
             }
 
+            // footerView 背景不包含 confidentialIcon
+            var leadingView: UIView = footerTimeLabel.isHidden ? messageBubbleView : footerTimeLabel
+
             footerView.snp.remakeConstraints { make in
-                make.leading.equalTo(footerTimeLabel.snp.leading).offset(-CVMessageFooterRenderItem.footerViewSpace)
-                make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
+                if footerTimeLabel.isHidden {
+                    make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
+                } else {
+                    make.leading.equalTo(leadingView.snp.leading).offset(-CVMessageFooterRenderItem.footerViewSpace)
+                    make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
+                }
                 make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace)
                 make.height.equalTo(CVMessageFooterRenderItem.footerViewHeight)
+            }
+
+            if !confidentialIconView.isHidden {
+                confidentialIconView.snp.remakeConstraints { make in
+                    make.width.height.equalTo(20)
+                    make.trailing.equalTo(footerView.snp.leading).offset(-5)
+                    make.centerY.equalTo(footerView.snp.centerY)
+                }
             }
         }
         
@@ -243,13 +284,11 @@ extension ConversationIncomingMessageCell {
                 return TSAccountManager.sharedInstance().localNumber()
             }
         }()
-        let avatar = viewItem.avatar as? [String: Any]
+
         avatarView.isHidden = false
         avatarView.setImage(
-            avatar: avatar,
             recipientId: contactId,
-            displayName: viewItem.displayName,
-            completion: nil
+            displayName: viewItem.displayName ?? ""
         )
         
         NotificationCenter.default.addObserver(

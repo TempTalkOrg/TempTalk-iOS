@@ -128,7 +128,7 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
     [self.databaseStorage asyncReadWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
         TSThread *lastestThread = [TSThread anyFetchWithUniqueId:self.thread.uniqueId
                                                      transaction:transaction];
-        self.durationSeconds = [lastestThread messageExpiresInSeconds];
+        self.durationSeconds = [lastestThread messageExpiresInSecondsWithTransaction:transaction];
     } completion:^{
         [self updateTableContents];
     }];
@@ -266,7 +266,7 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
                 if([latestInstance isKindOfClass:[TSGroupThread class]]){
                     latestInstance.groupModel.messageExpiry = @(self.durationSeconds);
 
-                    [self updateExpiTimeAndClearMessagesWithData:entity.data thread:latestInstance];
+                    [self updateExpiTimeAndClearMessagesWithData:entity.data thread:latestInstance transaction:transaction];
                 }
             }];
 
@@ -309,7 +309,7 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
                     threadConfig.conversation = sharingConfigurationEntity.conversation;
                     latestInstance.threadConfig = threadConfig;
 
-                    [self updateExpiTimeAndClearMessagesWithData:entity.data thread:latestInstance];
+                    [self updateExpiTimeAndClearMessagesWithData:entity.data thread:latestInstance transaction:transaction];
                 }
             }];
 
@@ -325,14 +325,15 @@ NSString *const kDefaultMessageExpiryKey = @"messageExpiry";
     }];
 }
 
-- (void)updateExpiTimeAndClearMessagesWithData:(NSDictionary *)data thread:(TSThread *)thread {
+- (void)updateExpiTimeAndClearMessagesWithData:(NSDictionary *)data thread:(TSThread *)thread transaction:(SDSAnyWriteTransaction *)transaction {
     // 修改就更新会话的字段
     UInt64 messageClearAnchor = [self uint64ValueFromDict:data key:@"messageClearAnchor"];
     UInt64 expiresInSeconds = [self uint64ValueFromDict:data key:@"messageExpiry"];
 
     [[DataUpdateUtil shared] updateConversationWithThread:thread
                                                expireTime:@(expiresInSeconds)
-                                       messageClearAnchor:@(messageClearAnchor)];
+                                       messageClearAnchor:@(messageClearAnchor)
+                                              transaction:transaction];
 }
 
 - (UInt64)uint64ValueFromDict:(NSDictionary *)dict key:(NSString *)key {

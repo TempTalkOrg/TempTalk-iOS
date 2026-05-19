@@ -13,7 +13,7 @@ public class DataUpdateUtil: NSObject {
         super.init()
     }
 
-    @objc public func updateConversation(thread: TSThread, expireTime: NSNumber?, messageClearAnchor: NSNumber?) {
+    @objc public func updateConversation(thread: TSThread, expireTime: NSNumber?, messageClearAnchor: NSNumber?, transaction: SDSAnyReadTransaction) {
 
         if let localNumber = TSAccountManager.localNumber() {
             let currentThreadId = TSContactThread.threadId(fromContactId: localNumber)
@@ -25,7 +25,7 @@ public class DataUpdateUtil: NSObject {
         if let expiry = expireTime, DTParamsUtils.validateNumber(expiry).boolValue, expiry.intValue > 0 {
             thread.expiresInSeconds = expiry.uint64Value
         } else {
-            thread.expiresInSeconds = UInt64(thread.messageExpiresInSeconds())
+            thread.expiresInSeconds = UInt64(thread.messageExpiresInSeconds(with: transaction))
         }
 
         if let anchor = messageClearAnchor, DTParamsUtils.validateNumber(anchor).boolValue, anchor.intValue > 0 {
@@ -33,11 +33,11 @@ public class DataUpdateUtil: NSObject {
         }
     }
 
-    @objc public func updateConversation(baseInfo: DTGroupBaseInfoEntity, thread: TSThread, expireTime: NSNumber?, messageClearAnchor: NSNumber?) {
+    @objc public func updateConversation(baseInfo: DTGroupBaseInfoEntity, thread: TSThread, expireTime: NSNumber?, messageClearAnchor: NSNumber?, transaction: SDSAnyReadTransaction) {
         if let expiry = expireTime, DTParamsUtils.validateNumber(expiry).boolValue, expiry.intValue > 0 {
             baseInfo.messageExpiry = expiry
         } else {
-            baseInfo.messageExpiry = NSNumber(value: thread.messageExpiresInSeconds())
+            baseInfo.messageExpiry = NSNumber(value: thread.messageExpiresInSeconds(with: transaction))
         }
 
         if let anchor = messageClearAnchor, DTParamsUtils.validateNumber(anchor).boolValue, anchor.intValue > 0 {

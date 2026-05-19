@@ -33,7 +33,10 @@ An Objective-C library for communicating with the Signal messaging service.
   s.compiler_flags = "-fcxx-modules"
 
   s.prefix_header_file = 'TTServiceKit/src/TSPrefix.h'
-  s.xcconfig = { 'OTHER_CFLAGS' => '$(inherited) -DSQLITE_HAS_CODEC' }
+  s.xcconfig = {
+    'OTHER_CFLAGS' => '$(inherited) -DSQLITE_HAS_CODEC',
+    'SWIFT_INCLUDE_PATHS' => '$(inherited) $(PODS_ROOT)/../DTProto/dtprotoFFI'
+  }
 
   s.resources = ["TTServiceKit/Resources/**/*"]
 

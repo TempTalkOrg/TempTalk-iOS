@@ -31,30 +31,63 @@
                     numbers:(nonnull NSArray *)numbers
                     success:(nonnull void (^)(DTCreateANewGroupDataEntity * _Nonnull))success
                     failure:(nonnull DTAPIFailureBlock)failure{
-    
+    [self sendRequestWithName:name
+                       avatar:avatar
+                      numbers:numbers
+              groupCryptoMode:0
+                encryptedName:nil
+              encryptedAvatar:nil
+   groupMemberVerifyPublicKey:nil
+               memberBindings:nil
+                      success:success
+                      failure:failure];
+}
+
+- (void)sendRequestWithName:(NSString *)name
+                     avatar:(NSString *)avatar
+                    numbers:(NSArray *)numbers
+            groupCryptoMode:(NSInteger)groupCryptoMode
+              encryptedName:(nullable NSString *)encryptedName
+            encryptedAvatar:(nullable NSString *)encryptedAvatar
+ groupMemberVerifyPublicKey:(nullable NSString *)groupMemberVerifyPublicKey
+             memberBindings:(nullable NSArray *)memberBindings
+                    success:(void(^)(DTCreateANewGroupDataEntity *entity))success
+                    failure:(DTAPIFailureBlock)failure{
+
     if(!DTParamsUtils.validateString(name) ||
        ![numbers isKindOfClass:[NSArray class]] ||
        ![avatar isKindOfClass:[NSString class]]){
         failure(DTErrorWithCodeDescription(DTAPIRequestResponseStatusParamsError, kDTAPIParamsErrorDescription));
         return;
     }
-    
-//    __block NSTimeInterval messageExpiry = -1;
-//    [DTDisappearanceTimeIntervalConfig fetchConfigWithCompletion:^(DTDisappearanceTimeIntervalEntity * _Nonnull entity, NSError * _Nonnull error) {
-//        messageExpiry = entity.messageDefault.unsignedIntValue;
-//    }];
-    
-    NSDictionary *parameters = @{
-        @"name":name,
+
+    NSString *safeName = (groupCryptoMode > 0) ? @"Encrypted Group" : name;
+    NSMutableDictionary *parameters = @{
+        @"name":safeName,
         @"numbers":numbers,
-//        @"messageExpiry":@(messageExpiry),
         @"avatar":avatar
-    };
-    
+    }.mutableCopy;
+
+    if(groupCryptoMode > 0){
+        parameters[@"groupCryptoMode"] = @(groupCryptoMode);
+        if(encryptedName){
+            parameters[@"encryptedName"] = encryptedName;
+        }
+        if(encryptedAvatar){
+            parameters[@"encryptedAvatar"] = encryptedAvatar;
+        }
+        if(groupMemberVerifyPublicKey){
+            parameters[@"groupMemberVerifyPublicKey"] = groupMemberVerifyPublicKey;
+        }
+        if(memberBindings){
+            parameters[@"memberBindings"] = memberBindings;
+        }
+    }
+
     NSString *path = [self requestUrl];
     TSRequest *request = [TSRequest requestWithUrl:[NSURL URLWithString:path]
                                             method:[self requestMethod]
-                                        parameters:parameters];
+                                        parameters:parameters.copy];
     [self sendRequest:request
               success:^(DTAPIMetaEntity * _Nonnull entity) {
         NSError *error;
@@ -69,7 +102,7 @@
     } failure:^(NSError * _Nonnull error) {
         failure(error);
     }];
-    
+
 }
 
 @end

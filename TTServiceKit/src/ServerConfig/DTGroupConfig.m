@@ -40,6 +40,7 @@
         @"membersMaxSize": @(200),
         @"messageArchivingTimeOptionValues": @[@(3600), @(172800), @(604800)],
         @"confidentialModeThreshold": @(20),
+        @"encryptionEnabled": @(NO),
     };
 }
 
@@ -70,6 +71,37 @@
         
     }];
     
+    return result;
+}
+
++ (DTGroupConfigEntity *)fetchGroupConfigWithTransaction:(SDSAnyReadTransaction *)transaction {
+
+    __block DTGroupConfigEntity *result = nil;
+
+    [[DTServerConfigManager sharedManager] fetchConfigFromLocalWithSpaceName:@"group"
+                                                                transaction:transaction
+                                                                  completion:^(id  _Nonnull config, NSError * _Nonnull error) {
+        NSDictionary *recallConfig = [self defaultConfig];
+        if(!error && config){
+            NSMutableDictionary *result = recallConfig.mutableCopy;
+            [result addEntriesFromDictionary:config];
+            recallConfig = result.copy;
+        }
+
+        NSError *jsonError;
+        DTGroupConfigEntity *entity = [MTLJSONAdapter modelOfClass:[DTGroupConfigEntity class] fromJSONDictionary:recallConfig error:&jsonError];
+        if(!jsonError){
+            result = entity;
+        }else{
+            DTGroupConfigEntity *entity = [DTGroupConfigEntity new];
+            [self.defaultConfig enumerateKeysAndObjectsUsingBlock:^(id  _Nonnull key, id  _Nonnull obj, BOOL * _Nonnull stop) {
+                [entity setValue:obj forKey:key];
+            }];
+            result = entity;
+        }
+
+    }];
+
     return result;
 }
 

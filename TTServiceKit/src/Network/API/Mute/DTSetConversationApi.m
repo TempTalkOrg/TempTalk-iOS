@@ -86,7 +86,9 @@
         }
         
     } failure:^(NSError * _Nonnull error) {
-        
+        if (failure) {
+            failure(error);
+        }
     }];
 }
 
@@ -100,6 +102,19 @@
     }
     NSString *remarkNameSecretText = DTParamsUtils.validateString(aesRemarkNameString) ?  [NSString stringWithFormat:@"V1|%@",aesRemarkNameString] : @"";
     NSDictionary *params = @{@"conversation":conversation,@"remark":remarkNameSecretText};
+    [self requestWithParmas:params success:sucessBlock failure:failure];
+}
+
+- (void)requestConfigContactRemarkAvatarWithConversationID:(NSString *)conversation
+                                              remarkAvatar:(NSString *)aesRemarkAvatarString
+                                                   success:(void(^)(DTConversationEntity*)) sucessBlock
+                                                   failure:(void(^)(NSError*))failure {
+    if(!DTParamsUtils.validateString(conversation)){
+        failure(DTErrorWithCodeDescription(DTAPIRequestResponseStatusParamsError, kDTAPIParamsErrorDescription));
+        return;
+    }
+    NSString *remarkAvatarSecretText = DTParamsUtils.validateString(aesRemarkAvatarString) ? [NSString stringWithFormat:@"V1|%@", aesRemarkAvatarString] : @"";
+    NSDictionary *params = @{@"conversation":conversation, @"remarkAvatar":remarkAvatarSecretText};
     [self requestWithParmas:params success:sucessBlock failure:failure];
 }
 

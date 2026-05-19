@@ -26,6 +26,10 @@ class DTHostingController<Content: View>: UIHostingController<Content> {
         )
 
     }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)

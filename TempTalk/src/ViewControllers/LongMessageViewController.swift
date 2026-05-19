@@ -34,7 +34,6 @@ public class LongMessageViewController: OWSViewController {
     private let viewItem: ConversationViewItem?
     private let messageBody: String
     private var messageTextView: UITextView?
-    private var textViewHeightConstraint: Constraint?
 
     // Action menu
     private var actionMenuController: ConversationActionMenuController?
@@ -98,8 +97,12 @@ public class LongMessageViewController: OWSViewController {
 
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // 确保主题正确应用
         applyTheme()
+    }
+
+    public override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateContentInset()
     }
 
     // MARK: - UI Setup
@@ -126,7 +129,8 @@ public class LongMessageViewController: OWSViewController {
         messageTextView?.textContainer.lineBreakMode = .byWordWrapping
         messageTextView?.layoutManager.allowsNonContiguousLayout = false
         messageTextView?.layoutManager.usesFontLeading = true
-        messageTextView?.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        messageTextView?.contentInsetAdjustmentBehavior = .never
+        messageTextView?.textContainerInset = UIEdgeInsets(top: 0, left: 28, bottom: 0, right: 28)
         messageTextView?.linkTextAttributes = [
             .foregroundColor: Theme.tinfoColor,
             .underlineStyle: NSUnderlineStyle.single.rawValue
@@ -140,12 +144,7 @@ public class LongMessageViewController: OWSViewController {
         if let messageTextView = messageTextView {
             view.addSubview(messageTextView)
             messageTextView.snp.makeConstraints { make in
-            make.leading.equalToSuperview().offset(28)
-            make.trailing.equalToSuperview().offset(-28)
-            make.centerY.equalToSuperview()
-            make.top.greaterThanOrEqualTo(view.safeAreaLayoutGuide.snp.top).offset(30)
-            make.bottom.lessThanOrEqualTo(view.safeAreaLayoutGuide.snp.bottom).offset(-30)
-            textViewHeightConstraint = make.height.equalTo(100).constraint // 初始高度，会在 loadContent 中更新
+                make.edges.equalToSuperview()
             }
         }
 
@@ -164,23 +163,36 @@ public class LongMessageViewController: OWSViewController {
                 self.messageTextView?.attributedText = attributedText
             }
 
-            // 计算内容实际需要的高度
-            let textViewWidth = UIScreen.main.bounds.width - 56 // 28*2 padding
-            guard let messageTextView = self.messageTextView else { return }
-            let size = messageTextView.sizeThatFits(CGSize(
-                width: textViewWidth,
-                height: .greatestFiniteMagnitude
-            ))
-
-            // 更新高度约束
-            let maxHeight = UIScreen.main.bounds.height - 100 // 留出上下安全区域
-            let targetHeight = min(size.height, maxHeight)
-            self.textViewHeightConstraint?.update(offset: targetHeight)
-
-            // 强制布局更新，确保frame有正确的值
             self.view.layoutIfNeeded()
+            self.updateContentInset()
+            let topInset = self.messageTextView?.contentInset.top ?? 0
+            self.messageTextView?.contentOffset = CGPoint(x: 0, y: -topInset)
+        }
+    }
 
-            self.messageTextView?.contentOffset = .zero
+    private func updateContentInset() {
+        guard let textView = messageTextView else { return }
+        let viewHeight = view.bounds.height
+        guard viewHeight > 0 else { return }
+
+        let safeTop = view.safeAreaInsets.top
+        let safeBottom = view.safeAreaInsets.bottom
+        let contentHeight = textView.sizeThatFits(CGSize(
+            width: textView.bounds.width,
+            height: .greatestFiniteMagnitude
+        )).height
+        let visibleHeight = viewHeight - safeTop - safeBottom
+
+        let newInset: UIEdgeInsets
+        if contentHeight <= visibleHeight {
+            let topInset = (viewHeight - contentHeight) / 2
+            newInset = UIEdgeInsets(top: topInset, left: 0, bottom: viewHeight - topInset - contentHeight, right: 0)
+        } else {
+            newInset = UIEdgeInsets(top: safeTop, left: 0, bottom: safeBottom + 40, right: 0)
+        }
+
+        if textView.contentInset != newInset {
+            textView.contentInset = newInset
         }
     }
 

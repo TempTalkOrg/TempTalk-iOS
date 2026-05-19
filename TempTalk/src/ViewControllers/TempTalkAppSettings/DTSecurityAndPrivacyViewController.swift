@@ -331,6 +331,16 @@ extension DTSecurityAndPrivacyViewController : DTSettingSwitchCellDelegate  {
                 if(isOn){
                     let setUpPasskeysVC = DTSetUpPasskeysController()
                     setUpPasskeysVC.loginType = DTLoginModeTypeViaRegisterPasskeyAuthFromMe
+                    setUpPasskeysVC.onBindResult = { [weak self] success in
+                        guard let self = self else { return }
+                        if success {
+                            self.setEnablePasskeysForProfileInfo(passkeysSwitch: 1)
+                        } else {
+                            DispatchQueue.main.async {
+                                self.reloadPage()
+                            }
+                        }
+                    }
                     self.navigationController?.pushViewController(setUpPasskeysVC, animated: true)
                 } else {
                     self.setEnablePasskeysForProfileInfo(passkeysSwitch: 0)

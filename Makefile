@@ -1,39 +1,49 @@
-# Make sure we're failing even though we pipe to xcpretty
 SHELL=/bin/bash -o pipefail -o errexit
 
-WORKING_DIR = ./
-SCHEME = TempTalk
-XCODE_BUILD = xcrun xcodebuild -workspace $(SCHEME).xcworkspace -scheme $(SCHEME) -sdk iphonesimulator
+# ── Configuration ──────────────────────────────────────────
+WORKSPACE   = Difft.xcworkspace
+SCHEME     ?= TempTalk
+CONFIG     ?= Debug
+DESTINATION = generic/platform=iOS
 
-.PHONY: build test retest clean dependencies
+XCODEBUILD  = xcodebuild \
+	-workspace $(WORKSPACE) \
+	-scheme $(SCHEME) \
+	-configuration $(CONFIG) \
+	-destination '$(DESTINATION)' \
+	-skipPackagePluginValidation \
+	-skipMacroValidation \
+	CODE_SIGNING_ALLOWED=NO \
+	COMPILER_INDEX_STORE_ENABLE=NO
 
-default: test
+.PHONY: setup build clean test ci help
 
-ci: dependencies test
-	cd SignalServiceKit && make ci
+# ── Default ────────────────────────────────────────────────
+default: help
 
-update_dependencies:
-	bundle exec pod update
-#	carthage update --platform iOS
+# ── Setup ──────────────────────────────────────────────────
+setup:  ## Install all dependencies (gems + brew tools + pods)
+	bundle install
+	brew bundle install --no-upgrade
+	bundle exec pod install
 
-dependencies:
-	cd $(WORKING_DIR) && \
-		git submodule update --init
-#		carthage build --platform iOS
+# ── Build ──────────────────────────────────────────────────
+build:  ## Build project (errors-only output via xcsift)
+	$(XCODEBUILD) build 2>&1 | xcsift -f toon --exit-on-failure
 
-build: dependencies
-	cd $(WORKING_DIR) && \
-		$(XCODE_BUILD) build | xcpretty
-
-test:
+# ── Test ───────────────────────────────────────────────────
+test:  ## Run tests
 	bundle exec fastlane scan
-	cd SignalServiceKit && make test
 
-clean:
-	cd $(WORKING_DIR) && \
-		rm -fr Carthage/Build && \
-		$(XCODE_BUILD) clean | xcpretty
+# ── CI ─────────────────────────────────────────────────────
+ci: build test  ## CI pipeline: build + test
 
-# Migrating across swift versions requires me to run this sometimes
-clean_carthage_cache:
-	rm -fr ~/Library/Caches/org.carthage.CarthageKit/
+# ── Maintenance ────────────────────────────────────────────
+clean:  ## Clean build artifacts
+	$(XCODEBUILD) clean 2>&1 | xcsift -f toon
+
+# ── Help ───────────────────────────────────────────────────
+help:  ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+	@echo "  Override scheme/config:  make build SCHEME=TempTalk CONFIG=Release"

@@ -11,7 +11,11 @@ import SnapKit
 
 class ConversationMessageHeaderView: UIView {
     
-    private lazy var dateSeparatorView = ConversationDateSeparatorView()
+    private lazy var dateSeparatorView: ConversationDateSeparatorView = {
+        let view = ConversationDateSeparatorView()
+        view.showsBackground = false
+        return view
+    }()
     
     override init(frame: CGRect) {
         super.init(frame: frame)

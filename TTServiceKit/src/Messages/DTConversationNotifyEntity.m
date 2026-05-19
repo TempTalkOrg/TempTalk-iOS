@@ -38,7 +38,8 @@
     [self.findyouDescribe isEqualToString:other.findyouDescribe] &&
     self.version == other.version &&
     self.confidentialMode == other.confidentialMode &&
-    [self.remark isEqualToString:other.remark];
+    [self.remark isEqualToString:other.remark] &&
+    ([self.remarkAvatar isEqualToString:other.remarkAvatar] || (!self.remarkAvatar && !other.remarkAvatar));
 }
 
 @end

@@ -242,6 +242,11 @@ extension ConversationViewController {
 
             headerView.isExternal = false
 
+            if groupThread.groupModel.isEncryptedGroup,
+               let attributedTitle = self.encryptedGroupAttributedTitle(for: groupThread) {
+                return attributedTitle
+            }
+
             return NSAttributedString(
                 string: groupThread.groupThreadNameWithMemberCount(),
                 attributes: [.foregroundColor: Theme.tprimaryColor]
@@ -250,8 +255,10 @@ extension ConversationViewController {
 
 
         if let groupThread = self.thread as? TSGroupThread, viewState.conversationViewMode == .normalPresent {
-
-            self.title = groupThread.name(with: nil)
+            // 加密群必须在 transaction 内解析才能拿到解密后的群名
+            databaseStorage.read { [weak self] transaction in
+                self?.title = groupThread.name(with: transaction)
+            }
             return
         }
 
@@ -597,5 +604,44 @@ extension ConversationViewController: OWSNavigationChildController {
         scrollDownButton.alpha = 1
         headerView.isUserInteractionEnabled = true
         updateBarButtonItems()
+    }
+}
+
+// MARK: - Encrypted Group Title
+
+extension ConversationViewController {
+
+    @objc func encryptedGroupDisplayName(for groupThread: TSGroupThread,
+                                          transaction: SDSAnyReadTransaction) -> String {
+        let model = groupThread.groupModel
+        guard model.isEncryptedGroup else {
+            return groupThread.groupThreadNameWithMemberCount()
+        }
+
+        let displayName = DTGroupCryptoDisplayHelper.shared.displayGroupName(
+            gid: groupThread.serverThreadId,
+            groupCryptoMode: model.groupCryptoMode,
+            encryptedName: nil,
+            originalName: model.groupName,
+            transaction: transaction
+        )
+
+        let memberCount = model.groupMemberIds.count
+        if memberCount > 0 {
+            return "\(displayName)(\(memberCount))"
+        }
+        return displayName
+    }
+
+    @objc func encryptedGroupAttributedTitle(for groupThread: TSGroupThread) -> NSAttributedString? {
+        var result: NSAttributedString?
+        databaseStorage.read { transaction in
+            let displayName = self.encryptedGroupDisplayName(for: groupThread, transaction: transaction)
+            result = NSAttributedString(
+                string: displayName,
+                attributes: [.foregroundColor: Theme.tprimaryColor]
+            )
+        }
+        return result
     }
 }

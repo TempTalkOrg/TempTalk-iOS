@@ -63,6 +63,8 @@ message Envelope {
     MSG_CLIENT_NOTIFY     = 10;
     MSG_SCHEDULE_NORMAL   = 11;
     MSG_ENC_CALL          = 12;
+    MSG_GROUP_KEY         = 13;
+    MSG_FORWARD_NOTICE    = 14;
   }
 
   enum CriticalLevel {
@@ -103,6 +105,28 @@ message Content {
   optional TypingMessage  typingMessage  = 6;
   optional NotifyMessage  notifyMessage  = 7;
   optional CallMessage     callMessage   = 8; // Enc Call 消息
+  optional GroupKeyMessage groupKeyMessage = 9;
+  optional ForwardNoticeMessage forwardNotice = 10;
+}
+
+message GroupKeyMessage {
+  optional bytes  groupId      = 1;
+  optional bytes  groupRootKey = 2;
+}
+
+message ForwardNoticeMessage {
+  enum ForwardScene {
+    UNKNOWN       = 0;
+    SINGLE        = 1;
+    ONE_BY_ONE    = 2;
+    COMBINED      = 3;
+    SAVE_TO_NOTES = 4;
+  }
+
+  optional ForwardScene   scene           = 1;
+  repeated string         sourceAuthorIds = 2;
+  optional uint32         messageCount    = 3;
+  optional ConversationId conversation    = 4; // v3: notice 所属"原消息会话"身份(group: groupId / 1v1+NTS: number)
 }
 
 message CallMessage {
@@ -666,6 +690,7 @@ message SyncMessage {
   optional TopicAction   topicAction                 = 15;
   optional uint64        serverTimestamp             = 16; // 操作時間
   repeated Read          criticalRead                = 17;
+  optional ForwardNoticeMessage forwardNoticeSync    = 18; // v3: 直接引用 ForwardNoticeMessage(去 wrapper)
 }
 
 message AttachmentPointer {
@@ -698,6 +723,7 @@ message GroupContext {
   optional string            name    = 3;
   repeated string            members = 4;
   optional AttachmentPointer avatar  = 5;
+  optional bytes             groupRootKey = 6;
 }
 
 message ContactDetails {

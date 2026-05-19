@@ -45,14 +45,13 @@ extension ConversationMessageBubbleView {
             bodyTextView.maskEnable = false
             
         case .confidential:
-            bodyTextView.maskEnable = true
+            bodyTextView.maskEnable = false
             bodyTextView.linkTextAttributes = [:]
             bodyTextView.isSelectable = false
             bodyTextView.isUserInteractionEnabled = false
             if let attributedText = bodyTextView.attributedText {
                 let mutableAttributedText = NSMutableAttributedString(attributedString: attributedText)
                 mutableAttributedText.removeAttribute(.link, range: NSRange(location: 0, length: mutableAttributedText.length))
-                mutableAttributedText.addAttribute(.foregroundColor, value: UIColor.clear, range: NSRange(location: 0, length: mutableAttributedText.length))
                 bodyTextView.attributedText = mutableAttributedText
             }
         default:

@@ -33,13 +33,11 @@ extension DTMeetingManager {
             clearCurrentCall()
             await removeCallWindow()
             hostRoomContentVC = nil
-
             appContext = nil
             roomContext = nil
             Logger.info("\(logTag) roomContext cleaned up")
 
             isMinimize = false
-            showErrorTost = false
             otherCriticalAlert = false
             openCallCamera = false
 
@@ -77,11 +75,12 @@ extension DTMeetingManager {
 
         // 重置控制标志
         isAnswering = false
+        hasEverConnectedToRoom = false
 
         // 清理参会人相关数据
         isFromCallkit = false
-        
-        visibleParticipants.removeAll()
+
+        setVisibleParticipants([])
         startCallThread = nil
         startCallRecipientIds = nil
         fromSource = nil
@@ -105,7 +104,7 @@ extension DTMeetingManager {
         reconnectingParticipants = nil
         lastParticipantsCount = 0
 
-        // 重置 CallKit 状态
-        DTCallKitManager.shared().isLocalEndCall = false
+        // 清理 CallKit UUID，防止残留影响下次通话
+        currentCall.callKitUUID = nil
     }
 }

@@ -17,7 +17,7 @@ def shared_pods
   pod 'JSQMessagesViewController',  git: 'https://github.com/signalapp/JSQMessagesViewController.git', branch: 'mkirk/share-compatible', :inhibit_warnings => true
   pod 'Mantle', git: 'https://github.com/TempTalkOrg/Mantle.git', branch: 'temptalk'
   pod 'PureLayout', '3.1.8', :inhibit_warnings => true
-  pod 'Reachability', '3.2', :inhibit_warnings => true
+  pod 'Reachability', '3.7.7', :inhibit_warnings => true
   pod 'SocketRocket', '~> 0.7.0', :inhibit_warnings => true
   pod 'YYImage', git: 'https://github.com/TempTalkOrg/YYImage.git', branch: 'temptalk', :inhibit_warnings => true
   pod 'YYImage/libwebp', git: 'https://github.com/TempTalkOrg/YYImage.git', branch: 'temptalk', :inhibit_warnings => true
@@ -81,6 +81,7 @@ post_install do |installer|
   configure_testable_build(installer)
   configure_simulator_archs(installer)
   strip_bitcode()
+  patch_afnetworking_reachability(installer)
 end
 
 def configure_testable_build(installer)
@@ -180,12 +181,34 @@ def strip_bitcode()
     puts "Stripping bitcode: #{command}"
     system(command)
   end
-  
+
   framework_paths = [
   "/Pods/OpenSSL-Universal/Frameworks/OpenSSL.xcframework/ios-arm64_armv7/OpenSSL.framework/OpenSSL"
   ]
-  
+
   framework_paths.each do |framework_relative_path|
     strip_bitcode_from_framework(bitcode_strip_path, framework_relative_path)
   end
 end
+
+# Fix AFNetworking 4.0.1 build error on newer Xcode SDKs:
+# 'netinet6/in6.h' is a private header; 'netinet/in.h' already provides IPv6 definitions.
+def patch_afnetworking_reachability(installer)
+  files_to_patch = [
+    'AFNetworking/AFNetworking/AFNetworkReachabilityManager.m',
+    'AFNetworking/AFNetworking/AFHTTPSessionManager.m'
+  ]
+
+  files_to_patch.each do |relative_path|
+    file_path = File.join(installer.sandbox.root, relative_path)
+    next unless File.exist?(file_path)
+
+    contents = File.read(file_path)
+    if contents.include?('#import <netinet6/in6.h>')
+      contents.gsub!('#import <netinet6/in6.h>', '')
+      File.write(file_path, contents)
+      puts "Patched #{File.basename(file_path)}: removed private header netinet6/in6.h"
+    end
+  end
+end
+

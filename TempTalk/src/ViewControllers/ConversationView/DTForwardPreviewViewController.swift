@@ -20,6 +20,8 @@ let numberOfOneRow = 5
 class DTForwardPreviewViewController: OWSViewController {
 
     private var threads: [TSThread]?
+    /// uniqueId -> 已解密展示名,在 viewDidLoad 一次性批量解析,避免 cell 内主线程同步读库
+    private var resolvedThreadNames: [String: String] = [:]
     var contactsManager: OWSContactsManager?
     weak var delegate: DTForwardPreviewDelegate?
 
@@ -50,6 +52,12 @@ class DTForwardPreviewViewController: OWSViewController {
         guard let threads = threads, threads.count > 0 else {
             owsFailDebug("No threads to forward")
             return
+        }
+
+        databaseStorage.read { [weak self] transaction in
+            threads.forEach { thread in
+                self?.resolvedThreadNames[thread.uniqueId] = thread.name(with: transaction)
+            }
         }
 
         let basePointSize = UIFont.ows_dynamicTypeBody.pointSize;
@@ -152,6 +160,8 @@ class DTForwardPreviewViewController: OWSViewController {
     }
 
     @IBAction func btnSendAction(_ sender: Any) {
+        self.tfLeaveMessage?.resignFirstResponder()
+
         guard let delegate = self.delegate else {
             self.dismiss(animated: false)
             return
@@ -212,7 +222,8 @@ extension DTForwardPreviewViewController: UICollectionViewDelegate, UICollection
         }
 
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: DTForwardPreviewSingleCell.reuseId(), for: indexPath) as! DTForwardPreviewSingleCell
-        cell.setAvatarImage(thread: threads[indexPath.item])
+        let thread = threads[indexPath.item]
+        cell.setAvatarImage(thread: thread, resolvedName: resolvedThreadNames[thread.uniqueId] ?? "")
 
         return cell
     }
@@ -314,28 +325,22 @@ class DTForwardPreviewSingleCell: UICollectionViewCell {
         fatalError("init(coder:) has not been implemented")
     }
     
-    func setAvatarImage(thread: TSThread, contactsManager: OWSContactsManager = Environment.shared.contactsManager) {
-        
+    /// - Parameter resolvedName: 由数据源层在 transaction 内预解析好的展示名,避免 cell 在主线程同步读库
+    func setAvatarImage(thread: TSThread, resolvedName: String, contactsManager: OWSContactsManager = Environment.shared.contactsManager) {
+
         if thread is TSContactThread {
             if thread.contactIdentifier() == TSAccountManager.sharedInstance().localNumber() {
                 self.avatarView.dt_setImage(with: nil, placeholderImage: UIImage.init(named: "icon_note_to_self"))
                 self.lbName.text = MessageStrings.noteToSelf()
             } else {
                 self.avatarView.setImageWithRecipientId(thread.contactIdentifier())
-                self.databaseStorage.read { transaction in
-                    self.lbName.text = thread.name(with: transaction)
-                }
+                self.lbName.text = resolvedName
             }
         } else {
-            var groupName: String
             let groupMemberCount = "(\(thread.recipientIdentifiers.count + 1))"
             let avatarWidth = Int((avatarGridViewWidth - avatarMargin * (numberOfOneRow - 1)) / numberOfOneRow)
             self.avatarView.image = OWSAvatarBuilder.buildImage(thread: thread, diameter: UInt(avatarWidth), contactsManager: contactsManager)
-            if thread.name(with: nil).count == 0 {
-                groupName = MessageStrings.newGroupDefaultTitle()
-            } else {
-                groupName = thread.name(with: nil)
-            }
+            let groupName = resolvedName.isEmpty ? MessageStrings.newGroupDefaultTitle() : resolvedName
             let totalName = groupName + groupMemberCount
             let attributeName = NSMutableAttributedString(string: totalName)
             attributeName.addAttribute(.foregroundColor, value: UIColor.ows_gray40, range: NSMakeRange(groupName.utf16.count, groupMemberCount.count))

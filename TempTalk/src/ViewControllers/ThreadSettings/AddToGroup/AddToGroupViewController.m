@@ -12,6 +12,7 @@
 #import "DTAddMembersToAGroupAPI.h"
 #import "DTAddToGroupItem.h"
 #import "DTSelectedAccountToolView.h"
+#import <TTServiceKit/TSContactThread.h>
 
 static CGFloat const kBottomViewHeight = 70;
 
@@ -480,8 +481,29 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
         [membersWhoJoined minusSet:oldMembers];//只保留新增的元素
         
         self.addMembersToAGroupAPI.transformToRemove = NO;
+
+        // Encrypted group: prepare member bindings
+        NSArray *memberBindings = nil;
+        if (groupModel.isEncryptedGroup) {
+            DTGroupCryptoManager *cryptoManager = DTGroupCryptoManager.shared;
+            __block NSArray *bindings = nil;
+            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                bindings = [cryptoManager prepareMemberBindingDictsForGid:serverGId
+                                                           newMemberUids:membersWhoJoined.allObjects
+                                                             transaction:transaction];
+            }];
+
+            if (!bindings) {
+                [DTToastHelper hide];
+                [DTToastHelper toastWithText:Localized(@"GROUP_CRYPTO_NO_KEY_TOAST", @"") inView:self.view durationTime:3 afterDelay:0.2];
+                return;
+            }
+            memberBindings = bindings;
+        }
+
         [self.addMembersToAGroupAPI sendRequestWithWithGroupId:serverGId
                                                        numbers:membersWhoJoined.allObjects
+                                                memberBindings:memberBindings
                                                        success:^(DTAPIMetaEntity * _Nonnull entity) {
             [DTToastHelper hide];
             __block NSString *updateGroupInfo = nil;
@@ -490,7 +512,20 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
                 updateGroupInfo = [DTGroupUtils getMemberChangedInfoStringWithJoinedMemberIds:membersWhoJoined.allObjects removedMemberIds:nil leftMemberIds:nil shouldAffectThreadSorting:&tmpShouldAffectSorting transaction:transaction];
             }];
             nextBlock(updateGroupInfo, membersWhoJoined.allObjects);
-            
+
+            // Distribute R_group after server confirmed new members joined
+            if (groupModel.isEncryptedGroup) {
+                __block NSData *rGroupData = nil;
+                [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                    rGroupData = [DTGroupCryptoManager.shared getRGroupDataWithGid:serverGId transaction:transaction];
+                }];
+                if (rGroupData) {
+                    [DTGroupKeyMessageHandler.shared sendGroupKeyMessageWithThread:self.thread
+                                                                           groupId:groupModel.groupId
+                                                                            rGroup:rGroupData];
+                }
+            }
+
             DispatchMainThreadSafe(^{
                 [self.conversationSettingsViewDelegate popAllConversationSettingsViews];
             });

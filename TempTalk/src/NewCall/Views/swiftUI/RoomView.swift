@@ -97,17 +97,10 @@ struct RoomView: View {
     @State private var canSwitchCameraPosition = false
     
     @State private var cachedSnapshots: [ParticipantSnapshot] = []
-    
-    private func computeDisplayedSnapshots() -> [ParticipantSnapshot] {
+
+    private var reconnectingSnapshots: [ParticipantSnapshot] {
         let currentSnapshots = DTMeetingManager.shared.sortedReconnectingParticipants()
-        if !currentSnapshots.isEmpty {
-            DispatchQueue.main.async {
-                cachedSnapshots = currentSnapshots
-            }
-            return currentSnapshots
-        } else {
-            return cachedSnapshots
-        }
+        return currentSnapshots.isEmpty ? cachedSnapshots : currentSnapshots
     }
 
     var body: some View {
@@ -124,10 +117,11 @@ struct RoomView: View {
                     participant.sid?.stringValue ?? participant.identity?.stringValue ?? participant.id
                 }) { participant in
                     ParticipantView(participant: participant, videoViewMode: .fill)
-                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(roomCtx.videoRefreshToken)
             } else if case .reconnecting = room.connectionState {
-                // 只有重连时才显示缓存的快照作为占位
-                let displayedSnapshots: [ParticipantSnapshot] = computeDisplayedSnapshots()
+                let displayedSnapshots = reconnectingSnapshots
                 if !displayedSnapshots.isEmpty {
                     ParticipantLayout(displayedSnapshots, spacing: 8, id: { shot in
                         shot.id
@@ -136,8 +130,20 @@ struct RoomView: View {
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            // disconnected 状态不显示任何参会者视图
         }
+        .onChange(of: isReconnecting) { reconnecting in
+            if reconnecting {
+                let snapshots = DTMeetingManager.shared.sortedReconnectingParticipants()
+                if !snapshots.isEmpty {
+                    cachedSnapshots = snapshots
+                }
+            }
+        }
+    }
+
+    private var isReconnecting: Bool {
+        if case .reconnecting = room.connectionState { return true }
+        return false
     }
 }
 

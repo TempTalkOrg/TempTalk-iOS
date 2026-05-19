@@ -7,6 +7,8 @@
 
 #import <Foundation/Foundation.h>
 
+@class SDSAnyReadTransaction;
+
 NS_ASSUME_NONNULL_BEGIN
 
 extern NSString *const kServerConfigUpdatedNotify;
@@ -20,16 +22,13 @@ extern NSString *const kServerConfigUpdatedNotify;
 - (void)fetchConfigFromLocalWithSpaceName:(NSString *)spaceName
                                completion:(void (^)(id _Nullable config, NSError * _Nullable error))completion;
 
+- (void)fetchConfigFromLocalWithSpaceName:(NSString *)spaceName
+                              transaction:(SDSAnyReadTransaction *)transaction
+                               completion:(void (^)(id _Nullable config, NSError * _Nullable error))completion;
+
 /// 获取 server 配置信息
 /// - Parameter completion: completion
 - (void)fetchServersConfigCompletion:(void (^)(id _Nullable, NSError * _Nullable))completion;
-
-/// 获取配置表中某个空间下的配置信息，从远程请求更新；
-/// @param spaceName 空间名
-/// @param completion 配置信息回调
-//- (void)fetchConfigFromServerWithSpaceName:(NSString *)spaceName
-//                                completion:(void(^)(id config, NSError *error))completion;
-
 
 - (void)updateConfig;
 - (void)fetchConfigFromServerCompletion:(void(^ _Nullable)(void))completion;

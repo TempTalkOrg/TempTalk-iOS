@@ -1458,6 +1458,9 @@
 /* status message for failed messages */
 "MESSAGE_STATUS_FAILED" = "发送失败。";
 
+/* status message when forwarding to multiple targets partially succeeded */
+"MESSAGE_STATUS_PARTIALLY_FAILED" = "部分發送成功";
+
 /* status message for failed messages */
 "MESSAGE_STATUS_FAILED_SHORT" = "失败";
 
@@ -2956,8 +2959,8 @@
 "Save failed" = "保存失败";
 "UPDATENAME_OPREATION_FAILED" = "操作被禁止，请联系 ITBot / ChativeBot。";
 
-"CONTACT_EDIT_REMARK" = "设置备注";
-"CONTACT_REMARK" = "备注";
+"CONTACT_EDIT_REMARK" = "編輯備註";
+"CONTACT_REMARK" = "添加備註";
 
 "CONTACT_PROFILENAME_DESCRIPTION_HEADER" = "昵称： ";
 "CONTACT_NUMBER_DESCRIPTION_HEADER" = "号码： ";
@@ -3138,6 +3141,11 @@
 "FORWARD_MESSAGE_SELECT_MESSAGE_MAX_COUNT" = "最多选择%lu条消息";
 "FORWARD_MESSAGE_SINGLE_TITLE" = "转发消息 %@\n来自: ";
 "FORWARD_MESSAGE_CONFIDENTIAL" = "机密消息不能被选中";
+"FORWARD_NOTICE_SINGLE" = "%1$@ 轉發了一條來自 %2$@ 的訊息";
+"FORWARD_NOTICE_PLURAL" = "%1$@ 轉發了 %2$u 條來自 %3$@ 的訊息";
+"FORWARD_NOTICE_SINGLE_NO_FROM" = "%1$@ 轉發了一條訊息";
+"FORWARD_NOTICE_PLURAL_NO_FROM" = "%1$@ 轉發了 %2$u 條訊息";
+"FORWARD_NOTICE_YOU" = "您";
 
 /* The title for the theme section in the appearance settings. */
 "SETTINGS_APPEARANCE_THEME_TITLE" = "主题";
@@ -3634,6 +3642,15 @@
 
 "REMOVE_CONTACT" = "删除好友";
 "SELECTED_ERROR_PASSKEY" = "你使用了错误的passkey，请重试并选择正确的passkey。";
+"PASSKEY_ERROR_REGISTER_INITIALIZE" = "Passkey 註冊初始化失敗，請稍後重試";
+"PASSKEY_ERROR_REGISTER_FINALIZE" = "Passkey 註冊確認失敗，請稍後重試";
+"PASSKEY_ERROR_LOGIN_INITIALIZE" = "Passkey 登錄初始化失敗，請稍後重試";
+"PASSKEY_ERROR_LOGIN_FINALIZE" = "Passkey 登錄驗證失敗，請稍後重試";
+"PASSKEY_ERROR_UNSUPPORTED_VERSION" = "當前系統版本不支持 Passkey，請升級到 iOS 16 或更高版本";
+"PASSKEY_ERROR_UNSUPPORTED_AUTH" = "當前設備不支持此認證方式";
+"PASSKEY_ERROR_DATA" = "數據處理異常，請稍後重試";
+"PASSKEY_ERROR_ACCOUNT" = "賬號驗證失敗，請重試";
+"PASSKEY_ERROR_UNKNOWN" = "操作失敗，請稍後重試";
 
 /* notification title indicating the user generically has a new message */
 "GENERIC_INCOMING_MESSAGE_NOTIFICATION" = "新消息！";
@@ -3844,6 +3861,13 @@
 "RAISE_HANDS_TITLE" = "举手";
 
 "CALLING_NOISE_TITLE" = "麦克风噪声抑制";
+"CALLING_DENOISE_MODE_TITLE" = "降噪模式";
+"CALLING_DENOISE_MODE_ENHANCED" = "增強降噪";
+"CALLING_DENOISE_MODE_STANDARD" = "標準降噪";
+"CALLING_VOICE_CHANGER_TITLE" = "變聲";
+"CALLING_VOICE_PRESET_ORIGINAL" = "未開啟(原聲)";
+"CALLING_VOICE_PRESET_HIGHER" = "清亮";
+"CALLING_VOICE_PRESET_DEEPER" = "低沉";
 
 "BLOCK_USER_TITLE" = "屏蔽用户";
 "BLOCK_USER_DESCRIPTION" = "是否屏蔽该用户，禁止其在 Yelling 上向你发送消息或发起通话？";
@@ -4001,3 +4025,15 @@
 "CRITICAL_ALERT_CONFIRM_DESC_GROUP_WITH_INVITED_MORE" = "发送给未入会的群成员和邀请的人（%@ 和其他 %d 人）";
 
 "CONVERSATION_CONFIDENTIAL_INFO_MESSAGE" = "机密消息已被查看";
+
+"CONFIRM_LEAVE_GROUP_CTA" = "离开";
+
+"CONFIRM_REMOVE_MEMBER_TITLE_FORMAT" = "移出 %@";
+
+"CONFIRM_REMOVE_MEMBER_BODY" = "该成员将无法继续查看或发送群消息";
+
+"CONFIRM_REMOVE_MEMBER_CTA" = "移出";
+
+"DISBAND_GROUP_ACTION" = "解散群组";
+
+"CALL_MIC_QUEUE_TITLE" = "等待發言";

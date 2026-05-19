@@ -16,13 +16,18 @@ class DTReactionHelper: NSObject {
         DTEmojiConfig.serverEmojiConfig()
     }
     
+    class func emojis(transaction: SDSAnyReadTransaction) -> [String] {
+        DTEmojiConfig.serverEmojiConfig(transaction: transaction)
+    }
+
     class func emojiTitlesForMessage(_ message: TSMessage, displayForBubble: Bool = false, transaction: SDSAnyReadTransaction) -> [String]? {
-     
+
         guard let reactionMap = message.reactionMap else {
             return nil
         }
+        let availableEmojis = emojis(transaction: transaction)
         let availableMap = reactionMap.filter {
-            emojis().contains($0.key) && !$0.value.isEmpty
+            availableEmojis.contains($0.key) && !$0.value.isEmpty
         }
         guard !availableMap.isEmpty else {
             return nil

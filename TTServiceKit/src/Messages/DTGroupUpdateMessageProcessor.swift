@@ -7,6 +7,25 @@
 
 import Foundation
 
+extension DTGroupBaseInfoEntity {
+    /// Syncs mutable fields from an incoming group notify into the local baseInfo row.
+    /// Empty / nil values are ignored so we never overwrite a good value with a blank one.
+    public static func syncFields(gid: String,
+                                  name: String? = nil,
+                                  plainAvatar: String? = nil,
+                                  encryptedName: String? = nil,
+                                  encryptedAvatar: String? = nil,
+                                  transaction: SDSAnyWriteTransaction) {
+        guard let baseInfo = Self.anyFetch(uniqueId: gid, transaction: transaction) else { return }
+        baseInfo.anyUpdate(transaction: transaction) { entity in
+            if let name, !name.isEmpty { entity.name = name }
+            if let plainAvatar, !plainAvatar.isEmpty { entity.avatar = plainAvatar }
+            if let encryptedName, !encryptedName.isEmpty { entity.encryptedName = encryptedName }
+            if let encryptedAvatar, !encryptedAvatar.isEmpty { entity.encryptedAvatar = encryptedAvatar }
+        }
+    }
+}
+
 extension DTGroupUpdateMessageProcessor {
     
     @objc public func handleGroupMessageArchiveChanged(oldGroupModel: TSGroupModel,
@@ -77,28 +96,38 @@ extension DTGroupUpdateMessageProcessor {
                                                                    newGroupThread: TSGroupThread,
                                                                    timeStamp: UInt64,
                                                                    transaction: SDSAnyWriteTransaction) {
-        
+
         newGroupModel.version = groupNotifyEntity.groupVersion
         newGroupThread.anyUpdateGroupThread(transaction: transaction) { instance in
             instance.groupModel = newGroupModel
-            
+
             // notify自己的时候
             if groupNotifyEntity.groupNotifyDetailedType == .groupMsgExpiryChange {
                 DataUpdateUtil.shared.updateConversation(thread: instance,
                                                          expireTime: groupNotifyEntity.group?.messageExpiry,
-                                                         messageClearAnchor: NSNumber(value: groupNotifyEntity.group?.messageClearAnchor ?? 0))
+                                                         messageClearAnchor: NSNumber(value: groupNotifyEntity.group?.messageClearAnchor ?? 0),
+                                                         transaction: transaction)
             }
         }
-        
+
+        // 加密群：同步 encryptedName / encryptedAvatar 到 DTGroupBaseInfoEntity
+        if let group = groupNotifyEntity.group, group.groupCryptoMode > 0 {
+            DTGroupBaseInfoEntity.syncFields(gid: groupNotifyEntity.gid,
+                                             plainAvatar: group.avatar,
+                                             encryptedName: group.encryptedName,
+                                             encryptedAvatar: group.encryptedAvatar,
+                                             transaction: transaction)
+        }
+
         transaction.addAsyncCompletionOnMain {
             NotificationCenter.default.post(name: NSNotification.Name.DTGroupMessageExpiryConfigChanged, object: nil)
         }
-        
+
         if groupNotifyEntity.groupNotifyDetailedType == .createGroup, groupNotifyEntity.group?.autoClear == true {
             let infoMessage = DTGroupUpdateInfoMessageHelper.gOpenAutoClearSwitchInfoMessage(with: newGroupThread, isOn: true)
             infoMessage.anyInsert(transaction: transaction)
         }
-        
+
     }
     
     @objc public func getHandler(for notifyType: DTGroupNotifyDetailType) -> GroupNotifyHandler? {
@@ -130,7 +159,8 @@ extension DTGroupUpdateMessageProcessor {
                 .autoClearChange,
                 .privilegeConfidential,
                 .groupRapidRoleChange,
-                .criticalAlertChange :
+                .criticalAlertChange,
+                .upgradeGroupCrypto :
             return GroupNotifyGroupInfoHandler()
           
         case .groupSelfInfoChange:

@@ -41,6 +41,10 @@ extern NSString * _Nonnull const kConversationUpdateFromSocketMessageNotificatio
 
 - (BOOL)isEncryptedRemarkString:(NSString * _Nonnull) remarkName;
 
+/// 解密服务端备注头像为本地头像字典。
+- (nullable NSDictionary *)decryptRemarkAvatarDictionary:(NSString * _Nonnull)cipherText
+                                                 receptid:(NSString * _Nonnull)receptid;
+
 @end
 
 

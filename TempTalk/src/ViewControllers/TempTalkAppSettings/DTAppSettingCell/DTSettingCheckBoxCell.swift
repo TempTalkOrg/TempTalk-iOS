@@ -82,6 +82,10 @@ class DTSettingCheckBoxCell : DTDefaultBaseStyleCell {
             } else {
                 checkBoxImageView.isHidden = true
             }
+        } else if let model_t = model as? VoiceChangerSettingItem {
+            // 变声预设选择
+            let currentPreset = CallSettingsManager.shared.getVoicePreset() ?? CallSettingsManager.defaultVoicePreset
+            checkBoxImageView.isHidden = (model_t.presetKey != currentPreset)
         } else if let model_t = model as? DTTextSizeSettingItem,
                   let textSizeLevel = model_t.textSizeLevel,
                   TextSizeManager.getCurrentLevel() == textSizeLevel {

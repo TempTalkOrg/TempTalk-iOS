@@ -13,6 +13,10 @@ import Foundation
     
     @objc func isInMeeting() -> Bool
     
+    @objc var hasMeeting: Bool { get }
+    
+    @objc func isPresentedShare() -> Bool
+    
     @objc func criticalAlertIncomingLocalMessage(entity: DTServerNotifyCriticalAlertEntity,
                                                  transation: SDSAnyWriteTransaction)
 }

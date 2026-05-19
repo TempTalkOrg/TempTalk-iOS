@@ -358,7 +358,7 @@ class MenuActionSheetView: UIView, MenuActionViewDelegate, DTEmojiReactionDelega
             guard let self, let expandHandler else { return}
             expandHandler(isExpand)
         }
-        if let scrollView = emojiView.subviews[0] as? UIScrollView {
+        if let scrollView = emojiView.subviews.first as? UIScrollView {
             scrollView.delegate = self
         }
         self.actionStackView.addArrangedSubview(emojiView)

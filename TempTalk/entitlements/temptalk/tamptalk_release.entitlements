@@ -8,6 +8,7 @@
 	<array>
 		<string>applinks:yelling.pro</string>
 		<string>applinks:temptalk.app</string>
+		<string>webcredentials:chative.com</string>
 	</array>
 	<key>com.apple.developer.default-data-protection</key>
 	<string>NSFileProtectionComplete</string>

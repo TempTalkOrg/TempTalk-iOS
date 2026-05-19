@@ -968,6 +968,12 @@ NSString *NSStringForOWSRegistrationState(OWSRegistrationState value)
                                                           error:&error];
                 NSString *remark = [[DTConversationSettingHelper sharedInstance] decryptRemarkString:contact.remark receptid:contact.number];
                 contact.remark = remark;
+                if (DTParamsUtils.validateString(contact.remarkAvatarServer)) {
+                    contact.remarkAvatar = [[DTConversationSettingHelper sharedInstance]
+                                            decryptRemarkAvatarDictionary:contact.remarkAvatarServer
+                                                                 receptid:contact.number];
+                    contact.remarkAvatarServer = nil;
+                }
                 [contact configWithFullName:contact.name phoneNumber:contact.number];
                 
                 if (!error && contact) {
@@ -1087,6 +1093,12 @@ NSString *NSStringForOWSRegistrationState(OWSRegistrationState value)
         [contact configWithFullName:fullName phoneNumber:number];
         NSString *remark = [[DTConversationSettingHelper sharedInstance] decryptRemarkString:contact.remark receptid:contact.number];
         contact.remark = remark;
+        if (DTParamsUtils.validateString(contact.remarkAvatarServer)) {
+            contact.remarkAvatar = [[DTConversationSettingHelper sharedInstance]
+                                    decryptRemarkAvatarDictionary:contact.remarkAvatarServer
+                                                         receptid:contact.number];
+            contact.remarkAvatarServer = nil;
+        }
         successHandler(@[contact]);
     } failure:^(OWSHTTPErrorWrapper * _Nonnull errorWrapper) {
         NSError *error = errorWrapper.asNSError;

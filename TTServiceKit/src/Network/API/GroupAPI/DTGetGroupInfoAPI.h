@@ -30,6 +30,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL autoClear;
 @property (nonatomic, assign) BOOL privilegeConfidential;
 
+@property (nonatomic, assign) NSInteger groupCryptoMode;
+@property (nonatomic, copy, nullable) NSString *encryptedName;
+@property (nonatomic, copy, nullable) NSString *encryptedAvatar;
+@property (nonatomic, copy, nullable) NSString *groupMemberVerifyPublicKey;
+
 @end
 
 @interface DTGetGroupInfoAPI : DTBaseAPI

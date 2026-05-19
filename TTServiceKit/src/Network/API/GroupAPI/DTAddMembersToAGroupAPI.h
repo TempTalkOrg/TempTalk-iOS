@@ -18,6 +18,12 @@ NS_ASSUME_NONNULL_BEGIN
                            success:(DTAPISuccessBlock)success
                            failure:(DTAPIFailureBlock)failure;
 
+- (void)sendRequestWithWithGroupId:(NSString *)groupId
+                           numbers:(NSArray *)numbers
+                    memberBindings:(nullable NSArray *)memberBindings
+                           success:(DTAPISuccessBlock)success
+                           failure:(DTAPIFailureBlock)failure;
+
 @end
 
 NS_ASSUME_NONNULL_END

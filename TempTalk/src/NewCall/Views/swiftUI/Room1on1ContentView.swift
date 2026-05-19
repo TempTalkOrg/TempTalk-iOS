@@ -19,8 +19,6 @@ struct Room1on1ContentView: View {
     
     var currentCall: DTLiveKitCallModel { roomCtx.currentCall }
     
-    private let screenWidth = UIScreen.main.bounds.width
-    
     @State var videoPositionExchange: Bool = false
     @State private var cachedRemote: Participant? = nil
     
@@ -32,6 +30,9 @@ struct Room1on1ContentView: View {
     }
     
     var body: some View {
+        GeometryReader { geometry in
+            let containerWidth = geometry.size.width
+
             ZStack {
                 if roomCtx.room.connectionState == .reconnecting {
                     let local = participantSnapshot(isLocal: true)
@@ -42,7 +43,6 @@ struct Room1on1ContentView: View {
                         is1on1: true,
                         videoViewMode: .fit
                     )
-                    .environmentObject(appCtx)
 
                 } else {
                     let local = roomCtx.room.localParticipant
@@ -58,7 +58,6 @@ struct Room1on1ContentView: View {
                                 is1on1: true,
                                 videoViewMode: .fit
                             )
-                            .environmentObject(appCtx)
                         }
 
                         if isLocalCameraOn, let remote {
@@ -67,21 +66,23 @@ struct Room1on1ContentView: View {
                                 is1on1: true,
                                 videoViewMode: .fit
                             )
-                            .environmentObject(appCtx)
-                            .frame(width: screenWidth / 3, height: screenWidth / 3 / 9 * 16)
+                            .frame(width: containerWidth / 3, height: containerWidth / 3 / 9 * 16)
                             .padding(.trailing, 10)
                             .padding(.top, 40)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         }
                     }
+                    .id(roomCtx.videoRefreshToken)
                     .onChange(of: remoteOpt) { newValue in
                         if let newValue {
-                            cachedRemote = newValue   // ✅ 在这里更新缓存
+                            cachedRemote = newValue
                         }
                     }
                 }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
+    }
 }
 
 extension Room1on1ContentView {

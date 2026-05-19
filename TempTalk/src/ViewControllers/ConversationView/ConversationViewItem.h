@@ -123,9 +123,9 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType);
 - (nullable NSString *)quotedAttachmentMimetype;
 - (nullable NSString *)quotedRecipientId;
 
-// We don't want to try to load the media for this item (if any)
-// if a load has previously failed.
-@property (nonatomic) BOOL didCellMediaFailToLoad;
+// Tracks how many times media loading has failed for this item.
+// After reaching max retries, loading is permanently skipped.
+@property (nonatomic) NSInteger cellMediaLoadFailureCount;
 
 @property (nonatomic, readonly, nullable) OWSQuotedReplyModel *quotedReply;
 

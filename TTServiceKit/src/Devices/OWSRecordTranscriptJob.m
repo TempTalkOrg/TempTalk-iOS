@@ -189,6 +189,30 @@ NS_ASSUME_NONNULL_BEGIN
                                                                              transaction:transaction];
     BOOL localMessageAlreadyExists = (existingMessage != nil) && !self.handleUnsupportedMessage;
 
+    if (localMessageAlreadyExists
+        && (existingMessage.messageState == TSOutgoingMessageStateFailed
+            || existingMessage.messageState == TSOutgoingMessageStateSending)) {
+
+        TSOutgoingMessageState priorState = existingMessage.messageState;
+
+        DTOutgoingMessageServerReceipts *receipts =
+            [[DTOutgoingMessageServerReceipts alloc]
+                  initWithNeedsSync:NO
+                         sequenceId:transcript.sequenceId
+                systemShowTimestamp:(NSTimeInterval)transcript.serverTimestamp
+                   notifySequenceId:transcript.notifySequenceId];
+
+        [existingMessage updateWithAllRecipientsMarkedAsSentWithServerReceipts:receipts
+                                                                   transaction:transaction];
+
+        OWSLogInfo(@"%@ Recovered stuck outgoing via sync echo. uniqueId=%@ ts=%llu priorState=%@",
+                   self.logTag,
+                   existingMessage.uniqueId,
+                   transcript.timestamp + index,
+                   NSStringForOutgoingMessageState(priorState));
+        return;
+    }
+
     NSArray<TSAttachmentPointer *> *pointers = @[];
     OWSAttachmentsProcessor *attachmentsProcessor;
     if (localMessageAlreadyExists) {

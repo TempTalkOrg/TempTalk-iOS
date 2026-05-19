@@ -36,13 +36,15 @@
 }
 
 - (void)prepareForReuse {
-    
+
     [super prepareForReuse];
-    
+
     self.headImage.image = nil;
     self.lbName.text = nil;
     self.muteIcon.image = nil;
     self.sharingIcon.hidden = YES;
+    self.animationSpeaking.hidden = YES;
+    [DTLottieBridge stopAnimationView:self.animationSpeaking];
 }
 
 - (void)setItemModel:(DTMultiChatItemModel *)itemModel {
@@ -57,13 +59,14 @@
     self.sharingIcon.hidden = !itemModel.isSharing;
     self.lbHost.hidden = !itemModel.isHost;
     self.spacer.hidden = itemModel.isSharing;
-    self.animationSpeaking.hidden = !itemModel.isSpeaking;
-    if (!itemModel.isSpeaking) {
-        if (itemModel.isMute) {
-            self.muteIcon.image = [UIImage imageNamed:@"ic_call_muted"];
-        } else {
-            self.muteIcon.image = [UIImage imageNamed:@"ic_call_unmuted"];
-        }
+    if (itemModel.isSpeaking) {
+        self.muteIcon.image = nil;
+        self.animationSpeaking.hidden = NO;
+        [DTLottieBridge playAnimationView:self.animationSpeaking];
+    } else {
+        self.animationSpeaking.hidden = YES;
+        [DTLottieBridge stopAnimationView:self.animationSpeaking];
+        self.muteIcon.image = [UIImage imageNamed:itemModel.isMute ? @"ic_call_muted" : @"ic_call_unmuted"];
     }
     
     BOOL isLiveStreamGuest = (itemModel.role == LiveStreamRoleAudience);

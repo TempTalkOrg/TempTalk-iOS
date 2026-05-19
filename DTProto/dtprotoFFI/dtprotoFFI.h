@@ -55,59 +55,87 @@ typedef DTProtoRustCallStatus RustCallStatus;
 // ⚠️ increment the version suffix in all instances of DTPROTO_UNIFFI_SHARED_HEADER_V4 in this file.           ⚠️
 #endif // def DTPROTO_UNIFFI_SHARED_H
 
-void ffi_dtproto_d2a4_DTProto_object_free(
+void ffi_dtproto_b7db_DTGroupCrypto_object_free(
       void*_Nonnull ptr,
     RustCallStatus *_Nonnull out_status
     );
-void*_Nonnull dtproto_d2a4_DTProto_new(
+void*_Nonnull dtproto_b7db_DTGroupCrypto_new(
+      uint8_t version,
+    RustCallStatus *_Nonnull out_status
+    );
+RustBuffer dtproto_b7db_DTGroupCrypto_derive_keys(
+      void*_Nonnull ptr,RustBuffer r_group,
+    RustCallStatus *_Nonnull out_status
+    );
+RustBuffer dtproto_b7db_DTGroupCrypto_encrypt(
+      void*_Nonnull ptr,RustBuffer k_group,RustBuffer plaintext,RustBuffer aad,
+    RustCallStatus *_Nonnull out_status
+    );
+RustBuffer dtproto_b7db_DTGroupCrypto_decrypt(
+      void*_Nonnull ptr,RustBuffer k_group,RustBuffer blob,RustBuffer aad,
+    RustCallStatus *_Nonnull out_status
+    );
+RustBuffer dtproto_b7db_DTGroupCrypto_sign_uid(
+      void*_Nonnull ptr,RustBuffer sk_bind,RustBuffer uid,
+    RustCallStatus *_Nonnull out_status
+    );
+int8_t dtproto_b7db_DTGroupCrypto_verify_uid(
+      void*_Nonnull ptr,RustBuffer pk_bind,RustBuffer uid,RustBuffer signature,
+    RustCallStatus *_Nonnull out_status
+    );
+void ffi_dtproto_b7db_DTProto_object_free(
+      void*_Nonnull ptr,
+    RustCallStatus *_Nonnull out_status
+    );
+void*_Nonnull dtproto_b7db_DTProto_new(
       int32_t version,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer dtproto_d2a4_DTProto_decrypt_message(
-      void*_Nonnull ptr,RustBuffer signed_e_key,RustBuffer their_id_key,RustBuffer local_their_id_key,RustBuffer e_key,RustBuffer local_pri_key,RustBuffer erm_key,RustBuffer cipher_text,
+RustBuffer dtproto_b7db_DTProto_decrypt_message(
+      void*_Nonnull ptr,RustBuffer signed_e_key,RustBuffer their_id_key,RustBuffer local_their_id_key,RustBuffer cached_their_id_key,RustBuffer e_key,RustBuffer local_pri_key,RustBuffer erm_key,RustBuffer cipher_text,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer dtproto_d2a4_DTProto_encrypt_message(
+RustBuffer dtproto_b7db_DTProto_encrypt_message(
       void*_Nonnull ptr,RustBuffer pub_id_key,RustBuffer pub_id_keys,RustBuffer local_pri_key,RustBuffer plain_text,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer dtproto_d2a4_DTProto_decrypt_key(
+RustBuffer dtproto_b7db_DTProto_decrypt_key(
       void*_Nonnull ptr,RustBuffer e_key,RustBuffer local_pri_key,RustBuffer e_m_key,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer dtproto_d2a4_DTProto_encrypt_key(
+RustBuffer dtproto_b7db_DTProto_encrypt_key(
       void*_Nonnull ptr,RustBuffer pub_id_keys,RustBuffer m_key,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer dtproto_d2a4_DTProto_generate_key(
+RustBuffer dtproto_b7db_DTProto_generate_key(
       void*_Nonnull ptr,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer dtproto_d2a4_DTProto_decrypt_rtm_message(
+RustBuffer dtproto_b7db_DTProto_decrypt_rtm_message(
       void*_Nonnull ptr,RustBuffer signature,RustBuffer their_local_id_key,RustBuffer aes_key,RustBuffer cipher_text,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer dtproto_d2a4_DTProto_encrypt_rtm_message(
+RustBuffer dtproto_b7db_DTProto_encrypt_rtm_message(
       void*_Nonnull ptr,RustBuffer aes_key,RustBuffer local_pri_key,RustBuffer plain_text,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer dtproto_d2a4_lib_name(
+RustBuffer dtproto_b7db_lib_name(
       
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer ffi_dtproto_d2a4_rustbuffer_alloc(
+RustBuffer ffi_dtproto_b7db_rustbuffer_alloc(
       int32_t size,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer ffi_dtproto_d2a4_rustbuffer_from_bytes(
+RustBuffer ffi_dtproto_b7db_rustbuffer_from_bytes(
       ForeignBytes bytes,
     RustCallStatus *_Nonnull out_status
     );
-void ffi_dtproto_d2a4_rustbuffer_free(
+void ffi_dtproto_b7db_rustbuffer_free(
       RustBuffer buf,
     RustCallStatus *_Nonnull out_status
     );
-RustBuffer ffi_dtproto_d2a4_rustbuffer_reserve(
+RustBuffer ffi_dtproto_b7db_rustbuffer_reserve(
       RustBuffer buf,int32_t additional,
     RustCallStatus *_Nonnull out_status
     );

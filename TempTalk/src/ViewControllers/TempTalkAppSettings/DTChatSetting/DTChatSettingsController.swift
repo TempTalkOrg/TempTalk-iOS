@@ -204,6 +204,11 @@ extension DTChatSettingsController : UITableViewDelegate, UITableViewDataSource 
             let speedVC = VoicePlaybackSpeedViewController()
             speedVC.delegate = self
             navigationController?.pushViewController(speedVC, animated: true)
+        } else if settingItem.tag == ChatItemType.voiceChanger.rawValue {
+            // 打开变声选择页面
+            let voiceChangerVC = VoiceChangerSettingViewController()
+            voiceChangerVC.delegate = self
+            navigationController?.pushViewController(voiceChangerVC, animated: true)
         }
     }
 }
@@ -214,8 +219,9 @@ extension DTChatSettingsController {
     enum ChatItemType: Int {
         case savePhotos = 0
         case voicePlaybackSpeed = 1
+        case voiceChanger = 2
     }
- 
+
     func getDataSource() -> [[DTSettingItem]] {
         let blanckItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.blank.rawValue)
 
@@ -238,12 +244,22 @@ extension DTChatSettingsController {
         voiceSpeedItem.tag = ChatItemType.voicePlaybackSpeed.rawValue
         let voiceSpeedTipsItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.plainTextType.rawValue, plainText: Localized("SETTINGS_CHAT_VOICE_PLAYBACK_SPEED_DESCRIPTION"))
 
+        // Voice Changer Section
+        let currentPreset = CallSettingsManager.shared.getVoicePreset() ?? CallSettingsManager.defaultVoicePreset
+        let presetNameKey = DTUpdateNoiseController.voicePresets.first { $0.key == currentPreset }?.nameKey ?? "CALLING_VOICE_PRESET_ORIGINAL"
+        let voiceChangerItem = DTSettingItem(icon: "", title: Localized("SETTINGS_CHAT_VOICE_CHANGER"), description: Localized(presetNameKey), cellStyle: SettingCellStyle.accessoryAndDescription.rawValue)
+        voiceChangerItem.tag = ChatItemType.voiceChanger.rawValue
+        let voiceChangerTipsItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.plainTextType.rawValue, plainText: Localized("SETTINGS_CHAT_VOICE_CHANGER_DESCRIPTION"))
+
         return [[blanckItem],
                 [chatSwitchItem],
                 [chatTipsItem],
                 [blanckItem],
                 [voiceSpeedItem],
-                [voiceSpeedTipsItem]]
+                [voiceSpeedTipsItem],
+                [blanckItem],
+                [voiceChangerItem],
+                [voiceChangerTipsItem]]
     }
 }
 
@@ -269,6 +285,14 @@ extension DTChatSettingsController : DTSettingSwitchCellDelegate  {
 extension DTChatSettingsController: VoicePlaybackSpeedDelegate {
     func didSelectPlaybackSpeed(_ speed: Float) {
         // 刷新页面显示新的速度
+        reloadPage()
+    }
+}
+
+//MARK: VoiceChangerSettingDelegate
+extension DTChatSettingsController: VoiceChangerSettingDelegate {
+    func didSelectVoiceChangerPreset(_ preset: String) {
+        // 刷新页面显示新的变声预设
         reloadPage()
     }
 }

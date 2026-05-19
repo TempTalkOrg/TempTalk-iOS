@@ -281,6 +281,9 @@
 /* Label for generic done button. */
 "BUTTON_DONE" = "Done";
 
+/* Label for generic edit button. */
+"BUTTON_EDIT" = "Edit";
+
 "BUTTON_OK" = "Ok";
 
 /* Button text to enable batch selection mode */
@@ -789,7 +792,7 @@
 
 "ADD_MEMBER_GROUP_ACTION" = "Add Members";
 
-"REMOVE_MEMBER_GROUP_ACTION" = "Remove Members";
+"REMOVE_MEMBER_GROUP_ACTION" = "Remove Member";
 
 "DISMISS_GROUP_ACTION" = "Disband Group";
 
@@ -813,6 +816,15 @@
 
 /* The navbar title for the 'update group' view. */
 "EDIT_GROUP_DEFAULT_TITLE" = "Edit Group";
+
+/* Placeholder / label for the group name field in edit group info page. */
+"GROUP_SETTING_GROUP_NAME" = "Group Name";
+
+/* Error message when user tries to submit an empty group name. */
+"RENAME_ERROR_CANNOT_EMPTY" = "Name cannot be empty";
+
+/* Toast when a member without permission tries to change the group avatar. */
+"GROUP_SETTING_NO_EDIT_AVATAR_PERMISSION" = "No permission, please contact the group moderators";
 
 /* Label for the cell that lets you add a new member to a group. */
 "EDIT_GROUP_MEMBERS_ADD_MEMBER" = "Add…";
@@ -1120,6 +1132,30 @@
 
 /* No comment provided by engineer. */
 "GROUP_TITLE_CHANGED" = "Title is now '%@'. ";
+
+/* Group encryption upgrade system message */
+"GROUP_CRYPTO_UPGRADE_SYSTEM_MSG" = "🔒 Group info has been upgraded to end-to-end encryption";
+
+/* Toast message when group crypto key is still syncing */
+"GROUP_CRYPTO_KEY_SYNCING" = "Group encryption key is syncing, please try again later";
+
+"GROUP_CRYPTO_UPGRADE_TITLE" = "Enhance Encryption";
+
+"GROUP_CRYPTO_UPGRADE_DESC" = "Group info will be upgraded from in-transit encryption to end-to-end encryption.";
+
+"GROUP_CRYPTO_UPGRADE_BUTTON" = "Turn On";
+
+"GROUP_CRYPTO_INFO_TITLE" = "Encryption Enhanced";
+
+"GROUP_CRYPTO_INFO_DESC" = "Group info has been upgraded from in-transit encryption to end-to-end encryption.";
+
+"GROUP_CRYPTO_ENCRYPTED_SUBTITLE" = "Encryption Enhanced";
+
+"GROUP_CRYPTO_NOT_AVAILABLE_YET" = "This feature is not available yet";
+"GROUP_CRYPTO_UPGRADE_FAILED" = "Upgrade failed";
+"GROUP_CRYPTO_NO_KEY_TOAST" = "Can't make changes right now";
+"GROUP_CRYPTO_DEFAULT_NAME" = "🔒 Group";
+"GROUP_CRYPTO_INFO_DISMISS" = "OK";
 
 /* No comment provided by engineer. */
 "GROUP_UPDATED" = "Group updated.";
@@ -1457,6 +1493,9 @@
 
 /* status message for failed messages */
 "MESSAGE_STATUS_FAILED" = "Sending failed.";
+
+/* status message when forwarding to multiple targets partially succeeded */
+"MESSAGE_STATUS_PARTIALLY_FAILED" = "Partially sent";
 
 /* status message for failed messages */
 "MESSAGE_STATUS_FAILED_SHORT" = "Failed";
@@ -2956,8 +2995,16 @@
 "CONTACT_EDIT_NAME" = "Change the name";
 "Save failed" = "Save failed";
 
-"CONTACT_EDIT_REMARK" = "Set remark";
-"CONTACT_REMARK" = "REMARK";
+"CONTACT_EDIT_REMARK" = "Edit Remarks";
+"CONTACT_REMARK" = "Add Remark";
+"EDIT_CONTACT_REMARK_SUBTITLE" = "Remark and avatar are only visible to you";
+"CONTACT_REMARK_AVATAR_ACTION_SHEET_TITLE" = "Set remark avatar";
+/* Label for action that restores the contact's original avatar */
+"CONTACT_REMARK_RESTORE_AVATAR" = "Revert to original";
+/* Label shown before original avatar in personal card */
+"PERSON_CARD_ORIGINAL_LABEL" = "Original:";
+/* Toast shown when uploading remark avatar fails */
+"CONTACT_REMARK_AVATAR_UPLOAD_FAILED" = "Upload avatar failed, please try again.";
 
 "UPDATENAME_OPREATION_FAILED" = "Operation denied, please contact ITBot / ChativeBot.";
 
@@ -3133,6 +3180,11 @@
 "FORWARD_MESSAGE_SINGLE_TITLE" = "Forwarded Message %@\nFrom: ";
 
 "FORWARD_MESSAGE_CONFIDENTIAL" = "Confidential messages can not be selected.";
+"FORWARD_NOTICE_SINGLE" = "%1$@ forwarded a message from %2$@.";
+"FORWARD_NOTICE_PLURAL" = "%1$@ forwarded %2$u messages from %3$@.";
+"FORWARD_NOTICE_SINGLE_NO_FROM" = "%1$@ forwarded a message.";
+"FORWARD_NOTICE_PLURAL_NO_FROM" = "%1$@ forwarded %2$u messages.";
+"FORWARD_NOTICE_YOU" = "You";
 
 /* The title for the theme section in the appearance settings. */
 "SETTINGS_APPEARANCE_THEME_TITLE" = "Theme";
@@ -3639,6 +3691,15 @@
 
 "REMOVE_CONTACT" = "Delete Contact";
 "SELECTED_ERROR_PASSKEY" = "You authenticated with a wrong passkey. Please try again and select the right one.";
+"PASSKEY_ERROR_REGISTER_INITIALIZE" = "Passkey registration initialization failed. Please try again later.";
+"PASSKEY_ERROR_REGISTER_FINALIZE" = "Passkey registration confirmation failed. Please try again later.";
+"PASSKEY_ERROR_LOGIN_INITIALIZE" = "Passkey login initialization failed. Please try again later.";
+"PASSKEY_ERROR_LOGIN_FINALIZE" = "Passkey login verification failed. Please try again later.";
+"PASSKEY_ERROR_UNSUPPORTED_VERSION" = "Your system does not support Passkey. Please upgrade to iOS 16 or later.";
+"PASSKEY_ERROR_UNSUPPORTED_AUTH" = "This authentication method is not supported on your device.";
+"PASSKEY_ERROR_DATA" = "Data processing error. Please try again later.";
+"PASSKEY_ERROR_ACCOUNT" = "Account verification failed. Please try again.";
+"PASSKEY_ERROR_UNKNOWN" = "Operation failed. Please try again later.";
 
 /* notification title indicating the user generically has a new message */
 "GENERIC_INCOMING_MESSAGE_NOTIFICATION" = "New Message!";
@@ -3736,7 +3797,7 @@
 "CONFIDENTIAL_MESSAGE_VIEW_ALERT_MESSAGE" = "Read once, then gone";
 
 "IMAGE_PREVIEW_ADD_MESSAGE" = "Add Message";
-"CONFIRM_DISBAND_GROUP_DESCRIPTION" = "The data of this group will be deleted and all of the members in this group will be removed at the same time.";
+"CONFIRM_DISBAND_GROUP_DESCRIPTION" = "This group will be permanently deleted and all members will be removed";
 "MESSAGE_ACTION_COMBINE_FORWARD" = "Combine & Forward";
 "MESSAGE_ACTION_SAVE" = "Save";
 "MESSAGE_ACTION_BATCH_RECALL" = "Recall";
@@ -3785,13 +3846,16 @@
 
 "SPEECHTOTEXT_NO_TEXT_RECOGNIZE" = "No text recognized";
 
-"SETTINGS_CHAT" = "Chat";
+"SETTINGS_CHAT" = "Chat & Call";
 
 "SETTINGS_CHAT_SAVE_PHOTOS" = "Save to Photos";
 "SETTINGS_CHAT_SAVE_PHOTOS_DESCRIPTION" = "Automatically save received photos and videos to Photos; items won't be saved in Confidential Mode.";
 
 "SETTINGS_CHAT_VOICE_PLAYBACK_SPEED" = "Voice Playback Speed";
 "SETTINGS_CHAT_VOICE_PLAYBACK_SPEED_DESCRIPTION" = "Set the default playback speed for voice messages.";
+
+"SETTINGS_CHAT_VOICE_CHANGER" = "Voice Changer";
+"SETTINGS_CHAT_VOICE_CHANGER_DESCRIPTION" = "Set the default voice changer for calls.";
 
 "MEETING_NAVAGATION_RECONNECTING_FAILURE" = "Reconnection failed";
 "MEETING_NAVAGATION_CONNECTING" = "connecting...";
@@ -3817,6 +3881,13 @@
 "RAISE_HANDS_TITLE" = "Raise";
 
 "CALLING_NOISE_TITLE" = "Mic Noise Suppression";
+"CALLING_DENOISE_MODE_TITLE" = "Denoise Mode";
+"CALLING_DENOISE_MODE_ENHANCED" = "Enhanced";
+"CALLING_DENOISE_MODE_STANDARD" = "Standard";
+"CALLING_VOICE_CHANGER_TITLE" = "Voice Changer";
+"CALLING_VOICE_PRESET_ORIGINAL" = "Off (Original)";
+"CALLING_VOICE_PRESET_HIGHER" = "Higher";
+"CALLING_VOICE_PRESET_DEEPER" = "Deeper";
 
 "BLOCK_USER_TITLE" = "Block user";
 "BLOCK_USER_DESCRIPTION" = "Block this user from messaging and calling you on Yelling?";
@@ -3974,3 +4045,27 @@
 "PERSON_CARD_OFFICIAL_ACCOUNT" = "Official Account";
 
 "PERSON_CARD_WEBSITE" = "Website";
+
+"CONFIRM_LEAVE_GROUP_CTA" = "Leave";
+
+"CONFIRM_REMOVE_MEMBER_TITLE_FORMAT" = "Remove %@";
+
+"CONFIRM_REMOVE_MEMBER_BODY" = "This member will no longer be able to view or send messages in this group";
+
+"CONFIRM_REMOVE_MEMBER_CTA" = "Remove";
+
+"DISBAND_GROUP_ACTION" = "Disband";
+
+/* Global Config Crypto */
+"GLOBAL_CONFIG_DECRYPT_SUCCESS" = "Signature verified and decrypted successfully";
+"GLOBAL_CONFIG_DECRYPT_FAILED" = "Decryption failed";
+"GLOBAL_CONFIG_ERROR_MISSING_FIELD" = "Config missing required field: %@";
+"GLOBAL_CONFIG_ERROR_INVALID_SIGN_PREFIX" = "Invalid sign field: missing GLOBALCONFIG_ prefix";
+"GLOBAL_CONFIG_ERROR_UNKNOWN_KEY_ID" = "Unknown keyId: \"%@\", public key not embedded in client";
+"GLOBAL_CONFIG_ERROR_SIGNATURE_FAILED" = "ECDSA signature verification failed: config may have been tampered";
+"GLOBAL_CONFIG_ERROR_BASE64_DECODE_FAILED" = "%@ Base64 decoding failed";
+"GLOBAL_CONFIG_ERROR_DECRYPTION_FAILED" = "AES-GCM decryption failed: %@";
+"GLOBAL_CONFIG_ERROR_JSON_PARSE_FAILED" = "JSON parsing failed";
+"GLOBAL_CONFIG_ERROR_CIPHERTEXT_TOO_SHORT" = "Ciphertext data too short";
+
+"CALL_MIC_QUEUE_TITLE" = "Waiting to speak";

@@ -143,6 +143,11 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
     [self updateReminderViews];
     [self applyTheme];
     [self stickNoteToSelfIfNeeded];
+
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        [DTGroupKeyMessageHandler repairMissingGroupCryptoKeys];
+    });
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -605,15 +610,61 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
                selector:@selector(tabBarItemDoubleClickNotification:)
                    name:kTabBarItemDoubleClickNotification
                  object:nil];
+
+    [center addObserver:self
+               selector:@selector(groupCryptoKeyDidArrive:)
+                   name:DTGroupCryptoConstants.groupCryptoKeyDidArriveNotification
+                 object:nil];
+
+    [center addObserver:self
+               selector:@selector(groupAvatarDidChange:)
+                   name:TSGroupThreadAvatarChangedNotification
+                 object:nil];
 }
 
 - (void)signalAccountsDidChange:(id)notification {
+    // 联系人/备注名变化可能影响任意行，全量刷新
+    [self invalidateCellsForThreadIds:nil];
+}
+
+- (void)groupCryptoKeyDidArrive:(NSNotification *)notification {
+    NSString *gid = notification.userInfo[DTGroupCryptoConstants.groupCryptoKeyGidKey];
+    NSString *threadId = [self threadIdFromServerGroupId:gid];
+    if (!threadId.length) {
+        OWSLogWarn(@"groupCryptoKeyDidArrive: invalid gid=%@", gid);
+        return;
+    }
+    [self invalidateCellsForThreadIds:[NSSet setWithObject:threadId]];
+}
+
+- (void)groupAvatarDidChange:(NSNotification *)notification {
+    NSString *threadId = notification.userInfo[TSGroupThread_NotificationKey_UniqueId];
+    if (!threadId.length) {
+        OWSLogWarn(@"groupAvatarDidChange: missing threadId");
+        return;
+    }
+    [self invalidateCellsForThreadIds:[NSSet setWithObject:threadId]];
+}
+
+- (void)invalidateCellsForThreadIds:(nullable NSSet<NSString *> *)threadIds {
     OWSAssertIsOnMainThread();
 
-    // When contact information (like remark name) changes, we need to refresh the visible cells
-    // to update the display names and avatars
-    [self.threadViewModelCache removeAllObjects];
-    [self.tableView reloadData];
+    if (threadIds.count == 0) {
+        [self.threadViewModelCache removeAllObjects];
+        [self fullReloadDataWithAnimated:NO completion:nil];
+    } else {
+        for (NSString *threadId in threadIds) {
+            [self.threadViewModelCache removeObjectForKey:threadId];
+        }
+        [self diffReloadDataWithForceReloadItemIds:threadIds animated:NO completion:nil];
+    }
+}
+
+- (nullable NSString *)threadIdFromServerGroupId:(nullable NSString *)gid {
+    if (!gid.length) { return nil; }
+    NSData *groupId = [TSGroupThread transformToLocalGroupIdWithServerGroupId:gid];
+    if (!groupId) { return nil; }
+    return [TSGroupThread threadIdFromGroupId:groupId];
 }
 
 - (void)deregistrationStateDidChange:(id)notification {
@@ -721,7 +772,7 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
 
 - (void)criticalAlertHighlightDidChange:(NSNotification *)notification {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self.tableView reloadData];
+        [self fullReloadDataWithAnimated:NO completion:nil];
     });
 }
 
@@ -1224,7 +1275,7 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
     
     [self.emptyBoxView applyTheme];
     [self.reminderViewCell applyTheme];
-    [self.tableView reloadData];
+    [self fullReloadDataWithAnimated:NO completion:nil];
 }
 
 - (void)applyLanguage {
@@ -1232,7 +1283,7 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
     
     [self socketStateDidChange];
     [self setupActionFloatView];
-    [self.tableView reloadData];
+    [self fullReloadDataWithAnimated:NO completion:nil];
 }
 
 @end

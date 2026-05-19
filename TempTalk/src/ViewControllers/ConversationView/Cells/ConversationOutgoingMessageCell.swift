@@ -66,6 +66,12 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
             make.trailing.equalTo(readStatusImageView.snp.leading).offset(-CVMessageFooterRenderItem.footerViewSpace/2.0)
             make.centerY.equalTo(readStatusImageView.snp.centerY)
         }
+
+        confidentialIconView.snp.makeConstraints { make in
+            make.width.height.equalTo(20)
+            make.trailing.equalTo(footerTimeLabel.snp.leading).offset(-5)
+            make.centerY.equalTo(footerTimeLabel.snp.centerY)
+        }
         
     }
     
@@ -99,8 +105,13 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
             readStatusImageView.tintColor = Theme.tthirdColor
             readStatusImageView.titleLable.textColor = Theme.tthirdColor
         } else {
-            readStatusImageView.tintColor = UIColor.white
-            readStatusImageView.titleLable.textColor = UIColor.white
+            if renderItem?.viewItem.isConfidentialMessage == true {
+                readStatusImageView.tintColor = Theme.tthirdColor
+                readStatusImageView.titleLable.textColor = Theme.tthirdColor
+            } else {
+                readStatusImageView.tintColor = UIColor.white
+                readStatusImageView.titleLable.textColor = UIColor.white
+            }
         }
     }
 
@@ -146,27 +157,38 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
 extension ConversationOutgoingMessageCell {
     
     private func updateViewLayout(viewItem: ConversationViewItem) {
-        
+
         if footerView.isHidden {
-            
+
             var readImageSize: CGFloat = 0
             if let outgoingRenderItem = renderItem as? ConversationOutgoingMessageRenderItem, outgoingRenderItem.shouldDisplaySendFailedBadge {
                 readImageSize = 0
             } else {
                 readImageSize = ConversationOutgoingMessageRenderItem.readStatusImageSize
             }
-            
+
             readStatusImageView.snp.remakeConstraints { make in
                 make.width.height.equalTo(readImageSize)
                 make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
                 make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace)
             }
-            
-            footerTimeLabel.snp.remakeConstraints { make in
-                make.trailing.equalTo(readStatusImageView.snp.leading).offset(-CVMessageFooterRenderItem.footerViewSpace/2.0)
-                make.centerY.equalTo(readStatusImageView.snp.centerY)
+
+            if !footerTimeLabel.isHidden {
+                footerTimeLabel.snp.remakeConstraints { make in
+                    make.trailing.equalTo(readStatusImageView.snp.leading).offset(-CVMessageFooterRenderItem.footerViewSpace/2.0)
+                    make.centerY.equalTo(readStatusImageView.snp.centerY)
+                }
             }
-            
+
+            if !confidentialIconView.isHidden {
+                let anchorView = footerTimeLabel.isHidden ? readStatusImageView : footerTimeLabel
+                confidentialIconView.snp.remakeConstraints { make in
+                    make.width.height.equalTo(20)
+                    make.trailing.equalTo(anchorView.snp.leading).offset(-5)
+                    make.centerY.equalTo(readStatusImageView.snp.centerY)
+                }
+            }
+
         } else {
 
             var leadingView: UIView = readStatusImageView
@@ -190,6 +212,14 @@ extension ConversationOutgoingMessageCell {
             if !footerTimeLabel.isHidden {
                 footerTimeLabel.snp.remakeConstraints { make in
                     make.trailing.equalTo(readStatusImageView.snp.leading).offset(-CVMessageFooterRenderItem.footerViewSpace/2.0)
+                    make.centerY.equalTo(footerView.snp.centerY)
+                }
+            }
+
+            if !confidentialIconView.isHidden {
+                confidentialIconView.snp.remakeConstraints { make in
+                    make.width.height.equalTo(20)
+                    make.trailing.equalTo(footerView.snp.leading).offset(-5)
                     make.centerY.equalTo(footerView.snp.centerY)
                 }
             }

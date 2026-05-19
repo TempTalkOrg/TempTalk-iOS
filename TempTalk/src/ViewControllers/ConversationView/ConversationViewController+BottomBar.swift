@@ -42,6 +42,11 @@ extension ConversationViewController {
         set { viewState.isDismissingInteractively = newValue }
     }
     
+    var isInteractivePopTransitioning: Bool {
+        get { viewState.isInteractivePopTransitioning }
+        set { viewState.isInteractivePopTransitioning = newValue }
+    }
+    
     var viewHasEverAppeared: Bool {
         get { viewState.viewHasEverAppeared }
         set { viewState.viewHasEverAppeared = newValue }
@@ -194,11 +199,7 @@ extension ConversationViewController {
             return
         }
         
-        // Don't update the bottom bar position if an interactive pop is in progress
-        switch navigationController?.interactivePopGestureRecognizer?.state {
-        case .possible, .failed:
-            break
-        default:
+        guard !self.isInteractivePopTransitioning else {
             return
         }
         
@@ -242,11 +243,7 @@ extension ConversationViewController {
     ) {
         AssertIsOnMainThread()
         
-        // Don't update the bottom bar position if an interactive pop is in progress
-        switch navigationController?.interactivePopGestureRecognizer?.state {
-        case .possible, .failed:
-            break
-        default:
+        guard !self.isInteractivePopTransitioning else {
             return
         }
         
@@ -497,6 +494,16 @@ extension ConversationViewController {
         self.inputToolbar.clearDesiredKeyboard()
     }
 
+    /// Perform deferred inputToolbar recreation that was skipped while the user was typing.
+    func flushDeferredInputToolbarRecreationIfNeeded() {
+        guard viewState.needsInputToolbarRecreation else { return }
+        viewState.needsInputToolbarRecreation = false
+        Logger.info("[Keyboard] flushDeferredInputToolbarRecreation: performing deferred recreateInputToolbar")
+        saveDraft()
+        recreateInputToolbar()
+        reloadBottomBar()
+    }
+
     /// 强制收起键盘（仅用于页面消失、退群等真正需要强制收起的场景）
     func forceDissmissKeyBoard() {
         Logger.info("[Keyboard] forceDissmissKeyBoard, isFirstResponder=\(inputToolbar.inputTextView.isFirstResponder), textLen=\(inputToolbar.inputTextView.text?.count ?? 0)")
@@ -546,6 +553,7 @@ extension ConversationViewController: InputAccessoryViewPlaceholderDelegate {
             updateBottomBarPosition()
             updateContentInsets(animated: false)
         }
+        flushDeferredInputToolbarRecreationIfNeeded()
     }
 
     public func inputAccessoryPlaceholderKeyboardIsDismissingInteractively() {
@@ -569,6 +577,11 @@ extension ConversationViewController: InputAccessoryViewPlaceholderDelegate {
 
         if let transitionCoordinator = self.transitionCoordinator,
            transitionCoordinator.isInteractive {
+            transitionCoordinator.animate(alongsideTransition: nil) { [weak self] _ in
+                guard let self else { return }
+                self.updateBottomBarPosition()
+                self.updateContentInsets(animated: false)
+            }
             return
         }
 
@@ -608,6 +621,10 @@ extension ConversationViewController: InputAccessoryViewPlaceholderDelegate {
             return
         }
 
+        guard !self.isInteractivePopTransitioning else {
+            return
+        }
+
         // Apply any pending layout changes to ensure we're measuring the up-to-date height.
         self.bottomBar.superview?.layoutIfNeeded()
 
@@ -620,6 +637,14 @@ extension ConversationViewController: InputAccessoryViewPlaceholderDelegate {
         self.inputAccessoryPlaceholder.desiredHeight = newHeight
     }
     
+    func syncBottomBarWithKeyboardState() {
+        AssertIsOnMainThread()
+
+        updateInputAccessoryPlaceholderHeight()
+        updateBottomBarPosition()
+        updateContentInsets(animated: false)
+    }
+
     func fixKeyboardLayoutAfterForeground() {
         AssertIsOnMainThread()
         

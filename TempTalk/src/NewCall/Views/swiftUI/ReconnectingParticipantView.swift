@@ -120,7 +120,7 @@ struct ParticipantVideoView: View {
     @ViewBuilder
     private func userInfoBar() -> some View {
         HStack(spacing: 4) {
-            Image(uiImage: UIImage(named: "call_ic_muted") ?? UIImage())
+            Image(uiImage: UIImage(named: snapshot.isMicMuted ? "call_ic_muted" : "ic_call_unmuted") ?? UIImage())
                 .frame(width: 16, height: 16)
 
             Text(participantName)
@@ -154,7 +154,6 @@ struct ReconnectingParticipantView: View {
                 geometry: geometry,
                 isRendering: $isRendering
             )
-            .environmentObject(liveKitCtx)
         }
     }
 }

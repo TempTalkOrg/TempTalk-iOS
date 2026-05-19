@@ -29,6 +29,8 @@ struct ParticipantView: View {
 
     @State private var isRendering: Bool = false
     @State private var cachedIdentity: String?
+    @State private var cameraUnmuteCounter: Int = 0
+    @State private var previousCameraMuted: Bool? = nil
     
     func recipientId(_ participant: Participant) -> String {
         guard let identity = participant.identity else {
@@ -55,13 +57,11 @@ struct ParticipantView: View {
                     Color(hex:0x181A20)
                 }
                 
-                // VideoView for the Participant
                 if let publication = participant.firstCameraPublication,
-                   !publication.isMuted,
                    let track = publication.track as? VideoTrack,
                    liveKitCtx.videoViewVisible
                 {
-                    ZStack(alignment: .topLeading) {
+                    ZStack {
                         SwiftUIVideoView(
                             track,
                             layoutMode: videoViewMode,
@@ -71,31 +71,21 @@ struct ParticipantView: View {
                             isDebugMode: liveKitCtx.showInformationOverlay,
                             isRendering: $isRendering
                         )
+                        .id(cameraUnmuteCounter)
                         .ignoresSafeArea()
-                        if !isRendering {
+
+                        if !isRendering && !publication.isMuted {
                             ProgressView().progressViewStyle(CircularProgressViewStyle())
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         }
+
+                        // Opaque avatar overlay when muted (renderer stays alive underneath)
+                        if publication.isMuted {
+                            mutedAvatarOverlay(geometry: geometry)
+                        }
                     }
                 } else {
-                    let recipientId = recipientId(participant)
-                    if is1on1 {
-                        let participantName = DTLiveKitCallModel.getDisplayName(recipientId: recipientId)
-                        VStack() {
-                            AvatarImageViewRepresentable(recipientId: recipientId)
-                                .frame(width: 120, height: 120)
-                            
-                            Text(participantName)
-                                .font(.system(size: 17))
-                                .foregroundColor(.white)
-                                .padding(.top, 10)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .position(CGPoint(x: geometry.size.width / 2, y: geometry.size.height/2.5))
-                    } else {
-                        AvatarImageViewRepresentable(recipientId: recipientId)
-                            .padding(EdgeInsets(top: 20, leading: 22, bottom: 24, trailing: 22))
-                    }
+                    noTrackAvatarView(geometry: geometry)
                 }
 
                 if liveKitCtx.showInformationOverlay {
@@ -139,26 +129,11 @@ struct ParticipantView: View {
                                     DTMeetingManager.shared.roomContext?.presentMuteActionSheet(participant)
                                 }
                             } else {
-                                // is remote
-                                if let remotePub = publication as? RemoteTrackPublication {
-                                    if case .subscribed = remotePub.subscriptionState {
-                                        Image(uiImage: UIImage(named: "ic_call_unmuted")!)
-                                            .frame(width: 16, height: 16)
-                                            .onLongPressGesture {
-                                                DTMeetingManager.shared.roomContext?.presentMuteActionSheet(participant)
-                                            }
-                                    } else {
-                                        Image(uiImage: UIImage(named: "call_ic_muted")!)
-                                            .frame(width: 16, height: 16)
+                                Image(uiImage: UIImage(named: "ic_call_unmuted")!)
+                                    .frame(width: 16, height: 16)
+                                    .onLongPressGesture {
+                                        DTMeetingManager.shared.roomContext?.presentMuteActionSheet(participant)
                                     }
-                                } else {
-                                    // local
-                                    Image(uiImage: UIImage(named: "ic_call_unmuted")!)
-                                        .frame(width: 16, height: 16)
-                                        .onLongPressGesture {
-                                            DTMeetingManager.shared.roomContext?.presentMuteActionSheet(participant)
-                                        }
-                                }
                             }
                         } else {
                             Image(uiImage: UIImage(named: "call_ic_muted")!)
@@ -183,19 +158,8 @@ struct ParticipantView: View {
                 }
             }
             .cornerRadius(8)
-            .overlay(
-                // 解决mute后蓝框不及时消失问题
-                !is1on1 ? Group {
-                    if let publication = participant.firstAudioPublication, publication.isMuted {
-                        EmptyView()
-                    } else if participant.isSpeaking {
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.lkBlue, lineWidth: 3)
-                    } else {
-                        EmptyView()
-                    }
-                } : nil
-            ).onAppear {
+            .overlay(speakingBorderOverlay)
+            .onAppear {
                 if cachedIdentity == nil, let id = participant.identity {
                     cachedIdentity = id.stringValue.components(separatedBy: ".").first
                 }
@@ -206,6 +170,65 @@ struct ParticipantView: View {
                 }
                 // 如果变成 nil，什么都不做，保留旧值
             }
+            .onChange(of: participant.firstCameraPublication?.isMuted) { isMuted in
+                defer { previousCameraMuted = isMuted }
+                guard previousCameraMuted == true, isMuted == false else { return }
+                cameraUnmuteCounter += 1
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func mutedAvatarOverlay(geometry: GeometryProxy) -> some View {
+        let recipientId = recipientId(participant)
+        if is1on1 {
+            let participantName = DTLiveKitCallModel.getDisplayName(recipientId: recipientId)
+            Color.dtBackground
+            VStack {
+                AvatarImageViewRepresentable(recipientId: recipientId)
+                    .frame(width: 120, height: 120)
+
+                Text(participantName)
+                    .font(.system(size: 17))
+                    .foregroundColor(.white)
+                    .padding(.top, 10)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .position(CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2.5))
+        } else {
+            Color(hex: 0x181A20)
+            AvatarImageViewRepresentable(recipientId: recipientId)
+                .padding(EdgeInsets(top: 20, leading: 22, bottom: 24, trailing: 22))
+        }
+    }
+
+    @ViewBuilder
+    private func noTrackAvatarView(geometry: GeometryProxy) -> some View {
+        let recipientId = recipientId(participant)
+        if is1on1 {
+            let participantName = DTLiveKitCallModel.getDisplayName(recipientId: recipientId)
+            VStack {
+                AvatarImageViewRepresentable(recipientId: recipientId)
+                    .frame(width: 120, height: 120)
+
+                Text(participantName)
+                    .font(.system(size: 17))
+                    .foregroundColor(.white)
+                    .padding(.top, 10)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .position(CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2.5))
+        } else {
+            AvatarImageViewRepresentable(recipientId: recipientId)
+                .padding(EdgeInsets(top: 20, leading: 22, bottom: 24, trailing: 22))
+        }
+    }
+
+    @ViewBuilder
+    private var speakingBorderOverlay: some View {
+        if !is1on1, let publication = participant.firstAudioPublication, !publication.isMuted, participant.isSpeaking {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.lkBlue, lineWidth: 3)
         }
     }
 }
@@ -220,68 +243,63 @@ struct StatsView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 5) {
-            VStack(alignment: .leading, spacing: 5) {
-                if track is VideoTrack {
-                    HStack(spacing: 3) {
-                        Image(systemSymbol: .videoFill)
-                        Text("Video").fontWeight(.bold)
-                        if let dimensions = observer.dimensions {
-                            Text("\(dimensions.width)×\(dimensions.height)")
-                        }
+        VStack(alignment: .leading, spacing: 5) {
+            if track is VideoTrack {
+                HStack(spacing: 3) {
+                    Image(systemSymbol: .videoFill)
+                    Text("Video").fontWeight(.bold)
+                    if let dimensions = observer.dimensions {
+                        Text("\(dimensions.width)×\(dimensions.height)")
                     }
-                } else if track is AudioTrack {
-                    HStack(spacing: 3) {
-                        Image(systemSymbol: .micFill)
-                        Text("Audio").fontWeight(.bold)
-                    }
-                } else {
-                    Text("Unknown").fontWeight(.bold)
                 }
+            } else if track is AudioTrack {
+                HStack(spacing: 3) {
+                    Image(systemSymbol: .micFill)
+                    Text("Audio").fontWeight(.bold)
+                }
+            } else {
+                Text("Unknown").fontWeight(.bold)
+            }
 
-                // if let trackStats = viewModel.statistics {
-                ForEach(observer.allStatisticts, id: \.self) { trackStats in
-                    ForEach(trackStats.outboundRtpStream.sortedByRidIndex()) { stream in
+            ForEach(observer.allStatisticts, id: \.self) { trackStats in
+                ForEach(trackStats.outboundRtpStream.sortedByRidIndex()) { stream in
+                    HStack(spacing: 3) {
+                        Image(systemSymbol: .arrowUp)
 
-                        HStack(spacing: 3) {
-                            Image(systemSymbol: .arrowUp)
+                        if let codec = trackStats.codec.first(where: { $0.id == stream.codecId }) {
+                            Text(codec.mimeType ?? "?")
+                        }
 
-                            if let codec = trackStats.codec.first(where: { $0.id == stream.codecId }) {
-                                Text(codec.mimeType ?? "?")
-                            }
+                        if let rid = stream.rid, !rid.isEmpty {
+                            Text(rid.uppercased())
+                        }
 
-                            if let rid = stream.rid, !rid.isEmpty {
-                                Text(rid.uppercased())
-                            }
+                        Text(stream.formattedBps())
 
-                            Text(stream.formattedBps())
-
-                            if let reason = stream.qualityLimitationReason, reason != QualityLimitationReason.none {
-                                Image(systemSymbol: .exclamationmarkTriangleFill)
-                                Text(reason.rawValue.capitalized)
-                            }
+                        if let reason = stream.qualityLimitationReason, reason != QualityLimitationReason.none {
+                            Image(systemSymbol: .exclamationmarkTriangleFill)
+                            Text(reason.rawValue.capitalized)
                         }
                     }
-                    ForEach(trackStats.inboundRtpStream) { stream in
+                }
+                ForEach(trackStats.inboundRtpStream) { stream in
+                    HStack(spacing: 3) {
+                        Image(systemSymbol: .arrowDown)
 
-                        HStack(spacing: 3) {
-                            Image(systemSymbol: .arrowDown)
-
-                            if let codec = trackStats.codec.first(where: { $0.id == stream.codecId }) {
-                                Text(codec.mimeType ?? "?")
-                            }
-
-                            Text(stream.formattedBps())
+                        if let codec = trackStats.codec.first(where: { $0.id == stream.codecId }) {
+                            Text(codec.mimeType ?? "?")
                         }
+
+                        Text(stream.formattedBps())
                     }
                 }
             }
-            .font(.system(size: 10))
-            .foregroundColor(Color.white)
-            .padding(5)
-            .background(Color.black.opacity(0.5))
-            .cornerRadius(8)
         }
+        .font(.system(size: 10))
+        .foregroundColor(Color.white)
+        .padding(5)
+        .background(Color.black.opacity(0.5))
+        .cornerRadius(8)
     }
 }
 

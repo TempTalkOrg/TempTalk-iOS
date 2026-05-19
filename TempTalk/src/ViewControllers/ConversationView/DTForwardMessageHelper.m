@@ -302,8 +302,16 @@
                                                     mentions:nil
                                                     inThread:targetThread
                                             quotedReplyModel:nil
-                                               messageSender:Environment.shared.messageSender];
-        if (success) success();
+                                               messageSender:Environment.shared.messageSender
+                                                     success:^{
+            if (success) {
+                success();
+            }
+        } failure:^(NSError *error) {
+            if (failure) {
+                failure(error);
+            }
+        }];
     }
 }
 

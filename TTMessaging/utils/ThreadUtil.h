@@ -101,8 +101,23 @@ NS_ASSUME_NONNULL_BEGIN
                                                quotedReplyModel:(nullable OWSQuotedReplyModel *)quotedReplyModel
                                                   messageSender:(OWSMessageSender *)messageSender;
 
++ (TSOutgoingMessage *)sendMessageWithCombinedForwardingMessage:(DTCombinedForwardingMessage *)forwardingMessage
+                                                      atPersons:(nullable NSString *)atPersons
+                                                       mentions:(nullable NSArray <DTMention *> *)mentions
+                                                       inThread:(TSThread *)thread
+                                               quotedReplyModel:(nullable OWSQuotedReplyModel *)quotedReplyModel
+                                                  messageSender:(OWSMessageSender *)messageSender
+                                                        success:(void (^)(void))successHandler
+                                                        failure:(void (^)(NSError *error))failureHandler;
+
 + (TSOutgoingMessage *)sendRecallMessageWithOriginMessage:(TSOutgoingMessage *)originMessage
                                                  inThread:(TSThread *)thread
+                                                  success:(void (^)(void))successHandler
+                                                  failure:(void (^)(NSError *error))failureHandler;
+
++ (TSOutgoingMessage *)sendRecallMessageWithOriginMessage:(TSOutgoingMessage *)originMessage
+                                                 inThread:(TSThread *)thread
+                                        explicitTimestamp:(uint64_t)explicitTimestamp
                                                   success:(void (^)(void))successHandler
                                                   failure:(void (^)(NSError *error))failureHandler;
 

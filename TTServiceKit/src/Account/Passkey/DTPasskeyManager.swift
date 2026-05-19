@@ -42,6 +42,37 @@ enum DTPasskeysErrorCode: NSInteger {
     case passkeyAuthAcountError = 300015
     case passkeyAuthAcountRegistrationError = 300016
     case unKnowError = 400000
+
+    var isUserCancelled: Bool {
+        return self == .userCancelledError
+    }
+
+    var localizedMessage: String {
+        switch self {
+        case .userCancelledError:
+            return ""
+        case .registerInitializeRequestError, .registerInitializeResponseError:
+            return Localized("PASSKEY_ERROR_REGISTER_INITIALIZE", comment: "")
+        case .registerFinalizeRequestError, .registerFinalizeResponseError:
+            return Localized("PASSKEY_ERROR_REGISTER_FINALIZE", comment: "")
+        case .loginInitializeRequestError, .loginInitializeResponseError:
+            return Localized("PASSKEY_ERROR_LOGIN_INITIALIZE", comment: "")
+        case .loginFinalizeRequestError, .loginFinalizeResponseError:
+            return Localized("PASSKEY_ERROR_LOGIN_FINALIZE", comment: "")
+        case .unSoupportVersionError:
+            return Localized("PASSKEY_ERROR_UNSUPPORTED_VERSION", comment: "")
+        case .unSoupportAuthError:
+            return Localized("PASSKEY_ERROR_UNSUPPORTED_AUTH", comment: "")
+        case .decodeBase64UrlError, .miss_user_id:
+            return Localized("PASSKEY_ERROR_DATA", comment: "")
+        case .passkeyWithunauthorized:
+            return Localized("SELECTED_ERROR_PASSKEY", comment: "")
+        case .passkeyAuthAcountError, .passkeyAuthAcountRegistrationError:
+            return Localized("PASSKEY_ERROR_ACCOUNT", comment: "")
+        case .unKnowError:
+            return Localized("PASSKEY_ERROR_UNKNOWN", comment: "")
+        }
+    }
 }
 
 @objc
@@ -145,41 +176,45 @@ public class DTPasskeyManager: NSObject, ASAuthorizationControllerPresentationCo
         registerForPasskeysApi.registerForPasskeys { entity in
             guard let entity = entity else {
                 let error = NSError(domain: self.domain,
-                                    code: DTPasskeysErrorCode.registerInitializeResponseError.rawValue ,
-                                    userInfo: [NSLocalizedDescriptionKey:"register initialize response error"])
-                if let registerCompletionHandler = self.registerCompletionHandler {
-                    registerCompletionHandler(error)
-                }
+                                    code: DTPasskeysErrorCode.registerInitializeResponseError.rawValue,
+                                    userInfo: [NSLocalizedDescriptionKey: DTPasskeysErrorCode.registerInitializeResponseError.localizedMessage])
+                self.registerCompletionHandler?(error)
                 return
             }
             let creationRequest = entity.data
             guard let publicKey = creationRequest["publicKey"] as? [String : Any ],
                   let challenge_str = publicKey["challenge"] as? String else {
                 let error = NSError(domain: self.domain,
-                                    code: DTPasskeysErrorCode.registerInitializeRequestError.rawValue,
-                                    userInfo: [NSLocalizedDescriptionKey:"register initialize response error"])
-                if let registerCompletionHandler = self.registerCompletionHandler {
-                    registerCompletionHandler(error)
-                }
-                Logger.error("[Passkeys module] authorizationController completionHandler register initialize response error --- publicKey or challenge_str error")
+                                    code: DTPasskeysErrorCode.registerInitializeResponseError.rawValue,
+                                    userInfo: [NSLocalizedDescriptionKey: DTPasskeysErrorCode.registerInitializeResponseError.localizedMessage])
+                self.registerCompletionHandler?(error)
                 return
             }
-            let challenge = challenge_str.decodeBase64Url()!
+            guard let challenge = challenge_str.decodeBase64Url() else {
+                let error = NSError(domain: self.domain,
+                                    code: DTPasskeysErrorCode.decodeBase64UrlError.rawValue,
+                                    userInfo: [NSLocalizedDescriptionKey: DTPasskeysErrorCode.decodeBase64UrlError.localizedMessage])
+                self.registerCompletionHandler?(error)
+                return
+            }
             
             guard let publicKey = creationRequest["publicKey"] as? [String : Any],
                     let user = publicKey["user"] as? [String : Any],
                     let userId = user["id"] as? String else {
                 
                 let error = NSError(domain: self.domain,
-                                    code: DTPasskeysErrorCode.registerInitializeRequestError.rawValue,
-                                    userInfo: [NSLocalizedDescriptionKey:"register initialize response error"])
-                if let registerCompletionHandler = self.registerCompletionHandler {
-                    registerCompletionHandler(error)
-                }
-                Logger.error("[Passkeys module] authorizationController completionHandler register initialize response error.")
+                                    code: DTPasskeysErrorCode.registerInitializeResponseError.rawValue,
+                                    userInfo: [NSLocalizedDescriptionKey: DTPasskeysErrorCode.registerInitializeResponseError.localizedMessage])
+                self.registerCompletionHandler?(error)
                 return
             }
-            let userID = userId.decodeBase64Url()!
+            guard let userID = userId.decodeBase64Url() else {
+                let error = NSError(domain: self.domain,
+                                    code: DTPasskeysErrorCode.decodeBase64UrlError.rawValue,
+                                    userInfo: [NSLocalizedDescriptionKey: DTPasskeysErrorCode.decodeBase64UrlError.localizedMessage])
+                self.registerCompletionHandler?(error)
+                return
+            }
             let registrationRequest = publicKeyCredentialProvider.createCredentialRegistrationRequest(challenge: challenge,
                                                                                                       name: userName,
                                                                                                       userID: userID)
@@ -188,13 +223,10 @@ public class DTPasskeyManager: NSObject, ASAuthorizationControllerPresentationCo
             authController.presentationContextProvider = self
             authController.performRequests()
         } failure: { error, entity in
-            let error = NSError(domain: self.domain,
-                                code: DTPasskeysErrorCode.registerInitializeRequestError.rawValue,
-                                userInfo: [NSLocalizedDescriptionKey:"register initialize request fail"])
-            if let registerCompletionHandler = self.registerCompletionHandler {
-                registerCompletionHandler(error)
-            }
-            Logger.error("[Passkeys module] Error: registerForPasskeysApi register fail")
+            let wrappedError = NSError(domain: self.domain,
+                                       code: DTPasskeysErrorCode.registerInitializeRequestError.rawValue,
+                                       userInfo: [NSLocalizedDescriptionKey: DTPasskeysErrorCode.registerInitializeRequestError.localizedMessage])
+            self.registerCompletionHandler?(wrappedError)
         }
     }
     
@@ -203,12 +235,11 @@ public class DTPasskeyManager: NSObject, ASAuthorizationControllerPresentationCo
             switch authorization.credential {
             case let credentialRegistration as ASAuthorizationPlatformPublicKeyCredentialRegistration:
                 Logger.info("[Passkeys module] A new credential was registered: \(credentialRegistration)")
-                // After the webapp has verified the registration and created the user account, sign the user in with the new account.
-                sendRegistrationResponse(params: credentialRegistration) { [weak self] in
+                sendRegistrationResponse(params: credentialRegistration) { [weak self] error in
                     guard let registerCompletionHandler = self?.registerCompletionHandler else {
                         return
                     }
-                    registerCompletionHandler(nil)
+                    registerCompletionHandler(error)
                 }
             case let credentialAssertion as ASAuthorizationPlatformPublicKeyCredentialAssertion:
                 Logger.info("[Passkeys module] A credential was used to authenticate: \(credentialAssertion)")
@@ -267,13 +298,13 @@ public class DTPasskeyManager: NSObject, ASAuthorizationControllerPresentationCo
                 Logger.error("[Passkeys module] didCompleteWithError User cancelled use passkey --> login")
             } else if (self.passkeysAuthType == .register){
                 let error = NSError(domain: self.domain,
-                                    code: DTPasskeysErrorCode.unSoupportAuthError.rawValue ,
+                                    code: DTPasskeysErrorCode.userCancelledError.rawValue ,
                                     userInfo: [NSLocalizedDescriptionKey:"User cancelled use passkey register"])
                 guard let registerCompletionHandler = self.registerCompletionHandler else {
                     return
                 }
                 registerCompletionHandler(error)
-                Logger.error("[Passkeys module] didCompleteWithError User cancelled use passkey --> register")
+                Logger.info("[Passkeys module] didCompleteWithError User cancelled use passkey --> register")
             } else {
                 Logger.info("[Passkeys module] user cancelled use passkey.")
             }
@@ -318,9 +349,16 @@ public class DTPasskeyManager: NSObject, ASAuthorizationControllerPresentationCo
     // Finalize the user account and credential registration
     // see https://github.com/teamhanko/apple-wwdc21-webauthn-example/blob/master/main.go
     @available(iOS 16.0, *)
-    func sendRegistrationResponse(params: ASAuthorizationPlatformPublicKeyCredentialRegistration, completionHandler: @escaping () -> Void) {
+    func sendRegistrationResponse(params: ASAuthorizationPlatformPublicKeyCredentialRegistration, completionHandler: @escaping (Error?) -> Void) {
+        guard let attestationObject = params.rawAttestationObject else {
+            let error = NSError(domain: self.domain,
+                                code: DTPasskeysErrorCode.registerFinalizeRequestError.rawValue,
+                                userInfo: [NSLocalizedDescriptionKey: DTPasskeysErrorCode.registerFinalizeRequestError.localizedMessage])
+            completionHandler(error)
+            return
+        }
         let response = [
-            "attestationObject": params.rawAttestationObject!.toBase64Url(),
+            "attestationObject": attestationObject.toBase64Url(),
             "clientDataJSON": params.rawClientDataJSON.toBase64Url()
         ]
         let parameters: [String : Any] = [
@@ -330,14 +368,28 @@ public class DTPasskeyManager: NSObject, ASAuthorizationControllerPresentationCo
             "response": response
         ]
         self.registerFinalizeForPasskeysApi.registerFinalizeForPasskeys(parameters) { entity in
-            guard let entity = entity else {return}
+            guard let entity = entity else {
+                let error = NSError(domain: self.domain,
+                                    code: DTPasskeysErrorCode.registerFinalizeResponseError.rawValue,
+                                    userInfo: [NSLocalizedDescriptionKey: DTPasskeysErrorCode.registerFinalizeResponseError.localizedMessage])
+                completionHandler(error)
+                return
+            }
             if(entity.status == 0){
-                completionHandler()
+                completionHandler(nil)
             } else {
-                Logger.error("[Passkeys module] error FinalizeForPasskeysApi ")
+                let error = NSError(domain: self.domain,
+                                    code: DTPasskeysErrorCode.registerFinalizeResponseError.rawValue,
+                                    userInfo: [NSLocalizedDescriptionKey: DTPasskeysErrorCode.registerFinalizeResponseError.localizedMessage])
+                completionHandler(error)
+                Logger.error("[Passkeys module] error FinalizeForPasskeysApi status=\(entity.status)")
             }
         } failure: { error, entity in
-            Logger.error("[Passkeys module] error: \(error.localizedDescription)")
+            let finalError = NSError(domain: self.domain,
+                                     code: DTPasskeysErrorCode.registerFinalizeRequestError.rawValue,
+                                     userInfo: [NSLocalizedDescriptionKey: DTPasskeysErrorCode.registerFinalizeRequestError.localizedMessage])
+            completionHandler(finalError)
+            Logger.error("[Passkeys module] registerFinalize error: \(error.localizedDescription)")
         }
     }
     func getAuthenticationOptions(completionHandler: @escaping (CredentialAssertion) -> Void) {
@@ -398,6 +450,23 @@ public class DTPasskeyManager: NSObject, ASAuthorizationControllerPresentationCo
         self.checkAccountExistsApi.checkAccountExists(email: email, phoneNumber: phoneNumber, sucess: sucess, failure: failure )
     }
     
+    @objc
+    public static func isUserCancelledError(_ error: Error?) -> Bool {
+        guard let nsError = error as? NSError else { return false }
+        return nsError.code == DTPasskeysErrorCode.userCancelledError.rawValue
+    }
+
+    @objc
+    public static func localizedPasskeyErrorMessage(_ error: Error?) -> String {
+        guard let nsError = error as? NSError else {
+            return DTPasskeysErrorCode.unKnowError.localizedMessage
+        }
+        if let errorCode = DTPasskeysErrorCode(rawValue: nsError.code) {
+            return errorCode.localizedMessage
+        }
+        return DTPasskeysErrorCode.unKnowError.localizedMessage
+    }
+
     @objc
     public func isPasskeySupported() -> Bool {
         let context = LAContext()

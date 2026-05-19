@@ -130,7 +130,9 @@ class RoomDataManager: NSObject, ObservableObject {
     }
     
     func updateVideoMuteParticipant(participant: Participant) {
-        self.onPipUpdate?()
+        DispatchQueue.main.async {
+            self.onPipUpdate?()
+        }
     }
     
     // 开启屏幕分享状态
@@ -153,8 +155,10 @@ class RoomDataManager: NSObject, ObservableObject {
     
     // 刷新说话人状态
     func updateSeakingParticipant() {
-        self.onMeetingUpdate?()
-        self.onPipUpdate?()
+        DispatchQueue.main.async {
+            self.onMeetingUpdate?()
+            self.onPipUpdate?()
+        }
     }
     
     func sendRTMBarrageMessage(pid: String, message: String) {
@@ -198,9 +202,11 @@ class RoomDataManager: NSObject, ObservableObject {
         }
     }
     
-    // 倒计时pip刷新
+    // 倒计时pip刷新 — 延迟到下一个 run loop，避免 SwiftUI AttributeGraph 重入崩溃
     func pipCountDownUpdate() {
-        self.onPipUpdate?()
+        DispatchQueue.main.async {
+            self.onPipUpdate?()
+        }
     }
     
     func updateRaiseHands(hands: [String]) {

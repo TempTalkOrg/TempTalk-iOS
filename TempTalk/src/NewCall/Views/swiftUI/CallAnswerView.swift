@@ -33,26 +33,23 @@ struct CallAnswerView: View {
     }
     
     var body: some View {
-        VStack {
-            VStack(spacing: 15) {
-                AvatarImageViewRepresentable(recipientId: currentCall.caller ?? "Yelling")
-                    .frame(width: 120, height: 120)
-                    .clipShape(Circle())
-                Text(displayName())
+        VStack(spacing: 15) {
+            AvatarImageViewRepresentable(recipientId: currentCall.caller ?? "Yelling")
+                .frame(width: 120, height: 120)
+                .clipShape(Circle())
+            Text(displayName())
+                .font(.system(size: 20))
+                .foregroundColor(.white)
+                .padding(.top, 10)
+            if currentCall.callType != .private {
+                Text(roomName())
                     .font(.system(size: 20))
                     .foregroundColor(.white)
-                    .padding(.top, 10)
-                if currentCall.callType != .private {
-                    Text(roomName())
-                        .font(.system(size: 20))
-                        .foregroundColor(.white)
-                }
             }
-            .padding(.top, 230)
-            .frame(maxWidth: .infinity)
-            
-            Spacer()
-            
+        }
+        .padding(.top, 230)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .overlay(
             HStack(spacing: 100) {
                 Button(action: {
                     onDecline()
@@ -66,7 +63,6 @@ struct CallAnswerView: View {
                 }
                 
                 Button(action: {
-                    // 防止重复点击和自动接听冲突
                     guard !isConnecting && !hasAutoAccepted else {
                         Logger.info("\(logTag) button action ignored - isConnecting: \(isConnecting), hasAutoAccepted: \(hasAutoAccepted)")
                         return
@@ -75,7 +71,7 @@ struct CallAnswerView: View {
                     Logger.info("\(logTag) manual answer button tapped")
                     onAnswer()
                 }) {
-                    VStack {
+                    Group {
                         if isConnecting {
                             LoadingAnimationView(rotation: $rotation)
                         } else {
@@ -90,8 +86,9 @@ struct CallAnswerView: View {
                 }
                 .disabled(isConnecting)
             }
-            .padding(.bottom, 90)
-        }
+            .padding(.bottom, 90),
+            alignment: .bottom
+        )
         .background(Color.dtBackground)
         .edgesIgnoringSafeArea(.all)
         .onAppear {

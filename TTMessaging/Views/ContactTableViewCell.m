@@ -25,6 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 @implementation ContactTableViewCell
 
 - (void)setSelectionStatus:(ContactCellSelectionStatus)selectionStatus{
+    _selectionStatus = selectionStatus;
     self.cellView.selectionStatus = selectionStatus;
 }
 
@@ -34,6 +35,13 @@ NS_ASSUME_NONNULL_BEGIN
         [self configure];
     }
     return self;
+}
+
+- (void)setSelected:(BOOL)selected animated:(BOOL)animated {
+    [super setSelected:selected animated:animated];
+    if (self.selectionStatus != ContactCellSelectionStatusNone) {
+        self.selectionStatus = selected ? ContactCellSelectionStatusSelected : ContactCellSelectionStatusUnselected;
+    }
 }
 
 + (NSString *)reuseIdentifier

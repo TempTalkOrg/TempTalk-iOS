@@ -87,7 +87,18 @@ NS_ASSUME_NONNULL_BEGIN
 @synthesize comparableNameLastFirst = _comparableNameLastFirst;
 
 + (NSDictionary *)JSONKeyPathsByPropertyKey {
-    return [NSDictionary mtl_identityPropertyMapWithModel:[self class]];
+    NSMutableDictionary *map = [[NSDictionary mtl_identityPropertyMapWithModel:[self class]] mutableCopy];
+    // 服务端返回密文，先放到临时字段再解密成字典。
+    map[@"remarkAvatarServer"] = @"remarkAvatar";
+    [map removeObjectForKey:@"remarkAvatar"];
+    return map.copy;
+}
+
++ (MTLPropertyStorage)storageBehaviorForPropertyWithKey:(NSString *)propertyKey {
+    if ([propertyKey isEqualToString:@"remarkAvatarServer"]) {
+        return MTLPropertyStorageTransitory;
+    }
+    return [super storageBehaviorForPropertyWithKey:propertyKey];
 }
 
 + (NSValueTransformer *)privateConfigsJSONTransformer {
@@ -134,6 +145,10 @@ NS_ASSUME_NONNULL_BEGIN
         }
         return nil;
     }];
+}
+
++ (NSValueTransformer *)remarkAvatarJSONTransformer {
+    return [self avatarJSONTransformer];
 }
 
 // adapt previous versions privateConfigs are dictionary in database
@@ -488,6 +503,7 @@ NS_ASSUME_NONNULL_BEGIN
     && ([self.superior  isEqualToString: contact.superior] || (!self.superior && !contact.superior))
     && ([self.timeZone  isEqualToString: contact.timeZone] || (!self.timeZone && !contact.timeZone))
     && ([self.avatar    isEqual: contact.avatar] || (!self.avatar && !contact.avatar))
+    && ([self.remarkAvatar isEqual: contact.remarkAvatar] || (!self.remarkAvatar && !contact.remarkAvatar))
     && ([self.signature isEqualToString: contact.signature] || (!self.signature && !contact.signature))
     && ([self.gender    isEqual: contact.gender] || (!self.gender && !contact.gender))
     && ([self.address   isEqualToString: contact.address] || (!self.address && !contact.address))

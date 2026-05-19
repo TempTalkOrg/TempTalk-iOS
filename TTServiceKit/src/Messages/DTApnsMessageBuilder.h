@@ -40,6 +40,7 @@ typedef NS_ENUM(NSInteger, DTApnsMessageType) {
 @class TSOutgoingMessage;
 @class TSThread;
 @class SignalRecipient;
+@class SDSAnyReadTransaction;
 
 @interface DTApnsMessageInfo : MTLModel<MTLJSONSerializing>
 
@@ -61,9 +62,11 @@ typedef NS_ENUM(NSInteger, DTApnsMessageType) {
 
 @property (nonatomic, strong) DTApnsMessageInfo *apnsMessageInfo;
 
+/// @param transaction 调用方已有的读事务;群名解析在此事务内完成,避免 builder 内部再开事务导致重入
 - (instancetype)initWithMessage:(TSOutgoingMessage *)message
                          thread:(TSThread *)thread
-                   forRecipient:(SignalRecipient *)recipient;
+                   forRecipient:(SignalRecipient *)recipient
+                    transaction:(SDSAnyReadTransaction *)transaction;
 
 - (NSDictionary *)build;
 

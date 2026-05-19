@@ -73,12 +73,12 @@ import Foundation
                 await DTMeetingManager.shared.othersideHungupCall(roomId: targetRoomId)
             }
         } else {
-            // State already cleared, but CallKit might still be showing
-            // Since there's only one CallKit, end it using callerMap
+            // State already cleared, but CallKit might still be showing.
+            // Match by roomId to end only the specific call, not an unrelated active call.
             let callKitManager = DTCallKitManager.shared()
             DispatchQueue.main.async {
-                if let firstCaller = (callKitManager.callerMap.allKeys as? [String])?.first {
-                    callKitManager.endCallAction(firstCaller, onlyForCallKit: true)
+                if let uuidString = callKitManager.uuidString(fromRoomId: targetRoomId) {
+                    callKitManager.endCallAction(uuidString, onlyForCallKit: true)
                 }
             }
         }

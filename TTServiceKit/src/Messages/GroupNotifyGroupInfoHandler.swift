@@ -186,11 +186,22 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
                                               newGroupThread: newGroupThread,
                                               timeStamp: timeStamp,
                                               transaction: transaction)
-            
+
+        } else if groupNotifyEntity.groupNotifyDetailedType == .upgradeGroupCrypto {
+
+            handleUpgradeGroupCrypto(envelope: envelope,
+                                     groupNotifyEntity: groupNotifyEntity,
+                                     display: display,
+                                     oldGroupModel: oldGroupModel,
+                                     newGroupModel: newGroupModel,
+                                     newGroupThread: newGroupThread,
+                                     timeStamp: timeStamp,
+                                     transaction: transaction)
+
         } else {
-            
+
             Logger.info("unsupported type")
-            
+
         }
         
     }
@@ -539,7 +550,8 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
             // 更新群消息 - notify expire change
             DataUpdateUtil.shared.updateConversation(thread: gthread,
                                                      expireTime: groupNotifyEntity.group?.messageExpiry,
-                                                     messageClearAnchor: NSNumber(value: groupNotifyEntity.group?.messageClearAnchor ?? 0))
+                                                     messageClearAnchor: NSNumber(value: groupNotifyEntity.group?.messageClearAnchor ?? 0),
+                                                     transaction: transaction)
         }
 
         // 只要归档时间发生变化，就触发归档检查
@@ -562,33 +574,62 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
                            transaction: SDSAnyWriteTransaction) {
         let gid = groupNotifyEntity.gid
         guard !gid.isEmpty,
-              let avatar = groupNotifyEntity.group?.avatar, !avatar.isEmpty,
               let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid), !groupId.isEmpty else {
             return
         }
-        
+
+        let group = groupNotifyEntity.group
+        let cryptoMode = group?.groupCryptoMode ?? 0
+        let isEncrypted = DTGroupCryptoDisplayHelper.shared.isEncryptedGroup(cryptoMode)
+
+        DTGroupBaseInfoEntity.syncFields(gid: gid,
+                                         plainAvatar: group?.avatar,
+                                         encryptedAvatar: group?.encryptedAvatar,
+                                         transaction: transaction)
+
+        guard let avatar = DTGroupCryptoDisplayHelper.shared.prepareAvatarUpdate(
+            plainAvatar: group?.avatar,
+            encryptedAvatar: group?.encryptedAvatar,
+            groupCryptoMode: cryptoMode,
+            gid: gid,
+            transaction: transaction
+        ) else {
+            return
+        }
+
+        let isPlainFallback = isEncrypted && !DTGroupCryptoDisplayHelper.shared.hasGroupKey(gid: gid, transaction: transaction)
+        let capturedEncryptedAvatar = group?.encryptedAvatar ?? ""
+
+        Logger.info("[GroupAvatar] GroupInfo avatar download starting, gid: \(gid), version: \(newGroupModel.version), plainFallback: \(isPlainFallback)")
         self.groupAvatarUpdateProcessor.groupThread = newGroupThread
         self.groupAvatarUpdateProcessor.handleReceivedGroupAvatarUpdate(withAvatarUpdate: avatar) { attachmentStream in
             let serialQueue = DTGroupUpdateMessageProcessor.self.serialQueue()
             serialQueue.async {
                 guard let image = attachmentStream.image() else {
-                    Logger.error("update avatar data empty")
+                    Logger.error("[GroupAvatar] GroupInfo: attachmentStream.image() nil, gid: \(gid)")
                     return
                 }
-                
+
                 // Perform database write transaction
                 NSObject.databaseStorage.asyncWrite { writeTransaction in
                     let groupThread = TSGroupThread.getOrCreateThread(withGroupId: groupId, transaction: writeTransaction)
-                    
+
                     // Ensure the new version is not older than the existing one
-                    guard newGroupModel.version >= groupThread.groupModel.version else { return }
-                    
+                    guard newGroupModel.version >= groupThread.groupModel.version else {
+                        Logger.info("[GroupAvatar] GroupInfo skip: older version \(newGroupModel.version) < local \(groupThread.groupModel.version), gid: \(gid)")
+                        return
+                    }
+
                     groupThread.anyUpdateGroupThread(transaction: writeTransaction) { g_thread in
                         g_thread.groupModel.groupImage = image
                         g_thread.groupModel.version = newGroupModel.version
                     }
-                    
+
                     groupThread.fireAvatarChangedNotification()
+                    Logger.info("[GroupAvatar] GroupInfo avatar download success, gid: \(gid), version: \(newGroupModel.version)")
+                    if !isPlainFallback {
+                        DTGroupCryptoDisplayHelper.shared.markAvatarDownloaded(gid: gid, encryptedAvatar: capturedEncryptedAvatar)
+                    }
                     
                     let updatedGroupInfoString = Localized("GROUP_AVATAR_CHANGED")
                     
@@ -607,7 +648,7 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
                 }
             }
         } failure: { error in
-            Logger.info("update avatar data error \(error.localizedDescription)")
+            Logger.error("[GroupAvatar] GroupInfo avatar download failed, gid: \(gid), error: \(error)")
         }
     }
 
@@ -623,19 +664,37 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
         
         let gid = groupNotifyEntity.gid
         guard !gid.isEmpty,
-              let name = groupNotifyEntity.group?.name, !name.isEmpty,
+              let rawName = groupNotifyEntity.group?.name, !rawName.isEmpty,
               let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid), !groupId.isEmpty else {
             return
         }
         
+        var resolvedName = rawName
+        let group = groupNotifyEntity.group
+        if let group, group.groupCryptoMode > 0,
+           let encryptedName = group.encryptedName, !encryptedName.isEmpty,
+           let decrypted = DTGroupCryptoManager.shared.decryptedGroupName(
+               gid: gid,
+               encryptedName: encryptedName,
+               transaction: transaction),
+           !decrypted.isEmpty {
+            resolvedName = decrypted
+            Logger.info("[GroupCrypto] Decrypted group name for gid: \(gid)")
+        }
+
+        DTGroupBaseInfoEntity.syncFields(gid: gid,
+                                         name: resolvedName,
+                                         encryptedName: group?.encryptedName,
+                                         transaction: transaction)
+
         // 更新 groupName 和 groupThread
-        newGroupModel.groupName = name
+        newGroupModel.groupName = resolvedName
         newGroupThread.anyUpdateGroupThread(transaction: transaction) { gthread in
             gthread.groupModel = newGroupModel
         }
         
         // 如果旧的 groupName 和新的不一样，则构造变更信息
-        guard oldGroupModel.groupName != name else {
+        guard oldGroupModel.groupName != resolvedName else {
             Logger.error("oldGroupModel.groupName == newGroupModel.groupName")
             return
         }
@@ -645,12 +704,12 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
         if !source.isEmpty {
             let displayName = TextSecureKitEnv.shared().contactsManager.displayName(forPhoneIdentifier: source)
             if !displayName.isEmpty {
-                updatedGroupInfoString = String(format: Localized("GROUP_NAME_CHANGED_SYSTEM_MSG"), displayName, name)
+                updatedGroupInfoString = String(format: Localized("GROUP_NAME_CHANGED_SYSTEM_MSG"), displayName, resolvedName)
             } else {
-                updatedGroupInfoString = String(format: Localized("GROUP_TITLE_CHANGED"), name)
+                updatedGroupInfoString = String(format: Localized("GROUP_TITLE_CHANGED"), resolvedName)
             }
         } else {
-            updatedGroupInfoString = String(format: Localized("GROUP_TITLE_CHANGED"), name)
+            updatedGroupInfoString = String(format: Localized("GROUP_TITLE_CHANGED"), resolvedName)
         }
         
         // 创建 infoMessage 并插入到数据库
@@ -661,6 +720,76 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
         
         infoMessage.isShouldAffectThreadSorting = false
         infoMessage.anyInsert(transaction: transaction)
+    }
+
+    // MARK: - Upgrade Group Crypto
+
+    private func handleUpgradeGroupCrypto(envelope: DSKProtoEnvelope,
+                                          groupNotifyEntity: DTGroupNotifyEntity,
+                                          display: Bool,
+                                          oldGroupModel: TSGroupModel,
+                                          newGroupModel: TSGroupModel,
+                                          newGroupThread: TSGroupThread,
+                                          timeStamp: UInt64,
+                                          transaction: SDSAnyWriteTransaction) {
+        guard let groupBaseInfo = groupNotifyEntity.group else {
+            Logger.info("[GroupCrypto] upgradeGroupCrypto: group base info is nil")
+            return
+        }
+
+        let cryptoMode = groupBaseInfo.groupCryptoMode
+        guard cryptoMode > 0 else {
+            Logger.info("[GroupCrypto] upgradeGroupCrypto: groupCryptoMode is 0, ignoring")
+            return
+        }
+
+        newGroupModel.groupCryptoMode = cryptoMode
+
+        let gid = groupNotifyEntity.gid
+        Logger.info("[GroupCrypto] Upgrade notify received: gid: \(gid), cryptoMode: \(cryptoMode), hasEncryptedName: \(groupBaseInfo.encryptedName?.isEmpty == false), hasEncryptedAvatar: \(groupBaseInfo.encryptedAvatar?.isEmpty == false)")
+
+        if let baseInfoEntity = DTGroupBaseInfoEntity.anyFetch(uniqueId: gid, transaction: transaction) {
+            baseInfoEntity.anyUpdate(transaction: transaction) { entity in
+                entity.groupCryptoMode = cryptoMode
+                entity.encryptedName = groupBaseInfo.encryptedName
+                entity.encryptedAvatar = groupBaseInfo.encryptedAvatar
+            }
+            Logger.info("[GroupCrypto] Updated existing baseInfo for upgrade notification, gid: \(gid)")
+        } else {
+            let newBaseInfo = DTGroupBaseInfoEntity()
+            newBaseInfo.gid = gid
+            newBaseInfo.name = newGroupModel.groupName ?? ""
+            newBaseInfo.avatar = groupBaseInfo.avatar
+            newBaseInfo.groupCryptoMode = cryptoMode
+            newBaseInfo.encryptedName = groupBaseInfo.encryptedName
+            newBaseInfo.encryptedAvatar = groupBaseInfo.encryptedAvatar
+            newBaseInfo.anyInsert(transaction: transaction)
+            Logger.info("[GroupCrypto] Created new baseInfo for upgrade notification, gid: \(gid)")
+        }
+
+        let wasAlreadyEncrypted = oldGroupModel.groupCryptoMode > 0
+
+        newGroupThread.anyUpdateGroupThread(transaction: transaction) { gthread in
+            gthread.groupModel = newGroupModel
+        }
+
+        guard display else { return }
+
+        if wasAlreadyEncrypted {
+            Logger.info("[GroupCrypto] Upgrade notify for already-encrypted group, skip system message, gid: \(gid)")
+            return
+        }
+
+        let customMessage = Localized("GROUP_CRYPTO_UPGRADE_SYSTEM_MSG")
+
+        let infoMessage = TSInfoMessage(timestamp: timeStamp,
+                                        in: newGroupThread,
+                                        messageType: .groupCryptoUpgrade,
+                                        customMessage: customMessage)
+        infoMessage.isShouldAffectThreadSorting = true
+        infoMessage.anyInsert(transaction: transaction)
+
+        Logger.info("[GroupCrypto] Inserted upgrade system message for gid: \(gid)")
     }
 
 }

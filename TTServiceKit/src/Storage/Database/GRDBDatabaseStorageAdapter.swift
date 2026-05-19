@@ -628,6 +628,14 @@ extension GRDBDatabaseStorageAdapter: SDSDatabaseStorageAdapter {
         }
     }
 
+    public func reentrantRead(block: (GRDBReadTransaction) -> Void) throws {
+        try pool.unsafeReentrantRead { database in
+            autoreleasepool {
+                block(GRDBReadTransaction(database: database))
+            }
+        }
+    }
+
     @objc
     public func write(block: (GRDBWriteTransaction) -> Void) throws {
 

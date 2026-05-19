@@ -31,7 +31,6 @@
 #import <TTServiceKit/DTGroupUtils.h>
 #import <TTServiceKit/DTGroupAvatarUpdateProcessor.h>
 #import <TTServiceKit/DTParamsBaseUtils.h>
-#import "DTImageBrowserView.h"
 
 
 NS_ASSUME_NONNULL_BEGIN
@@ -51,7 +50,7 @@ extern  CGFloat const kAvatarSize;
 @property (nonatomic, readonly) AvatarViewHelper *avatarViewHelper;
 
 @property (nonatomic, readonly) OWSTableViewController *tableViewController;
-//@property (nonatomic, readonly) DTAvatarImageView *avatarView;
+@property (nonatomic, readonly) DTAvatarImageView *avatarView;
 @property (nonatomic, readonly) UITextField *groupNameTextField;
 
 @property (nonatomic, nullable) UIImage *groupAvatar;
@@ -64,7 +63,6 @@ extern  CGFloat const kAvatarSize;
 @property (nonatomic, strong) DTUpdateGroupInfoAPI *updateGroupInfoAPI;
 @property (nonatomic, strong) DTAddMembersToAGroupAPI *addMembersToAGroupAPI;
 @property (nonatomic, strong) DTGroupAvatarUpdateProcessor *groupAvatarUpdateProcessor;
-@property (nonatomic, strong)  DTImageBrowserView *photoBrowser;
 @property (nonatomic, strong) FullTextSearchFinder *finder;
 
 @end
@@ -197,30 +195,9 @@ extern  CGFloat const kAvatarSize;
         case UpdateGroupMode_EditGroupName:
             [self.groupNameTextField becomeFirstResponder];
             break;
-        case UpdateGroupMode_EditGroupAvatar:{
-            
-//            [self showChangeAvatarUI];
-//            if (self.mode == UpdateGroupMode_EditGroupAvatar) {
-//                [self showAvatarBrowserViewAnimate:true];
-//            }
-        }
-            break;
         default:
             break;
     }
-}
-
-- (void)showAvatarBrowserViewAnimate:(BOOL)animate {
-//        NSMutableArray *items = [NSMutableArray new];
-//        DTImageViewModel *item = [DTImageViewModel new];
-//        item.thumbView = self.avatarView;
-//        item.largeImageSize = CGSizeMake(180, 180);
-//        item.receptid = [self.thread serverThreadId];
-//        item.thread = self.thread;
-//        item.image = self.groupAvatar;
-//        [items addObject:item];
-//        self.photoBrowser = [[DTImageBrowserView alloc] initWithGroupItems:items];
-//        [self.photoBrowser presentFromImageView:self.avatarView toContainer:self.view.window animated:animate completion:nil];
 }
 
 - (void)viewDidLoad {
@@ -246,27 +223,41 @@ extern  CGFloat const kAvatarSize;
     [threadInfoView autoPinWidthToSuperviewWithMargin:16.f];
     [threadInfoView autoPinHeightToSuperviewWithMargin:16.f];
 
-//    DTAvatarImageView *avatarView = [DTAvatarImageView new];
-//    _avatarView = avatarView;
+    BOOL isEncryptedGroup = self.thread.groupModel.isEncryptedGroup;
+    DTAvatarImageView *avatarView = nil;
+    if (isEncryptedGroup) {
+        avatarView = [DTAvatarImageView new];
+        _avatarView = avatarView;
 
-//    [threadInfoView addSubview:avatarView];
-//    [avatarView autoVCenterInSuperview];
-//    [avatarView autoPinLeadingToSuperviewMargin];
-//    [avatarView autoSetDimension:ALDimensionWidth toSize:kAvatarSize];
-//    [avatarView autoSetDimension:ALDimensionHeight toSize:kAvatarSize];
-//    _groupAvatar = self.thread.groupModel.groupImage;
-//    [self updateAvatarView];
+        [threadInfoView addSubview:avatarView];
+        [avatarView autoVCenterInSuperview];
+        [avatarView autoPinLeadingToSuperviewMargin];
+        [avatarView autoSetDimension:ALDimensionWidth toSize:kAvatarSize];
+        [avatarView autoSetDimension:ALDimensionHeight toSize:kAvatarSize];
+        _groupAvatar = self.thread.groupModel.groupImage;
+        [self updateAvatarView];
+    }
 
-    TTPaddedTextField *groupNameTextField = [[TTPaddedTextField alloc] init];
+    UITextField *groupNameTextField = [UITextField new];
     _groupNameTextField = groupNameTextField;
-    self.groupNameTextField.text = [self.thread.groupModel.groupName ows_stripped];
+    NSString *displayName = self.thread.groupModel.groupName;
+    if (isEncryptedGroup) {
+        __block NSString *decryptedName = nil;
+        [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+            decryptedName = [DTGroupCryptoDisplayHelper.shared
+                displayGroupNameWithGid:self.thread.serverThreadId
+                        groupCryptoMode:self.thread.groupModel.groupCryptoMode
+                          encryptedName:nil
+                           originalName:self.thread.groupModel.groupName
+                            transaction:transaction];
+        }];
+        if (decryptedName.length > 0) {
+            displayName = decryptedName;
+        }
+    }
+    self.groupNameTextField.text = [displayName ows_stripped];
     groupNameTextField.textColor = Theme.tprimaryColor;
     groupNameTextField.font = [UIFont ows_dynamicTypeTitle2Font];
-    groupNameTextField.borderStyle = UITextBorderStyleNone;
-    groupNameTextField.layer.borderWidth = 1.0;
-    groupNameTextField.layer.borderColor = (Theme.isDarkThemeEnabled ? [UIColor colorWithRgbHex:0x474D57].CGColor : [UIColor colorWithRgbHex:0xEAECEF].CGColor);
-    groupNameTextField.layer.cornerRadius = 4.0;
-    [groupNameTextField setTextPaddingWithTop:12 left:16 bottom:12 right:16];
     groupNameTextField.placeholder
         = Localized(@"NEW_GROUP_NAMEGROUP_REQUEST_DEFAULT", @"Placeholder text for group name field");
     groupNameTextField.delegate = self;
@@ -276,13 +267,13 @@ extern  CGFloat const kAvatarSize;
     [threadInfoView addSubview:groupNameTextField];
     [groupNameTextField autoVCenterInSuperview];
     [groupNameTextField autoPinTrailingToSuperviewMargin];
-    [groupNameTextField autoPinLeadingToSuperviewMargin];
-
-//    if(self.mode == UpdateGroupMode_EditGroupAvatar){
-//        [avatarView addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(avatarTouched:)]];
-//        avatarView.userInteractionEnabled = YES;
-//        groupNameTextField.userInteractionEnabled = NO;
-//    }
+    if (avatarView) {
+        [groupNameTextField autoPinLeadingToTrailingEdgeOfView:avatarView offset:16.f];
+        [avatarView addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(avatarTouched:)]];
+        avatarView.userInteractionEnabled = YES;
+    } else {
+        [groupNameTextField autoPinLeadingToSuperviewMargin];
+    }
 
     return firstSectionHeader;
 }
@@ -295,19 +286,13 @@ extern  CGFloat const kAvatarSize;
     }
 }
 
-//- (void)avatarTouched:(UIGestureRecognizer *)sender
-//{
-//    if (sender.state == UIGestureRecognizerStateRecognized) {
-//        self.mode = UpdateGroupMode_EditGroupAvatar;
-//        [self.groupNameTextField endEditing:YES];
-//        NSString *localNumber = self.contactsViewHelper.localNumber;
-//        if([self.thread.groupModel.groupOwner isEqualToString:localNumber] ||
-//           [self.thread.groupModel.groupAdmin containsObject:localNumber]){
-//            [self showAvatarBrowserViewAnimate:true];
-//            [self showChangeAvatarUI];
-//        }
-//    }
-//}
+- (void)avatarTouched:(UIGestureRecognizer *)sender
+{
+    if (sender.state == UIGestureRecognizerStateRecognized) {
+        [self.groupNameTextField endEditing:YES];
+        [self showChangeAvatarUI];
+    }
+}
 
 #pragma mark - Table Contents
 
@@ -539,8 +524,27 @@ extern  CGFloat const kAvatarSize;
             }
 
             [SVProgressHUD show];
+
+            // Encrypted group: encrypt group name
+            NSDictionary *updateInfo;
+            if (groupModel.isEncryptedGroup) {
+                DTGroupCryptoManager *cryptoManager = DTGroupCryptoManager.shared;
+                __block NSString *encryptedName = nil;
+                [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                    encryptedName = [cryptoManager encryptGroupNameWithGid:serverGId plainName:newGroupName transaction:transaction];
+                }];
+                if (!encryptedName) {
+                    [SVProgressHUD dismiss];
+                    [DTToastHelper toastWithText:Localized(@"GROUP_CRYPTO_NO_KEY_TOAST", @"") inView:self.view durationTime:3 afterDelay:0.2];
+                    return;
+                }
+                updateInfo = @{@"encryptedName": encryptedName};
+            } else {
+                updateInfo = @{@"name": newGroupName};
+            }
+
             [self.updateGroupInfoAPI sendUpdateGroupWithGroupId:serverGId
-                                                     updateInfo:@{@"name" : newGroupName}
+                                                     updateInfo:updateInfo
                                                         success:^(DTAPIMetaEntity * _Nonnull entity) {
                 [SVProgressHUD dismiss];
                 TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:groupModel];
@@ -631,69 +635,92 @@ extern  CGFloat const kAvatarSize;
                 }
             }];
         }
-    } else if (self.mode == UpdateGroupMode_EditGroupAvatar) {
-        
-        if (!groupModel.isSelfGroupOwner &&
-           !groupModel.isSelfGroupModerator) {
-            [DTToastHelper showWithInfo:@"No permission, please contact the group moderators"];
-            return;
-        }
-        
-        [SVProgressHUD show];
-        
-        NSData *data = UIImagePNGRepresentation(self.groupAvatar);
-        id <DataSource> _Nullable dataSource = [DataSourceValue dataSourceWithData:data fileExtension:@"png"];
-        [self.groupAvatarUpdateProcessor updateWithAttachment:dataSource
-                                                  contentType:OWSMimeTypeImagePng
-                                               sourceFilename:nil
-                                                      success:^(DTAPIMetaEntity * _Nonnull entity) {
-            [SVProgressHUD dismiss];
-            TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:groupModel];
-            newGroupModel.groupImage = self.groupAvatar;
-            NSString *updateGroupInfo = [DTGroupUtils getBaseInfoStringWithOldGroupModel:self.thread.groupModel
-                                                                                newModel:newGroupModel
-                                                                                  source:self.contactsViewHelper.localNumber
-                                                               shouldAffectThreadSorting:&tmpShouldAffectSorting];
-            nextBlock(newGroupModel, updateGroupInfo, NO);
-            [self.thread fireAvatarChangedNotification];
-            
-        } failure:^(NSError * _Nonnull error) {
-            [SVProgressHUD dismiss];
-            if(DTParamsUtils.validateString(error.localizedDescription)){
-                [SVProgressHUD showErrorWithStatus:error.localizedDescription];
-            }
-        }];
     }
-    
+
 }
 
 #pragma mark - Group Avatar
 
-//- (void)showChangeAvatarUI
-//{
-//    [self.groupNameTextField resignFirstResponder];
-//
-//    [self.avatarViewHelper showChangeAvatarUI];
-//}
-//
-//- (void)setGroupAvatar:(nullable UIImage *)groupAvatar
-//{
-//    OWSAssertIsOnMainThread();
-//
-//    _groupAvatar = groupAvatar;
-//
-//    self.hasUnsavedChanges = YES;
-//
-//    [self updateAvatarView];
-//    if (self.mode == UpdateGroupMode_EditGroupAvatar){
-//        [self.photoBrowser updateCurrentImage:groupAvatar];
-//    }
-//}
-//
-//- (void)updateAvatarView
-//{
-//    self.avatarView.image = (self.groupAvatar ?: [UIImage imageNamed:@"empty-group-avatar"]);
-//}
+- (void)showChangeAvatarUI
+{
+    [self.groupNameTextField resignFirstResponder];
+    [self.avatarViewHelper showChangeAvatarUI];
+}
+
+- (void)setGroupAvatar:(nullable UIImage *)groupAvatar
+{
+    OWSAssertIsOnMainThread();
+
+    _groupAvatar = groupAvatar;
+
+    [self updateAvatarView];
+}
+
+- (void)autoUploadGroupAvatar:(UIImage *)newAvatar
+{
+    OWSAssertIsOnMainThread();
+    OWSAssertDebug(newAvatar);
+
+    TSGroupModel *groupModel = self.thread.groupModel;
+    if (!groupModel.isSelfGroupOwner &&
+        !groupModel.isSelfGroupModerator &&
+        !groupModel.anyoneChangeName) {
+        [DTToastHelper showWithInfo:@"No permission, please contact the group moderators"];
+        return;
+    }
+
+    UIImage *oldAvatar = self.groupAvatar;
+    self.groupAvatar = newAvatar;
+
+    [SVProgressHUD show];
+    NSData *data = UIImagePNGRepresentation(newAvatar);
+    id <DataSource> _Nullable dataSource = [DataSourceValue dataSourceWithData:data fileExtension:@"png"];
+
+    @weakify(self);
+    [self.groupAvatarUpdateProcessor updateWithAttachment:dataSource
+                                              contentType:OWSMimeTypeImagePng
+                                           sourceFilename:nil
+                                                  success:^(DTAPIMetaEntity * _Nonnull entity) {
+        @strongify(self);
+        if (!self) { return; }
+        [SVProgressHUD dismiss];
+
+        TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:self.thread.groupModel];
+        newGroupModel.groupImage = newAvatar;
+        BOOL shouldAffectSorting = NO;
+        NSString *updateGroupInfo = [DTGroupUtils getBaseInfoStringWithOldGroupModel:self.thread.groupModel
+                                                                            newModel:newGroupModel
+                                                                              source:self.contactsViewHelper.localNumber
+                                                           shouldAffectThreadSorting:&shouldAffectSorting];
+        uint64_t now = [NSDate ows_millisecondTimeStamp];
+        DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
+            [self.thread anyUpdateGroupThreadWithTransaction:writeTransaction
+                                                       block:^(TSGroupThread *instance) {
+                instance.groupModel = newGroupModel;
+            }];
+            TSInfoMessage *systemMsg = [[TSInfoMessage alloc] initWithTimestamp:now
+                                                                       inThread:self.thread
+                                                                    messageType:TSInfoMessageTypeGroupUpdate
+                                                                  customMessage:updateGroupInfo];
+            systemMsg.shouldAffectThreadSorting = shouldAffectSorting;
+            [systemMsg anyInsertWithTransaction:writeTransaction];
+        });
+        [self.thread fireAvatarChangedNotification];
+    } failure:^(NSError * _Nonnull error) {
+        @strongify(self);
+        if (!self) { return; }
+        [SVProgressHUD dismiss];
+        self.groupAvatar = oldAvatar;
+        if (DTParamsUtils.validateString(error.localizedDescription)) {
+            [SVProgressHUD showErrorWithStatus:error.localizedDescription];
+        }
+    }];
+}
+
+- (void)updateAvatarView
+{
+    self.avatarView.image = (self.groupAvatar ?: [UIImage imageNamed:@"empty-group-avatar"]);
+}
 
 #pragma mark - Event Handling
 
@@ -786,7 +813,7 @@ extern  CGFloat const kAvatarSize;
     OWSAssertIsOnMainThread();
     OWSAssertDebug(image);
 
-    self.groupAvatar = image;
+    [self autoUploadGroupAvatar:image];
 }
 
 - (UIViewController *)fromViewController

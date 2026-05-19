@@ -34,11 +34,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// 机密消息模式阈值：群成员数量达到此值时，禁用机密消息功能
 @property (nonatomic, assign) NSUInteger confidentialModeThreshold;
 
+/// 群信息加密功能开关（服务端下发，默认 NO）
+@property (nonatomic, assign) BOOL encryptionEnabled;
+
 @end
+
+@class SDSAnyReadTransaction;
 
 @interface DTGroupConfig : NSObject
 
 + (DTGroupConfigEntity *)fetchGroupConfig;
++ (DTGroupConfigEntity *)fetchGroupConfigWithTransaction:(SDSAnyReadTransaction *)transaction;
 
 @end
 

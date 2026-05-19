@@ -197,10 +197,11 @@ extern NSString *const TSInboxGroup;
                                     
                                     [[DataUpdateUtil shared] updateConversationWithThread:instance
                                                                                expireTime:entity.messageExpiry
-                                                                       messageClearAnchor:@(entity.messageClearAnchor)];
+                                                                       messageClearAnchor:@(entity.messageClearAnchor)
+                                                                              transaction:writeTransaction];
                                 }];
                             }
-                            
+
                             if (entity.askedVersion > 0) {
                                 [TSContactThread updateWithRecipientId:thread.contactIdentifier
                                                   friendContactVersion:entity.askedVersion
@@ -259,10 +260,11 @@ extern NSString *const TSInboxGroup;
                             
                             [[DataUpdateUtil shared] updateConversationWithThread:instance
                                                                        expireTime:entity.messageExpiry
-                                                               messageClearAnchor:@(entity.messageClearAnchor)];
+                                                               messageClearAnchor:@(entity.messageClearAnchor)
+                                                                      transaction:writeTransaction];
                         }];
                     }
-                    
+
                     if (entity.askedVersion > 0) {
                         [TSContactThread updateWithRecipientId:thread.contactIdentifier
                                           friendContactVersion:entity.askedVersion
@@ -340,7 +342,8 @@ extern NSString *const TSInboxGroup;
                                     // 拉取所有会话的设置 大于分页
                                     [[DataUpdateUtil shared] updateConversationWithThread:instance
                                                                                expireTime:entity.messageExpiry
-                                                                       messageClearAnchor:@(entity.messageClearAnchor)];
+                                                                       messageClearAnchor:@(entity.messageClearAnchor)
+                                                                              transaction:writeTransaction];
                                 }];
                             }
                             
@@ -349,20 +352,11 @@ extern NSString *const TSInboxGroup;
                             }
                             
                             if([thread isKindOfClass:[TSContactThread class]]){
-                                TSContactThread *contactThread = (TSContactThread *)thread;
-                                SignalAccount *account = [SignalAccount anyFetchWithUniqueId:contactThread.contactIdentifier transaction:writeTransaction];
-                                if(!account){ OWSLogInfo(@"requestMuteStatus account = nil");}
-                                Contact *contact = account.contact;
-                                if(!DTParamsUtils.validateString(entity.remark)){return;}
-                                NSString *remark = [[DTConversationSettingHelper sharedInstance] decryptRemarkString:contact.remark receptid:contactThread.contactIdentifier];
-                                if(![contact.remark isEqualToString:remark]){
-                                    contact.remark = remark;
-                                    account.contact = contact;
-                                    id<ContactsManagerProtocol> contactsManager = [TextSecureKitEnv sharedEnv].contactsManager;
-                                    [contactsManager updateSignalAccountWithRecipientId:account.recipientId withNewSignalAccount:account withTransaction:writeTransaction];
-                                }
+                                [self applyRemarkFieldsFromEntity:entity
+                                                            thread:(TSContactThread *)thread
+                                                       transaction:writeTransaction];
                             }
-                            
+
                             loopBatchIndex += 1;
                         }];
                     });
@@ -397,7 +391,8 @@ extern NSString *const TSInboxGroup;
                             // 拉取所有会话的设置 小于分页
                             [[DataUpdateUtil shared] updateConversationWithThread:instance
                                                                        expireTime:entity.messageExpiry
-                                                               messageClearAnchor:@(entity.messageClearAnchor)];
+                                                               messageClearAnchor:@(entity.messageClearAnchor)
+                                                                      transaction:writeTransaction];
                             
                         }];
                     }
@@ -407,20 +402,11 @@ extern NSString *const TSInboxGroup;
                     }
                     
                     if([thread isKindOfClass:[TSContactThread class]]){
-                        TSContactThread *contactThread = (TSContactThread *)thread;
-                        SignalAccount *account = [SignalAccount anyFetchWithUniqueId:contactThread.contactIdentifier transaction:writeTransaction];
-                        if(!account){ OWSLogInfo(@"requestMuteStatus account = nil");}
-                        Contact *contact = account.contact;
-                        if(!DTParamsUtils.validateString(entity.remark)){return;}
-                        NSString *remark = [[DTConversationSettingHelper sharedInstance] decryptRemarkString:contact.remark receptid:contactThread.contactIdentifier];
-                        if(![contact.remark isEqualToString:remark]){
-                            contact.remark = remark;
-                            account.contact = contact;
-                            id<ContactsManagerProtocol> contactsManager = [TextSecureKitEnv sharedEnv].contactsManager;
-                            [contactsManager updateSignalAccountWithRecipientId:account.recipientId withNewSignalAccount:account withTransaction:writeTransaction];
-                        }
+                        [self applyRemarkFieldsFromEntity:entity
+                                                    thread:(TSContactThread *)thread
+                                               transaction:writeTransaction];
                     }
-                    
+
                 }];
                 
                 [writeTransaction addAsyncCompletionOnMain:^{
@@ -456,8 +442,9 @@ extern NSString *const TSInboxGroup;
                 
                 [[DataUpdateUtil shared] updateConversationWithThread:instance
                                                            expireTime:conversationEntity.messageExpiry
-                                                   messageClearAnchor:@(conversationEntity.messageClearAnchor)];
-                
+                                                   messageClearAnchor:@(conversationEntity.messageClearAnchor)
+                                                          transaction:writeTransaction];
+
             }];
             [writeTransaction addAsyncCompletionOnMain:^{
                 DispatchMainThreadSafe(^{
@@ -491,7 +478,8 @@ extern NSString *const TSInboxGroup;
                 
                 [[DataUpdateUtil shared] updateConversationWithThread:instance
                                                            expireTime:conversationEntity.messageExpiry
-                                                   messageClearAnchor:@(conversationEntity.messageClearAnchor)];
+                                                   messageClearAnchor:@(conversationEntity.messageClearAnchor)
+                                                          transaction:writeTransaction];
             }];
             [writeTransaction addAsyncCompletionOnMain:^{
                 [[NSNotificationCenter defaultCenter] postNotificationNameAsync:kConversationDidChangeNotification object:nil];
@@ -601,6 +589,66 @@ extern NSString *const TSInboxGroup;
     }
     
     return [SSKCryptography decryptAESGCMWithData:encryptedData key:remarkKey];
+}
+
+- (void)applyRemarkFieldsFromEntity:(DTConversationEntity *)entity
+                              thread:(TSContactThread *)contactThread
+                         transaction:(SDSAnyWriteTransaction *)transaction {
+    SignalAccount *account = [SignalAccount anyFetchWithUniqueId:contactThread.contactIdentifier
+                                                     transaction:transaction];
+    if (!account) {
+        OWSLogInfo(@"requestMuteStatus account = nil");
+        return;
+    }
+    Contact *contact = account.contact;
+    BOOL changed = NO;
+
+    if (DTParamsUtils.validateString(entity.remark)) {
+        NSString *remark = [self decryptRemarkString:entity.remark
+                                            receptid:contactThread.contactIdentifier];
+        if (![contact.remark isEqualToString:remark]) {
+            contact.remark = remark;
+            changed = YES;
+        }
+    }
+
+    if (DTParamsUtils.validateString(entity.remarkAvatar)) {
+        NSDictionary *remarkAvatar = [self decryptRemarkAvatarDictionary:entity.remarkAvatar
+                                                                receptid:contactThread.contactIdentifier];
+        if (remarkAvatar && ![contact.remarkAvatar isEqual:remarkAvatar]) {
+            contact.remarkAvatar = remarkAvatar;
+            changed = YES;
+        }
+    }
+
+    if (!changed) {
+        return;
+    }
+
+    account.contact = contact;
+    id<ContactsManagerProtocol> contactsManager = [TextSecureKitEnv sharedEnv].contactsManager;
+    [contactsManager updateSignalAccountWithRecipientId:account.recipientId
+                                   withNewSignalAccount:account
+                                        withTransaction:transaction];
+}
+
+- (nullable NSDictionary *)decryptRemarkAvatarDictionary:(NSString *)cipherText
+                                                receptid:(NSString *)receptid {
+    NSString *jsonString = [self decryptRemarkString:cipherText receptid:receptid];
+    if (!DTParamsUtils.validateString(jsonString)) {
+        return nil;
+    }
+    NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
+    if (!jsonData) {
+        return nil;
+    }
+    NSError *error = nil;
+    NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&error];
+    if (error || ![dict isKindOfClass:[NSDictionary class]]) {
+        OWSLogError(@"decryptRemarkAvatarDictionary parse error: %@", error);
+        return nil;
+    }
+    return dict;
 }
 
 - (SSKAES256Key *)getAESKeyFromReceptid:(NSString *)receptid {

@@ -8,6 +8,7 @@
 #import "DTGroupsViewController.h"
 #import "ConversationItemMacro.h"
 #import "ContactCellView.h"
+#import <TTMessaging/OWSGroupAvatarBuilder.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import <TTServiceKit/DTGroupUtils.h>
 #import <TTServiceKit/TSAccountManager.h>
@@ -215,10 +216,9 @@
     ContactCellView *cellView = cell.cellView;
     if([cellView isKindOfClass:[ContactCellView class]]){
         DTAvatarImageView *avatarView = [cellView valueForKey:@"avatarView"];
-        if([avatarView isKindOfClass:[DTAvatarImageView class]]){
-            if (groupThread && groupThread.groupModel.groupImage) {
-                avatarView.image = groupThread.groupModel.groupImage;
-            }
+        if([avatarView isKindOfClass:[DTAvatarImageView class]] && groupThread){
+            OWSGroupAvatarBuilder *builder = [[OWSGroupAvatarBuilder alloc] initWithThread:groupThread];
+            avatarView.image = [builder build];
         }
     }
     

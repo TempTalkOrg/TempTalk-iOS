@@ -241,13 +241,22 @@ extension DTMeetingManager {
     func turnIntoInstantCall() {
         Logger.info("\(logTag) private call turn into instant")
 
-        // 1. 先更新 callType，让 UI 立即响应
+        // 1. 清理 1v1 专属的超时定时器和呼叫提示音，
+        //    并补偿可能卡在 connecting 的状态机（caller 先于 callee 入房时会出现）
+        stopCallTimeoutTimer()
+        stopSound()
+        if lifecycleState == .connecting,
+           roomContext?.room.connectionState == .connected {
+            tryTransition(from: .connecting, to: .connected)
+        }
+
+        // 2. 更新 callType，让 UI 立即响应
         currentCall.callType = .instant
 
-        // 2. 手动触发 objectWillChange 确保 SwiftUI 更新
+        // 3. 手动触发 objectWillChange 确保 SwiftUI 更新
         currentCall.objectWillChange.send()
 
-        // 3. 获取需要的信息
+        // 4. 获取需要的信息
         let roomId = currentCall.roomId
         let recipientId: String
         if currentCall.isCaller, let calleeId = currentCall.conversationId {
@@ -258,7 +267,7 @@ extension DTMeetingManager {
             recipientId = ""
         }
 
-        // 4. 使用同步事务处理数据库操作（不操作 allMeetings）
+        // 5. 使用同步事务处理数据库操作（不操作 allMeetings）
         databaseStorage.write { [self] transaction in
             // 移除 1v1 的 bar
             if DTParamsUtils.validateString(recipientId).boolValue {
@@ -272,7 +281,7 @@ extension DTMeetingManager {
             dealInstantMeetingBar(call: currentCall, action: .add, transaction: transaction)
         }
 
-        // 5. 事务完成后在主线程更新 allMeetings（代码更清晰）
+        // 6. 事务完成后在主线程更新 allMeetings（代码更清晰）
         if let roomId = roomId {
             allMeetings = allMeetings.filter { $0.roomId != roomId }
         }
@@ -280,7 +289,7 @@ extension DTMeetingManager {
             allMeetings.append(callCopy)
         }
 
-        // 6. 同步完成后立即发送通知
+        // 7. 同步完成后立即发送通知
         postHomeAndConversationNoti()
     }
 
@@ -463,52 +472,66 @@ extension DTMeetingManager {
         // 先构造新的 MeetingBar 列表
         var newMeetingBars: [DTLiveKitCallModel] = []
 
-        for call in calls {
-            let callModel = DTLiveKitCallModel()
-            if let roomId = call["roomId"] as? String {
-                callModel.roomId = roomId
-            }
-
-            if let type = call["type"] as? String {
-                callModel.callType = CallType(rawValue: type) ?? .instant
-            }
-
-            if let callerInfo = call["caller"] as? [String: Any],
-               let callId = callerInfo["uid"] as? String
-            {
-                callModel.caller = callId
-                if case .private = callModel.callType,
-                   let localNumber = TSAccountManager.localNumber(),
-                   callId != localNumber
-                {
-                    callModel.callees = [localNumber]
+        // 合并为单个 read 事务：原有群成员校验 + 群会议 roomName 解析共用一个 tx，
+        // 避免每次循环重复开关事务，也规避潜在的嵌套读问题。
+        SDSDatabaseStorage.shared.read { tx in
+            for call in calls {
+                let callModel = DTLiveKitCallModel()
+                if let roomId = call["roomId"] as? String {
+                    callModel.roomId = roomId
                 }
-            }
 
-            if let conversationId = call["conversation"] as? String {
-                callModel.conversationId = conversationId
-                if callModel.callType == .group,
-                   let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId)
+                if let type = call["type"] as? String {
+                    callModel.callType = CallType(rawValue: type) ?? .instant
+                }
+
+                if let callerInfo = call["caller"] as? [String: Any],
+                   let callId = callerInfo["uid"] as? String
                 {
-                    if let groupThread = TSGroupThread.getWithGroupId(groupId) {
-                        if !groupThread.groupModel.groupMemberIds.contains(TSAccountManager.localNumber() ?? "") {
+                    callModel.caller = callId
+                    if case .private = callModel.callType,
+                       let localNumber = TSAccountManager.localNumber(),
+                       callId != localNumber
+                    {
+                        callModel.callees = [localNumber]
+                    }
+                }
+
+                if let conversationId = call["conversation"] as? String {
+                    callModel.conversationId = conversationId
+                    if callModel.callType == .group,
+                       let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId)
+                    {
+                        if let groupThread = TSGroupThread.getWithGroupId(groupId, transaction: tx) {
+                            if !groupThread.groupModel.groupMemberIds.contains(TSAccountManager.localNumber() ?? "") {
+                                callModel.callType = .instant
+                            }
+                        } else {
                             callModel.callType = .instant
                         }
-                    } else {
-                        callModel.callType = .instant
+                    } else if callModel.callType == .private {
+                        if self.roomContext?.room.allParticipants.keys.count ?? 0 > 2 {
+                            callModel.callType = .instant
+                        } else {
+                            callModel.callType = .private
+                        }
                     }
-                } else if callModel.callType == .private {
-                    if roomContext?.room.allParticipants.keys.count ?? 0 > 2 {
-                        callModel.callType = .instant
-                    } else {
-                        callModel.callType = .private
-                    }
+                } else {
+                    callModel.callType = .instant
                 }
-            } else {
-                callModel.callType = .instant
-            }
 
-            newMeetingBars.append(callModel)
+                // group 类型补齐群名，否则 joinBar 入会后会议标题为空只剩 "(N)"。
+                // private/instant 由 DTLiveKitCallModel.roomName getter 自行兜底。
+                if callModel.callType == .group, let gid = callModel.conversationId {
+                    callModel.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupDisplayName(
+                        serverGroupId: gid,
+                        fallbackName: "",
+                        transaction: tx
+                    )
+                }
+
+                newMeetingBars.append(callModel)
+            }
         }
 
         // 拿到最新数据再清空/替换 UI

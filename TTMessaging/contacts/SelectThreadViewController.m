@@ -44,6 +44,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong) NSMutableArray <TSThread *> *selectedThreads;
 @property (nonatomic, strong) NSMutableArray <NSString *> *selectedUniqueIds;
 @property (nonatomic, strong) UIButton *btnSelectDone;
+@property (nonatomic, assign) BOOL isMultiSelectMode;
 
 @end
 
@@ -294,14 +295,12 @@ NS_ASSUME_NONNULL_BEGIN
                       customRowHeight:70
                       actionBlock:^{
                 @strongify(self)
-                if (!self) {
-                    return;
-                }
+                if (!self) { return; }
                 
                 if([self.selectThreadViewDelegate respondsToSelector:@selector(forwordThreadCanBeSelested:)] && ![self.selectThreadViewDelegate forwordThreadCanBeSelested:thread]){
                     return;}
                 
-                if (self.tableView.isEditing) {
+                if (self.isMultiSelectMode) {
                     [self updateSelectDoneButtonWithThread:thread isAdd:YES];
                     return;
                 }
@@ -309,12 +308,8 @@ NS_ASSUME_NONNULL_BEGIN
             }
                       deselectActionBlock:^{
                 @strongify(self)
-                if (!self) {
-                    return;
-                }
-                if (!self.tableView.isEditing) {
-                    return;
-                }
+                if (!self) { return; }
+                if (!self.isMultiSelectMode) { return; }
                 [self updateSelectDoneButtonWithThread:thread isAdd:NO];
             }]];
         }
@@ -373,7 +368,7 @@ NS_ASSUME_NONNULL_BEGIN
                 }
                 if([self.selectThreadViewDelegate respondsToSelector:@selector(forwordThreadCanBeSelested:)] && ![self.selectThreadViewDelegate forwordThreadCanBeSelested:thread]){return;}
                 
-                if (self.tableView.isEditing) {
+                if (self.isMultiSelectMode) {
                     [self updateSelectDoneButtonWithThread:thread isAdd:YES];
                     return;
                 }
@@ -384,7 +379,7 @@ NS_ASSUME_NONNULL_BEGIN
                 if (!self) {
                     return;
                 }
-                if (!self.tableView.isEditing) {
+                if (!self.isMultiSelectMode) {
                     return;
                 }
                 TSThread *thread = [self threadOfSignalAccount:signalAccount];
@@ -489,10 +484,18 @@ NS_ASSUME_NONNULL_BEGIN
         }
         [self.selectedThreads addObject:thread];
         [self.selectedUniqueIds addObject:thread.uniqueId];
+        NSString *contactId = thread.contactIdentifier;
+        if (contactId) {
+            [self.selectedUniqueIds addObject:[@"c" stringByAppendingString:contactId]];
+        }
     } else {
         self.tableViewController.maxSelected = NO;
         [self.selectedThreads removeObject:thread];
         [self.selectedUniqueIds removeObject:thread.uniqueId];
+        NSString *contactId = thread.contactIdentifier;
+        if (contactId) {
+            [self.selectedUniqueIds removeObject:[@"c" stringByAppendingString:contactId]];
+        }
     }
     
     self.btnSelectDone.enabled = self.selectedThreads.count > 0;
@@ -607,20 +610,27 @@ NS_ASSUME_NONNULL_BEGIN
         return;
     }
     ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
-    NSString *uniqueId = nil;
-    if (contactCell.thread != nil) {
-        TSThread *targetThread = contactCell.thread;
-        uniqueId = targetThread.uniqueId;
-    } else if (contactCell.signalAccount != nil) {
-        SignalAccount *signalAccount = contactCell.signalAccount;
-        uniqueId = [@"c" stringByAppendingString:signalAccount.recipientId];
-    }
-    if (!uniqueId) {
-        return;
-    }
     
-    if ([self.selectedUniqueIds containsObject:uniqueId]) {
-        [tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionNone];
+    if (self.isMultiSelectMode) {
+        NSString *uniqueId = nil;
+        if (contactCell.thread != nil) {
+            uniqueId = contactCell.thread.uniqueId;
+        } else if (contactCell.signalAccount != nil) {
+            uniqueId = [@"c" stringByAppendingString:contactCell.signalAccount.recipientId];
+        }
+        BOOL shouldSelect = uniqueId && [self.selectedUniqueIds containsObject:uniqueId];
+        contactCell.selectionStatus = shouldSelect ? ContactCellSelectionStatusSelected : ContactCellSelectionStatusUnselected;
+        if (shouldSelect) {
+            [tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionNone];
+        }
+    } else {
+        contactCell.selectionStatus = ContactCellSelectionStatusNone;
+    }
+}
+
+- (void)tableViewDidRenderCompleteWithTableView:(UITableView *)tableView {
+    if (self.isMultiSelectMode && self.selectedUniqueIds.count > 0) {
+        [tableView reloadData];
     }
 }
 
@@ -638,10 +648,9 @@ NS_ASSUME_NONNULL_BEGIN
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:Localized(@"TXT_CANCEL_TITLE", @"") style:UIBarButtonItemStylePlain target:self action:@selector(cancelMultiplePressed:)];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:self.btnSelectDone];
     self.btnSelectDone.enabled = NO;
-    self.tableViewController.canEditRow = YES;
+    self.isMultiSelectMode = YES;
     self.tableView.allowsMultipleSelection = YES;
-    self.tableView.allowsMultipleSelectionDuringEditing = YES;
-    [self.tableView setEditing:YES animated:YES];
+    [self updateTableContents];
 }
 
 - (void)cancelMultiplePressed:(id)sender {
@@ -651,8 +660,8 @@ NS_ASSUME_NONNULL_BEGIN
         return;
     }
     
-    self.tableViewController.canEditRow = NO;
-    [self.tableView setEditing:NO animated:YES];
+    self.isMultiSelectMode = NO;
+    self.tableView.allowsMultipleSelection = NO;
     [self.selectedThreads removeAllObjects];
     [self.selectedUniqueIds removeAllObjects];
     self.tableViewController.maxSelected = NO;
@@ -663,6 +672,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                       action:@selector(dismissPressed:)];
     self.navigationItem.rightBarButtonItem =
     [[UIBarButtonItem alloc] initWithTitle:Localized(@"FORWARD_MESSAGE_SELECT_MULTI", @"") style:UIBarButtonItemStylePlain target:self action:@selector(multipleSelectPressed:)];
+    [self updateTableContents];
 }
 
 - (void)tableViewWillBeginDragging

@@ -7,11 +7,17 @@
 //
 
 import SwiftUI
+import AudioPipelineProcessor
 
 struct BottomPopupView: View {
     let onDismiss: () -> Void
     let onShowCriticalAlertConfirm: () -> Void
+    var containerSize: CGSize = UIScreen.main.bounds.size
     @State private var isSwitchOn: Bool = DTMeetingManager.shared.roomContext?.isDenoiseFilterEnabled() ?? true
+    @State private var isEnhancedMode: Bool = (DTMeetingManager.shared.roomContext?.currentAudioModule() ?? .deepfilternet) == .deepfilternet
+    @State private var isModeListExpanded: Bool = false
+    @State private var isVoiceChangerExpanded: Bool = false
+    @State private var currentVoicePreset: String = DTMeetingManager.shared.roomContext?.currentVoicePreset() ?? "original"
     @ObservedObject private var roomDataManager = RoomDataManager.shared
     @State private var refreshTrigger = false
 
@@ -19,12 +25,14 @@ struct BottomPopupView: View {
     @State private var offsetY: CGFloat = 0
     let meetingManager = DTMeetingManager.shared
 
+    private let popupHeight: CGFloat = 334
+
     var body: some View {
 
         let _ = refreshTrigger // Force rebuild when notifications fire
         let buttons = buildButtons()
         let count = buttons.count
-        let kScreenWidth: CGFloat = min(screenWidth, screenHeight)
+        let kScreenWidth: CGFloat = min(containerSize.width, containerSize.height)
         
         // 根据数量自适应 spacing
         let spacing: CGFloat = {
@@ -42,58 +50,111 @@ struct BottomPopupView: View {
             Color.black.opacity(0.4)
                 .ignoresSafeArea()
                 .onTapGesture {
-                    onDismiss()
+                    if isModeListExpanded {
+                        isModeListExpanded = false
+                    } else if isVoiceChangerExpanded {
+                        isVoiceChangerExpanded = false
+                    } else {
+                        onDismiss()
+                    }
                 }
 
-            // 弹出层
             VStack {
-                Spacer()
-                VStack {
-                    HStack(spacing: spacing) {
-                        ForEach(buttons.indices, id: \.self) { idx in
-                            buttons[idx]
-                        }
+                HStack(spacing: spacing) {
+                    ForEach(buttons.indices, id: \.self) { idx in
+                        buttons[idx]
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 50)
-                    .padding(.top, 20)
-                    .padding(.bottom, 24)
-                    .animation(.easeInOut(duration: 0.25), value: count)
-                    
-                    HStack {
-                        Text(Localized("CALLING_NOISE_TITLE"))
-                            .font(.system(size: 16, weight: .regular))
-                            .foregroundColor(.white)
-                        Spacer()
-                        SwitchView(isOn: $isSwitchOn)
-                    }
-                    .padding(.horizontal, 20)
-                    .frame(width: kScreenWidth - 20, height: 55)
-                    .background(Color(hex: 0x474D57).cornerRadius(8))
-                    .padding(.top, -10)
-
-                    Spacer()
                 }
-                .frame(width: kScreenWidth, height: 210)
-                .background(
-                    Color(hex: 0x2B3139)
-                        .clipShape(RoundedCorner(radius: 10, corners: [.topLeft, .topRight]))
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 50)
+                .padding(.top, 20)
+                .padding(.bottom, 24)
+                .animation(.easeInOut(duration: 0.25), value: count)
+                
+                HStack {
+                    Text(Localized("CALLING_NOISE_TITLE"))
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(.white)
+                    Spacer()
+                    SwitchView(isOn: $isSwitchOn)
+                }
+                .padding(.horizontal, 20)
+                .frame(width: kScreenWidth - 20, height: 55)
+                .background(Color(hex: 0x474D57).cornerRadius(8))
+                .padding(.top, -10)
+
+                DenoiseModeDropdown(
+                    isEnhancedMode: $isEnhancedMode,
+                    isExpanded: $isModeListExpanded
                 )
-                .offset(y: offsetY + dragOffset.height)
-                .gesture(
-                    DragGesture()
-                        .updating($dragOffset) { value, state, _ in
-                            if value.translation.height > 0 {
-                                state = value.translation
-                            }
+                .frame(width: kScreenWidth - 20, height: 55)
+                .background(Color(hex: 0x474D57).cornerRadius(8))
+                .padding(.top, 4)
+
+                VoiceChangerDropdown(
+                    currentPreset: $currentVoicePreset,
+                    isExpanded: $isVoiceChangerExpanded
+                )
+                .frame(width: kScreenWidth - 20, height: 55)
+                .background(Color(hex: 0x474D57).cornerRadius(8))
+                .padding(.top, 4)
+
+                Spacer()
+            }
+            .frame(width: kScreenWidth, height: popupHeight)
+            .background(
+                Color(hex: 0x2B3139)
+                    .clipShape(RoundedCorner(radius: 10, corners: [.topLeft, .topRight]))
+            )
+            .offset(y: offsetY + dragOffset.height)
+            .gesture(
+                DragGesture()
+                    .updating($dragOffset) { value, state, _ in
+                        if value.translation.height > 0 {
+                            state = value.translation
                         }
-                        .onEnded { value in
-                            if value.translation.height > 50 {
+                    }
+                    .onEnded { value in
+                        if value.translation.height > 50 {
+                            if isModeListExpanded {
+                                isModeListExpanded = false
+                            } else if isVoiceChangerExpanded {
+                                isVoiceChangerExpanded = false
+                            } else {
                                 onDismiss()
                             }
                         }
-                )
-                .animation(.easeOut(duration: 0.25), value: dragOffset)
+                    }
+            )
+            .animation(.easeOut(duration: 0.25), value: dragOffset)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+
+            if isModeListExpanded {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        isModeListExpanded = false
+                    }
+
+                denoiseModeBubble
+                    .padding(.trailing, 255)
+                    .padding(.bottom, 75)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            }
+
+            if isVoiceChangerExpanded {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        isVoiceChangerExpanded = false
+                    }
+
+                voiceChangerBubble
+                    .padding(.trailing, 255)
+                    .padding(.bottom, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CallStateDidChange"))) { _ in
@@ -101,6 +162,12 @@ struct BottomPopupView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("DTGroupCriticalAlertChangedNotification"))) { _ in
             refreshTrigger.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .denoiseModeDidChange)) { _ in
+            isEnhancedMode = (DTMeetingManager.shared.roomContext?.currentAudioModule() ?? .deepfilternet) == .deepfilternet
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .voiceChangerPresetDidChange)) { _ in
+            currentVoicePreset = DTMeetingManager.shared.roomContext?.currentVoicePreset() ?? "original"
         }
     }
 
@@ -157,29 +224,30 @@ struct BottomPopupView: View {
                     break
                 }
 
-                result.append(AnyView(
-                    VerticalIconTextButton(
-                        normalImage: Image("calling_lowerHand"),
-                        selectedImage: Image("calling_raiseHand"),
-                        title: Localized("RAISE_HANDS_TITLE"),
-                        isSelected: $roomDataManager.localRaiseHand
-                    ) {
-                        Task {
-                            if roomDataManager.localRaiseHand {
-                                await meetingManager.handCancelRemoteSyncStatus(
-                                    participantId: meetingManager.roomContext?
-                                        .room.localParticipant.identity?.stringValue
-                                        .components(separatedBy: ".").first ?? ""
-                                )
-                                roomDataManager.localRaiseHand = false
-                            } else {
-                                await meetingManager.handRaiseRemoteSyncStatus()
-                                roomDataManager.localRaiseHand = true
-                            }
-                        }
-                    }
-                    .frame(width: buttonWidth, height: 76)
-                ))
+                // 举手入口已下掉，注释保留逻辑
+                // result.append(AnyView(
+                //     VerticalIconTextButton(
+                //         normalImage: Image("calling_lowerHand"),
+                //         selectedImage: Image("calling_raiseHand"),
+                //         title: Localized("RAISE_HANDS_TITLE"),
+                //         isSelected: $roomDataManager.localRaiseHand
+                //     ) {
+                //         Task {
+                //             if roomDataManager.localRaiseHand {
+                //                 await meetingManager.handCancelRemoteSyncStatus(
+                //                     participantId: meetingManager.roomContext?
+                //                         .room.localParticipant.identity?.stringValue
+                //                         .components(separatedBy: ".").first ?? ""
+                //                 )
+                //                 roomDataManager.localRaiseHand = false
+                //             } else {
+                //                 await meetingManager.handRaiseRemoteSyncStatus()
+                //                 roomDataManager.localRaiseHand = true
+                //             }
+                //         }
+                //     }
+                //     .frame(width: buttonWidth, height: 76)
+                // ))
 
                 if meetingManager.openCallCamera {
                     result.append(AnyView(
@@ -236,15 +304,12 @@ struct BottomPopupView: View {
         }
 
     private func handleCriticalAlertTap() {
-        // 判断是否需要显示二次确认弹窗
         if meetingManager.shouldShowCriticalAlertConfirm {
-            // Instant/Group: 显示二次确认弹窗（使用 SwiftUI 版本，适配横屏分享状态）
             onDismiss()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 onShowCriticalAlertConfirm()
             }
         } else {
-            // 1v1: 直接发送 Critical Alert
             onDismiss()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 Task {
@@ -254,6 +319,83 @@ struct BottomPopupView: View {
                 }
             }
         }
+    }
+
+    private var denoiseModeBubble: some View {
+        VStack(spacing: 0) {
+            denoiseModeBubbleRow(
+                title: Localized("CALLING_DENOISE_MODE_STANDARD"),
+                isSelected: !isEnhancedMode
+            ) {
+                isEnhancedMode = false
+                DTMeetingManager.shared.roomContext?.setAudioModule(.rnnoise)
+                isModeListExpanded = false
+            }
+
+            Divider()
+                .background(Color.white.opacity(0.12))
+                .padding(.horizontal, 12)
+
+            denoiseModeBubbleRow(
+                title: Localized("CALLING_DENOISE_MODE_ENHANCED"),
+                isSelected: isEnhancedMode
+            ) {
+                isEnhancedMode = true
+                DTMeetingManager.shared.roomContext?.setAudioModule(.deepfilternet)
+                isModeListExpanded = false
+            }
+        }
+        .frame(width: 160)
+        .background(Color(hex: 0x3C4249))
+        .cornerRadius(8)
+        .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 2)
+    }
+
+    private var voiceChangerBubble: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(DTUpdateNoiseController.voicePresets.enumerated()), id: \.offset) { index, preset in
+                let localizedName = Localized(preset.nameKey)
+                let displayText = preset.emoji.isEmpty ? localizedName : "\(preset.emoji) \(localizedName)"
+                let isSelected = preset.key == currentVoicePreset
+
+                denoiseModeBubbleRow(
+                    title: displayText,
+                    isSelected: isSelected
+                ) {
+                    DTMeetingManager.shared.roomContext?.setVoiceChangerPreset(preset.key)
+                    currentVoicePreset = preset.key
+                    isVoiceChangerExpanded = false
+                }
+
+                if index < DTUpdateNoiseController.voicePresets.count - 1 {
+                    Divider()
+                        .background(Color.white.opacity(0.12))
+                        .padding(.horizontal, 12)
+                }
+            }
+        }
+        .frame(width: 180)
+        .background(Color(hex: 0x3C4249))
+        .cornerRadius(8)
+        .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 2)
+    }
+
+    private func denoiseModeBubbleRow(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 14, weight: isSelected ? .medium : .regular))
+                .foregroundColor(isSelected ? Color(hex: 0x3B82F6) : .white)
+            Spacer()
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Color(hex: 0x3B82F6))
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 44)
+        .contentShape(Rectangle())
+        .onTapGesture { action() }
     }
 }
 
@@ -360,5 +502,72 @@ struct VerticalIconTextButton: View {
         .onTapGesture {
             action()
         }
+    }
+}
+
+struct VoiceChangerDropdown: View {
+    @Binding var currentPreset: String
+    @Binding var isExpanded: Bool
+
+    private var displayText: String {
+        let presets = DTUpdateNoiseController.voicePresets
+        guard let info = presets.first(where: { $0.key == currentPreset }) else {
+            return Localized(presets[0].nameKey)
+        }
+        let localizedName = Localized(info.nameKey)
+        return info.emoji.isEmpty ? localizedName : "\(info.emoji) \(localizedName)"
+    }
+
+    var body: some View {
+        HStack {
+            Text(Localized("CALLING_VOICE_CHANGER_TITLE"))
+                .font(.system(size: 16, weight: .regular))
+                .foregroundColor(.white)
+            Spacer()
+            HStack(spacing: 4) {
+                Text(displayText)
+                    .font(.system(size: 14))
+                    .foregroundColor(Color(hex: 0xB7BDC6))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(hex: 0x9CA3AF))
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { isExpanded.toggle() }
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 55)
+    }
+}
+
+struct DenoiseModeDropdown: View {
+    @Binding var isEnhancedMode: Bool
+    @Binding var isExpanded: Bool
+
+    private var currentTitle: String {
+        isEnhancedMode
+            ? Localized("CALLING_DENOISE_MODE_ENHANCED")
+            : Localized("CALLING_DENOISE_MODE_STANDARD")
+    }
+
+    var body: some View {
+        HStack {
+            Text(Localized("CALLING_DENOISE_MODE_TITLE"))
+                .font(.system(size: 16, weight: .regular))
+                .foregroundColor(.white)
+            Spacer()
+            HStack(spacing: 4) {
+                Text(currentTitle)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white)
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(hex: 0x9CA3AF))
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { isExpanded.toggle() }
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 55)
     }
 }

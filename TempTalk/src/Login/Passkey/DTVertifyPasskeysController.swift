@@ -137,7 +137,7 @@ public class DTVertifyPasskeysController: OWSViewController {
     }
     
     private func refreshTheme() {
-        view.backgroundColor = Theme.bg1Color
+        view.backgroundColor = Theme.bgpagePrimaryColor
         titleLabel.textColor = Theme.tprimaryColor
         verfityDecLabel.textColor = Theme.tsecondaryColor
     }

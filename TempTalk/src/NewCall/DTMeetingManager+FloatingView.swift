@@ -23,25 +23,13 @@ extension DTMeetingManager {
                 return value
             }
             let newValue = DTFloatingView()
-            newValue.floatViewAction = { [weak self] in
+            newValue.floatViewAction = { @MainActor [weak self] in
                 guard let self else { return }
-              
-                isMinimize = false
-                OWSWindowManager.shared().showCallView()
-                newValue.removeFromSuperview()
-                
-                let callWindow = OWSWindowManager.shared().callViewWindow
-                callAlertManager.bringLiveKitAlertCalls(to: callWindow)
-                
-                DispatchMainThreadSafe {
-                    UIDevice.current.isProximityMonitoringEnabled = true
-                }
-                
-                NotificationCenter.default.post(name: Notification.Name("CallShareZoomDidChange"), object: nil)
 
-                Task { @MainActor in
-                    self.roomContext?.checkAndPresentScreenShareIfNeeded()
-                }
+                restoreFullScreenView()
+
+                UIDevice.current.isProximityMonitoringEnabled = true
+                NotificationCenter.default.post(name: Notification.Name("CallShareZoomDidChange"), object: nil)
             }
             
             objc_setAssociatedObject(self, &AssociatedKeys.floatingViewKey, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
@@ -70,9 +58,7 @@ extension DTMeetingManager {
         let rootWindow = OWSWindowManager.shared().rootWindow
         callAlertManager.bringLiveKitAlertCalls(to: rootWindow)
         
-        DispatchMainThreadSafe {
-            UIDevice.current.isProximityMonitoringEnabled = false
-        }
+        UIDevice.current.isProximityMonitoringEnabled = false
         NotificationCenter.default.post(name: Notification.Name.DTRefreshJoinBarStatusChange, object: nil)
     }
     

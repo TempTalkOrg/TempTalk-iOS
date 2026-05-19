@@ -25,6 +25,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) UInt64 messageClearAnchor;
 @property (nonatomic, assign) BOOL criticalAlert;
 
+@property (nonatomic, assign) NSInteger groupCryptoMode;
+@property (nonatomic, copy, nullable) NSString *encryptedName;
+@property (nonatomic, copy, nullable) NSString *encryptedAvatar;
+
 ///不需要入库字段
 /// 需要在{Project}/Scripts/sds_codegen/sds_config/sds-config.json 文件中进行忽略
 ///===========
@@ -47,8 +51,11 @@ NS_ASSUME_NONNULL_BEGIN
                     anyoneRemove:(BOOL)anyoneRemove
                           avatar:(NSString *)avatar
                    criticalAlert:(BOOL)criticalAlert
+                 encryptedAvatar:(nullable NSString *)encryptedAvatar
+                   encryptedName:(nullable NSString *)encryptedName
                              ext:(BOOL)ext
                              gid:(NSString *)gid
+                 groupCryptoMode:(NSInteger)groupCryptoMode
                   invitationRule:(nullable NSNumber *)invitationRule
               messageClearAnchor:(unsigned long long)messageClearAnchor
                    messageExpiry:(nullable NSNumber *)messageExpiry
@@ -56,7 +63,7 @@ NS_ASSUME_NONNULL_BEGIN
                      publishRule:(nullable NSNumber *)publishRule
                           rejoin:(BOOL)rejoin
                      remindCycle:(NSString *)remindCycle
-NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:anyoneRemove:avatar:criticalAlert:ext:gid:invitationRule:messageClearAnchor:messageExpiry:name:publishRule:rejoin:remindCycle:));
+NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:anyoneRemove:avatar:criticalAlert:encryptedAvatar:encryptedName:ext:gid:groupCryptoMode:invitationRule:messageClearAnchor:messageExpiry:name:publishRule:rejoin:remindCycle:));
 
 // clang-format on
 

@@ -311,21 +311,24 @@ extension HomeViewController {
     }
     
     private func threadViewModel(for identifier: String) -> ThreadViewModel? {
-        guard let thread = threadMapping.thread(for: identifier) else {
+        guard threadMapping.thread(for: identifier) != nil else {
             Logger.error("can not find thread for identifier: \(identifier)")
             return nil
         }
-        
-        if let cachedThreadViewModel = self.threadViewModelCache.object(forKey: thread.uniqueId as NSString) {
+
+        if let cachedThreadViewModel = self.threadViewModelCache.object(forKey: identifier as NSString) {
             return cachedThreadViewModel
         }
-        
+
         var newThreadViewModel: ThreadViewModel?
         self.databaseStorage.uiRead { transaction in
-            newThreadViewModel = ThreadViewModel(thread: thread, transaction: transaction)
+            guard let freshThread = TSThread.anyFetch(uniqueId: identifier, transaction: transaction) else {
+                return
+            }
+            newThreadViewModel = ThreadViewModel(thread: freshThread, transaction: transaction)
         }
         if let newThreadViewModel {
-            self.threadViewModelCache.setObject(newThreadViewModel, forKey: thread.uniqueId as NSString)
+            self.threadViewModelCache.setObject(newThreadViewModel, forKey: identifier as NSString)
         }
         return newThreadViewModel
     }

@@ -72,8 +72,6 @@ protocol InteractionFinderAdapter {
     
     static func enumerateCardRelatedInteractions(cardUniqueId: String, transaction: ReadTransaction, block: @escaping (TSInteraction, UnsafeMutablePointer<ObjCBool>) -> Void) throws
     
-    static func findThreadsWithOnlyArchiveMessages(transaction: ReadTransaction) -> [String]
-
     static func deleteAllRecallInfoMessages(transaction: WriteTransaction) -> Int
 
     #if DEBUG
@@ -521,9 +519,27 @@ public class InteractionFinder: NSObject, InteractionFinderAdapter {
     
     @objc
     public class func findThreadsWithOnlyArchiveMessages(transaction: SDSAnyReadTransaction) -> [String] {
+        guard let localNumber = TSAccountManager.shared.localNumber(with: transaction), !localNumber.isEmpty else {
+            Logger.info("[Archive] localNumber unavailable (not registered?), skipping visible thread cleanup query")
+            return []
+        }
+        let noteToSelfThreadId = TSContactThread.threadId(fromContactId: localNumber)
         switch transaction.readTransaction {
         case .grdbRead(let grdbRead):
-            return GRDBInteractionFinderAdapter.findThreadsWithOnlyArchiveMessages(transaction: grdbRead)
+            return GRDBInteractionFinderAdapter.findThreadsWithOnlyArchiveMessages(noteToSelfThreadId: noteToSelfThreadId, transaction: grdbRead)
+        }
+    }
+
+    @objc
+    public class func findOrphanThreadIds(transaction: SDSAnyReadTransaction) -> [String] {
+        guard let localNumber = TSAccountManager.shared.localNumber(with: transaction), !localNumber.isEmpty else {
+            Logger.info("[Archive] localNumber unavailable (not registered?), skipping orphan thread cleanup query")
+            return []
+        }
+        let noteToSelfThreadId = TSContactThread.threadId(fromContactId: localNumber)
+        switch transaction.readTransaction {
+        case .grdbRead(let grdbRead):
+            return GRDBInteractionFinderAdapter.findOrphanThreadIds(noteToSelfThreadId: noteToSelfThreadId, transaction: grdbRead)
         }
     }
 
@@ -1438,22 +1454,19 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
         }
     }
 
-    static func findThreadsWithOnlyArchiveMessages(transaction: GRDBReadTransaction) -> [String] {
-        // 查找应该被清理的空thread
+    static func findThreadsWithOnlyArchiveMessages(noteToSelfThreadId: String, transaction: GRDBReadTransaction) -> [String] {
         let sql = """
         SELECT DISTINCT t.uniqueId
         FROM \(ThreadRecord.databaseTableName) t
-        WHERE t.uniqueId != ?  -- 排除备忘录
+        WHERE t.uniqueId != ?
         AND \(threadColumn: .shouldBeVisible) = 1
         AND (
-            -- 情况1: 完全没有消息
             (
                 SELECT COUNT(*)
                 FROM \(InteractionRecord.databaseTableName) i
                 WHERE i.\(interactionColumn: .threadUniqueId) = t.uniqueId
             ) = 0
             OR
-            -- 情况2: 只有一条TSInfoMessageArchiveMessage系统消息
             (
                 (
                     SELECT COUNT(*)
@@ -1471,21 +1484,59 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
         )
         """
 
-        let threadUniqueId = TSContactThread.threadId(fromContactId: TSAccountManager.localNumber() ?? "")
         let arguments: StatementArguments = [
-            threadUniqueId,
+            noteToSelfThreadId,
             SDSRecordType.infoMessage.rawValue,
             TSInfoMessageType.archiveMessage.rawValue
         ]
 
         do {
             let threadIds = try String.fetchAll(transaction.database, sql: sql, arguments: arguments)
-            if !threadIds.isEmpty {
-                Logger.info("[Archive] Found \(threadIds.count) threads to cleanup: empty or only archive messages")
-            }
             return threadIds
         } catch {
             owsFailDebug("Failed to find threads with only archive messages: \(error)")
+            return []
+        }
+    }
+
+    static func findOrphanThreadIds(noteToSelfThreadId: String, transaction: GRDBReadTransaction) -> [String] {
+        let gracePeriodSeconds: Double = 300
+        let creationCutoff = Date().timeIntervalSince1970 - gracePeriodSeconds
+
+        let sql = """
+        SELECT t.uniqueId FROM \(ThreadRecord.databaseTableName) t
+        WHERE \(threadColumn: .shouldBeVisible) = 0
+        AND t.uniqueId != ?
+        AND (\(threadColumn: .messageDraft) IS NULL OR \(threadColumn: .messageDraft) = '')
+        AND (\(threadColumn: .draftQuoteMessageId) IS NULL OR \(threadColumn: .draftQuoteMessageId) = '')
+        AND (\(threadColumn: .stickDate) IS NULL OR \(threadColumn: .stickDate) = 0)
+        AND \(threadColumn: .creationDate) < ?
+        AND (
+            (SELECT COUNT(*) FROM \(InteractionRecord.databaseTableName) i
+             WHERE i.\(interactionColumn: .threadUniqueId) = t.uniqueId) = 0
+            OR
+            (
+                (SELECT COUNT(*) FROM \(InteractionRecord.databaseTableName) i
+                 WHERE i.\(interactionColumn: .threadUniqueId) = t.uniqueId) = 1
+                AND EXISTS (
+                    SELECT 1 FROM \(InteractionRecord.databaseTableName) i2
+                    WHERE i2.\(interactionColumn: .threadUniqueId) = t.uniqueId
+                    AND i2.\(interactionColumn: .recordType) = ?
+                    AND i2.\(interactionColumn: .messageType) = ?
+                )
+            )
+        )
+        """
+        let arguments: StatementArguments = [
+            noteToSelfThreadId,
+            creationCutoff,
+            SDSRecordType.infoMessage.rawValue,
+            TSInfoMessageType.archiveMessage.rawValue
+        ]
+        do {
+            return try String.fetchAll(transaction.database, sql: sql, arguments: arguments)
+        } catch {
+            owsFailDebug("[Archive] Failed to find orphan threads: \(error)")
             return []
         }
     }

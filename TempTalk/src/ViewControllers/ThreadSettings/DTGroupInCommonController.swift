@@ -41,6 +41,7 @@ class DTGroupInCommonController: OWSViewController {
     var resultGroups: [GroupSearchResult]!
     var sortedGroupMembers: [String: String]!
     var leaveGroupHandler: ( ([GroupSearchResult]) -> Void )?
+    var recipientId: String?
 
     private var filteredResultGroups = [GroupSearchResult]()
     
@@ -132,28 +133,62 @@ extension DTGroupInCommonController: UITableViewDelegate, UITableViewDataSource 
     }
     
     func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard indexPath.row < filteredResultGroups.count else { return nil }
         let groupThread = filteredResultGroups[indexPath.row].thread
-        let isGroupOwner = (groupThread.groupModel.groupOwner == TSAccountManager.localNumber())
-        let leaveTitle = Localized(isGroupOwner ? "CONFIRM_DISBAND" : "LEAVE_BUTTON_TITLE", comment: "member leave group title")
-        let leaveAction = UIContextualAction(style: .destructive, title: leaveTitle) { (action, sourceView, completion) -> Void in
-            DTLeaveOrDisbandGroup.leaveOrDisbandGroup(groupThread, viewController: self) { [weak self] in
+        let groupModel = groupThread.groupModel
+        var actions: [UIContextualAction] = []
+
+        if GroupPermissions.hasPermissionToRemoveGroupMembers(groupModel: groupModel) {
+            let removeAction = UIContextualAction(style: .normal, title: Localized("REMOVE_MEMBER_GROUP_ACTION")) { [weak self] _, _, completion in
+                completion(true)
+                guard let self, let recipientId = self.recipientId else { return }
+                self.removeMember(recipientId, from: groupThread) { [weak self] in
+                    self?.removeGroupFromList(groupThread)
+                }
+            }
+            removeAction.backgroundColor = Theme.bgtooltipColor
+            actions.append(removeAction)
+        }
+
+        if groupModel.isSelfGroupOwner() {
+            let disbandAction = UIContextualAction(style: .destructive, title: Localized("DISBAND_GROUP_ACTION")) { [weak self] _, _, completion in
                 completion(true)
                 guard let self else { return }
-                self.filteredResultGroups.remove(at: indexPath.row)
-                self.updateTableContents()
-                
-                self.resultGroups.removeAll {
-                    groupThread.serverThreadId == $0.thread.serverThreadId
+                DTLeaveOrDisbandGroup.leaveOrDisbandGroup(groupThread, viewController: self) { [weak self] in
+                    self?.removeGroupFromList(groupThread)
                 }
-                guard let leaveGroupHandler = self.leaveGroupHandler else { return }
-                leaveGroupHandler(self.resultGroups)
             }
+            disbandAction.backgroundColor = Theme.errorColor
+            actions.append(disbandAction)
+        } else {
+            let leaveAction = UIContextualAction(style: .normal, title: Localized("LEAVE_BUTTON_TITLE")) { [weak self] _, _, completion in
+                completion(true)
+                guard let self else { return }
+                DTLeaveOrDisbandGroup.leaveOrDisbandGroup(groupThread, viewController: self) { [weak self] in
+                    self?.removeGroupFromList(groupThread)
+                }
+            }
+            leaveAction.backgroundColor = Theme.cautionColor
+            actions.append(leaveAction)
         }
-        
-        let actionsConfig = UISwipeActionsConfiguration(actions: [leaveAction])
-        actionsConfig.performsFirstActionWithFullSwipe = false
-        
-        return actionsConfig
+
+        guard !actions.isEmpty else { return nil }
+        let config = UISwipeActionsConfiguration(actions: actions)
+        config.performsFirstActionWithFullSwipe = false
+        return config
+    }
+
+    private func removeGroupFromList(_ groupThread: TSGroupThread) {
+        filteredResultGroups.removeAll { groupThread.serverThreadId == $0.thread.serverThreadId }
+        updateTableContents()
+        resultGroups.removeAll { groupThread.serverThreadId == $0.thread.serverThreadId }
+        leaveGroupHandler?(resultGroups)
+    }
+
+    private func removeMember(_ recipientId: String, from groupThread: TSGroupThread, completion: @escaping () -> Void) {
+        DTLeaveOrDisbandGroup.removeMember(recipientId, from: groupThread, viewController: self) {
+            completion()
+        }
     }
     
 }

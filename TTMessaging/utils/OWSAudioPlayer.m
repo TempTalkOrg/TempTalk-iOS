@@ -30,13 +30,20 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark -
 
+typedef NS_ENUM(NSInteger, OWSAudioPlayMode) {
+    OWSAudioPlayMode_CurrentCategory,
+    OWSAudioPlayMode_Playback,
+    OWSAudioPlayMode_PlayAndRecord,
+};
+
 @interface OWSAudioPlayer () <AVAudioPlayerDelegate>
 
 @property (nonatomic, readonly) NSURL *mediaUrl;
 @property (nonatomic, nullable) AVAudioPlayer *audioPlayer;
 @property (nonatomic, nullable) NSTimer *audioPlayerPoller;
 @property (nonatomic, readonly) OWSAudioActivity *audioActivity;
-@property (nonatomic, assign) float playbackRate; // 播放速度
+@property (nonatomic, assign) float playbackRate;
+@property (nonatomic, assign) OWSAudioPlayMode lastPlayMode;
 
 @end
 
@@ -97,6 +104,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)playWithCurrentAudioCategory
 {
     OWSAssertIsOnMainThread();
+    self.lastPlayMode = OWSAudioPlayMode_CurrentCategory;
     [OWSAudioSession.shared startAudioActivity:self.audioActivity];
 
     [self play];
@@ -105,6 +113,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)playWithPlaybackAudioCategory
 {
     OWSAssertIsOnMainThread();
+    self.lastPlayMode = OWSAudioPlayMode_Playback;
     [OWSAudioSession.shared startPlaybackAudioActivity:self.audioActivity];
 
     [self play];
@@ -113,8 +122,26 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)playWithPlayAndRecordAudioCategory
 {
     OWSAssertIsOnMainThread();
+    self.lastPlayMode = OWSAudioPlayMode_PlayAndRecord;
     [OWSAudioSession.shared startPlayAndRecordAudioActivity:self.audioActivity];
 
+    [self play];
+}
+
+- (void)restoreAudioSessionAndPlay
+{
+    switch (self.lastPlayMode) {
+        case OWSAudioPlayMode_Playback:
+            [OWSAudioSession.shared startPlaybackAudioActivity:self.audioActivity];
+            break;
+        case OWSAudioPlayMode_PlayAndRecord:
+            [OWSAudioSession.shared startPlayAndRecordAudioActivity:self.audioActivity];
+            break;
+        case OWSAudioPlayMode_CurrentCategory:
+        default:
+            [OWSAudioSession.shared startAudioActivity:self.audioActivity];
+            break;
+    }
     [self play];
 }
 
@@ -208,7 +235,7 @@ NS_ASSUME_NONNULL_BEGIN
         [self pause];
     } else {
         OWSLogDebug(@"[audio] play");
-        [self play];
+        [self restoreAudioSessionAndPlay];
     }
 }
 

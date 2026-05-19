@@ -125,6 +125,7 @@ typedef NS_ENUM(NSInteger, DTGroupNotifyDetailType) {
     DTGroupNotifyDetailTypeGroupCostChange = 40,
     DTGroupNotifyDetailTypePrivateChatChange = 41,
     DTGroupNotifyDetailTypeCriticalAlertChange = 47,
+    DTGroupNotifyDetailTypeUpgradeGroupCrypto = 48,
     DTGroupNotifyDetailTypeGroupAccountInvalid = 999
 };
 
@@ -151,8 +152,11 @@ typedef NS_ENUM(NSInteger, DTGroupNotifyDetailType) {
                     anyoneRemove:(BOOL)anyoneRemove
                           avatar:(NSString *)avatar
                    criticalAlert:(BOOL)criticalAlert
+                 encryptedAvatar:(nullable NSString *)encryptedAvatar
+                   encryptedName:(nullable NSString *)encryptedName
                              ext:(BOOL)ext
                              gid:(NSString *)gid
+                 groupCryptoMode:(NSInteger)groupCryptoMode
                   invitationRule:(nullable NSNumber *)invitationRule
               messageClearAnchor:(unsigned long long)messageClearAnchor
                    messageExpiry:(nullable NSNumber *)messageExpiry
@@ -161,7 +165,7 @@ typedef NS_ENUM(NSInteger, DTGroupNotifyDetailType) {
                           rejoin:(BOOL)rejoin
                      remindCycle:(NSString *)remindCycle
                           action:(DTGroupNotifyAction)action
-NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:anyoneRemove:avatar:criticalAlert:ext:gid:invitationRule:messageClearAnchor:messageExpiry:name:publishRule:rejoin:remindCycle:action:));
+NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:anyoneRemove:avatar:criticalAlert:encryptedAvatar:encryptedName:ext:gid:groupCryptoMode:invitationRule:messageClearAnchor:messageExpiry:name:publishRule:rejoin:remindCycle:action:));
 
 // clang-format on
 

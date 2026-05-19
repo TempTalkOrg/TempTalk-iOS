@@ -522,6 +522,12 @@ const InfoMessageUserInfoKey InfoMessageUserInfoKeyChangePhoneNumberNew = @"Info
             // Check current language
             return Localized(@"CONVERSATION_CONFIDENTIAL_INFO_MESSAGE", @"");
         }
+        case TSInfoMessageGroupCryptoUpgrade: {
+            return _customMessage != nil ? _customMessage : Localized(@"GROUP_CRYPTO_UPGRADE_SYSTEM_MSG", @"");
+        }
+        case TSInfoMessageForwardNotice: {
+            return _customMessage;
+        }
         default:
             break;
     }

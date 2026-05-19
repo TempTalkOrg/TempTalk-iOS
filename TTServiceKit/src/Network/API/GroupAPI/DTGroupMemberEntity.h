@@ -51,6 +51,7 @@ typedef NS_ENUM(NSInteger, DTGroupRAPIDRole) {
 @property (nonatomic, strong) NSNumber *extId;
 @property (nonatomic, assign) DTGroupRAPIDRole rapidRole;
 @property (nonatomic, readonly) NSString *rapidDescription;
+@property (nonatomic, copy, nullable) NSString *uidSignature;
 
 @end
 

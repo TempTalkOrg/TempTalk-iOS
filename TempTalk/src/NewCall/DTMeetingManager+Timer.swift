@@ -21,6 +21,7 @@ extension DTMeetingManager {
         stopCallTimeoutTimer()
         stopCallDurationTimer()
         stopParticipantDisTimer()
+        stopConnectionPhaseTimer()
     }
     
     // MARK: 通话超时
@@ -149,9 +150,45 @@ extension DTMeetingManager {
         guard let participantDisTimer else {
             return
         }
-        
+
         participantDisTimer.invalidate()
         self.participantDisTimer = nil
         participantDisconnectCallback = nil
+    }
+
+    // MARK: 被叫连接阶段兜底
+    func startConnectionPhaseTimer() {
+        stopConnectionPhaseTimer()
+
+        let interval: TimeInterval = 45
+        connectionPhaseTimer = Timer.weakTimer(
+            withTimeInterval: interval,
+            target: self,
+            selector: #selector(connectionPhaseTimeoutAction),
+            userInfo: nil,
+            repeats: false
+        )
+
+        if let connectionPhaseTimer {
+            RunLoop.current.add(connectionPhaseTimer, forMode: .common)
+        }
+    }
+
+    @objc
+    private func connectionPhaseTimeoutAction(_ timer: Timer) {
+        guard hasMeeting, !inMeeting else { return }
+        Logger.error("[newcall] connection phase timeout, hanging up")
+        Task {
+            await self.hangupCall(needSyncCallKit: true, isByLocal: true, showErrorToast: true)
+        }
+    }
+
+    func stopConnectionPhaseTimer() {
+        guard let connectionPhaseTimer else {
+            return
+        }
+
+        connectionPhaseTimer.invalidate()
+        self.connectionPhaseTimer = nil
     }
 }

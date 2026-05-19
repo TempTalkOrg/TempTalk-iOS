@@ -36,7 +36,9 @@
 - (void)setupUI {
     [self.contentView addSubview:self.quickActionStackView];
     
-    [self.quickActionStackView addArrangedSubview:self.messageButton];
+    if (self.isFriend) {
+        [self.quickActionStackView addArrangedSubview:self.messageButton];
+    }
     if (self.haveCall) {
         [self.quickActionStackView addArrangedSubview:self.callButton];
         self.callButton.hidden = false;

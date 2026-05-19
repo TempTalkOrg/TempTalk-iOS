@@ -242,6 +242,88 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
     return;
 }
 
+- (void)syncrunForUploadOnlyWithSuccess:(void (^)(NSString *attachmentId, NSString *location))successBlock
+                                 failure:(void (^)(NSError *error))failureBlock {
+    __block TSAttachmentStream *attachmentStream;
+    if (self.attachment) {
+        attachmentStream = self.attachment;
+    }
+
+    if (!attachmentStream) {
+        OWSProdError([OWSAnalyticsEvents messageSenderErrorCouldNotLoadAttachment]);
+        NSError *error = OWSErrorMakeFailedToSendOutgoingMessageError();
+        error.isRetryable = NO;
+        if (failureBlock) {
+            failureBlock(error);
+        }
+        return;
+    }
+
+    if (attachmentStream.isUploaded) {
+        OWSLogInfo(@"%@ attachment previously uploaded.", self.logTag);
+        if (successBlock) {
+            successBlock([NSString stringWithFormat:@"%llu", self.serverId], self.location ?: @"");
+        }
+        return;
+    }
+
+    [self fireNotificationWithProgress:0];
+
+    self.group = dispatch_group_create();
+    dispatch_group_enter(self.group);
+
+    TSRequest *request = [OWSRequestFactory profileAvatarUploadUrlRequest:nil];
+    [self.networkManager makeRequest:request success:^(id<HTTPResponse>  _Nonnull response) {
+        NSDictionary *responseObject = response.responseBodyJson;
+        if (![responseObject isKindOfClass:[NSDictionary class]]) {
+            OWSLogError(@"%@ unexpected response from server: %@", self.logTag, responseObject);
+            NSError *error = OWSErrorMakeUnableToProcessServerResponseError();
+            error.isRetryable = YES;
+            if (failureBlock) {
+                failureBlock(error);
+            }
+            dispatch_group_leave(self.group);
+            return;
+        }
+
+        NSDictionary *responseDict = (NSDictionary *)responseObject;
+        UInt64 serverId = ((NSDecimalNumber *)[responseDict objectForKey:@"id"]).unsignedLongLongValue;
+        self.serverId = serverId;
+        NSString *location = [responseDict objectForKey:@"location"];
+        self.location = location;
+
+        [self uploadAvatarWithServerId:serverId
+                              location:location
+                           avatarStream:attachmentStream
+                      completionHandler:^(NSURLResponse * _Nonnull uploadResp,
+                                          id  _Nonnull uploadObj,
+                                          NSError * _Nonnull uploadError) {
+            if (!uploadError) {
+                NSString *attachmentId = [NSString stringWithFormat:@"%llu", serverId];
+                if (successBlock) {
+                    successBlock(attachmentId, location ?: @"");
+                }
+            } else {
+                OWSLogError(@"%@ upload attachment failed: %@", self.logTag, uploadError);
+                if (failureBlock) {
+                    failureBlock(uploadError);
+                }
+            }
+            dispatch_group_leave(self.group);
+        }];
+    } failure:^(OWSHTTPErrorWrapper * _Nonnull errorWrapper) {
+        NSError *error = errorWrapper.asNSError;
+        OWSLogError(@"%@ Failed to allocate attachment with error: %@", self.logTag, error);
+        error.isRetryable = YES;
+        if (failureBlock) {
+            failureBlock(error);
+        }
+        dispatch_group_leave(self.group);
+    }];
+
+    dispatch_group_wait(self.group, DISPATCH_TIME_FOREVER);
+}
+
 - (void)putV1ProfileWithResponse:(NSURLResponse *)response
                            error:(NSError *)error
                     avatarStream:(TSAttachmentStream *)avatarStream

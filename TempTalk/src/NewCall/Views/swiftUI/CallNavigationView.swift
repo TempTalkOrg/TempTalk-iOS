@@ -21,24 +21,19 @@ struct CallNavigationView: View {
     var cameraRotateAction: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer().frame(width: 15)
-                // 左按钮
-                Button(action: leftItemAction) {
-                    Image("ic_call_mini")
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                Spacer()
-                // 独立子 view 持有自己的 @ObservedObject，不受父 view 重建影响
-                CallNavigationCenterView(currentCall: currentCall)
-                    .environmentObject(room)
-                Spacer().frame(width: 64)
+        HStack {
+            Spacer().frame(width: 15)
+            Button(action: leftItemAction) {
+                Image("ic_call_mini")
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 44)
+            Spacer()
+            CallNavigationCenterView(currentCall: currentCall)
+            Spacer().frame(width: 64)
         }
+        .padding(.horizontal, 10)
+        .frame(minHeight: 44)
         .background(
             Color.black.opacity(currentCall.callType == .private ? 0 : 0.2)
                 .ignoresSafeArea(edges: .top)
@@ -129,37 +124,28 @@ struct CountdownView: View {
     @ObservedObject var timerManager: TimerDataManager
 
     var body: some View {
-        HStack {
-            Spacer()
-            Group {
-                HStack(spacing: 5) {
-                    Spacer()
-                    
-                    Text(stringDuration)
-                        .font(.system(size: 12))
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                    
-                    Rectangle()
-                        .fill(Color.init(hex: 0x474D57))
-                        .frame(width: 1, height: 10)
-                        .padding(.horizontal, 2)
-                    
-                    SwingingAlarmRepresentView(
-                        imageName: timerManager.imageName,
-                        message: timerManager.displayTime,
-                        isAnimating: timerManager.isShaking,
-                        textColor: timerManager.textColor,
-                        isVibrating: timerManager.isVibrating
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .id(timerManager.displayTime)
-
-                    Spacer()
-                }.offset(x: -10)
-            }
-            .frame(width: 200, height: 20)
-            Spacer()
+        HStack(spacing: 5) {
+            Text(stringDuration)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            
+            Rectangle()
+                .fill(Color(hex: 0x474D57))
+                .frame(width: 1, height: 10)
+                .padding(.horizontal, 2)
+            
+            SwingingAlarmRepresentView(
+                imageName: timerManager.imageName,
+                message: timerManager.displayTime,
+                isAnimating: timerManager.isShaking,
+                textColor: timerManager.textColor,
+                isVibrating: timerManager.isVibrating
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .id(timerManager.displayTime)
         }
+        .frame(width: 200, height: 20)
+        .offset(x: -10)
     }
 }

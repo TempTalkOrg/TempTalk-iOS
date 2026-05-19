@@ -7,92 +7,112 @@
 //
 
 #import "DTCallKitManager.h"
+#import "DTCallKitManagerDelegate.h"
+@class OWSBackgroundTask;
+@class WeaCallKitCaller;
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface DTCallKitManager (CallerMapTool)
 
-- (NSString *__nullable)callerIDFromUUID:(NSUUID *)uuid;
+#pragma mark - UUID 查找
 
-- (NSUUID *__nullable)uuidFromCallerID:(NSString *)callerID;
+- (NSString *__nullable)uuidStringFromNSUUID:(NSUUID *)uuid;
+- (NSString *__nullable)uuidStringFromRoomId:(NSString *)roomId;
 
-- (NSString *__nullable)channelNameFromCallerID:(NSString *)callerID;
+#pragma mark - Getter（by UUID）
 
-- (BOOL)isLiveStreamFromCallerID:(NSString *)callerID;
+- (NSString *__nullable)callerAccountFromUUID:(NSString *)uuidString;
+- (NSString *__nullable)channelNameFromUUID:(NSString *)uuidString;
+- (BOOL)isLiveStreamFromUUID:(NSString *)uuidString;
+- (BOOL)isScheduleFromUUID:(NSString *)uuidString;
+- (NSString *__nullable)eidFromUUID:(NSString *)uuidString;
+- (NSString *__nullable)meetingIdFromUUID:(NSString *)uuidString;
+- (NSString *__nullable)meetingNameFromUUID:(NSString *)uuidString;
+- (NSString *__nullable)modeFromUUID:(NSString *)uuidString;
+- (NSString *__nullable)encryptMeetingKeyFromUUID:(NSString *)uuidString;
+- (int)meetingVersionKeyFromUUID:(NSString *)uuidString;
+- (BOOL)answerStateFromUUID:(NSString *)uuidString;
+- (BOOL)hungupStateFromUUID:(NSString *)uuidString;
 
-- (BOOL)isScheduleFromCallerID:(NSString *)callerID;
+#pragma mark - Setter（by UUID）
 
-- (NSString *__nullable)eidFromCallerID:(NSString *)callerID;
-
-- (NSString *__nullable)meetingIdFromCallerID:(NSString *)callerID;
-
-- (NSString *__nullable)meetingNameFromCallerID:(NSString *)callerID;
-
-- (NSString *__nullable)modeFromCallerID:(NSString *)callerID;
-
-- (NSString *__nullable)encryptMeetingKeyFromCallerID:(NSString *)callerID;
-
-- (int)meetingVersionKeyFromCallerID:(NSString *)callerID;
-
-- (NSString *__nullable)callerAccountFromCallerID:(NSString *)callerID;
-
-- (BOOL)answerStateFromCallerID:(NSString *)callerID;
-
-- (BOOL)hungupStateFromCallerID:(NSString *)callerID;
-
-- (void)setMode:(NSString *)mode byCallerID:(NSString *)callerID;
-
-- (void)setEncryptMeetingKey:(NSString *)emk byCallerID:(NSString *)callerID;
-
-- (void)setMeetingVersionKey:(NSNumber *)meetingVersion byCallerID:(NSString *)callerID;
-
-- (void)setCallerAccount:(NSString *)callerAccount byCallerID:(NSString *)callerID;
-
-- (void)setUUID:(NSUUID *)uuid byCallerID:(NSString *)callerID;
-
+- (void)setMode:(NSString *)mode byUUID:(NSString *)uuidString;
+- (void)setEncryptMeetingKey:(NSString *)emk byUUID:(NSString *)uuidString;
+- (void)setMeetingVersionKey:(NSNumber *)meetingVersion byUUID:(NSString *)uuidString;
+- (void)setCallerAccount:(NSString *)callerAccount byUUID:(NSString *)uuidString;
 - (void)setChannelName:(NSString *)channelName
              meetingId:(NSString *)meetingId
            meetingName:(NSString *)meetingName
           isLiveStream:(BOOL)isLiveStream
             isSchedule:(BOOL)isSchedule
                    eid:(nullable NSString *)eid
-            byCallerID:(NSString *)callerID;
+                byUUID:(NSString *)uuidString;
+- (void)setAnswerState:(BOOL)state byUUID:(NSString *)uuidString;
+- (void)setHungupState:(BOOL)state byUUID:(NSString *)uuidString;
 
-- (void)setAnswerState:(BOOL)state byCallerID:(NSString *)callerID;
+- (void)setCalling:(DSKProtoCallMessageCalling *)calling uuid:(NSString *)uuidString;
+- (DSKProtoCallMessageCalling *__nullable)callingFromUUID:(NSString *)uuidString;
 
-- (void)setHungupState:(BOOL)state byCallerID:(NSString *)callerID;
+#pragma mark - 线程安全访问器（供 Swift 使用）
 
+/// 线程安全地获取 caller 对象（内部持有 callerMapLock）
+- (WeaCallKitCaller *__nullable)callerForUUID:(NSString *)uuidString;
 
-/// 缓存本次callKit incoming call
-/// - Parameters:
-///   - calling: LiveKitCalling
-///   - callerId: caller
-- (void)setCalling:(DSKProtoCallMessageCalling *)calling callerId:(NSString *)callerID;
-- (DSKProtoCallMessageCalling *__nullable)callingFromCallerId:(NSString *)callerId;
+#pragma mark - 多通话管理
+
+- (NSArray<NSString *> *)getAllActiveUUIDs;
+- (NSUInteger)getActiveCallsCount;
+- (NSUInteger)getActiveCallsCountFromCallerMap;
+- (BOOL)hasActiveCalls;
+- (nullable NSString *)getFirstActiveUUID;
+- (BOOL)hasCallWithUUID:(NSString *)uuidString;
+- (BOOL)isCallAcceptedWithUUID:(NSString *)uuidString;
+- (BOOL)hasAnyAcceptedCall;
+- (NSUInteger)getAcceptedCallsCount;
+- (NSArray<NSString *> *)getAcceptedUUIDs;
+- (void)cleanupEndedCalls;
 
 @end
 
 
 @interface WeaCallKitCaller : NSObject
 
+// 身份信息
 @property (nonatomic, strong) NSUUID *uuid;
+@property (nonatomic, strong) NSString *callerAccount;
 @property (nonatomic, strong) NSString *channelName;
 @property (nonatomic, strong) NSString *meetingName;
 @property (nonatomic, strong) NSString *meetingId;
 @property (nonatomic, strong) NSString *mode;
-@property (nonatomic, strong) NSString *callerAccount;
-@property (nonatomic, assign) BOOL answered;
-@property (nonatomic, assign) BOOL muted;
-@property (nonatomic, assign) BOOL hungup;
 
+// 加密
 @property (nonatomic, strong, nullable) NSString *encryptMeetingKey;
 @property (nonatomic, strong, nullable) NSNumber *meetingVersion;
 
+// 通话类型
 @property (nonatomic, assign) BOOL isLiveStream;
-@property (nonatomic, strong, nullable) NSString *eid;
 @property (nonatomic, assign) BOOL isSchedule;
+@property (nonatomic, assign) BOOL isPrivateCall;
+@property (nonatomic, strong, nullable) NSString *eid;
 
+// 通话状态（per-call）
+@property (nonatomic, assign) NSTimeInterval timing;
+@property (nonatomic, assign) BOOL answered;
+@property (nonatomic, assign) BOOL isAccepted;
+@property (nonatomic, assign) BOOL isEnded;
+@property (nonatomic, assign) BOOL hungup;
+@property (nonatomic, assign) BOOL isMuted;
+@property (nonatomic, assign) BOOL isMutedByApp;
+@property (nonatomic, assign) CallStatus status;
+@property (nonatomic, assign) CKCallSystemState systemState;
+
+// 后台保活（per-call）
+@property (nonatomic, strong, nullable) OWSBackgroundTask *backgroundTask;
+
+// Calling proto 缓存
 @property (nonatomic, strong, nullable) DSKProtoCallMessageCalling *calling;
 
 @end
+
 NS_ASSUME_NONNULL_END

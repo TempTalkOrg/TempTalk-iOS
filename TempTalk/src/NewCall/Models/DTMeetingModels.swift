@@ -54,6 +54,8 @@ var defaultRoomName: String {
     }
     @Published var callType: CallType = .instant
     var roomId: String?
+    /// 当前通话对应的 CallKit UUID string（由 delegate 回调设置）
+    var callKitUUID: String?
 //    var roomName: String = ""
     var conversationId: String?
     var caller: String?
@@ -105,13 +107,8 @@ var defaultRoomName: String {
                     return name
                 }
             } else if callType == .group {
-                if let gid = conversationId,
-                    let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid),
-                   let groupThread = TSGroupThread.getWithGroupId(groupId) {
-                    return groupThread.name(with: nil)
-                } else {
-                    return _roomName
-                }
+                // _roomName 在接收/发起时已通过 DTGroupCryptoDisplayHelper.resolveGroupDisplayName 解析为本地真实群名
+                return _roomName
             } else if callType == .instant {
                 guard let caller = caller, !caller.isEmpty else {
                     return "instant call"

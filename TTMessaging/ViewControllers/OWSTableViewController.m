@@ -830,12 +830,10 @@ NSString *const kOWSTableCellIdentifier = @"kOWSTableCellIdentifier";
 
     [self.tableView reloadData];
     [self.tableView layoutIfNeeded];
-//    dispatch_async(dispatch_get_main_queue(), ^{
-        if(self.delegate && [self.delegate respondsToSelector:@selector(tableViewDidRenderCompleteWithTableView:)]){
-            [self.delegate tableViewDidRenderCompleteWithTableView:self.tableView];
-        }
-            
-//    });
+
+    if(self.delegate && [self.delegate respondsToSelector:@selector(tableViewDidRenderCompleteWithTableView:)]){
+        [self.delegate tableViewDidRenderCompleteWithTableView:self.tableView];
+    }
 }
 
 #pragma mark - Table view data source
@@ -988,7 +986,7 @@ NSString *const kOWSTableCellIdentifier = @"kOWSTableCellIdentifier";
     }
     if (!item.deselectActionWithIndexPathBlock && !item.deselectActionBlock) {
         [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    }else {
+    } else {
         if (self.isMaxSelected) {
             [tableView deselectRowAtIndexPath:indexPath animated:YES];
         }

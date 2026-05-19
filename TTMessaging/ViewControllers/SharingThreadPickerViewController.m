@@ -139,14 +139,17 @@ typedef void (^SendMessageBlock)(SendCompletionBlock completion);
 
 - (nullable NSString *)convertAttachmentToMessageTextIfPossible
 {
-//    OWSAssertDebug(self.attachments.count == 1);
-    if (!self.attachments[0].isConvertibleToTextMessage) {
+    if (self.attachments.count == 0) {
         return nil;
     }
-    if (self.attachments[0].dataLength >= kOversizeTextMessageSizeThreshold) {
+    SignalAttachment *firstAttachment = self.attachments.firstObject;
+    if (!firstAttachment.isConvertibleToTextMessage) {
         return nil;
     }
-    NSData *data = self.attachments[0].data;
+    if (firstAttachment.dataLength >= kOversizeTextMessageSizeThreshold) {
+        return nil;
+    }
+    NSData *data = firstAttachment.data;
     OWSAssertDebug(data.length < kOversizeTextMessageSizeThreshold);
     NSString *_Nullable messageText = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
     return [messageText filterStringForDisplay];

@@ -91,7 +91,6 @@ class NotificationService: UNNotificationServiceExtension {
         if let mutablePlainAttemptContent = plainAttemptContent.mutableCopy() as? UNMutableNotificationContent {
             ///allUnMutedUnreadCount 回调可能为负
             threadHelper.syncLoadUnReadThreadForNSE{ allUnMutedUnreadCount in
-                
                 if allUnMutedUnreadCount >= 0 {
                     let latestBadge = allUnMutedUnreadCount
                     Logger.info("latestBadge \(latestBadge).")
@@ -100,13 +99,11 @@ class NotificationService: UNNotificationServiceExtension {
                     mutablePlainAttemptContent.badge = NSNumber(value: latestBadge)
                 }
                 contentHandlerObject.contentHandler(mutablePlainAttemptContent)
-                
             }
         } else {
-            
             contentHandlerObject.contentHandler(plainAttemptContent)
         }
-        
+
         Logger.info("Invoking contentHandler, memoryUsage: \(LocalDevice.memoryUsageString), nseCount: \(nseCount).")
         Logger.flush()
     }
@@ -166,6 +163,45 @@ class NotificationService: UNNotificationServiceExtension {
         }
     }
 
+    func overridePlainContentWithResolvedName(replacementName: String, locargs: [String]) {
+        guard !replacementName.isEmpty else { return }
+
+        guard let contentHandlerObject = contentHandlers.first else {
+            Logger.warn("[NSE] overridePlainContent: no contentHandlerObject")
+            return
+        }
+        let identifier = contentHandlerObject.identifier
+
+        guard let plainAttemptContent = plainAttemptContents[identifier],
+              let mutableCopy = plainAttemptContent.mutableCopy() as? UNMutableNotificationContent else {
+            Logger.warn("[NSE] overridePlainContent: cannot mutate plainAttemptContent")
+            return
+        }
+
+        mutableCopy.title = replacementName
+
+        let placeholder = DTGroupCryptoDisplayHelper.encryptedGroupNamePlaceholder
+        if !mutableCopy.body.isEmpty {
+            mutableCopy.body = mutableCopy.body.replacingOccurrences(of: placeholder, with: replacementName)
+        }
+
+        var userInfo = mutableCopy.userInfo
+        if var apsDict = userInfo["aps"] as? [AnyHashable: Any] {
+            if var alertDict = apsDict["alert"] as? [AnyHashable: Any] {
+                alertDict["loc-args"] = locargs
+                if alertDict["title"] != nil {
+                    alertDict["title"] = replacementName
+                }
+                apsDict["alert"] = alertDict
+            }
+            userInfo["aps"] = apsDict
+        }
+        mutableCopy.userInfo = userInfo
+
+        plainAttemptContents[identifier] = mutableCopy
+        Logger.info("[NSE] overridePlainContent: title overridden with resolved name")
+    }
+
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         let attemptContent = request.content
         
@@ -179,7 +215,7 @@ class NotificationService: UNNotificationServiceExtension {
         }
         
         let identifier = request.identifier
-        plainAttemptContents.set([identifier: attemptContent])
+        plainAttemptContents[identifier] = attemptContent
         
         let contentHandleObject = ContentHandlerObject(identifier: identifier, contentHandler: contentHandler)
         contentHandlers.append(contentHandleObject)
@@ -361,26 +397,15 @@ class NotificationService: UNNotificationServiceExtension {
         }
     }
     
-    // 是否 critical 相关
-    func isCriticalNotification(attemptContent :UNNotificationContent) -> Bool {
-        
-        let userInfo = attemptContent.userInfo
-        if let aps = userInfo["aps"] as? Dictionary<String, Any> {
-    
-            guard let level = aps["interruption-level"] as? String else {
-                return false
-            }
-            
-            switch level {
-            case "critical":
-                return true
-            default:
-                return false
-            }
-            
-        } else {
-            return false
-        }
+    // 是否 critical 相关（基于 aps 字典直接判断，承担实际判定逻辑）
+    func isCriticalNotification(aps: [String: Any]) -> Bool {
+        return (aps["interruption-level"] as? String) == "critical"
+    }
+
+    // 是否 critical 相关（基于完整 attemptContent，旧签名 wrapper，保持兼容）
+    func isCriticalNotification(attemptContent: UNNotificationContent) -> Bool {
+        let aps = attemptContent.userInfo["aps"] as? [String: Any] ?? [:]
+        return isCriticalNotification(aps: aps)
     }
     
     func conversationName(from attemptContent: UNNotificationContent, completion: @escaping (_ displayName: String?, _ locArg: String?) -> Void) {
@@ -534,44 +559,68 @@ class NotificationService: UNNotificationServiceExtension {
         guard let alert = aps["alert"] as? Dictionary<String, Any> else {
             return
         }
-        
-        guard let lockey = alert["loc-key"] as? String, let locargs = alert["loc-args"] as? Array<String> else {
+
+        guard let lockey = alert["loc-key"] as? String, var locargs = alert["loc-args"] as? Array<String> else {
             return
         }
-        
-        let result = processPlainNotification(displayName: displayName, notiType: notiType, title: alert["title"] as? String, body: alert["body"] as? String, lockey: lockey, locargs: locargs, dataMessage: dataMessage)
+
+        let interruptionLevel = aps["interruption-level"] as? String ?? "none"
+        let isCritical = isCriticalNotification(aps: aps)
+        Logger.info("[NSE] processNotification: loc-key=\(lockey), loc-args-count=\(locargs.count), interruption-level=\(interruptionLevel)")
+
+        if !locargs.isEmpty {
+            switch resolveGroupNameFromLocalDB(aps: aps, isCritical: isCritical, lockey: lockey) {
+            case .useServerProvided:
+                break
+            case .replace(let name):
+                locargs[0] = name
+                overridePlainContentWithResolvedName(replacementName: name, locargs: locargs)
+            case .encryptedPlaceholder:
+                locargs[0] = DTGroupCryptoDisplayHelper.encryptedGroupNamePlaceholder
+            }
+        }
+
+        let result = processPlainNotification(displayName: displayName, notiType: notiType, title: alert["title"] as? String, body: alert["body"] as? String, lockey: lockey, locargs: locargs, dataMessage: dataMessage, isCritical: isCritical)
         Logger.info("result = \(result)")
+
+        if !result, isCritical {
+            let resolvedTitle = locargs.first ?? defaultNewMessageBody
+            let safeTitle = resolvedTitle.isEmpty ? defaultNewMessageBody : resolvedTitle
+            let resolvedBody = (alert["body"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? defaultNewMessageBody
+            Logger.info("[NSE] processNotification: critical-alert outer fallback")
+            configWithNameAndPreview(title: safeTitle, body: resolvedBody)
+        }
+    }
+
+    private func resolveGroupNameFromLocalDB(aps: [String: Any], isCritical: Bool, lockey: String) -> GroupNameResolution {
+        var resolution: GroupNameResolution = isCritical ? .encryptedPlaceholder : .useServerProvided
+        databaseStorage.read { transaction in
+            resolution = NSEGroupNameResolver().resolve(aps: aps, isCritical: isCritical, lockey: lockey, transaction: transaction)
+        }
+        return resolution
     }
     
     // TODO: 将后面处理 envelop 逻辑移出
-    func processPlainNotification(displayName: String, notiType: NotificationType, title: String? = nil, body: String? = nil, lockey: String, locargs: Array<String>, dataMessage: DSKProtoDataMessage?) -> Bool {
-        Logger.info("processPlainNotification notiType: \(notiType)")
-        
+    func processPlainNotification(displayName: String, notiType: NotificationType, title: String? = nil, body: String? = nil, lockey: String, locargs: Array<String>, dataMessage: DSKProtoDataMessage?, isCritical: Bool = false) -> Bool {
+        Logger.info("processPlainNotification notiType: \(notiType), isCritical: \(isCritical)")
+
         switch notiType {
         case .noNameNoPreview:
             configWithNoNameNoPreView()
             return true
-            
+
         case .nameNoPreview:
-            if showNameNoPreviewNotification(displayName: displayName, title: title, body: body, lockey: lockey, locargs: locargs, dataMessage: dataMessage) == true {
-                return true
-            } else {
-                return false
-            }
-            
+            return showNameNoPreviewNotification(displayName: displayName, title: title, body: body, lockey: lockey, locargs: locargs, dataMessage: dataMessage, isCritical: isCritical)
+
         case .namePreview:
-            if showNameAndPreviewNotification(displayName: displayName, lockey: lockey, locargs: locargs, dataMessage: dataMessage) == true {
-                return true
-            } else {
-                return false
-            }
-            
+            return showNameAndPreviewNotification(displayName: displayName, lockey: lockey, locargs: locargs, dataMessage: dataMessage)
+
         @unknown default:
             return false
         }
     }
     
-    func showNameNoPreviewNotification(displayName: String, title: String? = nil, body: String? = nil, lockey: String, locargs: Array<String>, dataMessage: DSKProtoDataMessage?) -> Bool {
+    func showNameNoPreviewNotification(displayName: String, title: String? = nil, body: String? = nil, lockey: String, locargs: Array<String>, dataMessage: DSKProtoDataMessage?, isCritical: Bool = false) -> Bool {
         var plainTitle = ""
         var plainBody = defaultNewMessageBody
         
@@ -625,7 +674,7 @@ class NotificationService: UNNotificationServiceExtension {
                 }
                 plainBody = defaultNewMessageBody
             } else if (locargs.count > 1) {
-                var plainTitle = locargs.first ?? "Yelling"
+                plainTitle = locargs.first ?? "Yelling"
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName
@@ -633,13 +682,18 @@ class NotificationService: UNNotificationServiceExtension {
                 plainBody = "\(fromRecipient) : \(defaultNewMessageBody)"
             }
         default:
-            break
+            if isCritical {
+                plainTitle = locargs.first ?? defaultNewMessageBody
+                if plainTitle.isEmpty { plainTitle = defaultNewMessageBody }
+                plainBody = defaultNewMessageBody
+                Logger.info("[NSE] showNameNoPreview: critical-alert inner fallback")
+            }
         }
-        
+
         configWithNameAndPreview(title: plainTitle, body: plainBody)
         return true
     }
-    
+
     func showNameAndPreviewNotification(displayName: String, lockey: String = "", locargs: Array<String>, dataMessage: DSKProtoDataMessage?) -> Bool {
         var plainTitle = ""
         var plainBody = ""

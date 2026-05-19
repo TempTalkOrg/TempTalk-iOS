@@ -121,6 +121,8 @@ public class GRDBSchemaMigrator: NSObject {
         case addArchiveMessageIndex  // Add index for archive message query optimization
         case fixArchiveMessageIndex  // Fix the archive message index (remove WHERE clause with wrong type)
         case addMigrationOutgoingIndex  // Add index for TSMessageReadPositionMigrator query optimization
+        case addGroupCryptoKeyRecord   // New table for group encryption root keys
+        case addGroupCryptoFields      // Add groupCryptoMode/encryptedName/encryptedAvatar to DTGroupBaseInfoEntity
 
         //MARK GRDB need to focus on
 
@@ -156,7 +158,7 @@ public class GRDBSchemaMigrator: NSObject {
 
     /// Attention: matters
     ///model_TSMessageSecondary_virtual 虚表，集成自定义 FTS5 分词器 simple
-    public static let grdbSchemaVersionLatest: UInt = 7
+    public static let grdbSchemaVersionLatest: UInt = 8
 
     // An optimization for new users, we have the first migration import the latest schema
     // and mark any other migrations as "already run".
@@ -403,6 +405,35 @@ public class GRDBSchemaMigrator: NSObject {
                 Logger.info("Successfully created migration outgoing index")
             } catch {
                 owsFail("Error creating migration outgoing index: \(error)")
+            }
+        }
+
+        migrator.registerMigration(.addGroupCryptoKeyRecord) { db in
+            do {
+                try db.create(table: "model_DTGroupCryptoKeyRecord") { table in
+                    table.autoIncrementedPrimaryKey("id").notNull()
+                    table.column("recordType", .integer).notNull()
+                    table.column("uniqueId", .text).notNull().unique(onConflict: .fail)
+                    table.column("gid", .text).notNull()
+                    table.column("rGroup", .text).notNull()
+                }
+                try db.create(index: "index_model_DTGroupCryptoKeyRecord_on_uniqueId",
+                              on: "model_DTGroupCryptoKeyRecord",
+                              columns: ["uniqueId"])
+            } catch {
+                owsFail("Error creating group_crypto_keys table: \(error)")
+            }
+        }
+
+        migrator.registerMigration(.addGroupCryptoFields) { db in
+            do {
+                try db.alter(table: "model_DTGroupBaseInfoEntity") { (table: TableAlteration) -> Void in
+                    table.add(column: "groupCryptoMode", .integer).notNull().defaults(to: 0)
+                    table.add(column: "encryptedName", .text)
+                    table.add(column: "encryptedAvatar", .text)
+                }
+            } catch {
+                owsFail("Error adding group crypto fields: \(error)")
             }
         }
     }

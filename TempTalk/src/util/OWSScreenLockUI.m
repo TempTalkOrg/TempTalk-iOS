@@ -58,6 +58,8 @@ NSNotificationName const ScreenLockDidUnlockNotification = @"ScreenLockDidUnlock
 
 @property (nonatomic) Reachability *reachability;
 
+@property (nonatomic) BOOL meetingScreenLockBypassed;
+@property (nonatomic, strong, nullable) DTScreenLockBaseViewController *unlockScreenVc;
 @end
 
 #pragma mark -
@@ -188,16 +190,22 @@ NSNotificationName const ScreenLockDidUnlockNotification = @"ScreenLockDidUnlock
         DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive NO 2", self.logTag);
         return;
     }
-    if (!self.screenLockCountdownDate) {
-        // We became inactive, but never started a countdown.
-        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive NO 3", self.logTag);
+    
+    BOOL hasMeeting = [self isInAnyMeetingState];
+    if (hasMeeting && self.meetingScreenLockBypassed) {
+        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive NO 3 (meeting bypass active)", self.logTag);
         return;
     }
     
-    BOOL haveMeeting = [DTMeetingManager shared].hasMeeting;
-    if (haveMeeting) {
-        // Screen not lock when start a meeting
-        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive NO 4", self.logTag);
+    if (hasMeeting && [DTMeetingManager shared].isFromCallkit) {
+        self.isScreenLockLocked = YES;
+        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive YES 4 (forced lock for CallKit meeting)", self.logTag);
+        return;
+    }
+    
+    if (!self.screenLockCountdownDate) {
+        // We became inactive, but never started a countdown.
+        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive NO 5", self.logTag);
         return;
     }
     
@@ -208,12 +216,12 @@ NSNotificationName const ScreenLockDidUnlockNotification = @"ScreenLockDidUnlock
     if (countdownInterval >= screenLockTimeout) {
         self.isScreenLockLocked = YES;
 
-        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive YES 5 (%0.3f >= %0.3f)",
+        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive YES 6 (%0.3f >= %0.3f)",
             self.logTag,
             countdownInterval,
             screenLockTimeout);
     } else {
-        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive NO 6 (%0.3f < %0.3f)",
+        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive NO 7 (%0.3f < %0.3f)",
             self.logTag,
             countdownInterval,
             screenLockTimeout);
@@ -272,6 +280,11 @@ NSNotificationName const ScreenLockDidUnlockNotification = @"ScreenLockDidUnlock
     }
 
     self.didLastUnlockAttemptFail = NO;
+    
+    if ([self isInAnyMeetingState] && ![DTMeetingManager shared].isFromCallkit && !self.meetingScreenLockBypassed) {
+        self.meetingScreenLockBypassed = YES;
+        DDLogVerbose(@"%@ startScreenLockCountdownIfNecessary: set meetingScreenLockBypassed (non-CallKit meeting)", self.logTag);
+    }
 }
 
 // added: flag for screen lock result
@@ -292,17 +305,23 @@ bool bScreenLockDone = false;
         return;
     }
 
+    if (self.meetingScreenLockBypassed && ![self isInAnyMeetingState]) {
+        self.meetingScreenLockBypassed = NO;
+        DDLogVerbose(@"%@ ensureUI: reset meetingScreenLockBypassed (no active meeting)", self.logTag);
+    }
+
     ScreenLockUIState desiredUIState = self.desiredUIState;
     self.lastState = desiredUIState;
 
     DDLogVerbose(@"%@, ensureUI: %@", self.logTag, NSStringForScreenLockUIState(desiredUIState));
 
-    [self updateScreenBlockingWindow:desiredUIState animated:YES];
-
-    // Show the "iOS auth UI to unlock" if necessary.
-    if (desiredUIState == ScreenLockUIStateScreenLock && !self.didLastUnlockAttemptFail) {
+    BOOL isLockActive = (desiredUIState == ScreenLockUIStateScreenLock || desiredUIState == ScreenLockUIStateScreenProtection)
+                        && self.isScreenLockLocked;
+    if (isLockActive && !self.didLastUnlockAttemptFail) {
         [self tryToPresentAuthUIToUnlockScreenLock];
     }
+
+    [self updateScreenBlockingWindow:desiredUIState animated:YES];
 }
 
 - (void)tryToPresentAuthUIToUnlockScreenLock
@@ -310,11 +329,6 @@ bool bScreenLockDone = false;
     OWSAssertIsOnMainThread();
 
     if (self.isShowingScreenLockUI) {
-        // We're already showing the auth UI; abort.
-        return;
-    }
-    if (self.appIsInactiveOrBackground) {
-        // Never show the auth UI unless active.
         return;
     }
 
@@ -328,33 +342,50 @@ bool bScreenLockDone = false;
             self.isShowingScreenLockUI = NO;
 
             self.isScreenLockLocked = NO;
+        
+            if ([self isInAnyMeetingState]) {
+                self.meetingScreenLockBypassed = YES;
+                DDLogVerbose(@"%@ unlock during meeting: set meetingScreenLockBypassed", self.logTag);
+            }
 
-            // Always clear the countdown after successful unlock
-            // The countdown will be restarted automatically by setAppIsInactiveOrBackground
-            // if the app goes to background again
             self.screenLockCountdownDate = nil;
+
+            bScreenLockDone = true;
+
+            [self removeUnlockScreenVc];
 
             [self ensureUI];
 
-            // added: set screen lock flag to true.
-            bScreenLockDone = true;
-
-            self.screenBlockingWindow.rootViewController = self.screenBlockingViewController;
-
-            // Notify that screen unlock completed - allows deferred UI to be shown
             [[NSNotificationCenter defaultCenter] postNotificationName:ScreenLockDidUnlockNotification object:nil];
     }];
 
-    self.screenBlockingWindow.rootViewController = unlockScreenVc;
-    
-    [self ensureUI];
+    self.unlockScreenVc = unlockScreenVc;
+
+    [unlockScreenVc loadViewIfNeeded];
+    UIViewController *parentVc = self.screenBlockingViewController;
+    [parentVc addChildViewController:unlockScreenVc];
+    unlockScreenVc.view.frame = parentVc.view.bounds;
+    unlockScreenVc.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [parentVc.view addSubview:unlockScreenVc.view];
+    [unlockScreenVc didMoveToParentViewController:parentVc];
+}
+
+- (void)removeUnlockScreenVc
+{
+    if (!self.unlockScreenVc) {
+        return;
+    }
+    [self.unlockScreenVc willMoveToParentViewController:nil];
+    [self.unlockScreenVc.view removeFromSuperview];
+    [self.unlockScreenVc removeFromParentViewController];
+    self.unlockScreenVc = nil;
 }
 
 // Determines what the state of the app should be.
 - (ScreenLockUIState)desiredUIState
 {
-    if (self.hasActiveMeeting) {
-        DDLogVerbose(@"%@ desiredUIState: hasActiveMeeting", self.logTag);
+    if ([self isInAnyMeetingState] && self.meetingScreenLockBypassed) {
+        DDLogVerbose(@"%@ desiredUIState: in meeting with bypass active", self.logTag);
         return ScreenLockUIStateNone;
     }
     
@@ -524,6 +555,10 @@ bool bScreenLockDone = false;
     BOOL isCallKitActive = DTCallKitManager.shared.callsCount > 0;
     
     return haveMeeting || isCallKitActive;
+}
+
+- (BOOL)isInAnyMeetingState {
+    return [DTMeetingManager shared].hasMeeting || DTCallKitManager.shared.callsCount > 0;
 }
 
 - (void)socketStateDidChange

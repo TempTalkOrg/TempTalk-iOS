@@ -164,26 +164,28 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
     void (^markAndHandleSuccess)(TSAttachmentStream *attachmentStream) = ^(TSAttachmentStream *attachmentStream) {
         // Ensure enclosing transaction is complete.
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            /// 成功的回调
+            OWSLogInfo(@"markAndHandleSuccess: stream=%@ grdbId=%@ message=%llu message.grdbId=%@ threadId=%@",
+                       attachmentStream.uniqueId, attachmentStream.grdbId,
+                       message.timestamp, message.grdbId, message.uniqueThreadId);
+
             successHandler(attachmentStream);
-            /// 自动保存图片
+
             if (message.messageModeType == TSMessageModeTypeNormal) {
-                // 机密消息不进行自动保存
                 if (attachmentStream.isImage) {
-                    // 如果是图片
                     [[MediaSavePolicyManager shared] saveImageIfNeeded:attachmentStream.image threadId:message.uniqueThreadId];
                 } else if (attachmentStream.isVideo) {
-                    // 如果是视频
                     [[MediaSavePolicyManager shared] saveVideoIfNeeded:attachmentStream.mediaURL threadId:message.uniqueThreadId];
                 }
             }
 
             DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-//                    [message anyReloadWithTransaction:writeTransaction];
                 if(message.grdbId){
                     [self.databaseStorage touchInteraction:message
                                              shouldReindex:NO
                                                transaction:writeTransaction];
+                } else {
+                    OWSLogError(@"markAndHandleSuccess: SKIPPED touchInteraction, message.grdbId is nil! message=%llu, uniqueId=%@",
+                                message.timestamp, message.uniqueId);
                 }
             });
 
@@ -457,6 +459,20 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
 
     DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
         [stream anyUpsertWithTransaction:transaction];
+
+        if (!stream.grdbId) {
+            TSAttachment *fetchedStream = [TSAttachment anyFetchWithUniqueId:stream.uniqueId
+                                                                  transaction:transaction];
+            if (fetchedStream.grdbId) {
+                [stream updateRowId:fetchedStream.grdbId.longLongValue];
+                OWSLogInfo(@"decryptAttachment: updated stream grdbId from DB: %@", stream.grdbId);
+            } else {
+                OWSLogError(@"decryptAttachment: failed to get grdbId after upsert for stream: %@", stream.uniqueId);
+            }
+        }
+
+        OWSLogInfo(@"decryptAttachment: upserted stream=%@ grdbId=%@ contentType=%@",
+                   stream.uniqueId, stream.grdbId, stream.contentType);
     });
     successHandler(stream);
 }
@@ -591,8 +607,13 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
 {
     OWSAssertDebug(transaction);
 
-    pointer.state = TSAttachmentPointerStateDownloading;
-    [pointer anyInsertWithTransaction:transaction];
+    OWSLogInfo(@"setAttachment:isDownloading pointer=%@ grdbId=%@ message=%llu message.grdbId=%@",
+               pointer.uniqueId, pointer.grdbId, message.timestamp, message.grdbId);
+
+    [pointer anyUpdateAttachmentPointerWithTransaction:transaction
+                                                 block:^(TSAttachmentPointer *instance) {
+        instance.state = TSAttachmentPointerStateDownloading;
+    }];
     
     if (message) {
         DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
@@ -600,6 +621,8 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
                 [self.databaseStorage touchInteraction:message
                                          shouldReindex:NO
                                            transaction:writeTransaction];
+            } else {
+                OWSLogWarn(@"setAttachment:isDownloading SKIPPED touchInteraction because message.grdbId is nil, message=%llu", message.timestamp);
             }
         });
     }

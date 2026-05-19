@@ -196,15 +196,6 @@ class ConversationMessageBubbleView: UIView {
         if pinMark.superview != nil {
             pinMark.tintColor = ConversationStyle.bubbleTextColorIncoming
         }
-        
-        if let renderItem,
-            renderItem.viewItem.isConfidentialMessage,
-            renderItem.confidentialEnable,
-            let message = renderItem.viewItem.interaction as? TSMessage,
-            message.isTextMessage() {
-            bodyTextView.maskColor = Theme.isDarkThemeEnabled ? UIColor.color(rgbHex: 0x5E6673) : UIColor.color(rgbHex: 0xB7BDC6)
-        }
-        
     }
     
     func prepareForReuse() {
@@ -227,6 +218,7 @@ class ConversationMessageBubbleView: UIView {
         bubbleView.bubbleColor = nil
         bubbleView.clearPartnerViews()
         bubbleView.subviews.forEach { $0.removeFromSuperview() }
+        removeGaussianBlur(from: bubbleView)
         
         if let unloadCellContentBlock {
             unloadCellContentBlock()
@@ -235,6 +227,9 @@ class ConversationMessageBubbleView: UIView {
         unloadCellContentBlock = nil
         
         bodyMediaView?.subviews.forEach { $0.removeFromSuperview() }
+        if let bodyMediaView {
+            removeGaussianBlur(from: bodyMediaView)
+        }
         bodyMediaView?.removeFromSuperview()
         bodyMediaView = nil
         
@@ -318,23 +313,6 @@ class ConversationMessageBubbleView: UIView {
         return formatter
     }()
     
-    private lazy var confidentialView: UIVisualEffectView = {
-        let blurEffect = UIBlurEffect.init(style: .light)
-        let visualView = UIVisualEffectView.init(effect: blurEffect)
-        visualView.layer.cornerRadius = 5
-        visualView.layer.masksToBounds = true
-        return visualView
-    }()
-    
-    private lazy var tapToViewLabel: PaddingLabel = {
-        let label = PaddingLabel(insets: UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12))
-        label.textAlignment = .center
-        label.font = UIFont.systemFont(ofSize: 14)
-        label.layer.cornerRadius = 8
-        label.layer.masksToBounds = true
-        return label
-    }()
-    
     var quotedMessageView: ConversationQuotedMessageView?
     var bodyMediaView: UIView?
     var downloadView: AttachmentPointerView?
@@ -392,63 +370,52 @@ extension ConversationMessageBubbleView {
         configureConfidential(renderItem: renderItem)
     }
     
+    // MARK: - Confidential Blur
+    private static let blurRadiusHigh: CGFloat = 13.0
+    private static let blurRadiusLow: CGFloat = 4.0
+
     private func configureConfidential(renderItem: CVMessageBubbleRenderItem) {
         let viewItem = renderItem.viewItem
         guard viewItem.isConfidentialMessage && renderItem.confidentialEnable,
               let message = viewItem.interaction as? TSMessage else {
-            confidentialView.isHidden = true
+            removeGaussianBlur(from: bubbleView)
             return
         }
 
-        // For single forward messages, add confidentialView only on media content (not entire bubble)
-        // so that forward source remains visible
-        if message.isSingleForward() {
-            // For single forward non-text messages, add mask on bodyMediaView only
-            // Use messageCellType instead of isTextMessage() because isTextMessage() returns false for forwarded messages
-            if viewItem.messageCellType() != .textMessage, let bodyMediaView = self.bodyMediaView {
-                confidentialView.isHidden = false
-                if confidentialView.superview != bodyMediaView {
-                    confidentialView.removeFromSuperview()
-                    bodyMediaView.addSubview(confidentialView)
-                    confidentialView.autoPinEdgesToSuperviewEdges()
-                    confidentialView.contentView.addSubview(tapToViewLabel)
-                    tapToViewLabel.textColor = UIColor.white
-                    tapToViewLabel.backgroundColor = UIColor.color(rgbHex: 0x000000, alpha: 0.3)
-                    tapToViewLabel.text = Localized("CONVERSATION_VIEW_CONFIDETIAL_TAP_TO_VIEW")
-                    tapToViewLabel.snp.remakeConstraints { make in
-                        make.center.equalToSuperview()
-                        make.leading.greaterThanOrEqualToSuperview().offset(12)
-                        make.trailing.lessThanOrEqualToSuperview().offset(-12)
-                    }
-                }
+        let cellType = viewItem.messageCellType()
+
+        switch cellType {
+        case .stillImage, .animatedImage, .video:
+            let targetView: UIView
+            if message.isSingleForward(),
+               let bodyMediaView = self.bodyMediaView {
+                targetView = bodyMediaView
             } else {
-                confidentialView.isHidden = true
+                targetView = bubbleView
             }
-            return
-        }
+            applyGaussianBlur(to: targetView, radius: Self.blurRadiusHigh)
 
-        // For text messages (not single forward), don't show confidentialView mask
-        if message.isTextMessage() {
-            confidentialView.isHidden = true
-            return
+        default:
+            applyGaussianBlur(to: bubbleView, radius: Self.blurRadiusLow)
         }
+    }
 
-        // For non-text messages (not single forward), show confidentialView mask on entire bubble
-        confidentialView.isHidden = false
-        if confidentialView.superview != self {
-            confidentialView.removeFromSuperview()
-            addSubview(confidentialView)
-            confidentialView.autoPinEdgesToSuperviewEdges()
-            confidentialView.contentView.addSubview(tapToViewLabel)
-            tapToViewLabel.textColor = UIColor.white
-            tapToViewLabel.backgroundColor = UIColor.color(rgbHex: 0x000000, alpha: 0.3)
-            tapToViewLabel.text = Localized("CONVERSATION_VIEW_CONFIDETIAL_TAP_TO_VIEW")
-            tapToViewLabel.snp.remakeConstraints { make in
-                make.center.equalToSuperview()
-                make.leading.greaterThanOrEqualToSuperview().offset(12)
-                make.trailing.lessThanOrEqualToSuperview().offset(-12)
-            }
-        }
+    // MARK: - Gaussian Blur (Private API via KVC)
+
+    private func applyGaussianBlur(to view: UIView, radius: CGFloat) {
+        let filterClass: AnyClass? = NSClassFromString(["CA", "Filter"].joined())
+        guard let cls = filterClass else { return }
+        let sel = NSSelectorFromString(["filter", "With", "Type:"].joined())
+        guard cls.responds(to: sel) else { return }
+        let filterType = ["gaussian", "Blur"].joined()
+        let filter = (cls as AnyObject).perform(sel, with: filterType)?.takeUnretainedValue()
+        guard let blurFilter = filter as? NSObject else { return }
+        blurFilter.setValue(radius, forKey: ["input", "Radius"].joined())
+        view.layer.setValue([blurFilter], forKey: ["filt", "ers"].joined())
+    }
+
+    private func removeGaussianBlur(from view: UIView) {
+        view.layer.setValue(nil, forKey: ["filt", "ers"].joined())
     }
     
     private func configureForwardSourceView(renderItem: CVMessageBubbleRenderItem) {

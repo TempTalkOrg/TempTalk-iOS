@@ -480,19 +480,59 @@ extension DTMeetingManager: DTCallMessageDelegate {
                 return
             }
             
-            // 当前有会议, 新收到的call和当前是一个, 忽略
             if let currentRoomId = currentCall.roomId, currentRoomId == roomId {
                 return
             }
-            
+
+            let hasActiveCall = currentCall.roomId != nil
+                || (hasMeeting && roomContext != nil)
+            if hasActiveCall {
+                let newCall = DTLiveKitCallModel()
+                newCall.callState = .alerting
+                newCall.caller = caller
+                newCall.roomId = roomId
+                let fallbackRoomName = roomName ?? "[No Room Name]-\(caller)'s Call"
+                newCall.roomName = fallbackRoomName
+                newCall.publicKey = publicKey
+                newCall.emk = emk
+                newCall.createCallMsg = createCallMsg
+                newCall.controlType = controlType
+                newCall.inviteCallees = callees
+                newCall.timestamp = timestamp
+                newCall.serverTimestamp = serverTimestamp
+                newCall.envelopeSource = envelopeSource
+                newCall.envelopeSourceDevice = envelopeSourceDevice
+                if let conversationId {
+                    let callInfo = conversationId.getCallInfo()
+                    newCall.conversationId = callInfo.conversationId
+                    newCall.callType = callInfo.callType
+                    if callInfo.callType == .group, let gid = callInfo.conversationId {
+                        SDSDatabaseStorage.shared.read { tx in
+                            newCall.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupDisplayName(
+                                serverGroupId: gid,
+                                fallbackName: fallbackRoomName,
+                                transaction: tx)
+                        }
+                    }
+                } else {
+                    newCall.callType = .instant
+                }
+                if newCall.callType == .private, let localNumber = TSAccountManager.localNumber() {
+                    newCall.callees = [localNumber]
+                }
+                Logger.info("\(logTag) hasMeeting or currentCall exists, show alert banner for new call (roomId: \(roomId))")
+                DTAlertCallViewManager.shared().addLiveKitCallAlert(newCall)
+                return
+            }
+
             let isSameSource = envelopeSource == TSAccountManager.localNumber()
-            
+
             let newCall = DTLiveKitCallModel()
             newCall.callState = .alerting
             newCall.caller = caller
             newCall.roomId = roomId
-            // TODO: call test
-            newCall.roomName = roomName ?? "[No Room Name]-\(caller)'s Call"
+            let fallbackRoomName = roomName ?? "[No Room Name]-\(caller)'s Call"
+            newCall.roomName = fallbackRoomName
             newCall.publicKey = publicKey
             newCall.emk = emk
             newCall.createCallMsg = createCallMsg
@@ -502,7 +542,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
             newCall.serverTimestamp = serverTimestamp
             newCall.envelopeSource = envelopeSource
             newCall.envelopeSourceDevice = envelopeSourceDevice
-            
+
             var callType: CallType = .instant
             if let conversationId {
                 let callInfo = conversationId.getCallInfo()
@@ -510,16 +550,17 @@ extension DTMeetingManager: DTCallMessageDelegate {
                 callType = callInfo.callType
             }
             newCall.callType = callType
-            
+            if callType == .group, let gid = newCall.conversationId {
+                SDSDatabaseStorage.shared.read { tx in
+                    newCall.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupDisplayName(
+                        serverGroupId: gid,
+                        fallbackName: fallbackRoomName,
+                        transaction: tx)
+                }
+            }
+
             if callType == .private, let localNumber = TSAccountManager.localNumber() {
                 newCall.callees = [localNumber]
-            }
-            
-            if let currentRoomId = currentCall.roomId, currentRoomId != roomId {
-                // 弹出提醒
-                Logger.info("\(logTag) hasMeeting")
-                DTAlertCallViewManager.shared().addLiveKitCallAlert(newCall)
-                return
             }
 
             /// calling展示meetingbar
@@ -577,8 +618,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
                     return
                 }
 
-                // Check if we're in connecting state - this means we're joining ourselves
-                if lifecycleState == .connecting || lifecycleState == .connected {
+                if (lifecycleState == .connecting && roomContext != nil) || lifecycleState == .connected {
                     return
                 }
 
@@ -612,17 +652,25 @@ extension DTMeetingManager: DTCallMessageDelegate {
     
     // callee reveiced cancel to close alert view
     public func handleRemoteCanceledMessage(roomId: String) {
-        Logger.info("\(logTag) roomId handleRemoteCanceledMessage")
-        
+        Logger.info("\(logTag) handleRemoteCanceledMessage roomId: \(roomId), currentRoomId: \(currentCall.roomId ?? "nil"), inMeeting: \(inMeeting)")
+
         if roomId == currentCall.roomId {
+            if inMeeting {
+                Logger.warn("\(logTag) handleRemoteCanceledMessage - already in meeting, ignoring cancel for roomId: \(roomId)")
+                return
+            }
             Task {
                 Logger.info("\(logTag) handleRemoteCanceledMessage need remoteCallHaveBeenCanceled")
                 await remoteCallHaveBeenCanceled()
             }
         } else {
-            // TODO: call remove 多个 call 的悬浮小窗
             callAlertManager.removeLiveKitAlertCall(roomId)
             handleMeetingBar(roomId: roomId, action: .remove)
+
+            let ckManager = DTCallKitManager.shared()
+            if let uuidString = ckManager.uuidString(fromRoomId: roomId) {
+                ckManager.endCallAction(uuidString, onlyForCallKit: true)
+            }
         }
     }
     
@@ -634,9 +682,6 @@ extension DTMeetingManager: DTCallMessageDelegate {
         }
         
         if roomId == currentRoomId {
-            // 1v1 call：
-            // 在会议中，被叫用户一端入会，需要忽略被叫用户其它端的reject的消息：可以通过消息的source， sourceDevice来判断
-            // 自己忽略自己的reject消息
             if currentCall.callType == .private, DTMeetingManager.shared.inMeeting, envelope.source == TSAccountManager.shared.localNumber() {
                 Logger.info("\(logTag) Ignoring reject message from other device while in meeting")
                 return
@@ -665,14 +710,13 @@ extension DTMeetingManager: DTCallMessageDelegate {
     }
     
     public func handleWasHungupMessage(roomId: String) {
-        Logger.info("\(logTag) handleWasHungupMessage roomId")
-        
+        Logger.info("\(logTag) handleWasHungupMessage roomId: \(roomId), currentRoomId: \(currentCall.roomId ?? "nil")")
+
         if roomId == currentCall.roomId {
             Task {
                 await othersideHungupCall(roomId: roomId)
             }
         } else {
-            // TODO: call remove 多个 call 的悬浮小窗
             callAlertManager.removeLiveKitAlertCall(roomId)
             handleMeetingBar(roomId: roomId, action: .remove)
         }
@@ -1202,8 +1246,8 @@ extension DTMeetingManager: DTCallMessageDelegate {
                                                 
                         let dataResult = try JSONSerialization.data(withJSONObject: dataConfig, options: .prettyPrinted)
                         
-                       Task.detached { [weak self] in
-                            guard let self else { return }
+                       Task { [weak self] in
+                            guard let self, self.roomContext != nil else { return }
                             do {
                                 let options = DataPublishOptions(destinationIdentities: [identity], topic: "mute-other", reliable: true)
                                 try await self.roomContext?.room.localParticipant.publish(data: dataResult, options: options)
@@ -1235,14 +1279,14 @@ extension DTMeetingManager: DTCallMessageDelegate {
                     }
                     
                     // 本地关麦
-                    if roomCtx.room.localParticipant.localAudioTracks.count > 0 {
-                        roomCtx.room.localParticipant.localAudioTracks.forEach { track in
-                            Task {
-                                do {
-                                    try await track.mute()
-                                } catch {
-                                    Logger.error("\(logTag) Failed to localAudioTracks mute track: \(error)")
-                                }
+                    let audioTracks = roomCtx.room.localParticipant.localAudioTracks
+                    for track in audioTracks {
+                        Task { [weak track] in
+                            guard let track else { return }
+                            do {
+                                try await track.mute()
+                            } catch {
+                                Logger.error("\(self.logTag) Failed to localAudioTracks mute track: \(error)")
                             }
                         }
                     }
@@ -1287,8 +1331,8 @@ extension DTMeetingManager: DTCallMessageDelegate {
                                                 
                         let dataResult = try JSONSerialization.data(withJSONObject: dataConfig, options: .prettyPrinted)
                         
-                       Task.detached { [weak self] in
-                            guard let self else { return }
+                       Task { [weak self] in
+                            guard let self, self.roomContext != nil else { return }
                             do {
                                 let options = DataPublishOptions(destinationIdentities: [identity], topic: "continue-call-after-silence", reliable: true)
                                 try await self.roomContext?.room.localParticipant.publish(data: dataResult, options: options)
@@ -1346,8 +1390,8 @@ extension DTMeetingManager: DTCallMessageDelegate {
                                  RTMKeys.payload: jsonString] as [String : Any]
                                         
                let dataResult = try JSONSerialization.data(withJSONObject: dataConfig, options: .prettyPrinted)
-               Task.detached { [weak self] in
-                    guard let self else { return }
+               Task { [weak self] in
+                    guard let self, self.roomContext != nil else { return }
                     do {
                         RoomDataManager.shared.raiseLocalHand()
                         let options = DataPublishOptions(topic: "raise-hand", reliable: true)
@@ -1393,8 +1437,8 @@ extension DTMeetingManager: DTCallMessageDelegate {
                                          RTMKeys.payload: jsonString] as [String : Any]
                                                 
                        let dataResult = try JSONSerialization.data(withJSONObject: dataConfig, options: .prettyPrinted)
-                       Task.detached { [weak self] in
-                            guard let self else { return }
+                       Task { [weak self] in
+                            guard let self, self.roomContext != nil else { return }
                             do {
                                 RoomDataManager.shared.cancelHand(participantId: identity.stringValue.components(separatedBy: ".").first ?? "")
                                 let options = DataPublishOptions(destinationIdentities: [identity], topic: "cancel-hand", reliable: true)

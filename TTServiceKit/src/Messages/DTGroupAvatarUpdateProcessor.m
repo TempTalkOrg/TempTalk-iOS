@@ -63,7 +63,7 @@
           sourceFilename:(nullable NSString *)sourceFilename
                  success:(void (^)(NSString * _Nullable))successHandler
                  failure:(void (^)(NSError *error))failureHandler {
-    
+
     TSAttachmentStream *attachmentStream =
         [[TSAttachmentStream alloc] initWithContentType:contentType
                                               byteCount:(UInt64)dataSource.dataLength
@@ -76,32 +76,33 @@
         NSError *error = OWSErrorMakeWriteAttachmentDataError();
         return failureHandler(error);
     }
-    
-    DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
-        [attachmentStream anyInsertWithTransaction:transaction];
-    });
-    
-    OWSUploadToOSSOperation *uploadAttachmentOperation =
-        [[OWSUploadToOSSOperation alloc] initWithAttachmentId:attachmentStream.uniqueId];
-    [uploadAttachmentOperation setSuccessHandler:^{
-        __block TSAttachmentStream *attachment = nil;
-        [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
-            attachment = [TSAttachmentStream anyFetchAttachmentStreamWithUniqueId:attachmentStream.uniqueId transaction:transaction];
-        }];
-        if (![attachment isKindOfClass:[TSAttachmentStream class]]) {
-            DDLogError(@"Unexpected type for attachment builder: %@", attachment);
-            if (failureHandler) {
-                failureHandler(OWSErrorMakeWriteAttachmentDataError());
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+            [attachmentStream anyInsertWithTransaction:transaction];
+        });
+
+        OWSUploadToOSSOperation *uploadAttachmentOperation =
+            [[OWSUploadToOSSOperation alloc] initWithAttachmentId:attachmentStream.uniqueId];
+        [uploadAttachmentOperation setSuccessHandler:^{
+            __block TSAttachmentStream *attachment = nil;
+            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
+                attachment = [TSAttachmentStream anyFetchAttachmentStreamWithUniqueId:attachmentStream.uniqueId transaction:transaction];
+            }];
+            if (![attachment isKindOfClass:[TSAttachmentStream class]]) {
+                OWSLogError(@"Unexpected type for attachment builder: %@", attachment);
+                if (failureHandler) {
+                    failureHandler(OWSErrorMakeWriteAttachmentDataError());
+                }
+                return;
             }
-            return;
-        }
-        if (successHandler) {
-            successHandler([self buildJsonStringWithAttachmentStream:attachment]);
-        }
-    }];
-    uploadAttachmentOperation.failureHandler = failureHandler;
-    [self.uploadQueue addOperation:uploadAttachmentOperation];
-    
+            if (successHandler) {
+                successHandler([self buildJsonStringWithAttachmentStream:attachment]);
+            }
+        }];
+        uploadAttachmentOperation.failureHandler = failureHandler;
+        [self.uploadQueue addOperation:uploadAttachmentOperation];
+    });
 }
 
 
@@ -111,7 +112,7 @@
               sourceFilename:(nullable NSString *)sourceFilename
                      success:(void (^)(DTAPIMetaEntity * _Nonnull entity))successHandler
                      failure:(void (^)(NSError *error))failureHandler{
-    
+
     TSAttachmentStream *attachmentStream =
         [[TSAttachmentStream alloc] initWithContentType:contentType
                                               byteCount:(UInt64)dataSource.dataLength
@@ -124,36 +125,58 @@
         NSError *error = OWSErrorMakeWriteAttachmentDataError();
         return failureHandler(error);
     }
-    
-    DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
-        [attachmentStream anyInsertWithTransaction:transaction];
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+            [attachmentStream anyInsertWithTransaction:transaction];
+        });
+
+        OWSUploadToOSSOperation *uploadAttachmentOperation =
+            [[OWSUploadToOSSOperation alloc] initWithAttachmentId:attachmentStream.uniqueId];
+        [uploadAttachmentOperation setSuccessHandler:^{
+            __block TSAttachmentStream *attachment = nil;
+            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
+                attachment = [TSAttachmentStream anyFetchAttachmentStreamWithUniqueId:attachmentStream.uniqueId transaction:transaction];
+            }];
+            if (![attachment isKindOfClass:[TSAttachmentStream class]]) {
+                OWSLogError(@"Unexpected type for attachment builder: %@", attachment);
+                return;
+            }
+
+            NSString *avatarJson = [self buildJsonStringWithAttachmentStream:attachment];
+            NSDictionary *parameter;
+
+            // Encrypted group: encrypt avatar JSON
+            if (self.groupThread.groupModel.isEncryptedGroup) {
+                DTGroupCryptoManager *cryptoManager = DTGroupCryptoManager.shared;
+                __block NSString *encryptedAvatar = nil;
+                [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                    encryptedAvatar = [cryptoManager encryptGroupAvatarWithGid:self.groupThread.serverThreadId
+                                                                  plainAvatar:avatarJson
+                                                                  transaction:transaction];
+                }];
+                if (encryptedAvatar) {
+                    parameter = @{@"encryptedAvatar": encryptedAvatar};
+                } else {
+                    failureHandler([NSError errorWithDomain:@"GroupCrypto" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"Failed to encrypt group avatar"}]);
+                    return;
+                }
+            } else {
+                parameter = @{@"avatar": avatarJson};
+            }
+
+            [self.updateGroupInfoAPI sendUpdateGroupWithGroupId:self.groupThread.serverThreadId updateInfo:parameter
+                                                        success:^(DTAPIMetaEntity * _Nonnull entity) {
+                successHandler(entity);
+
+            } failure:^(NSError * _Nonnull error) {
+                OWSLogError(@"update group avatar failed, gid: %@, error: %@", self.groupThread.serverThreadId, error);
+                failureHandler(error);
+            }];
+        }];
+        uploadAttachmentOperation.failureHandler = failureHandler;
+        [self.uploadQueue addOperation:uploadAttachmentOperation];
     });
-    
-    OWSUploadToOSSOperation *uploadAttachmentOperation =
-        [[OWSUploadToOSSOperation alloc] initWithAttachmentId:attachmentStream.uniqueId];
-    [uploadAttachmentOperation setSuccessHandler:^{
-        __block TSAttachmentStream *attachment = nil;
-        [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
-            attachment = [TSAttachmentStream anyFetchAttachmentStreamWithUniqueId:attachmentStream.uniqueId transaction:transaction];
-        }];
-        if (![attachment isKindOfClass:[TSAttachmentStream class]]) {
-            DDLogError(@"Unexpected type for attachment builder: %@", attachment);
-            return;
-        }
-        
-        NSDictionary *parameter = @{@"avatar" : [self buildJsonStringWithAttachmentStream:attachment]};
-        [self.updateGroupInfoAPI sendUpdateGroupWithGroupId:self.groupThread.serverThreadId updateInfo:parameter
-                                                    success:^(DTAPIMetaEntity * _Nonnull entity) {
-            successHandler(entity);
-            
-        } failure:^(NSError * _Nonnull error) {
-            failureHandler(error);
-        }];
-        
-    }];
-    uploadAttachmentOperation.failureHandler = failureHandler;
-    [self.uploadQueue addOperation:uploadAttachmentOperation];
-    
 }
 
 - (NSString *)buildJsonStringWithAttachmentStream:(TSAttachmentStream *)attachmentStream{

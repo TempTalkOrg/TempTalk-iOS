@@ -389,6 +389,8 @@ extension ConversationMessageBubbleView {
         }
     }
     
+    private static let maxMediaLoadRetries = 3
+
     private func tryToLoadMedia<T: AnyObject>(
         viewItem: ConversationViewItem,
         loadMedia: () -> T?,
@@ -397,19 +399,22 @@ extension ConversationMessageBubbleView {
         cacheKey: String,
         shouldSkipCache: Bool
     ) -> T? {
-        guard !viewItem.didCellMediaFailToLoad else { return nil }
+        guard viewItem.cellMediaLoadFailureCount < Self.maxMediaLoadRetries else { return nil }
         if let cache, let mediaCache = cache.object(forKey: cacheKey as NSString) as? T {
             return mediaCache
         }
         let media = loadMedia()
         if let media {
+            viewItem.cellMediaLoadFailureCount = 0
             if !shouldSkipCache, let cache {
                 cache.setObject(media, forKey: cacheKey as NSString)
             }
         } else {
-            Logger.error("Failed to load cell media, url: \(viewItem.attachmentStream()?.mediaURL()?.absoluteString ?? "")")
-            viewItem.didCellMediaFailToLoad = true
-            showAttachmentErrorView(on: mediaView)
+            viewItem.cellMediaLoadFailureCount += 1
+            Logger.error("Failed to load cell media (attempt \(viewItem.cellMediaLoadFailureCount)/\(Self.maxMediaLoadRetries)), url: \(viewItem.attachmentStream()?.mediaURL()?.absoluteString ?? "")")
+            if viewItem.cellMediaLoadFailureCount >= Self.maxMediaLoadRetries {
+                showAttachmentErrorView(on: mediaView)
+            }
         }
         return media
     }

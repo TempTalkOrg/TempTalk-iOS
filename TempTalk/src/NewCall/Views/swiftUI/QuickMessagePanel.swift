@@ -146,6 +146,8 @@ class QuickMessagePanel: UIView, UICollectionViewDataSource, UICollectionViewDel
     var emojiPresets: [String] = []
     var textPresets: [String] = []
     var onMessageTap: ((String) -> Void)?
+    var onContentSizeChange: ((CGSize) -> Void)?
+    private var lastReportedContentSize: CGSize = .zero
 
     override init(frame: CGRect) {
         let layout = LeftAlignedFlowLayout()
@@ -170,18 +172,31 @@ class QuickMessagePanel: UIView, UICollectionViewDataSource, UICollectionViewDel
         collectionView.register(TextCell.self, forCellWithReuseIdentifier: TextCell.identifier)
         collectionView.register(DividerView.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter, withReuseIdentifier: DividerView.identifier)
         collectionView.backgroundColor = .clear // CollectionView 背景透明，使用面板背景色
+        // 不滚动，由外部根据内容尺寸调整 frame
+        collectionView.isScrollEnabled = false
+        collectionView.bounces = false
         addSubview(collectionView)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         collectionView.frame = bounds
+        reportContentSizeIfNeeded()
     }
 
     func reload(emojiPresets: [String], textPresets: [String]) {
         self.emojiPresets = emojiPresets
         self.textPresets = textPresets
         collectionView.reloadData()
+        collectionView.layoutIfNeeded()
+        reportContentSizeIfNeeded()
+    }
+
+    private func reportContentSizeIfNeeded() {
+        let contentSize = collectionView.collectionViewLayout.collectionViewContentSize
+        guard contentSize.height > 0, contentSize != lastReportedContentSize else { return }
+        lastReportedContentSize = contentSize
+        onContentSizeChange?(contentSize)
     }
 
     // MARK: - UICollectionViewDataSource
@@ -270,14 +285,26 @@ struct QuickMessagePanelUIKitWrapper: UIViewRepresentable {
     var emojiPresets: [String]
     var textPresets: [String]
     var onTap: (String) -> Void
+    var onContentSizeChange: ((CGSize) -> Void)?
 
     func makeUIView(context: Context) -> QuickMessagePanel {
         let panel = QuickMessagePanel()
         panel.onMessageTap = onTap
+        panel.onContentSizeChange = { size in
+            DispatchQueue.main.async {
+                onContentSizeChange?(size)
+            }
+        }
         return panel
     }
 
     func updateUIView(_ uiView: QuickMessagePanel, context: Context) {
+        uiView.onMessageTap = onTap
+        uiView.onContentSizeChange = { size in
+            DispatchQueue.main.async {
+                onContentSizeChange?(size)
+            }
+        }
         uiView.reload(emojiPresets: emojiPresets, textPresets: textPresets)
     }
 }

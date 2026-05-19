@@ -48,7 +48,7 @@ struct DTBulletChatViewRepresentable: UIViewRepresentable {
             Logger.info("[BulletChat] DTBulletChatViewRepresentable - setting up subscription")
 
             RoomDataManager.shared.bulletMessagePublisher
-                .sink { [weak bulletChatView] _ in
+                .sink { [weak bulletChatView, weak self] _ in
                     Logger.info("[BulletChat] DTBulletChatViewRepresentable - bulletMessagePublisher received")
 
                     DispatchMainThreadSafe {
@@ -57,7 +57,10 @@ struct DTBulletChatViewRepresentable: UIViewRepresentable {
                         case .localPartConnect, .remotePartConnect:
                             chatModel = DTBulletChatModel.generate(withMessage: "", type: BulletMessageType.join.rawValue, receiptId: RoomDataManager.shared.participantId)
                         case .startScreenShare:
-                            chatModel = DTBulletChatModel.generate(withMessage: "", type: BulletMessageType.start_screen.rawValue, receiptId: RoomDataManager.shared.participantId)
+                            let rawPid = RoomDataManager.shared.participantId
+                            let pid = rawPid.components(separatedBy: ".").first ?? rawPid
+                            chatModel = DTBulletChatModel.generate(withMessage: "", type: BulletMessageType.start_screen.rawValue, receiptId: pid)
+                            self?.lastScreenShareParticipantIds.insert(pid)
                         case .remoteMute:
                             chatModel = DTBulletChatModel.generate(withMessage: "",
                                                                    type: RoomDataManager.shared.isMuted ? BulletMessageType.mic_off.rawValue : BulletMessageType.mic_on.rawValue,
@@ -80,18 +83,17 @@ struct DTBulletChatViewRepresentable: UIViewRepresentable {
 struct DTEmojiFlyingViewRepresentable: UIViewRepresentable {
     @EnvironmentObject var roomCtx: RoomContext
     let containerSize: CGSize
+    let isLandscape: Bool
 
     func makeUIView(context: Context) -> DTEmojiFlyingView {
-        let orientation = determineOrientation()
-        let emojiView = DTEmojiFlyingView(orientation: orientation)
+        let emojiView = DTEmojiFlyingView(orientation: resolvedOrientation)
         emojiView.updateContainerSize(containerSize)
         context.coordinator.setupSubscription(for: emojiView)
         return emojiView
     }
 
     func updateUIView(_ uiView: DTEmojiFlyingView, context: Context) {
-        let newOrientation = determineOrientation()
-        uiView.updateOrientation(newOrientation)
+        uiView.updateOrientation(resolvedOrientation)
         uiView.updateContainerSize(containerSize)
     }
 
@@ -134,9 +136,8 @@ struct DTEmojiFlyingViewRepresentable: UIViewRepresentable {
         }
     }
 
-    private func determineOrientation() -> DTMeetingUIOrientation {
-        let screenSize = UIScreen.main.bounds.size
-        return screenSize.width > screenSize.height ? .landscape : .portrait
+    private var resolvedOrientation: DTMeetingUIOrientation {
+        isLandscape ? .landscape : .portrait
     }
 }
 

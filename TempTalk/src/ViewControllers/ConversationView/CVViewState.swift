@@ -70,6 +70,7 @@ class CVViewState: NSObject {
     var bottomBarBottomConstraint: NSLayoutConstraint?
     lazy var inputAccessoryPlaceholder = InputAccessoryViewPlaceholder()
     var isDismissingInteractively = false
+    var isInteractivePopTransitioning = false
     
     var tapGestureRecognizer: UITapGestureRecognizer?
     
@@ -79,6 +80,8 @@ class CVViewState: NSObject {
     
     var viewHasEverAppeared = false
     var shouldAnimateKeyboardChanges = false
+    var needsInputToolbarRecreation = false
+    var wasInputToolbarFirstResponderBeforeResignActive = false
     var hasCompletedInitialScroll = false
     
     var atLocation: UInt = 0

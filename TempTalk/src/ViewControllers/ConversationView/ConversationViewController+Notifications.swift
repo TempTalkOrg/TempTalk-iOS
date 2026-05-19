@@ -17,6 +17,12 @@ extension ConversationViewController {
     func registerNotifications() {
         NotificationCenter.default.addObserver(
             self,
+            selector: #selector(videoPlayerWillStartPlaying),
+            name: OWSVideoPlayer.willStartPlayingNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
             selector: #selector(windowManagerCallDidChange),
             name: .OWSWindowManagerCallDidChange,
             object: nil
@@ -103,12 +109,6 @@ extension ConversationViewController {
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(userTakeScreenshot),
-            name: UIApplication.userDidTakeScreenshotNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
             selector: #selector(didChangeContentSizeCategory),
             name: UIContentSizeCategory.didChangeNotification,
             object: nil
@@ -127,6 +127,29 @@ extension ConversationViewController {
             name: .textSizeDidChange,
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(groupCryptoKeyDidArrive(_:)),
+            name: DTGroupCryptoConstants.groupCryptoKeyDidArriveNotification,
+            object: nil
+        )
+    }
+
+    func registerScreenshotObserver() {
+        // viewIsAppearing fires on every appearance (e.g. returning from image viewer);
+        // remove any existing observer first to avoid stacking duplicates.
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userTakeScreenshot(_:)),
+            name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
     }
 }
 
@@ -134,6 +157,10 @@ extension ConversationViewController {
 
 @objc
 private extension ConversationViewController {
+    func videoPlayerWillStartPlaying(_ notification: Notification) {
+        pauseAudioPlayer()
+    }
+
     func windowManagerCallDidChange(_ notification: Notification) {
         updateBarButtonItems()
         
@@ -212,11 +239,13 @@ private extension ConversationViewController {
         cancelReadTimer()
         updateCellsVisible()
         self.cellMediaCache.removeAllObjects()
+        viewState.wasInputToolbarFirstResponderBeforeResignActive = false
     }
     
     func applicationWillResignActive(_ notification: Notification) {
         self.isUserScrolling = false
         self.isWaitingForDeceleration = false
+        viewState.wasInputToolbarFirstResponderBeforeResignActive = inputToolbar.isInputViewFirstResponder
         saveDraft()
         markVisibleMessagesAsRead()
         self.cellMediaCache.removeAllObjects()
@@ -228,20 +257,18 @@ private extension ConversationViewController {
     
     func applicationDidBecomeActive(_ notification: Notification) {
         startReadTimer()
-        // Invalid update: invalid number of items in section 0. The number of items contained in an existing section after the update (99) must be equal to the number of items contained in that section before the update (96), plus or minus the number of items inserted or deleted from that section (4 inserted, 2 deleted) and plus or minus the number of items moved into or out of that section (0 moved in, 0 moved out).
-        /*
-        1、A、B私聊互相发送多条消息
-        2、A停留在私聊页面锁屏
-        3、B继续给A发送多条消息
-        4、A点击通知打开锁屏，停留在私聊页面
-        5、B继续给A发送一条消息，A crash
-         */
-//        if (self.viewHasEverAppeared) {
-//            [self resetContentAndLayoutWithSneakyTransaction];
-//        }
         updateShouldObserveDBModifications()
         reloadAfterAppEnterForegroundIfNeed()
         
+        if viewHasEverAppeared, viewState.wasInputToolbarFirstResponderBeforeResignActive {
+            viewState.wasInputToolbarFirstResponderBeforeResignActive = false
+            Logger.info("[Keyboard] applicationDidBecomeActive: restoring keyboard after resign-active")
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.isViewVisible else { return }
+                self.inputToolbar.beginEditingMessage()
+            }
+        }
+
         // Fix keyboard layout issues when returning from background
         // The keyboard state might not sync properly between background/foreground transitions
         if viewHasEverAppeared {
@@ -271,22 +298,22 @@ private extension ConversationViewController {
     }
     
     func conversationSettingDidChange(_ notification: Notification) {
-        databaseStorage.asyncRead { transaction in
+        AssertIsOnMainThread()
+        databaseStorage.uiRead { transaction in
             self.thread.anyReload(transaction: transaction)
-        } completion: {
-            self.checkBotBlock()
-            self.safeUpdateBlockStatus()
-            if let conversationEntity = self.thread.conversationEntity, conversationEntity.confidentialMode == TSMessageModeType.confidential {
-                self.inputToolbar.inputToolbarState = .confidential
-            } else {
-                self.inputToolbar.inputToolbarState = .normal
-            }
-            self.reloadBottomBar()
-
-            // Check and update confidential message availability when conversation settings change
-            // This handles group member changes (join/leave)
-            self.checkAndUpdateConfidentialMessageAvailability()
         }
+        self.checkBotBlock()
+        self.safeUpdateBlockStatus()
+        if let conversationEntity = self.thread.conversationEntity, conversationEntity.confidentialMode == TSMessageModeType.confidential {
+            self.inputToolbar.inputToolbarState = .confidential
+        } else {
+            self.inputToolbar.inputToolbarState = .normal
+        }
+        self.reloadBottomBar()
+
+        // Check and update confidential message availability when conversation settings change
+        // This handles group member changes (join/leave)
+        self.checkAndUpdateConfidentialMessageAvailability()
     }
     
     func saveDraftDidSuccess(_ notification: Notification) {
@@ -306,27 +333,26 @@ private extension ConversationViewController {
     }
     
     func signalAccountsDidChanged(_ notification: Notification) {
-        databaseStorage.asyncRead { transaction in
+        AssertIsOnMainThread()
+        databaseStorage.uiRead { transaction in
             self.thread.anyReload(transaction: transaction)
-        } completion: {
-            self.updateNavigationTitle()
-            self.updateBarButtonItems()
+        }
+        self.updateNavigationTitle()
+        self.updateBarButtonItems()
 
-            if !self.isGroupConversation {
-                self.updateNavigationBarSubtitleLabel()
-                let isEditing = self.inputToolbar.inputTextView.isFirstResponder
-                let textLen = self.inputToolbar.inputTextView.text?.count ?? 0
-                Logger.info("[Keyboard] signalAccountsDidChanged → recreateInputToolbar, isEditing=\(isEditing), currentTextLen=\(textLen)")
+        if !self.isGroupConversation {
+            self.updateNavigationBarSubtitleLabel()
+            if self.isUserActivelyTyping {
+                Logger.info("[Keyboard] signalAccountsDidChanged: skipping recreateInputToolbar (user is typing)")
+                self.viewState.needsInputToolbarRecreation = true
+            } else {
+                Logger.info("[Keyboard] signalAccountsDidChanged → recreateInputToolbar")
                 self.recreateInputToolbar()
                 self.reloadBottomBar()
             }
-
-            // Reload all cells to update sender names in messages
-            // This is needed for both group and 1-on-1 conversations
-            // because messages may contain forwarded content or quoted messages
-            // that display contact names
-            self.resetContentAndLayoutWithSneakyTransaction()
         }
+
+        self.resetContentAndLayoutWithSneakyTransaction()
     }
     
     func userTakeScreenshot(_ notification: NSNotification) {
@@ -339,8 +365,6 @@ private extension ConversationViewController {
         var targetThread = thread
         let currentCall = DTMeetingManager.shared.currentCall
 
-        // 检查是否有会议且会议不是小窗模式（即全屏模式）
-        // 如果会议是全屏模式，截屏消息应该发送到会议对应的会话
         if DTMeetingManager.shared.hasMeeting,
            !DTMeetingManager.shared.isMinimize,  // ✅ 添加小窗模式检查
            let conversationId = currentCall.conversationId,
@@ -377,6 +401,14 @@ private extension ConversationViewController {
 
     func textSizeDidChange(_ notification: NSNotification) {
         reloadData()
+    }
+
+    func groupCryptoKeyDidArrive(_ notification: Notification) {
+        guard let gid = notification.userInfo?[DTGroupCryptoConstants.groupCryptoKeyGidKey] as? String,
+              !gid.isEmpty,
+              let groupThread = thread as? TSGroupThread,
+              groupThread.serverThreadId == gid else { return }
+        updateNavigationTitle()
     }
 
 }

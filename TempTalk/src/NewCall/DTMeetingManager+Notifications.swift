@@ -131,21 +131,33 @@ extension DTMeetingManager {
     }
     
     @objc func appWillTerminate(_ noti: Notification) {
-       
         guard hasMeeting || !allMeetings.isEmpty else {
             return
         }
-        
-        Task {
-            await roomContext?.disconnect()
-            if hasMeeting {
-                Logger.info("\(logTag) hangup app Will Terminate")
-                await hangupCall(needSyncCallKit: true,
-                                 isByLocal: true)
+
+        // 主线程 Thread.sleep 会阻塞 MainActor 调度，导致 Task 内的 await MainActor.run 永远无法执行。
+        // 用 RunLoop + DispatchGroup 轮转等待：既给 Task 跑完的机会，也有 3 秒硬超时保护，
+        // 避免超过 iOS willTerminate 窗口（约 5 秒）被强杀。
+        let done = DispatchGroup()
+        done.enter()
+        Task { [weak self] in
+            defer { done.leave() }
+            guard let self else { return }
+            await self.roomContext?.disconnect()
+            if self.hasMeeting {
+                Logger.info("\(self.logTag) hangup app Will Terminate")
+                await self.hangupCoordinator.terminate(reason: .appWillTerminate)
             }
         }
-        
-        Thread.sleep(forTimeInterval: 3)
+
+        let deadline = Date(timeIntervalSinceNow: 3)
+        while done.wait(timeout: .now() + 0.05) == .timedOut {
+            if Date() >= deadline {
+                Logger.warn("\(logTag) appWillTerminate: cleanup timed out after 3s")
+                break
+            }
+            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.05))
+        }
     }
     
     
@@ -164,7 +176,8 @@ extension DTMeetingManager {
         callModel.callState = .alerting
         callModel.caller = caller
         callModel.roomId = meetingId
-        callModel.roomName = meetingName ?? ""
+        let fallbackRoomName = meetingName ?? ""
+        callModel.roomName = fallbackRoomName
         callModel.callType = .instant
         if DTParamsUtils.validateString(groupId).boolValue {
             callModel.conversationId = groupId
@@ -172,6 +185,12 @@ extension DTMeetingManager {
                 callModel.callType = .private
             } else if callType == 2 {
                 callModel.callType = .group
+                SDSDatabaseStorage.shared.read { tx in
+                    callModel.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupDisplayName(
+                        serverGroupId: groupId,
+                        fallbackName: fallbackRoomName,
+                        transaction: tx)
+                }
             }
         }
         if let localNumber = TSAccountManager.localNumber(), callType == 1 {

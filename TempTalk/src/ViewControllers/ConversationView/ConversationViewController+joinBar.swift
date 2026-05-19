@@ -133,6 +133,10 @@ extension ConversationViewController {
     
     // MARK: - Join 行为
     @objc private func joinTapped() {
+        if let targetCall = DTMeetingManager.shared.currentThreadTargetCall(self.thread) {
+            DTMeetingManager.shared.acceptCall(call: targetCall)
+            return
+        }
         guard let callModel = curCallModel else { return }
         DTMeetingManager.shared.acceptCall(call: callModel)
     }

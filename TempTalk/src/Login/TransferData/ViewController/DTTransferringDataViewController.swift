@@ -15,7 +15,9 @@ import TTMessaging
     private let urlComponent: DeviceTransferURLComponent
     private let logintoken: String?
     private let oldDevice: Bool
-    
+    private var discoveryTimeoutTimer: Timer?
+    private var hasStartedTransfer = false
+
     private var progress: Progress? {
         willSet {
             progress.map {
@@ -52,12 +54,13 @@ import TTMessaging
         super.viewWillAppear(animated)
         DeviceTransferService.shared.addObserver(self)
         DeviceTransferService.shared.startListeningForNewDevices()
-        beginTransfer()
-        Logger.info("DeviceTransferService:::: = \(DeviceTransferService.shared)");
+        startDiscoveryTimeout()
+        Logger.info("[DeviceTransfer] Waiting for new device discovery, expected peer: \(urlComponent.peerId.displayName)")
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        cancelDiscoveryTimeout()
         DeviceTransferService.shared.removeObserver(self)
         DeviceTransferService.shared.stopListeningForNewDevices()
         DeviceTransferService.shared.cancelTransferToNewDevice()
@@ -106,14 +109,58 @@ import TTMessaging
         ])
     }
     
-    private func beginTransfer() {
+    private static let discoveryTimeoutInterval: TimeInterval = 30
+
+    private func beginTransfer(with discoveredPeerId: MCPeerID) {
+        AssertIsOnMainThread()
+        guard !hasStartedTransfer else { return }
+        hasStartedTransfer = true
+        cancelDiscoveryTimeout()
+        Logger.info("[DeviceTransfer] Peer discovered, beginning transfer")
         DispatchQueue.global().async {
             do {
-                try DeviceTransferService.shared.transferAccountToNewDevice(with: self.urlComponent.peerId, certificateHash: self.urlComponent.certificateHash)
+                try DeviceTransferService.shared.transferAccountToNewDevice(with: discoveredPeerId, certificateHash: self.urlComponent.certificateHash)
             } catch {
-                Logger.error("Device transfer failed: \(error)")
+                Logger.error("[DeviceTransfer] Transfer failed: \(error)")
+                DispatchMainThreadSafe { self.hasStartedTransfer = false }
             }
         }
+    }
+
+    private func startDiscoveryTimeout() {
+        cancelDiscoveryTimeout()
+        discoveryTimeoutTimer = Timer.scheduledTimer(
+            withTimeInterval: Self.discoveryTimeoutInterval,
+            repeats: false
+        ) { [weak self] _ in
+            guard let self, !self.hasStartedTransfer else { return }
+            Logger.warn("[DeviceTransfer] Discovery timed out after \(Self.discoveryTimeoutInterval)s")
+            self.showDiscoveryTimeoutAlert()
+        }
+    }
+
+    private func cancelDiscoveryTimeout() {
+        discoveryTimeoutTimer?.invalidate()
+        discoveryTimeoutTimer = nil
+    }
+
+    private func showDiscoveryTimeoutAlert() {
+        let alert = UIAlertController(
+            title: "Connection Failed".localized,
+            message: "Could not find the other device. Make sure both devices have Wi-Fi and Bluetooth enabled and are near each other, then try again.".localized,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Retry".localized, style: .default) { [weak self] _ in
+            guard let self else { return }
+            self.startDiscoveryTimeout()
+            DeviceTransferService.shared.startListeningForNewDevices()
+            Logger.info("[DeviceTransfer] Retrying discovery")
+        })
+        alert.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel) { [weak self] _ in
+            DeviceTransferService.shared.stopTransfer()
+            self?.dismiss(animated: true)
+        })
+        present(alert, animated: true)
     }
     @objc private func buttonEvent(cancel sender: UIButton) {
         DeviceTransferService.shared.stopTransfer()
@@ -203,7 +250,9 @@ import TTMessaging
 
 extension DTTransferringDataViewController: DeviceTransferServiceObserver {
     func deviceTransferServiceDiscoveredNewDevice(peerId: MCPeerID, discoveryInfo: [String : String]?) {
-        Logger.info("[DeviceTransferModule -> DTTransferringDataViewController -> func -> deviceTransferServiceDiscoveredNewDevice] new device discovered")
+        Logger.info("[DeviceTransfer] Discovered peer: \(peerId.displayName), expected: \(urlComponent.peerId.displayName)")
+        guard peerId.displayName == urlComponent.peerId.displayName else { return }
+        beginTransfer(with: peerId)
     }
     
     func deviceTransferServiceDidStartTransfer(progress: Progress) {

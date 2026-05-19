@@ -377,7 +377,7 @@ extension DTCallAPIManager {
                let joined = tempJoined.value as? Bool {
                 anotherDeviceJoined = joined
             }
-            if let tempStopped = data["userStoped"],
+            if let tempStopped = data["userStopped"],
                let stopped = tempStopped.value as? Bool {
                 userStopped = stopped
             }

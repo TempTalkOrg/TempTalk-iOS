@@ -155,9 +155,11 @@ static NSInteger maxExpandCount = 5;
      numberOfItemsInSection:(NSInteger)section {
     
     if (!self.isLiveStream) {
-        BOOL hasHands = self.getHangupList.count > 0;
-        NSInteger cellCount = hasHands ? 1:0;
-        return (NSInteger)self.broadcasters.count + cellCount;
+        // 举手入口已下掉，注释保留逻辑
+        // BOOL hasHands = self.getHangupList.count > 0;
+        // NSInteger cellCount = hasHands ? 1:0;
+        // return (NSInteger)self.broadcasters.count + cellCount;
+        return (NSInteger)self.broadcasters.count;
     }
     
     NSInteger numberOfItems = (NSInteger)(section == 0 ? MIN(self.handupAudiences.count, 3) : self.broadcasters.count);
@@ -183,32 +185,33 @@ static NSInteger maxExpandCount = 5;
         }
         return cell;
     } else {
-        if (self.getHangupList.count > 0 ) {
-            if (indexPath.item == 0) {
-                DTHandupTableContainerCell *handupCell = [collectionView dequeueReusableCellWithReuseIdentifier:[DTHandupTableContainerCell reuseIdentifier] forIndexPath:indexPath];
-                [handupCell configureWithHandupList:self.getHangupList
-                                  isExpanded:self.isHandupExpanded
-                                   maxCount:maxExpandCount
-                                   onToggle:^(BOOL expanded) {
-                    self.isHandupExpanded = expanded;
-                    [collectionView reloadItemsAtIndexPaths:@[indexPath]];
-                }];
-                return handupCell;
-            } else {
-                DTMultiMeetingMiniCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:[DTMultiMeetingMiniCell reuseIdentifier] forIndexPath:indexPath];
-                DTMultiChatItemModel *itemModel = self.broadcasters[(NSUInteger)indexPath.item - 1];
-                cell.itemModel = itemModel;
-                [cell setDisplayBackground:NO displayCorner:NO];
-                return cell;
-            }
-        } else {
+        // 举手入口已下掉，注释保留逻辑
+        // if (self.getHangupList.count > 0 ) {
+        //     if (indexPath.item == 0) {
+        //         DTHandupTableContainerCell *handupCell = [collectionView dequeueReusableCellWithReuseIdentifier:[DTHandupTableContainerCell reuseIdentifier] forIndexPath:indexPath];
+        //         [handupCell configureWithHandupList:self.getHangupList
+        //                           isExpanded:self.isHandupExpanded
+        //                            maxCount:maxExpandCount
+        //                            onToggle:^(BOOL expanded) {
+        //             self.isHandupExpanded = expanded;
+        //             [collectionView reloadItemsAtIndexPaths:@[indexPath]];
+        //         }];
+        //         return handupCell;
+        //     } else {
+        //         DTMultiMeetingMiniCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:[DTMultiMeetingMiniCell reuseIdentifier] forIndexPath:indexPath];
+        //         DTMultiChatItemModel *itemModel = self.broadcasters[(NSUInteger)indexPath.item - 1];
+        //         cell.itemModel = itemModel;
+        //         [cell setDisplayBackground:NO displayCorner:NO];
+        //         return cell;
+        //     }
+        // } else {
             DTMultiMeetingMiniCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:[DTMultiMeetingMiniCell reuseIdentifier] forIndexPath:indexPath];
             DTMultiChatItemModel *itemModel = self.broadcasters[(NSUInteger)indexPath.item];
             cell.itemModel = itemModel;
             [cell setDisplayBackground:NO displayCorner:NO];
             return cell;
-        }
-        
+        // }
+
     }
     return [[UICollectionViewCell alloc] init];
 }
@@ -216,24 +219,25 @@ static NSInteger maxExpandCount = 5;
 - (CGSize)collectionView:(UICollectionView *)collectionView
                   layout:(UICollectionViewLayout *)collectionViewLayout
   sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
-    if (indexPath.item == 0 && self.getHangupList.count > 0) {
-        NSArray *hands = self.getHangupList;
-        NSInteger headerHeight = 44;
-        NSInteger controlHeight = 25;
-        CGFloat height = 0;
-        if (hands.count > maxExpandCount) {
-            // 大于数量分2部
-            if (self.isHandupExpanded) {
-                height = hands.count * 44 + headerHeight + controlHeight;
-            } else {
-                height = maxExpandCount * 44 + headerHeight + controlHeight;
-            }
-        } else {
-            height = hands.count * 44 + headerHeight + 8;
-        }
-        return CGSizeMake(collectionView.bounds.size.width, height);
-    }
-    
+    // 举手入口已下掉，注释保留逻辑
+    // if (indexPath.item == 0 && self.getHangupList.count > 0) {
+    //     NSArray *hands = self.getHangupList;
+    //     NSInteger headerHeight = 44;
+    //     NSInteger controlHeight = 25;
+    //     CGFloat height = 0;
+    //     if (hands.count > maxExpandCount) {
+    //         // 大于数量分2部
+    //         if (self.isHandupExpanded) {
+    //             height = hands.count * 44 + headerHeight + controlHeight;
+    //         } else {
+    //             height = maxExpandCount * 44 + headerHeight + controlHeight;
+    //         }
+    //     } else {
+    //         height = hands.count * 44 + headerHeight + 8;
+    //     }
+    //     return CGSizeMake(collectionView.bounds.size.width, height);
+    // }
+
     return self.adjustCellSize;
 }
 

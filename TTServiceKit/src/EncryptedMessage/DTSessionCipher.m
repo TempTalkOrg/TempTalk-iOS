@@ -169,6 +169,7 @@
 
 - (DTDecryptedMsgResult *)decryptWithMessage:(DTEncryptedMessage *)message
                          localTheirIdKeyData:(NSData *)localTheirIdKeyData
+                        cachedTheirIdKeyData:(NSData *_Nullable)cachedTheirIdKeyData
                              localPriKeyData:(NSData *)localPriKeyData
                                        error:(NSError **)outError {
     DTProtoAdapter *protoAdapter = [DTProtoAdapter new];
@@ -176,6 +177,7 @@
                                                                 signedEKey:message.signedEKey
                                                                 theirIdKey:message.identityKey
                                                            localTheirIdKey:localTheirIdKeyData
+                                                          cachedTheirIdKey:cachedTheirIdKeyData
                                                                       eKey:message.eKey
                                                                localPriKey:localPriKeyData
                                                                     ermKey:message.eRMKey
@@ -197,9 +199,12 @@ BOOL isMoreThanOneDayAgo(NSTimeInterval timestamp) {
     
     ECKeyPair *localIdKeyPair = [OWSIdentityManager.sharedManager identityKeyPairWithTransaction:transaction];
     NSData *localTheirIdKeyData = [[NSData dataFromBase64StringNoPadding:localTheirIdKey] throws_removeKeyType];
+    DTSessionRecord *sessionRecord = [TTSessionStore loadSessionWithIdentifier:self.recipientId transaction:transaction];
+    NSData *cachedTheirIdKeyData = sessionRecord.remoteIdentityKey;
     NSError *error;
     DTDecryptedMsgResult * result = [self decryptWithMessage:message
                                          localTheirIdKeyData:localTheirIdKeyData
+                                        cachedTheirIdKeyData:cachedTheirIdKeyData
                                              localPriKeyData:localIdKeyPair.privateKey
                                                        error:&error];
     if(error){
@@ -215,6 +220,7 @@ BOOL isMoreThanOneDayAgo(NSTimeInterval timestamp) {
                     OWSLogInfo(@"retry decrypt message use old key.");
                     result = [self decryptWithMessage:message
                                   localTheirIdKeyData:localTheirIdKeyData
+                                 cachedTheirIdKeyData:cachedTheirIdKeyData
                                       localPriKeyData:oldLocalIdKeyPair.privateKey
                                                 error:&retryError];
                 }
@@ -231,7 +237,7 @@ BOOL isMoreThanOneDayAgo(NSTimeInterval timestamp) {
     }
     
     if(DTParamsUtils.validateString(localTheirIdKey)){
-        if(!result.verifiedIDResult) {
+        if(result.identityVerifyResult == DTIdentityVerifyResultAllMismatch) {
             NSString *logInfo = [NSString stringWithFormat:@"Decryption:verifiedID failed! source = %@, sourceDevice = %u, messageIdKey = %@, remoteIdKey = %@.", self.recipientId, self.sourceDevice, [message.identityKey base64EncodedString], [localTheirIdKeyData base64EncodedString]];
             OWSLogWarn(@"%@", logInfo);
             OWSProdError(logInfo);

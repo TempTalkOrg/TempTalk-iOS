@@ -112,6 +112,9 @@ CREATE
             ,"publishRule" INTEGER
             ,"messageClearAnchor" DOUBLE
             ,"criticalAlert" BOOLEAN
+            ,"groupCryptoMode" INTEGER NOT NULL DEFAULT 0
+            ,"encryptedName" TEXT
+            ,"encryptedAvatar" TEXT
         )
 ;
 
@@ -697,5 +700,23 @@ CREATE
 CREATE
     INDEX "index_model_ResetIdentifyKeyRecord_on_uniqueId"
         ON "model_ResetIdentifyKeyRecord"("uniqueId"
+)
+;
+
+CREATE
+    TABLE
+        IF NOT EXISTS "model_DTGroupCryptoKeyRecord" (
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL
+            ,"recordType" INTEGER NOT NULL
+            ,"uniqueId" TEXT NOT NULL UNIQUE
+                ON CONFLICT FAIL
+            ,"gid" TEXT NOT NULL
+            ,"rGroup" TEXT NOT NULL
+        )
+;
+
+CREATE
+    INDEX "index_model_DTGroupCryptoKeyRecord_on_uniqueId"
+        ON "model_DTGroupCryptoKeyRecord"("uniqueId"
 )
 ;

@@ -37,9 +37,9 @@ class DTRaiseHandController: OWSTableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         updateTableContents()
-        RoomDataManager.shared.onRaiseHandsUpdate = {
-            DispatchMainThreadSafe {
-                self.updateTableContents()
+        RoomDataManager.shared.onRaiseHandsUpdate = { [weak self] in
+            DispatchMainThreadSafe { [weak self] in
+                self?.updateTableContents()
             }
         }
     }

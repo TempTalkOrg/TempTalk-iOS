@@ -14,6 +14,7 @@ struct CriticalAlertConfirmBottomPopupView: View {
     let onDismiss: () -> Void
     let invitedUserIds: [String]
     let callType: CallType
+    var containerSize: CGSize = UIScreen.main.bounds.size
 
     @GestureState private var dragOffset = CGSize.zero
     @State private var showTipsBubble = false
@@ -22,7 +23,7 @@ struct CriticalAlertConfirmBottomPopupView: View {
     let meetingManager = DTMeetingManager.shared
 
     var body: some View {
-        let kScreenWidth: CGFloat = min(screenWidth, screenHeight)
+        let kScreenWidth: CGFloat = min(containerSize.width, containerSize.height)
 
         ZStack {
             // 背景层，点击时触发收起
@@ -33,105 +34,95 @@ struct CriticalAlertConfirmBottomPopupView: View {
                     onDismiss()
                 }
 
-            // 弹出层
-            VStack {
-                Spacer()
-                VStack(spacing: 0) {
-                    // 标题和描述区域
-                    VStack(spacing: 12) {
-                        // 标题和提示按钮
-                        HStack(spacing: 8) {
-                            Text(Localized("CRITICAL_ALERT_CONFIRM_TITLE"))
-                                .font(.system(size: 16, weight: .regular))
-                                .foregroundColor(Color(hex: 0xEAECEF))
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Text(Localized("CRITICAL_ALERT_CONFIRM_TITLE"))
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(Color(hex: 0xEAECEF))
 
-                            Button(action: {
-                                showTipsBubble.toggle()
-                            }) {
-                                Image("critical_alert_confirm_tips")
-                                    .resizable()
-                                    .frame(width: 14, height: 14)
-                            }
-                            .background(
-                                GeometryReader { geo in
-                                    Color.clear.preference(
-                                        key: TipsButtonFramePreferenceKey.self,
-                                        value: geo.frame(in: .global)
-                                    )
-                                }
+                    Button(action: {
+                        showTipsBubble.toggle()
+                    }) {
+                        Image("critical_alert_confirm_tips")
+                            .resizable()
+                            .frame(width: 14, height: 14)
+                    }
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: TipsButtonFramePreferenceKey.self,
+                                value: geo.frame(in: .global)
                             )
                         }
+                    )
+                }
+                .padding(.top, 24)
 
-                        // 描述文本
-                        Text(generateDescriptionText())
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundColor(Color(hex: 0xB7BDC6))
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 24)
-                    .padding(.bottom, 24)
-
-                    // 按钮区域
-                    HStack(spacing: 12) {
-                        // Cancel 按钮
-                        Button(action: {
-                            showTipsBubble = false  // 立即隐藏气泡
-                            onDismiss()
-                        }) {
-                            Text(Localized("CRITICAL_ALERT_CANCEL"))
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 40)
-                                .background(Color(hex: 0x2B3139))
-                                .cornerRadius(8)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color(hex: 0x474D57), lineWidth: 1)
-                                )
-                        }
-
-                        // Send 按钮
-                        Button(action: {
-                            handleSendButtonTapped()
-                        }) {
-                            Text(Localized("CRITICAL_ALERT_SEND"))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 40)
-                                .background(Color(hex: 0x056FFA))
-                                .cornerRadius(8)
-                        }
-                    }
+                Text(generateDescriptionText())
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(Color(hex: 0xB7BDC6))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-                    .padding(.bottom, 18)
+                    .padding(.bottom, 24)
+
+                HStack(spacing: 12) {
+                    Button(action: {
+                        showTipsBubble = false
+                        onDismiss()
+                    }) {
+                        Text(Localized("CRITICAL_ALERT_CANCEL"))
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 40)
+                            .background(Color(hex: 0x2B3139))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(hex: 0x474D57), lineWidth: 1)
+                            )
+                    }
+
+                    Button(action: {
+                        handleSendButtonTapped()
+                    }) {
+                        Text(Localized("CRITICAL_ALERT_SEND"))
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 40)
+                            .background(Color(hex: 0x056FFA))
+                            .cornerRadius(8)
+                    }
                 }
-                .frame(width: kScreenWidth)
-                .background(
-                    Color(hex: 0x2B3139)
-                        .clipShape(CriticalAlertRoundedCorner(radius: 10, corners: [.topLeft, .topRight]))
-                )
-                .offset(y: dragOffset.height)
-                .gesture(
-                    DragGesture()
-                        .updating($dragOffset) { value, state, _ in
-                            if value.translation.height > 0 {
-                                state = value.translation
-                            }
-                        }
-                        .onEnded { value in
-                            if value.translation.height > 50 {
-                                showTipsBubble = false  // 立即隐藏气泡
-                                onDismiss()
-                            }
-                        }
-                )
-                .animation(.easeOut(duration: 0.25), value: dragOffset)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 18)
             }
+            .frame(width: kScreenWidth)
+            .background(
+                Color(hex: 0x2B3139)
+                    .clipShape(CriticalAlertRoundedCorner(radius: 10, corners: [.topLeft, .topRight]))
+            )
+            .offset(y: dragOffset.height)
+            .gesture(
+                DragGesture()
+                    .updating($dragOffset) { value, state, _ in
+                        if value.translation.height > 0 {
+                            state = value.translation
+                        }
+                    }
+                    .onEnded { value in
+                        if value.translation.height > 50 {
+                            showTipsBubble = false
+                            onDismiss()
+                        }
+                    }
+            )
+            .animation(.easeOut(duration: 0.25), value: dragOffset)
+            .frame(maxHeight: .infinity, alignment: .bottom)
 
             // 气泡提示
             if showTipsBubble {

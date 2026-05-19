@@ -264,7 +264,9 @@ NS_ASSUME_NONNULL_BEGIN
             return;
         };
         TSGroupThread *groupThread = (TSGroupThread *)thread;
-        if ([[groupThread nameWithTransaction:nil].lowercaseString containsString:searchText.lowercaseString]) {
+        // 复用 configureWithThread: 时已解密缓存的群名,避免主线程同步读库阻塞搜索输入
+        NSString *resolvedGroupName = self.thread.name ?: @"";
+        if ([resolvedGroupName.lowercaseString containsString:searchText.lowercaseString]) {
             self.snippetLabel.hidden = true;
             return;
         }
@@ -771,19 +773,19 @@ NS_ASSUME_NONNULL_BEGIN
             SignalAccount *account = [self.contactsManager signalAccountForRecipientId:self.messageAuthorId];
             // Use nickname for avatar, not remark name
             NSString *nicknameForAvatar = [self.contactsManager rawDisplayNameForPhoneIdentifier:self.messageAuthorId];
-            [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:self.messageAuthorId displayName:nicknameForAvatar completion:nil];
+            [self.avatarView setImageWithSignalAccount:account displayName:nicknameForAvatar completion:nil];
             return;
         }
 
         if (thread.isGroupThread) {
-
-            [self.avatarView setImageWithThread:(TSGroupThread *)thread.threadRecord contactsManager:contactsManager];
+            TSGroupThread *groupThread = (TSGroupThread *)thread.threadRecord;
+            [self.avatarView setImageWithThread:groupThread contactsManager:contactsManager];
         } else {
 
             SignalAccount *account = [self.contactsManager signalAccountForRecipientId:thread.contactIdentifier];
             // Use nickname for avatar, not remark name
             NSString *nicknameForAvatar = [self.contactsManager rawDisplayNameForPhoneIdentifier:thread.contactIdentifier];
-            [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:thread.contactIdentifier displayName:nicknameForAvatar completion:nil];
+            [self.avatarView setImageWithSignalAccount:account displayName:nicknameForAvatar completion:nil];
         }
     }
     
@@ -1009,7 +1011,11 @@ NS_ASSUME_NONNULL_BEGIN
     
 //#pragma clang diagnostic push
 //#pragma clang diagnostic ignored "-Wnonnull"
-    self.thread = [[ThreadViewModel alloc] initWithThread:groupThread transaction:nil];
+    // 加密群名在 nil transaction 下会拿到占位符,ThreadViewModel 初始化必须带 transaction
+    __weak typeof(self) weakSelf = self;
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
+        weakSelf.thread = [[ThreadViewModel alloc] initWithThread:groupThread transaction:transaction];
+    }];
 //#pragma clang diagnostic pop
     self.contentView.backgroundColor = Theme.bgpagePrimaryColor;
     self.selectedBackgroundView.backgroundColor = Theme.bg5Color;
@@ -1248,7 +1254,7 @@ NS_ASSUME_NONNULL_BEGIN
     self.groupSizeContainer.hidden = NO;
     self.groupSizeContainer.layer.borderColor = UIColor.ows_whiteColor.CGColor;//self.contentView.backgroundColor.CGColor;
     self.groupSizeContainer.backgroundColor = isDarkTheme ? [UIColor colorWithRGBHex:0x012C70] : [UIColor colorWithRGBHex:0xEBF7FF];
-    self.lbGroupSize.textColor = Theme.tinfoColor;
+    self.lbGroupSize.textColor = [[Theme light] tinfoColor];
     
     self.lbGroupSize.text = [NSString stringWithFormat:@"%ld", memberCount];
 }

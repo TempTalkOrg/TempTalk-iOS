@@ -80,38 +80,15 @@ extension ConversationViewController: ConversationMessageCellDelegate {
     
     func messageCell(_ cell: ConversationMessageCell, didTapFailedOutgoingMessage message: TSOutgoingMessage) {
         AssertIsOnMainThread()
-        
+
         guard isCanSpeak else { return }
-        
-        let actionSheet = ActionSheetController(title: message.mostRecentFailureText)
-        actionSheet.addAction(OWSActionSheets.cancelAction)
-        
-        let delegateMessageAction = ActionSheetAction(
-            title: Localized("TXT_DELETE_TITLE"),
-            style: .destructive
-        ) { action in
-            self.databaseStorage.asyncWrite { transaction in
-                message.anyRemove(transaction: transaction)
-                OWSLogger.info("handleUnsentMessageTap delete message timestamp for sorting: \(message.timestampForSorting())")
-            }
-        }
-        actionSheet.addAction(delegateMessageAction)
-        
-        let resendMessageAction = ActionSheetAction(
-            title: Localized("SEND_AGAIN_BUTTON"),
-            accessibilityIdentifier: "ConversationViewController.send_agin",
-            style: .default
-        ) { action in
-            self.messageSender.enqueue(message) {
-                OWSLogger.info("\(self.logTag) Successfully resent failed message.")
-            } failure: { error in
-                OWSLogger.info("\(self.logTag) Failed to send message with error: \(error.localizedDescription)")
-            }
-        }
-        actionSheet.addAction(resendMessageAction)
 
         dismissKeyBoard(byUserAction: true)  // 用户点击重发，标记为用户操作
-        presentActionSheet(actionSheet)
+        messageSender.enqueue(message) { [weak self] in
+            OWSLogger.info("\(self?.logTag ?? "") Successfully resent failed message.")
+        } failure: { [weak self] error in
+            OWSLogger.info("\(self?.logTag ?? "") Failed to send message with error: \(error.localizedDescription)")
+        }
     }
     
     func messageCell(_ cell: ConversationMessageCell, didTapTranslateIconWith viewItem: ConversationViewItem) {

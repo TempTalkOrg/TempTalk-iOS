@@ -35,15 +35,7 @@ class CVBodyTextRenderItem: ConversationRenderItem {
         guard let message = viewItem.interaction as? TSMessage else {
             return ConversationStyle.bubbleTextColorOutgoing
         }
-        
-        if viewItem.isConfidentialMessage &&
-            !message.isSingleForward() &&
-            !message.isMultiForward() &&
-            confidentialEnable {
-            return UIColor.clear
-        } else {
-            return conversationStyle.bubbleTextColor(message: message)
-        }
+        return conversationStyle.bubbleTextColor(message: message)
     }
     
     var isCombinedForwardingStyle: Bool {
@@ -103,6 +95,23 @@ class CVBodyTextRenderItem: ConversationRenderItem {
         //call at last
         if viewItem.isConfidentialMessage && confidentialEnable {
             self.bodyTextStyle = .confidential
+            if let existingConfig = self.bodyTextConfig {
+                let confidentialConfig = CVTextViewConfig(
+                    text: existingConfig.text,
+                    font: existingConfig.font,
+                    textColor: existingConfig.textColor,
+                    maximumNumberOfLines: 8,
+                    lineBreakMode: existingConfig.lineBreakMode,
+                    textAlignment: existingConfig.textAlignment,
+                    linkTextAttributes: existingConfig.linkTextAttributes,
+                    shouldIgnoreEvents: existingConfig.shouldIgnoreEvents,
+                    textContainerInset: existingConfig.textContainerInset
+                )
+                self.bodyTextConfig = confidentialConfig
+                self.viewSize = measureDefaultBodyTextSize(textConfig: confidentialConfig)
+                self.lastLineSize = measureDefaultBodyLastLineSize(textConfig: confidentialConfig)
+                self.hasTapForMore = false
+            }
         }
     }
     

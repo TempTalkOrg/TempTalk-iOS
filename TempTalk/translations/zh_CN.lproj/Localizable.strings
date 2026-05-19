@@ -281,6 +281,9 @@
 /* Label for generic done button. */
 "BUTTON_DONE" = "完成";
 
+/* Label for generic edit button. */
+"BUTTON_EDIT" = "编辑";
+
 "BUTTON_OK" = "好的";
 
 /* Button text to enable batch selection mode */
@@ -785,7 +788,7 @@
 
 "ADD_MEMBER_GROUP_ACTION" = "添加成员";
 
-"REMOVE_MEMBER_GROUP_ACTION" = "移出成员";
+"REMOVE_MEMBER_GROUP_ACTION" = "移出群组";
 
 "DISMISS_GROUP_ACTION" = "解散群组";
 
@@ -808,6 +811,15 @@
 
 /* The navbar title for the 'update group' view. */
 "EDIT_GROUP_DEFAULT_TITLE" = "编辑群组";
+
+/* Placeholder / label for the group name field in edit group info page. */
+"GROUP_SETTING_GROUP_NAME" = "群组名称";
+
+/* Error message when user tries to submit an empty group name. */
+"RENAME_ERROR_CANNOT_EMPTY" = "群组名称不能为空";
+
+/* Toast when a member without permission tries to change the group avatar. */
+"GROUP_SETTING_NO_EDIT_AVATAR_PERMISSION" = "无权限，请联系群主或管理员";
 
 /* Label for the cell that lets you add a new member to a group. */
 "EDIT_GROUP_MEMBERS_ADD_MEMBER" = "添加...";
@@ -1117,6 +1129,30 @@
 
 /* No comment provided by engineer. */
 "GROUP_TITLE_CHANGED" = "群组名称已改为 '%@'。";
+
+/* Group encryption upgrade system message */
+"GROUP_CRYPTO_UPGRADE_SYSTEM_MSG" = "🔒 群信息已增强为端到端加密";
+
+/* Toast message when group crypto key is still syncing */
+"GROUP_CRYPTO_KEY_SYNCING" = "群组加密密钥同步中，请稍后再试";
+
+"GROUP_CRYPTO_UPGRADE_TITLE" = "增强加密";
+
+"GROUP_CRYPTO_UPGRADE_DESC" = "群信息从通道加密增强为端到端加密。";
+
+"GROUP_CRYPTO_UPGRADE_BUTTON" = "开启";
+
+"GROUP_CRYPTO_INFO_TITLE" = "已增强加密";
+
+"GROUP_CRYPTO_INFO_DESC" = "群信息已从通道加密增强为端到端加密。";
+
+"GROUP_CRYPTO_ENCRYPTED_SUBTITLE" = "已增强加密";
+
+"GROUP_CRYPTO_NOT_AVAILABLE_YET" = "该功能暂不可用";
+"GROUP_CRYPTO_UPGRADE_FAILED" = "升级失败";
+"GROUP_CRYPTO_NO_KEY_TOAST" = "暂时无法操作";
+"GROUP_CRYPTO_DEFAULT_NAME" = "🔒 群组";
+"GROUP_CRYPTO_INFO_DISMISS" = "知道了";
 
 /* No comment provided by engineer. */
 "GROUP_UPDATED" = "群组更新完成。";
@@ -1455,6 +1491,9 @@
 
 /* status message for failed messages */
 "MESSAGE_STATUS_FAILED" = "发送失败。";
+
+/* status message when forwarding to multiple targets partially succeeded */
+"MESSAGE_STATUS_PARTIALLY_FAILED" = "部分发送成功";
 
 /* status message for failed messages */
 "MESSAGE_STATUS_FAILED_SHORT" = "失败";
@@ -2955,8 +2994,16 @@
 "Save failed" = "保存失败";
 "UPDATENAME_OPREATION_FAILED" = "操作被禁止，请联系 ITBot / ChativeBot。";
 
-"CONTACT_EDIT_REMARK" = "设置备注";
-"CONTACT_REMARK" = "备注";
+"CONTACT_EDIT_REMARK" = "编辑备注";
+"CONTACT_REMARK" = "添加备注";
+"EDIT_CONTACT_REMARK_SUBTITLE" = "备注和头像仅自己可见";
+"CONTACT_REMARK_AVATAR_ACTION_SHEET_TITLE" = "设置备注头像";
+/* Label for action that restores the contact's original avatar */
+"CONTACT_REMARK_RESTORE_AVATAR" = "还原头像";
+/* Label shown before original avatar in personal card */
+"PERSON_CARD_ORIGINAL_LABEL" = "原头像:";
+/* Toast shown when uploading remark avatar fails */
+"CONTACT_REMARK_AVATAR_UPLOAD_FAILED" = "上传头像失败，请重试";
 
 "CONTACT_PROFILENAME_DESCRIPTION_HEADER" = "昵称： ";
 "CONTACT_NUMBER_DESCRIPTION_HEADER" = "号码： ";
@@ -3129,6 +3176,11 @@
 "FORWARD_MESSAGE_SELECT_MESSAGE_MAX_COUNT" = "最多选择%lu条消息";
 "FORWARD_MESSAGE_SINGLE_TITLE" = "转发消息 %@\n来自: ";
 "FORWARD_MESSAGE_CONFIDENTIAL" = "机密消息不能被选中";
+"FORWARD_NOTICE_SINGLE" = "%1$@ 转发了一条来自 %2$@ 的消息";
+"FORWARD_NOTICE_PLURAL" = "%1$@ 转发了 %2$u 条来自 %3$@ 的消息";
+"FORWARD_NOTICE_SINGLE_NO_FROM" = "%1$@ 转发了一条消息";
+"FORWARD_NOTICE_PLURAL_NO_FROM" = "%1$@ 转发了 %2$u 条消息";
+"FORWARD_NOTICE_YOU" = "您";
 
 /* The title for the theme section in the appearance settings. */
 "SETTINGS_APPEARANCE_THEME_TITLE" = "主题";
@@ -3628,6 +3680,15 @@
 
 "REMOVE_CONTACT" = "删除好友";
 "SELECTED_ERROR_PASSKEY" = "你使用了错误的passkey，请重试并选择正确的passkey。";
+"PASSKEY_ERROR_REGISTER_INITIALIZE" = "Passkey 注册初始化失败，请稍后重试";
+"PASSKEY_ERROR_REGISTER_FINALIZE" = "Passkey 注册确认失败，请稍后重试";
+"PASSKEY_ERROR_LOGIN_INITIALIZE" = "Passkey 登录初始化失败，请稍后重试";
+"PASSKEY_ERROR_LOGIN_FINALIZE" = "Passkey 登录验证失败，请稍后重试";
+"PASSKEY_ERROR_UNSUPPORTED_VERSION" = "当前系统版本不支持 Passkey，请升级到 iOS 16 或更高版本";
+"PASSKEY_ERROR_UNSUPPORTED_AUTH" = "当前设备不支持此认证方式";
+"PASSKEY_ERROR_DATA" = "数据处理异常，请稍后重试";
+"PASSKEY_ERROR_ACCOUNT" = "账号验证失败，请重试";
+"PASSKEY_ERROR_UNKNOWN" = "操作失败，请稍后重试";
 
 /* notification title indicating the user generically has a new message */
 "GENERIC_INCOMING_MESSAGE_NOTIFICATION" = "新消息！";
@@ -3774,13 +3835,16 @@
 
 "SPEECHTOTEXT_NO_TEXT_RECOGNIZE" = "未识别到文字";
 
-"SETTINGS_CHAT" = "聊天";
+"SETTINGS_CHAT" = "聊天和通话";
 
 "SETTINGS_CHAT_SAVE_PHOTOS" = "保存到相册";
 "SETTINGS_CHAT_SAVE_PHOTOS_DESCRIPTION" = "自动将收到的照片和视频保存到照片中；在机密模式下不会保存项目。";
 
 "SETTINGS_CHAT_VOICE_PLAYBACK_SPEED" = "语音播放速度";
 "SETTINGS_CHAT_VOICE_PLAYBACK_SPEED_DESCRIPTION" = "设置语音消息的默认播放速度。";
+
+"SETTINGS_CHAT_VOICE_CHANGER" = "变声";
+"SETTINGS_CHAT_VOICE_CHANGER_DESCRIPTION" = "设置通话的默认变声。";
 
 "MEETING_NAVAGATION_RECONNECTING_FAILURE" = "重连失败";
 "MEETING_NAVAGATION_CONNECTING" = "连接中...";
@@ -3806,6 +3870,13 @@
 "RAISE_HANDS_TITLE" = "举手";
 
 "CALLING_NOISE_TITLE" = "麦克风噪声抑制";
+"CALLING_DENOISE_MODE_TITLE" = "降噪模式";
+"CALLING_DENOISE_MODE_ENHANCED" = "增强降噪";
+"CALLING_DENOISE_MODE_STANDARD" = "标准降噪";
+"CALLING_VOICE_CHANGER_TITLE" = "变声";
+"CALLING_VOICE_PRESET_ORIGINAL" = "未开启(原声)";
+"CALLING_VOICE_PRESET_HIGHER" = "清亮";
+"CALLING_VOICE_PRESET_DEEPER" = "低沉";
 
 "BLOCK_USER_TITLE" = "屏蔽用户";
 "BLOCK_USER_DESCRIPTION" = "是否屏蔽该用户，禁止其在 Yelling 上向你发送消息或发起通话？";
@@ -3963,3 +4034,27 @@
 "PERSON_CARD_OFFICIAL_ACCOUNT" = "官方账号";
 
 "PERSON_CARD_WEBSITE" = "网站";
+
+"CONFIRM_LEAVE_GROUP_CTA" = "离开";
+
+"CONFIRM_REMOVE_MEMBER_TITLE_FORMAT" = "移出 %@";
+
+"CONFIRM_REMOVE_MEMBER_BODY" = "该成员将无法继续查看或发送群消息";
+
+"CONFIRM_REMOVE_MEMBER_CTA" = "移出";
+
+"DISBAND_GROUP_ACTION" = "解散群组";
+
+/* Global Config Crypto */
+"GLOBAL_CONFIG_DECRYPT_SUCCESS" = "验签解密成功";
+"GLOBAL_CONFIG_DECRYPT_FAILED" = "解密失败";
+"GLOBAL_CONFIG_ERROR_MISSING_FIELD" = "配置文件缺少 %@ 字段";
+"GLOBAL_CONFIG_ERROR_INVALID_SIGN_PREFIX" = "sign 字段格式异常：缺少 GLOBALCONFIG_ 前缀";
+"GLOBAL_CONFIG_ERROR_UNKNOWN_KEY_ID" = "未知的 keyId: \"%@\"，客户端未预埋对应公钥";
+"GLOBAL_CONFIG_ERROR_SIGNATURE_FAILED" = "ECDSA 签名验证失败：配置文件可能被篡改";
+"GLOBAL_CONFIG_ERROR_BASE64_DECODE_FAILED" = "%@ Base64 解码失败";
+"GLOBAL_CONFIG_ERROR_DECRYPTION_FAILED" = "AES-GCM 解密失败: %@";
+"GLOBAL_CONFIG_ERROR_JSON_PARSE_FAILED" = "JSON 解析失败";
+"GLOBAL_CONFIG_ERROR_CIPHERTEXT_TOO_SHORT" = "密文数据过短";
+
+"CALL_MIC_QUEUE_TITLE" = "等待发言";

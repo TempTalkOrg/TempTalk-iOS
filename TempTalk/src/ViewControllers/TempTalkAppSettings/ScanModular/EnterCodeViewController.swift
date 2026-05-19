@@ -189,6 +189,7 @@ final class EnterCodeViewController: OWSViewController {
     }
 
     @objc func backButtonTapped() {
+        view.endEditing(true)
         self.navigationController?.popViewController(animated: true)
     }
 

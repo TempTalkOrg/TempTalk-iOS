@@ -66,6 +66,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nullable, readonly, nonatomic) NSString *firstName;
 @property (nullable, readonly, nonatomic) NSString *lastName;
 @property (nullable, copy, nonatomic) NSString *remark;//备注名
+/// 备注头像，仅本端可见，结构与 `avatar` 一致。
+@property (nullable, copy, nonatomic) NSDictionary *remarkAvatar;
+/// 服务端 `remarkAvatar` 密文临时载体，不参与归档。
+@property (nullable, copy, nonatomic) NSString *remarkAvatarServer;
 @property (nonatomic, copy) NSString *fullName;
 @property (nullable, copy, nonatomic) NSString *email;
 @property (nullable, copy, nonatomic) NSString *number;

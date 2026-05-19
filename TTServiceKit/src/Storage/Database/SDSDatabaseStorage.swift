@@ -346,6 +346,20 @@ public class SDSDatabaseStorage: SDSTransactable {
         }
         read(file: "objc", function: "objc", line: 0, block: block)
     }
+
+    public func reentrantRead(block: (SDSAnyReadTransaction) -> Void) {
+        guard storageCoordinatorState == .GRDB else {
+            owsFailDebug("Yap unsupported reentrantRead.")
+            return
+        }
+        do {
+            try grdbStorage.reentrantRead { transaction in
+                block(transaction.asAnyRead)
+            }
+        } catch {
+            owsFail("reentrantRead error: \(error.grdbErrorForLogging)")
+        }
+    }
     
 //    @objc(writeWithBlock:)
 //    public override func write(block: @escaping (SDSAnyWriteTransaction) -> Void) {

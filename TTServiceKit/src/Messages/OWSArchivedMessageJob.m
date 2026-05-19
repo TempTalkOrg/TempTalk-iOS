@@ -7,6 +7,7 @@
 
 #import "OWSArchivedMessageJob.h"
 #import "AppReadiness.h"
+#import "DTFetchThreadConfigAPI.h"
 #import <SignalCoreKit/NSDate+OWS.h>
 #import "NSTimer+OWS.h"
 #import <TTServiceKit/TTServiceKit-Swift.h>
@@ -237,6 +238,16 @@ static const NSUInteger kArchivedMessageBatchSize = 30;
         return;
     }
 
+    DTThreadConfigEntity *threadConfig = thread.threadConfig;
+    if (threadConfig && threadConfig.endTimestamp > 0) {
+        uint64_t creationTimestamp = (uint64_t)([thread.creationDate timeIntervalSince1970] * 1000);
+        if (creationTimestamp > threadConfig.endTimestamp) {
+            OWSLogInfo(@"[Archive] Skipping system message for recreated thread: %@ (creationDate %llu > endTimestamp %llu)",
+                       thread.uniqueId, creationTimestamp, threadConfig.endTimestamp);
+            return;
+        }
+    }
+
     // 使用高效的 SQL SELECT EXISTS 查询检查是否已存在 TSInfoMessageArchiveMessage
     InteractionFinder *finder = [[InteractionFinder alloc] initWithThreadUniqueId:thread.uniqueId];
     if ([finder existsArchiveMessageWithTransaction:transaction]) {
@@ -248,8 +259,6 @@ static const NSUInteger kArchivedMessageBatchSize = 30;
     if (finalTimestamp <= 0) {
         return;
     }
-
-    OWSLogInfo(@"%@ generate system message finalTimestamp %llu", self.logTag, finalTimestamp);
 
     // 创建新的系统消息
     TSInfoMessage *info = [[TSInfoMessage alloc] initWithTimestamp:finalTimestamp
@@ -476,6 +485,19 @@ static const NSUInteger kArchivedMessageBatchSize = 30;
 
 #pragma mark - Cleanup Empty Threads
 
+static NSString *const kOrphanCleanupDoneKey = @"kOrphanCleanupDone";
+static NSString *const kArchivedJobStoreCollection = @"OWSArchivedMessageJob";
+
++ (SDSKeyValueStore *)keyValueStore
+{
+    static SDSKeyValueStore *store = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        store = [[SDSKeyValueStore alloc] initWithCollection:kArchivedJobStoreCollection];
+    });
+    return store;
+}
+
 - (void)cleanupEmptyThreadsIfNeeded {
     OWSLogInfo(@"[Archive] Starting cleanup of empty threads");
 
@@ -486,6 +508,15 @@ static const NSUInteger kArchivedMessageBatchSize = 30;
 
             // 2. Cleanup threads where user has been kicked from group
             [self cleanupKickedGroupThreadsWithTransaction:transaction];
+
+            // 3. Once-ever: cleanup orphan threads (shouldBeVisible=0, no messages or only archive message)
+            BOOL alreadyDone = [[OWSArchivedMessageJob keyValueStore] getBool:kOrphanCleanupDoneKey
+                                                                defaultValue:NO
+                                                                 transaction:transaction];
+            if (!alreadyDone) {
+                [TSThread cleanupOrphanThreadsWithTransaction:transaction];
+                [[OWSArchivedMessageJob keyValueStore] setBool:YES key:kOrphanCleanupDoneKey transaction:transaction];
+            }
         });
 
         OWSLogInfo(@"[Archive] Cleanup of empty threads completed");

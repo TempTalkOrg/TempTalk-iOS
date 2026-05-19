@@ -20,6 +20,7 @@
 #import "OWSOutgoingSentMessageTranscript.h"
 #import "DTMessageParams.h"
 #import "DTMsgPeerContextParams.h"
+#import <TTServiceKit/TTServiceKit-Swift.h>
 
 @implementation DTMessageParamsBuilder
 
@@ -42,6 +43,8 @@
         msgType = DSKProtoEnvelopeMsgTypeMsgReadReceipt;
     }else if ([message isRecalMessage]){
         msgType = DSKProtoEnvelopeMsgTypeMsgRecall;
+    }else if ([message isKindOfClass:[TSOutgoingForwardNoticeMessage class]]) {
+        msgType = DSKProtoEnvelopeMsgTypeMsgForwardNotice;
     }
     
     return msgType;
@@ -75,29 +78,35 @@
         recipient = [SignalRecipient new];
     }
     
-    NSDictionary *apnsInfo = [[[DTApnsMessageBuilder alloc] initWithMessage:message thread:thread forRecipient:recipient] build];
-    
-    DTMessageParams *messageParams = nil;
-    
-    messageParams = [[DTMessageParams alloc] initWithType:messageType
-                                                  content:serializedData
-                                            legacyContent:legacySerializedData
-                                              readReceipt:readReceipt
-                                                 apnsInfo:apnsInfo];
-    
+    // 一次读事务内完成 APNs builder 的群名解析和 associated thread 查询,避免 builder 内部重入事务
+    __block NSDictionary *apnsInfo = nil;
+    __block NSDictionary *associatedConversation = nil;
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
+        if (![message isKindOfClass:[TSOutgoingForwardNoticeMessage class]]) {
+            apnsInfo = [[[DTApnsMessageBuilder alloc] initWithMessage:message
+                                                               thread:thread
+                                                         forRecipient:recipient
+                                                          transaction:transaction] build];
+        }
+        if (DTParamsUtils.validateString(message.associatedUniqueThreadId)) {
+            TSThread *associatedThread = [TSThread anyFetchWithUniqueId:message.associatedUniqueThreadId transaction:transaction];
+            associatedConversation = [self getConversationInfoWithThread:associatedThread];
+        }
+    }];
+
+    DTMessageParams *messageParams = [[DTMessageParams alloc] initWithType:messageType
+                                                                   content:serializedData
+                                                             legacyContent:legacySerializedData
+                                                               readReceipt:readReceipt
+                                                                  apnsInfo:apnsInfo];
+
     messageParams.msgType = [self msgTypeWithMessage:message];
     OWSDetailMessageType type = [message detailMessageType];
     if (type != OWSDetailMessageTypeUnknow){
         messageParams.detailMessageType = type;
     }
-   
-    if(DTParamsUtils.validateString(message.associatedUniqueThreadId)){
-        [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
-            messageParams.conversation = [self getConversationInfoWithThread:[TSThread anyFetchWithUniqueId:message.associatedUniqueThreadId transaction:transaction]];
-        }];
-    }else{
-        messageParams.conversation = [self getConversationInfoWithThread:thread];
-    }
+
+    messageParams.conversation = associatedConversation ?: [self getConversationInfoWithThread:thread];
     if([message isKindOfClass:[OWSReadReceiptsForLinkedDevicesMessage class]]){
         OWSReadReceiptsForLinkedDevicesMessage *receiptMsg = (OWSReadReceiptsForLinkedDevicesMessage *)message;
         OWSLinkedDeviceReadReceipt *receipt = receiptMsg.readReceipts.firstObject;

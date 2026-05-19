@@ -917,7 +917,7 @@ extension DTMessageListController: QLPreviewControllerDataSource, QLPreviewContr
             owsFailDebug("currentFileURL was unexpectedly nil")
             // Dismiss the preview controller and show error to user
             controller.dismiss(animated: true) {
-                OWSActionSheets.showErrorAlert(message: NSLocalizedString("FILE_PREVIEW_ERROR",
+                OWSActionSheets.showErrorAlert(message: Localized("FILE_PREVIEW_ERROR",
                                                                           comment: "Error message when file preview fails"))
             }
             // Create a valid placeholder file to prevent QuickLook crash

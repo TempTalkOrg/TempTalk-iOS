@@ -31,8 +31,17 @@ open class DTLottieBridge: NSObject {
           }
         }
         animationView.play()
-        
+
         return animationView
     }
-    
+
+    @objc(playAnimationView:)
+    class func play(_ animationView: LottieAnimationView) {
+        animationView.play()
+    }
+
+    @objc(stopAnimationView:)
+    class func stop(_ animationView: LottieAnimationView) {
+        animationView.stop()
+    }
 }

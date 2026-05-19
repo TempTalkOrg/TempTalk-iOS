@@ -13,6 +13,8 @@ protocol OWSVideoPlayerDelegate: AnyObject {
 @objc
 public class OWSVideoPlayer: NSObject {
 
+    @objc public static let willStartPlayingNotification = Notification.Name("OWSVideoPlayerWillStartPlaying")
+
     @objc
     let avPlayer: AVPlayer
     let audioActivity: AudioActivity
@@ -42,6 +44,7 @@ public class OWSVideoPlayer: NSObject {
 
     @objc
     public func play() {
+        NotificationCenter.default.post(name: OWSVideoPlayer.willStartPlayingNotification, object: self)
         OWSAudioSession.shared.startPlaybackAudioActivity(self.audioActivity)
 
         guard let item = avPlayer.currentItem else {

@@ -33,6 +33,13 @@ NS_ASSUME_NONNULL_BEGIN
                                              success:(void(^)(DTConversationEntity*)) sucessBlock
                                              failure:(void(^)(NSError*))failure;
 
+/// 设置对联系人的备注头像（仅本端可见）。aesRemarkAvatarString 是 AES-GCM 密文 base64，
+/// 接口里会再补 V1| 前缀，与 remark 字段编码方式一致。
+- (void)requestConfigContactRemarkAvatarWithConversationID:(NSString *)conversation
+                                              remarkAvatar:(NSString *)aesRemarkAvatarString
+                                                   success:(void(^)(DTConversationEntity*)) sucessBlock
+                                                   failure:(void(^)(NSError*))failure;
+
 @end
 
 NS_ASSUME_NONNULL_END

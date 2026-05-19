@@ -1,9 +1,10 @@
 
 
+
 Pod::Spec.new do |s|
 
-  PROTOVERSION = "0.5.1"
-  
+  PROTOVERSION = "3.1.0"
+
   s.name             = "DTProto"
   s.version          = "#{PROTOVERSION}"
   s.summary          = "message protocol"
@@ -12,10 +13,10 @@ Pod::Spec.new do |s|
 message protocol.
   DESC
 
-  s.homepage         = "https://difft.org"
-  s.license          = 'GPLv3'
-  s.author           = { "Kris" => "kris@difft.org" }
-  s.source           = { :git => "https://difft.org", :tag => s.version.to_s }
+  s.homepage         = "https://github.com/TempTalkOrg/dtproto"
+  s.license          = 'AGPL-3.0'
+  s.author           = { "TempTalkOrg" => "https://github.com/TempTalkOrg" }
+  s.source           = { :git => "https://github.com/TempTalkOrg/dtproto.git", :tag => s.version.to_s }
 
   s.platform     = :ios, '10.0'
   #s.ios.deployment_target = '9.0'
@@ -24,7 +25,7 @@ message protocol.
   s.source_files = 'DTProto/*.swift'
 
 #  s.ios.vendored_library = 'DTProto/*.a'
-  
+
   s.pod_target_xcconfig = {
     'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/DTProto/dtprotoFFI',
     'SWIFT_INCLUDE_PATHS' => '$(HEADER_SEARCH_PATHS)',
@@ -37,7 +38,7 @@ message protocol.
   s.user_target_xcconfig = {
     'SWIFT_INCLUDE_PATHS' => '$(PODS_ROOT)/../DTProto/dtprotoFFI'
   }
-  
+
   s.script_phases = [
       { name: 'Download and cache libdtproto_ffi',
         execution_position: :before_compile,
@@ -48,10 +49,10 @@ message protocol.
              # exists
              exit 0
            fi
-                   
+
            mkdir -p "${DTPROTOLIBROOT}"
            cd "${DTPROTOLIBROOT}"
-                   
+
            curl -O "https://difft-proto-binary.s3.ap-southeast-1.amazonaws.com/${DTPROTOTARGETLIBZIP}"
 
            if [ -e "${DTPROTOTARGETLIBZIP}" ]; then
@@ -63,6 +64,6 @@ message protocol.
         )
       }
   ]
-  
-  
+
+
 end

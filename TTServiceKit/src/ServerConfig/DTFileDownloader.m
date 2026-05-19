@@ -103,21 +103,6 @@
                 return;
             }
             
-            // 取消验证 contentLength，阿里云服务器返回的没有这个字段
-//            NSString *contentLength = headers[@"Content-Length"];
-//            if (![contentLength isKindOfClass:[NSString class]]) {
-//                DDLogError(@"%@ Attachment download missing or invalid content length.", self.logTag);
-//                abortDownload();
-//                return;
-//            }
-//
-//
-//            if (contentLength.longLongValue > kMaxDownloadSize) {
-//                DDLogError(@"%@ Attachment download content length exceeds max download size.", self.logTag);
-//                abortDownload();
-//                return;
-//            }
-            
             // This response has a valid content length that is less
             // than our max download size.  Proceed with the download.
             hasCheckedContentLength = YES;

@@ -21,10 +21,10 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
     var password: String = ""
     let maxRetryCount = 10
     
-    let GWidth = UIScreen.main.bounds.width
-    let GHeight = UIScreen.main.bounds.height
-    let minScreenDimension = min(UIScreen.main.bounds.width, UIScreen.main.bounds.height)
-    let patternWidth: CGFloat = min(UIScreen.main.bounds.width, UIScreen.main.bounds.height) - 100
+    var GWidth: CGFloat { min(UIScreen.main.bounds.width, UIScreen.main.bounds.height) }
+    var GHeight: CGFloat { max(UIScreen.main.bounds.width, UIScreen.main.bounds.height) }
+    var minScreenDimension: CGFloat { min(UIScreen.main.bounds.width, UIScreen.main.bounds.height) }
+    var patternWidth: CGFloat { minScreenDimension - 100 }
     let patternHeight: CGFloat = 300
     let patternX: CGFloat = 50
     
@@ -144,8 +144,11 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
         }
     }
     
+    private var isCurrentlyLandscape: Bool {
+        return false
+    }
+
     func updateSubViewsLayout(with shouldShowPattern: Bool) {
-        // Deactivate existing constraints for specific views that need layout updates
         let managedSubviews: [UIView] = [
             logoIconImageView,
             titleLabel,
@@ -171,12 +174,16 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
         }
 
         NSLayoutConstraint.deactivate(constraintsToDeactivate)
+
+        let isLandscape = isCurrentlyLandscape
+        let logoTopInset: CGFloat = isLandscape ? 20 : 108
+        let logoSize: CGFloat = isLandscape ? 60 : 160
         
-        logoIconImageView.autoPinEdge(toSuperviewEdge: .top, withInset: 108)
-        logoIconImageView.autoSetDimensions(to: CGSize(width: 160, height: 160))
+        logoIconImageView.autoPinEdge(toSuperviewEdge: .top, withInset: logoTopInset)
+        logoIconImageView.autoSetDimensions(to: CGSize(width: logoSize, height: logoSize))
         logoIconImageView.autoHCenterInSuperview()
         
-        titleLabel.autoPinEdge(.top, to: .bottom, of: logoIconImageView, withOffset: 10)
+        titleLabel.autoPinEdge(.top, to: .bottom, of: logoIconImageView, withOffset: isLandscape ? 4 : 10)
         titleLabel.autoSetDimension(.height, toSize: 28.0)
         titleLabel.autoHCenterInSuperview()
         
@@ -188,36 +195,45 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
             errorTipsLabel.autoPinEdge(.right, to: .right, of: view, withOffset: -60)
             errorTipsLabel.autoSetDimension(.height, toSize: 31.0)
             errorTipsLabel.autoHCenterInSuperview()
+
+            if isLandscape {
+                let landscapePatternY: CGFloat = logoTopInset + logoSize + 4 + 28 + 31 + 10
+                let landscapePatternH: CGFloat = min(patternHeight, view.bounds.height - landscapePatternY - 50)
+                let landscapePatternW: CGFloat = landscapePatternH
+                patternView.autoPinEdge(.top, to: .top, of: view, withOffset: landscapePatternY)
+                patternView.autoSetDimension(.height, toSize: landscapePatternH)
+                patternView.autoSetDimension(.width, toSize: landscapePatternW)
+                patternView.autoHCenterInSuperview()
+            } else {
+                let logoMar = LogoY + LogoH + LogoTitlePadding
+                let titleErrorMar = titleH + errorTipsH + patternErrorPadding
+                let patternY: CGFloat = CGFloat(logoMar + titleErrorMar)
+                patternView.autoPinEdge(.top, to: .top, of: view, withOffset: patternY)
+                patternView.autoPinEdge(.left, to: .left, of: view, withOffset: patternX)
+                patternView.autoSetDimension(.height, toSize: patternHeight)
+                patternView.autoSetDimension(.width, toSize: patternWidth)
+            }
             
-            let logoMar = LogoY + LogoH + LogoTitlePadding
-            let titleErrorMar = titleH + errorTipsH + patternErrorPadding
-            let patternY: CGFloat = CGFloat(logoMar + titleErrorMar)
-            patternView.autoPinEdge(.top, to: .top, of: view, withOffset: patternY)
-            patternView.autoPinEdge(.left, to: .left, of: view, withOffset: patternX)
-            patternView.autoSetDimension(.height, toSize: patternHeight)
-            patternView.autoSetDimension(.width, toSize: patternWidth)
-            
+            let bottomInset: CGFloat = isLandscape ? 10 : 60
             if shouldShowSwitchBtn() {
-                // switchBtn 在左侧
-                switchPatternBtn.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -60)
+                switchPatternBtn.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -bottomInset)
                 switchPatternBtn.autoSetDimensions(to: CGSize(width: 130, height: 20))
                 switchPatternBtn.autoPinEdge(.right, to: .right, of: view, withOffset: -minScreenDimension * 0.5 - 10)
                 
-                switchPasswordBtn.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -60)
+                switchPasswordBtn.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -bottomInset)
                 switchPasswordBtn.autoSetDimensions(to: CGSize(width: 130, height: 20))
                 switchPasswordBtn.autoPinEdge(.right, to: .right, of: view, withOffset: -minScreenDimension * 0.5 - 10)
                 
-                seperatorView.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -65)
+                seperatorView.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -(bottomInset + 5))
                 seperatorView.autoPinEdge(.left, to: .right, of: switchPasswordBtn, withOffset: 10)
                 seperatorView.autoSetDimension(.height, toSize: 12)
                 seperatorView.autoSetDimension(.width, toSize: 2)
 
-                // forgotBtn 在右侧
-                forgotBtn.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -60)
+                forgotBtn.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -bottomInset)
                 forgotBtn.autoSetDimensions(to: CGSize(width: 118, height: 20))
                 forgotBtn.autoPinEdge(.left, to: .right, of: seperatorView, withOffset: 10)
             } else {
-                forgotBtn.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -60)
+                forgotBtn.autoPinEdge(.bottom, to: .bottom, of: view, withOffset: -bottomInset)
                 forgotBtn.autoHCenterInSuperview()
                 forgotBtn.autoSetDimension(.height, toSize: 20)
                 forgotBtn.autoSetDimension(.width, toSize: 118)
@@ -549,6 +565,17 @@ public class DTUnlockScreenViewController: DTScreenLockBaseViewController {
         return false
     }
     
+    private var lastLayoutSize: CGSize = .zero
+
+    public override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let currentSize = view.bounds.size
+        if currentSize != lastLayoutSize && currentSize != .zero {
+            lastLayoutSize = currentSize
+            updateUILayout(with: shouldShowPatternView())
+        }
+    }
+
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         stopCountdown()

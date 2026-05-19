@@ -27,7 +27,7 @@ import Foundation
     }
     
     override func applyTheme() {
-        view.backgroundColor = Theme.bg1Color
+        view.backgroundColor = Theme.bgpagePrimaryColor
         
         loginTipLabel.textColor = Theme.tsecondaryColor
     }

@@ -91,8 +91,11 @@ public extension DTCallKitManager {
     ///   - roomId: roomId
     ///   - timestamp: timestamp
 
-    func acceptCall(calling: DSKProtoCallMessageCalling) {
-        // Extract all data from protobuf object synchronously before async context
+    func acceptCall(calling: DSKProtoCallMessageCalling?) {
+        guard let calling else {
+            Logger.error("\(logTag) acceptCall - calling is nil (ObjC nil bridge)")
+            return
+        }
         guard let roomId = calling.roomID else {
             Logger.error("\(logTag) roomId is nil")
             return
@@ -124,6 +127,14 @@ public extension DTCallKitManager {
                 callType = callInfo.callType
             }
             newCall.callType = callType
+            if callType == .group, let gid = newCall.conversationId {
+                SDSDatabaseStorage.shared.read { tx in
+                    newCall.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupDisplayName(
+                        serverGroupId: gid,
+                        fallbackName: roomName,
+                        transaction: tx)
+                }
+            }
             if case .private = callType, let localNumber = TSAccountManager.localNumber() {
                 newCall.callees = [localNumber]
             }
@@ -131,8 +142,9 @@ public extension DTCallKitManager {
             newCall.controlType = controlType
             newCall.inviteCallees = inviteCallees
             newCall.timestamp = timestamp
+            newCall.callKitUUID = DTCallKitManager.shared().uuidString(fromRoomId: roomId)
 
-            Logger.info("\(logTag) from callkit accepting call directly without blocking main thread")
+            Logger.info("\(logTag) from callkit accepting call directly without blocking main thread, callKitUUID: \(newCall.callKitUUID ?? "nil")")
 
             await DTMeetingManager.shared.showAnswerFromCallKit(call: newCall)
         }
@@ -141,20 +153,40 @@ public extension DTCallKitManager {
         Task {
             if manager.hasMeeting, let oldRoomId = manager.currentCall.roomId, oldRoomId != roomId {
                 Logger.info("CallKit: last call not ended, caller:\(manager.currentCall.caller ?? "no caller")")
-                if DTCallKitManager.shared().callsCount == 1 {
-                    Logger.info("\(self.logTag) hangup last call meeting")
-                    await DTMeetingManager.shared.hangupCall(needSyncCallKit: true,
-                                                             isByLocal: true,
-                                                             roomId: oldRoomId)
 
-                    // 清理旧会议的 alert view，防止在接听新会议后显示
-                    Logger.info("\(self.logTag) remove alert view for old call: \(oldRoomId)")
+                let oldCallKitUUID = DTCallKitManager.shared().uuidString(fromRoomId: oldRoomId)
+
+                Logger.info("\(self.logTag) hangup last call meeting, oldUUID: \(oldCallKitUUID ?? "nil")")
+                await DTMeetingManager.shared.hangupCall(needSyncCallKit: false,
+                                                         isByLocal: true,
+                                                         roomId: oldRoomId)
+
+                if let oldCallKitUUID {
                     await MainActor.run {
-                        DTMeetingManager.shared.callAlertManager.removeLiveKitAlertCall(oldRoomId)
+                        DTCallKitManager.shared().endCallAction(oldCallKitUUID, onlyForCallKit: true)
                     }
                 }
 
-                Logger.info("CallKit: The last call is ended  - stared a new call")
+                Logger.info("\(self.logTag) remove alert view for old call: \(oldRoomId)")
+                await MainActor.run {
+                    DTMeetingManager.shared.callAlertManager.removeLiveKitAlertCall(oldRoomId)
+                }
+
+                let maxWaitIterations = 60 // 3 seconds max
+                for i in 0..<maxWaitIterations {
+                    let isReady = await MainActor.run {
+                        manager.lifecycleState == .idle
+                    }
+                    if isReady {
+                        Logger.info("[CALLKIT_DEBUG] acceptCall - state is idle after \(i * 50)ms")
+                        break
+                    }
+                    try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                }
+                // Minimum yield for RunLoop cleanup
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+
+                Logger.info("[CALLKIT_DEBUG] acceptCall - switching to new call")
                 await acceptCallAction()
             } else {
                 Logger.info("CallKit: normal accept.")
@@ -166,107 +198,102 @@ public extension DTCallKitManager {
 
 @objc
 public extension DTCallKitManager {
-    private enum AssociatedKeys {
-        static var timingKey: Int8 = 0
-        static var isCheckingKey: Int8 = 1
-    }
 
-    private var timing: TimeInterval {
-        get {
-            if let value = objc_getAssociatedObject(self, &AssociatedKeys.timingKey) as? TimeInterval {
-                return value
-            }
-            return 0
-        }
-        set {
-            objc_setAssociatedObject(self, &AssociatedKeys.timingKey, newValue, .OBJC_ASSOCIATION_ASSIGN)
-        }
-    }
+    // MARK: - Per-call Timeout Timer
 
-    /// 当前是否有checking roomId请求未返回
-    private var isChecking: Bool {
-        get {
-            if let value = objc_getAssociatedObject(self, &AssociatedKeys.isCheckingKey) as? Bool {
-                return value
-            }
-            return false
-        }
-        set {
-            objc_setAssociatedObject(self, &AssociatedKeys.isCheckingKey, newValue, .OBJC_ASSOCIATION_ASSIGN)
-        }
-    }
-
-    /// 监控超时 / 检查对方是否cancel
-    /// - Parameter callerId: callerId
-    @objc
-    func startTimeoutTimer(callerId: String) {
+    @objc func startTimeoutTimerForUUID(_ uuidString: String) {
         DispatchMainThreadSafe { [self] in
-            stopTimeroutTimer()
-            let userInfo = ["callerId": callerId]
-            callKitTimeOutTimer = Timer.weakTimer(withTimeInterval: 1,
-                                                  target: self,
-                                                  selector: #selector(checkCallAvailable),
-                                                  userInfo: userInfo,
-                                                  repeats: true)
-            if let callKitTimeOutTimer {
-                RunLoop.current.add(callKitTimeOutTimer,
-                                    forMode: .common)
-                checkCallAvailable(callKitTimeOutTimer)
+            stopTimeoutTimerForUUID(uuidString)
+            let userInfo = ["uuidString": uuidString]
+            let timer = Timer.weakTimer(withTimeInterval: 1,
+                                         target: self,
+                                         selector: #selector(checkCallAvailableForTimer),
+                                         userInfo: userInfo,
+                                         repeats: true)
+            callerMapLock.lock()
+            timeoutTimers[uuidString] = timer
+            callerMapLock.unlock()
+            RunLoop.current.add(timer, forMode: .common)
+            checkCallAvailableForTimer(timer)
+        }
+    }
+
+    @objc func stopTimeoutTimerForUUID(_ uuidString: String) {
+        callerMapLock.lock()
+        guard let timer = timeoutTimers[uuidString] as? Timer else {
+            callerMapLock.unlock()
+            return
+        }
+        timeoutTimers.removeObject(forKey: uuidString)
+        callerMapLock.unlock()
+
+        if Thread.isMainThread {
+            timer.invalidate()
+        } else {
+            DispatchQueue.main.async {
+                timer.invalidate()
             }
         }
     }
 
-    func stopTimeroutTimer() {
-        timing = 0
-        isChecking = false
-        guard let callKitTimeOutTimer else {
-            return
+    @objc func stopAllTimeoutTimers() {
+        callerMapLock.lock()
+        let allTimers = (timeoutTimers.allValues as? [Timer]) ?? []
+        timeoutTimers.removeAllObjects()
+        callerMapLock.unlock()
+
+        if Thread.isMainThread {
+            for timer in allTimers {
+                timer.invalidate()
+            }
+        } else {
+            DispatchQueue.main.async {
+                for timer in allTimers {
+                    timer.invalidate()
+                }
+            }
         }
-        callKitTimeOutTimer.invalidate()
-        self.callKitTimeOutTimer = nil
     }
 
-    /// 超过48s超时挂断, 未超过检查对方是否cancel
-
-    func checkCallAvailable(_ timer: Timer) {
-        timing += 1
-        guard let userInfo = timer.userInfo as? [String: String], let callerId = userInfo["callerId"] else {
-            stopTimeroutTimer()
+    /// 超过48s超时挂断, 未超过每2s检查对方是否cancel
+    @objc func checkCallAvailableForTimer(_ timer: Timer) {
+        guard let userInfo = timer.userInfo as? [String: String],
+              let uuidString = userInfo["uuidString"] else {
             return
         }
 
-        if timing >= 48 {
-            // miss call
-            stopTimeroutTimer()
-            endCallAction(callerId, onlyForCallKit: false)
+        guard let caller = caller(forUUID: uuidString) else {
+            stopTimeoutTimerForUUID(uuidString)
             return
         }
-        Logger.debug("\(logTag) timing: \(timing)")
-        // 每2s检查一次roomId是否有效
-        let remainder = timing.truncatingRemainder(dividingBy: 2)
+
+        caller.timing += 1
+        let currentTiming = caller.timing
+
+        if currentTiming >= 48 {
+            stopTimeoutTimerForUUID(uuidString)
+            endCallAction(uuidString, onlyForCallKit: false)
+            return
+        }
+
+        Logger.debug("\(logTag) timing[\(uuidString)]: \(currentTiming)")
+
+        let remainder = currentTiming.truncatingRemainder(dividingBy: 2)
         guard remainder == 0 else { return }
 
-        guard let calling = calling(fromCallerId: callerId),
-              let roomId = calling.roomID
-        else {
-            stopTimeroutTimer()
-            endCallAction(callerId, onlyForCallKit: false)
+        guard let calling = calling(fromUUID: uuidString),
+              let roomId = calling.roomID else {
+            stopTimeoutTimerForUUID(uuidString)
+            endCallAction(uuidString, onlyForCallKit: false)
             return
         }
 
-        guard !isChecking else {
-            return
-        }
-        isChecking = true
+        guard !caller.isEnded else { return }
 
         Task {
             let result = await DTMeetingManager.checkRoomIdValid(roomId)
-            isChecking = false
             guard let result else {
-                Logger.info("\(logTag) roomId invalid")
-                stopTimeroutTimer()
-                // 只有48s超时
-                //    endCallAction(callerId, onlyForCallKit: false)
+                Logger.info("\(logTag) roomId check returned nil")
                 return
             }
 
@@ -274,10 +301,9 @@ public extension DTCallKitManager {
             let userStopped = result.userStopped
 
             if anotherDeviceJoined || userStopped {
-                Logger.info("\(logTag) roomId valid, anotherDeviceJoined = \(anotherDeviceJoined), userStopped = \(userStopped)")
-                stopTimeroutTimer()
-                endCallAction(callerId, onlyForCallKit: false)
-                return
+                Logger.info("\(logTag) roomId valid, anotherDeviceJoined=\(anotherDeviceJoined), userStopped=\(userStopped)")
+                stopTimeoutTimerForUUID(uuidString)
+                endCallAction(uuidString, onlyForCallKit: false)
             }
         }
     }
@@ -308,7 +334,7 @@ public extension DTCallKitManager {
             if callType == .private, let localNumber = TSAccountManager.localNumber() {
                 tempCall.callees = [localNumber]
             }
-            await DTMeetingManager.shared.rejectRemoteCall(with: tempCall)
+            await DTMeetingManager.shared.rejectIncomingCallSilently(with: tempCall)
             DTMeetingManager.shared.syncServerCalls()
         }
     }

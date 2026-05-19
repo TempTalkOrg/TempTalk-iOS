@@ -207,6 +207,10 @@ class DTPersonalCardController: OWSTableViewController,
     }
     
     @objc func signalAccountsDidChange(notify: Notification) {
+        reloadAccountFromDB()
+    }
+
+    @objc func reloadAccountFromDB() {
         let contactsManager = Environment.shared.contactsManager
         databaseStorage.asyncRead {[weak self] transaction in
             guard let self, let recipientId = self.recipientId else {return}
@@ -295,8 +299,8 @@ class DTPersonalCardController: OWSTableViewController,
            !sourceDesc.isEmpty {
             contactsSection.add(OWSTableItem(customCellBlock: { [weak self] in
                 guard let self else { return UITableViewCell()}
-                return self.personCardForOther(withTitle: Localized("MET_METHOD"), detailText: sourceDesc, longPressSel: nil, accessoryType: .none)
-            }, customRowHeight: 36, actionBlock: {}))
+                return self.personCardForOther(withTitle: Localized("MET_METHOD"), detailText: sourceDesc, longPressSel: nil, accessoryType: .none, numberOfLines: 0)
+            }, customRowHeight: UITableView.automaticDimension, actionBlock: {}))
         }
 
         if account.isBot() {
@@ -317,7 +321,7 @@ class DTPersonalCardController: OWSTableViewController,
             }
             contactsSection.add(OWSTableItem(customCellBlock: { [weak self] in
                 guard let self else { return UITableViewCell()}
-                return self.personCardForOther(withTitle: Localized("GROUPS"), detailText: detailText, longPressSel: nil, accessoryType: .none)
+                return self.personCardForOther(withTitle: Localized("GROUPS"), detailText: detailText, longPressSel: nil, accessoryType: .disclosureIndicator)
             }, customRowHeight: 36, actionBlock: { [weak self] in
                 self?.showCommonGroups()
             }))
@@ -538,19 +542,64 @@ class DTPersonalCardController: OWSTableViewController,
         topRightContentView.addArrangedSubview(nameLabel)
 
         if self.type != .selfCanEdit {
-            let secondaryLabel = UILabel()
-            secondaryLabel.textColor = Theme.tsecondaryColor;
-            secondaryLabel.font = UIFont.ows_regularFont(withSize: 14)
-            secondaryLabel.textAlignment = .left
-            secondaryLabel.isUserInteractionEnabled = false
-
             if account.isBot() {
+                let secondaryLabel = UILabel()
+                secondaryLabel.textColor = Theme.tsecondaryColor
+                secondaryLabel.font = UIFont.ows_regularFont(withSize: 14)
+                secondaryLabel.textAlignment = .left
+                secondaryLabel.isUserInteractionEnabled = false
                 let rawName = Environment.shared.contactsManager?.rawDisplayName(forPhoneIdentifier: recipientId ?? "") ?? ""
                 secondaryLabel.text = rawName
                 topRightContentView.addArrangedSubview(secondaryLabel)
-            } else if let contact = account.contact, let remark = contact.remark, !remark.isEmpty {
-                secondaryLabel.text = Localized("CONTACT_PROFILE_NAME", comment: "") + ": \(contact.fullName)"
-                topRightContentView.addArrangedSubview(secondaryLabel)
+            } else if let contact = account.contact {
+                let hasRemarkAvatar = contact.remarkAvatar != nil && !contact.remarkAvatar!.isEmpty
+                let hasRemarkName = contact.remark != nil && !contact.remark!.isEmpty
+
+                if hasRemarkAvatar {
+                    let originalRow = UIStackView()
+                    originalRow.axis = .horizontal
+                    originalRow.alignment = .center
+                    originalRow.spacing = 4
+
+                    if !hasRemarkName {
+                        let originalLabel = UILabel()
+                        originalLabel.text = Localized("PERSON_CARD_ORIGINAL_LABEL", comment: "")
+                        originalLabel.font = .systemFont(ofSize: 12)
+                        originalLabel.textColor = Theme.tthirdColor
+                        originalLabel.setContentHuggingPriority(.required, for: .horizontal)
+                        originalRow.addArrangedSubview(originalLabel)
+                    }
+
+                    let smallAvatar = DTAvatarImageView()
+                    smallAvatar.autoSetDimensions(to: CGSize(width: 16, height: 16))
+                    smallAvatar.isUserInteractionEnabled = true
+                    smallAvatar.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapOriginalAvatar)))
+                    smallAvatar.setImage(
+                        avatar: contact.avatar as? [String: Any],
+                        recipientId: recipientId,
+                        displayName: contact.fullName,
+                        completion: nil
+                    )
+                    originalRow.addArrangedSubview(smallAvatar)
+
+                    if hasRemarkName {
+                        let nameLabel = UILabel()
+                        nameLabel.text = contact.fullName
+                        nameLabel.font = UIFont.ows_regularFont(withSize: 14)
+                        nameLabel.textColor = Theme.tsecondaryColor
+                        originalRow.addArrangedSubview(nameLabel)
+                    }
+
+                    topRightContentView.addArrangedSubview(originalRow)
+                } else if hasRemarkName {
+                    let secondaryLabel = UILabel()
+                    secondaryLabel.textColor = Theme.tsecondaryColor
+                    secondaryLabel.font = UIFont.ows_regularFont(withSize: 14)
+                    secondaryLabel.textAlignment = .left
+                    secondaryLabel.isUserInteractionEnabled = false
+                    secondaryLabel.text = Localized("CONTACT_PROFILE_NAME", comment: "") + ": \(contact.fullName)"
+                    topRightContentView.addArrangedSubview(secondaryLabel)
+                }
             }
         }
         
@@ -567,7 +616,7 @@ class DTPersonalCardController: OWSTableViewController,
         iconImage.autoPinEdgesToSuperviewEdges()
         avatarContentView.autoSetDimension(.height, toSize: 75)
         avatarContentView.autoSetDimension(.width, toSize: 75)
-        iconImage.setImage(avatar: account.contact?.avatar as? [String : Any], recipientId: recipientId, displayName: nicknameForAvatar, completion: nil)
+        iconImage.setImage(signalAccount: account, displayName: nicknameForAvatar, completion: nil)
         
         topContentRow.addArrangedSubview(avatarContentView)
         topContentRow.addArrangedSubview(topRightContentView)
@@ -594,18 +643,47 @@ class DTPersonalCardController: OWSTableViewController,
 
     @objc func editNameBtnClick() {
         guard self.type == .other,
-        let contactsManager = Environment.shared.contactsManager,
-        let recipientId else {
+              let recipientId,
+              recipientId != TSAccountManager.sharedInstance().localNumber() else {
             return
         }
 
-        let displayName = contactsManager.displayName(forPhoneIdentifier: recipientId)
-        let remarkVC = DTEditRemarkController()
-        let remarkNav = OWSNavigationController(rootViewController: remarkVC)
-        remarkVC.configure(withRecipientId: recipientId, defaultRemarkText: displayName)
-        self.present(remarkNav, animated: true, completion: nil)
+        let remarkVC = DTEditContactRemarkViewController(recipientId: recipientId, account: account)
+        remarkVC.editDelegate = self
+
+        if let presentingVC = self.presentingViewController {
+            presentingVC.dismiss(animated: true) { [weak self] in
+                guard let self else { return }
+                if let conversationVC = self.findConversationViewController(from: presentingVC) {
+                    conversationVC.navigationController?.pushViewController(remarkVC, animated: true)
+                } else if let navController = presentingVC as? UINavigationController {
+                    navController.pushViewController(remarkVC, animated: true)
+                } else if let navController = presentingVC.navigationController {
+                    navController.pushViewController(remarkVC, animated: true)
+                }
+            }
+        } else {
+            navigationController?.pushViewController(remarkVC, animated: true)
+        }
     }
     
+    @objc func tapOriginalAvatar(_ tap: UITapGestureRecognizer) {
+        guard let smallAvatar = tap.view as? DTAvatarImageView,
+              let window = view.window else { return }
+
+        var items = [DTImageViewModel]()
+        let item = DTImageViewModel()
+        item.thumbView = smallAvatar
+        item.image = smallAvatar.image
+        item.largeImageSize = CGSize(width: 180, height: 180)
+        item.avatar = account.contact?.avatar
+        item.receptid = recipientId
+        items.append(item)
+
+        photoBrowser = DTImageBrowserView(groupItems: items)
+        photoBrowser?.present(fromImageView: smallAvatar, toContainer: window, animated: true, completion: nil)
+    }
+
     func showAvatarBrowserViewAnimate(_ animate: Bool) {
         
         guard let contactsManager = Environment.shared.contactsManager, let recipientId = self.recipientId else {
@@ -621,7 +699,8 @@ class DTPersonalCardController: OWSTableViewController,
                     item.thumbView = iconImage
                     item.image = iconImage.image
                     item.largeImageSize = CGSize(width: 180, height: 180)
-                    item.avatar = account?.contact?.avatar
+                    // 放大查看与头像展示保持同一优先级。
+                    item.avatar = account?.contact?.remarkAvatar ?? account?.contact?.avatar
                     item.receptid = self.recipientId
                     items.append(item)
                     self.photoBrowser = DTImageBrowserView(groupItems: items)
@@ -763,7 +842,7 @@ class DTPersonalCardController: OWSTableViewController,
         return sectionHeaderCell
     }
     
-    func personCardForOther(withTitle title: String, detailText detail: String, detailColor: UIColor? = nil, longPressSel seletor: Selector?, accessoryType: UITableViewCell.AccessoryType) -> UITableViewCell {
+    func personCardForOther(withTitle title: String, detailText detail: String, detailColor: UIColor? = nil, longPressSel seletor: Selector?, accessoryType: UITableViewCell.AccessoryType, numberOfLines: Int = 1) -> UITableViewCell {
         let cell = UITableViewCell(style: .value1, reuseIdentifier: "UITableViewCellStyleValue1")
         cell.textLabel?.text = title
         cell.textLabel?.font = UIFont.ows_regularFont(withSize: 14, scaled: false)
@@ -778,10 +857,16 @@ class DTPersonalCardController: OWSTableViewController,
         detailTextLabel.textColor = detailColor ?? Theme.tsecondaryColor
         detailTextLabel.text = detail
         detailTextLabel.textAlignment = .left
+        detailTextLabel.numberOfLines = numberOfLines
         cell.contentView.addSubview(detailTextLabel)
         detailTextLabel.autoPinEdge(toSuperviewEdge: .left, withInset: 120)
         detailTextLabel.autoPinEdge(toSuperviewEdge: .right, withInset: 25)
-        detailTextLabel.autoVCenterInSuperview()
+        if numberOfLines != 1 {
+            detailTextLabel.autoPinEdge(toSuperviewEdge: .top, withInset: 8)
+            detailTextLabel.autoPinEdge(toSuperviewEdge: .bottom, withInset: 8)
+        } else {
+            detailTextLabel.autoVCenterInSuperview()
+        }
 
         if let selector = seletor {
             let longPress = UILongPressGestureRecognizer(target: self, action: selector)
@@ -792,7 +877,9 @@ class DTPersonalCardController: OWSTableViewController,
         cell.detailTextLabel?.textColor = Theme.tsecondaryColor
 
         if accessoryType == .disclosureIndicator {
-            cell.accessoryView = self.accessoryArrow
+            let arrowImageView = UIImageView(image: UIImage(named: "default_accessory_arrow"))
+            arrowImageView.frame = CGRect(x: 0, y: 0, width: 16, height: 16)
+            cell.accessoryView = arrowImageView
         } else {
             cell.accessoryType = accessoryType
         }
@@ -850,7 +937,7 @@ class DTPersonalCardController: OWSTableViewController,
         }
         
         if DTMeetingManager.shared.hasMeeting, OWSWindowManager.shared().hasCall() {
-            OWSWindowManager.shared().showCallView()
+            DTMeetingManager.shared.restoreFullScreenView()
             return
         }
 
@@ -1036,7 +1123,7 @@ class DTPersonalCardController: OWSTableViewController,
 
 extension DTPersonalCardController : AvatarViewHelperDelegate {
     func avatarActionSheetTitle() -> String {
-        return NSLocalizedString("PROFILE_VIEW_AVATAR_ACTIONSHEET_TITLE", comment: "Action Sheet title prompting the user for a profile avatar")
+        return Localized("PROFILE_VIEW_AVATAR_ACTIONSHEET_TITLE", comment: "Action Sheet title prompting the user for a profile avatar")
     }
     
     func fromViewController() -> UIViewController {
@@ -1053,7 +1140,7 @@ extension DTPersonalCardController : AvatarViewHelperDelegate {
     }
     
     var clearAvatarActionLabel: String {
-        return NSLocalizedString("PROFILE_VIEW_CLEAR_AVATAR", comment: "Label for action that clear's the user's profile avatar")
+        return Localized("PROFILE_VIEW_CLEAR_AVATAR", comment: "Label for action that clear's the user's profile avatar")
     }
     
     func clearAvatar() {
@@ -1119,7 +1206,7 @@ extension DTPersonalCardController : DTQuickActionCellDelegate {
         switch type {
 
         case DTQuickActionTypeShare:
-            account.isFriend ? showSelectThreadController() : requestAddFriend()
+            account.isFriend ? showSelectThreadController() : handleMessageAction()
 
         case DTQuickActionTypeCall:
             if canCall() {
@@ -1286,4 +1373,11 @@ extension DTPersonalCardController : OWSNavigationChildController {
     }
 
     public var shouldCancelNavigationBack: Bool { false }
+}
+
+extension DTPersonalCardController: DTEditContactRemarkViewControllerDelegate {
+
+    public func editContactRemarkDidFinish() {
+        reloadAccountFromDB()
+    }
 }

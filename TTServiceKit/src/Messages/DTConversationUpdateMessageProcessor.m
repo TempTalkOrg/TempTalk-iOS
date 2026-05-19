@@ -70,7 +70,8 @@ NSString *const DTConversationSharingConfigurationChangeNotification = @"kDTconv
             
             [[DataUpdateUtil shared] updateConversationWithThread:instance
                                                        expireTime:conversationEntity.messageExpiry
-                                               messageClearAnchor:@(conversationEntity.messageClearAnchor)];
+                                               messageClearAnchor:@(conversationEntity.messageClearAnchor)
+                                                      transaction:writeTransaction];
         }];
         
         if([thread isKindOfClass:[TSContactThread class]] && changeType == 2){

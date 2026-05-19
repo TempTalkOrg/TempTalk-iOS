@@ -71,6 +71,27 @@ extension DTMeetingManager {
         return nil
     }
     
+    func currentSpeakingParticipant() -> Participant? {
+        roomContext?.currentActiveSpeaker
+    }
+
+    func micOnLineUp() -> [Participant] {
+        guard let room = roomContext?.room else { return [] }
+        let allParticipants: [Participant] = [room.localParticipant] + Array(room.remoteParticipants.values)
+        let speaker = currentSpeakingParticipant()
+
+        return Array(allParticipants
+            .filter { $0.isMicrophoneEnabled() && $0 !== speaker }
+            .prefix(3))
+    }
+
+    func micOnLineUpDisplayNames() -> [String] {
+        micOnLineUp().map { participant in
+            let recipientId = participant.identity?.stringValue.components(separatedBy: ".").first ?? ""
+            return DTLiveKitCallModel.getDisplayName(recipientId: recipientId)
+        }
+    }
+
     func openMuteOtherEnabled() -> Bool {
         let callConfig = CallConfigManager.fetchCallConfig()
         return callConfig.muteOtherEnabled
@@ -82,44 +103,106 @@ extension DTMeetingManager {
     }
     
     // MARK: - 参会人排序
+
     // 重连的缓存策略
     func sortedReconnectingParticipants() -> [ParticipantSnapshot] {
         return reconnectingParticipants ?? []
     }
-    
+
     func sortedMeetingParticipants() -> [Participant] {
-        if let room = roomContext?.room {
-            return sortedMeetings(participants: Array(room.allParticipants.values))
+        guard let room = roomContext?.room else { return [] }
+        return sortedMeetings(participants: Array(room.allParticipants.values))
+    }
+
+    /// 计算八宫格 + 剩余参会人排序列表。
+    ///
+    /// 计算部分全部交给静态纯函数 `computeSortedMeetings`,不直接修改 `visibleParticipants`;
+    /// 新 visible 通过 `scheduleVisibleParticipantsUpdate` 异步 commit,
+    /// 避免在 SwiftUI body getter 中产生同步副作用导致的 body 重入 race(参见 issue 1f351e7d)。
+    func sortedMeetings(participants: [Participant]) -> [Participant] {
+        let (visible, remaining) = Self.computeSortedMeetings(
+            participants: participants,
+            currentVisible: visibleParticipants,
+            localParticipant: roomContext?.room.localParticipant
+        )
+        scheduleVisibleParticipantsUpdate(visible)
+        return visible + remaining
+    }
+
+    /// 主动刷新一次 `visibleParticipants`,供 delegate / onChange 等非 body 流程同步调用。
+    func refreshVisibleParticipants() {
+        guard let room = roomContext?.room else {
+            setVisibleParticipants([])
+            return
         }
-        return []
+        let participants = Array(room.allParticipants.values)
+        let (visible, _) = Self.computeSortedMeetings(
+            participants: participants,
+            currentVisible: visibleParticipants,
+            localParticipant: room.localParticipant
+        )
+        setVisibleParticipants(visible)
+    }
+
+    /// `visibleParticipants` 的唯一写入入口。任意线程可调,内部切到主线程并在内容真正变化时才 assign。
+    @nonobjc
+    func setVisibleParticipants(_ newVisible: [Participant]) {
+        DispatchMainThreadSafe { [weak self] in
+            guard let self else { return }
+            let oldIds = self.visibleParticipants.map { $0.identity?.stringValue ?? "" }
+            let newIds = newVisible.map { $0.identity?.stringValue ?? "" }
+            guard oldIds != newIds else { return }
+            self.visibleParticipants = newVisible
+        }
+    }
+
+    /// 合并同一 MainActor tick 内的多次 commit,避免 SwiftUI body 重入时反复触发 state 更新。
+    private func scheduleVisibleParticipantsUpdate(_ newVisible: [Participant]) {
+        guard !isVisibleParticipantsUpdateScheduled else { return }
+        isVisibleParticipantsUpdateScheduled = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.isVisibleParticipantsUpdateScheduled = false
+            self.setVisibleParticipants(newVisible)
+        }
     }
     
-    func sortedMeetings(participants: [Participant]) -> [Participant] {
+    // MARK: - 参会人排序(纯函数实现,不读写实例 state)
 
-        let maxParticipantCount = 8
+    private static let maxVisibleParticipantCount = 8
 
-        // 获取当前所有参会人和他们的 identity
+    /// 基于输入计算新的 `(visible, remaining)` 列表。
+    private static func computeSortedMeetings(
+        participants: [Participant],
+        currentVisible: [Participant],
+        localParticipant: Participant?
+    ) -> (visible: [Participant], remaining: [Participant]) {
+        var visible = currentVisible
+
+        // Step 1: 清理 visible 中已离会的人
         let allIdentities = Set(participants.compactMap { $0.identity?.stringValue })
-
-        // Step 1: 清理 visibleParticipants 中离会的人
-        visibleParticipants.removeAll { participant in
+        visible.removeAll { participant in
             guard let id = participant.identity?.stringValue else { return true }
             return !allIdentities.contains(id)
         }
 
-        // Step 2: 补充 visibleParticipants 不满时的数据（按 host > 视频 > 麦）
-        if visibleParticipants.count < maxParticipantCount {
-            fillVisibleParticipantsIfBelowLimit(maxParticipantCount, participants: participants)
+        // Step 2/3: 不满补充;已满替换
+        if visible.count < maxVisibleParticipantCount {
+            fillBelowLimit(
+                &visible,
+                limit: maxVisibleParticipantCount,
+                participants: participants,
+                localParticipant: localParticipant
+            )
         } else {
-            // Step 3: 替换逻辑（visible 人满时，根据最久未发言替换）
-            fillVisibleParticipantsIfUpperLimit(participants: participants)
+            fillUpperLimit(&visible, participants: participants)
         }
 
-        // Step 4: 按 host > 视频 > 其他 重排 visibleParticipants
-        sortVisibleParticipants()
+        // Step 4: 本端 > 视频 > 其他
+        sortVisible(&visible, localIdentity: localParticipant?.identity?.stringValue)
 
-        // Step 5: 处理剩余参会人，按权重排序
-        let visibleIds = Set(visibleParticipants.compactMap { $0.identity?.stringValue })
+        // Step 5: 剩余参会人按权重排序
+        let visibleIds = Set(visible.compactMap { $0.identity?.stringValue })
         let remaining = participants.filter {
             guard let id = $0.identity?.stringValue else { return false }
             return !visibleIds.contains(id)
@@ -143,97 +226,101 @@ extension DTMeetingManager {
             return a.id < b.id
         }
 
-        return visibleParticipants + remaining
+        return (visible, remaining)
     }
-    
-    private func fillVisibleParticipantsIfBelowLimit(_ limit: Int, participants: [Participant]) {
-        guard let room = roomContext?.room else {
-            return
-        }
-        
-        var addedIdentities = Set(visibleParticipants.compactMap { $0.identity?.stringValue })
+
+    private static func fillBelowLimit(
+        _ current: inout [Participant],
+        limit: Int,
+        participants: [Participant],
+        localParticipant: Participant?
+    ) {
+        var addedIdentities = Set(current.compactMap { $0.identity?.stringValue })
 
         func tryAppend(_ participant: Participant) {
-            guard let id = participant.identity?.stringValue, !addedIdentities.contains(id) else { return }
-            visibleParticipants.append(participant)
+            guard let id = participant.identity?.stringValue,
+                  !addedIdentities.contains(id) else { return }
+            current.append(participant)
             addedIdentities.insert(id)
         }
 
-        if !addedIdentities.contains(room.localParticipant.identity?.stringValue ?? "") {
-            visibleParticipants.insert(room.localParticipant, at: 0)
-            addedIdentities.insert(room.localParticipant.identity?.stringValue ?? "")
+        if let localParticipant,
+           let localId = localParticipant.identity?.stringValue,
+           !addedIdentities.contains(localId) {
+            current.insert(localParticipant, at: 0)
+            addedIdentities.insert(localId)
         }
 
         for participant in participants where participant.isCameraEnabled() {
             tryAppend(participant)
-            if visibleParticipants.count >= limit { break }
+            if current.count >= limit { break }
         }
-        
-        if visibleParticipants.count < limit {
+
+        if current.count < limit {
             for participant in participants where participant.isMicrophoneEnabled() {
                 tryAppend(participant)
-                if visibleParticipants.count >= limit { break }
+                if current.count >= limit { break }
             }
         }
     }
-    
-    
-    private func fillVisibleParticipantsIfUpperLimit(participants: [Participant]) {
-        
-        let visibleIdentities = Set(visibleParticipants.compactMap { $0.identity?.stringValue })
+
+    private static func fillUpperLimit(
+        _ current: inout [Participant],
+        participants: [Participant]
+    ) {
+        // dropFirst + minSpokeIndex/replaceableIndex 都要求至少 2 个元素
+        guard current.count >= 2 else { return }
+
+        let visibleIdentities = Set(current.compactMap { $0.identity?.stringValue })
         let otherParticipants = participants.filter {
             guard let id = $0.identity?.stringValue else { return false }
             return !visibleIdentities.contains(id)
         }
+        guard !otherParticipants.isEmpty else { return }
 
-        if !otherParticipants.isEmpty {
-            let minSpokeIndex = visibleParticipants.enumerated().dropFirst().min(by: { $0.element.lastSpokeAt < $1.element.lastSpokeAt })?.offset
-            
-            let now = Date().ows_millisecondsSince1970
-            let timeThreshold: UInt64 = 10000
-            let others = visibleParticipants.dropFirst().enumerated()
-            let inactiveParticipants = others.filter { _, participant in
-                return now - UInt64(participant.lastSpokeAt) > timeThreshold
-            }
+        let minSpokeIndex = current.enumerated().dropFirst().min(by: {
+            $0.element.lastSpokeAt < $1.element.lastSpokeAt
+        })?.offset
 
-            let silentAndInvisible = inactiveParticipants.filter {
-                !$0.element.isMicrophoneEnabled() && !$0.element.isCameraEnabled()
-            }
-            let speakingInvisible = inactiveParticipants.filter {
-                $0.element.isMicrophoneEnabled() && !$0.element.isCameraEnabled()
-            }
-            let candidates: [(offset: Int, element: Participant)] =
-                !silentAndInvisible.isEmpty ? silentAndInvisible :
-                (!speakingInvisible.isEmpty ? speakingInvisible : [])
+        let now = Date().ows_millisecondsSince1970
+        let timeThreshold: UInt64 = 10000
+        let others = current.dropFirst().enumerated()
+        let inactiveParticipants = others.filter { _, participant in
+            now - UInt64(participant.lastSpokeAt) > timeThreshold
+        }
 
-            if let target = candidates.max(by: {
-                (now - UInt64($0.element.lastSpokeAt)) < (now - UInt64($1.element.lastSpokeAt))
-            }) {
-                let replaceableIndex = target.offset + 1
-                // 你可以在这里进行替换逻辑
-                for participant in otherParticipants {
-                    if participant.isCameraEnabled(){
-                        visibleParticipants[replaceableIndex] = participant
-                        break
-                    }
-                }
-            }
-            
-            for participant in otherParticipants where participant.isSpeaking {
-                if let idx = minSpokeIndex {
-                    visibleParticipants[idx] = participant
+        let silentAndInvisible = inactiveParticipants.filter {
+            !$0.element.isMicrophoneEnabled() && !$0.element.isCameraEnabled()
+        }
+        let speakingInvisible = inactiveParticipants.filter {
+            $0.element.isMicrophoneEnabled() && !$0.element.isCameraEnabled()
+        }
+        let candidates: [(offset: Int, element: Participant)] =
+            !silentAndInvisible.isEmpty ? silentAndInvisible :
+            (!speakingInvisible.isEmpty ? speakingInvisible : [])
+
+        if let target = candidates.max(by: {
+            (now - UInt64($0.element.lastSpokeAt)) < (now - UInt64($1.element.lastSpokeAt))
+        }) {
+            let replaceableIndex = target.offset + 1
+            for participant in otherParticipants where participant.isCameraEnabled() {
+                if replaceableIndex < current.count {
+                    current[replaceableIndex] = participant
                 }
                 break
             }
         }
-    }
-    
-    private func sortVisibleParticipants() {
-        guard let room = roomContext?.room else {
-            return
+
+        for participant in otherParticipants where participant.isSpeaking {
+            if let idx = minSpokeIndex, idx < current.count {
+                current[idx] = participant
+            }
+            break
         }
-        let localIdentity = room.localParticipant.identity?.stringValue
-        visibleParticipants.sort { a, b in
+    }
+
+    private static func sortVisible(_ current: inout [Participant], localIdentity: String?) {
+        current.sort { a, b in
             func priority(_ p: Participant) -> Int {
                 if p.identity?.stringValue == localIdentity { return 0 }
                 if p.isCameraEnabled() { return 1 }
@@ -320,7 +407,9 @@ extension DTMeetingManager {
     //获取当前会话的call对象
     public func currentThreadTargetCall(_ thread: TSThread) -> DTLiveKitCallModel? {
         if self.hasMeeting, OWSWindowManager.shared().hasCall() {
-            OWSWindowManager.shared().showCallView()
+            Task { @MainActor [weak self] in
+                self?.restoreFullScreenView()
+            }
             return nil
         }
         Logger.info("\(logTag) ready receive targetCall")
@@ -360,7 +449,12 @@ extension DTMeetingManager {
             }.first
             
             if let targetCall, targetCall.roomName.isEmpty {
-                targetCall.roomName = groupThread.name(with: nil)
+                SDSDatabaseStorage.shared.read { tx in
+                    targetCall.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupDisplayName(
+                        serverGroupId: groupThread.serverThreadId,
+                        fallbackName: "",
+                        transaction: tx)
+                }
             }
         }
         Logger.info("\(logTag) targetCall")
@@ -500,18 +594,31 @@ extension DTMeetingManager {
     }
     
     func syncLocalMicrophoneStateToCallKit(_ muted: Bool) {
-        guard let callerId = currentCall.caller else {
-            Logger.error("\(self.logTag) no callerId")
+        guard let callKitUUID = currentCall.callKitUUID else {
+            Logger.error("\(self.logTag) no callKitUUID")
             return
         }
-        
-        DTCallKitManager.shared().muteCurrentCall(muted, callerId:callerId)
+
+        DTCallKitManager.shared().muteCurrentCall(muted, uuidString: callKitUUID)
     }
     
-    func restoreFullScreenView() {
-        if self.hasMeeting, OWSWindowManager.shared().hasCall() {
-            OWSWindowManager.shared().showCallView()
-            floatingView.removeFromSuperview()
+    @MainActor func restoreFullScreenView() {
+        guard self.hasMeeting, OWSWindowManager.shared().hasCall() else { return }
+
+        let wasMinimize = isMinimize
+        isMinimize = false
+        removeFloatingView()
+        OWSWindowManager.shared().showCallView()
+
+        let callWindow = OWSWindowManager.shared().callViewWindow
+        callAlertManager.bringLiveKitAlertCalls(to: callWindow)
+
+        if wasMinimize {
+            Logger.info("\(logTag) restored from minimize to full screen")
+        }
+
+        Task { @MainActor [weak self] in
+            self?.roomContext?.checkAndPresentScreenShareIfNeeded()
         }
     }
     
@@ -559,7 +666,7 @@ extension DTMeetingManager {
         let noiseVC = DTUpdateNoiseController()
         noiseVC.modalPresentationStyle = .popover
         let noiseNav = DTPanModalNavController(rootViewController: noiseVC,
-                                                     defaultHeight: 210,
+                                                     defaultHeight: 344,
                                                ignorePanGestureInContent: false,
                                                forbidPanGesture: true)
         noiseNav.navigationBar.isHidden = true
@@ -705,11 +812,11 @@ extension DTMeetingManager {
     }
     
     func switchCamera() {
+        guard let track = roomContext?.room.localParticipant.firstCameraVideoTrack as? LocalVideoTrack,
+              let cameraCapturer = track.capturer as? CameraCapturer else {
+            return
+        }
         Task {
-            guard let track = DTMeetingManager.shared.roomContext?.room.localParticipant.firstCameraVideoTrack as? LocalVideoTrack,
-                  let cameraCapturer = track.capturer as? CameraCapturer else {
-                return
-            }
             try await cameraCapturer.switchCameraPosition()
         }
     }
@@ -726,7 +833,7 @@ extension DTMeetingManager {
         DTToastHelper.toast(withText: message, in: topVC.view, durationTime: 3, afterDelay: 1)
     }
     
-    func isPresentedShare() -> Bool {
+    public func isPresentedShare() -> Bool {
         return currentCall.isPresentedShare
     }
     

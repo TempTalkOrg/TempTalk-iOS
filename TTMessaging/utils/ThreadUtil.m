@@ -454,9 +454,10 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertDebug(messageSender);
     
     uint32_t expiresInSeconds = [thread messageExpiresInSeconds];
-    
+
+    NSString *combinedForwardFallbackBody = [NSString stringWithFormat:@"[%@]", Localized(@"FORWARD_MESSAGE_CHAT_HISTORY", @"")];
     TSOutgoingMessage *message = [TSOutgoingMessage outgoingMessageInThread:thread
-                                                                messageBody:@"[Unsupported message type]"
+                                                                messageBody:combinedForwardFallbackBody
                                                                   atPersons:atPersons
                                                                    mentions:mentions
                                                                attachmentId:nil
@@ -519,11 +520,23 @@ NS_ASSUME_NONNULL_BEGIN
                                                  inThread:(TSThread *)thread
                                                   success:(void (^)(void))successHandler
                                                   failure:(void (^)(NSError *error))failureHandler{
+    return [self sendRecallMessageWithOriginMessage:originMessage
+                                           inThread:thread
+                                  explicitTimestamp:[NSDate ows_millisecondTimeStamp]
+                                            success:successHandler
+                                            failure:failureHandler];
+}
+
++ (TSOutgoingMessage *)sendRecallMessageWithOriginMessage:(TSOutgoingMessage *)originMessage
+                                                 inThread:(TSThread *)thread
+                                        explicitTimestamp:(uint64_t)explicitTimestamp
+                                                  success:(void (^)(void))successHandler
+                                                  failure:(void (^)(NSError *error))failureHandler{
     OWSAssertIsOnMainThread();
     OWSAssertDebug(thread);
-    
+
     uint32_t expiresInSeconds = [thread messageExpiresInSeconds];
-    
+
     NSString *localNumber = [TSAccountManager localNumber];
     DTRealSourceEntity *originSource = [[DTRealSourceEntity alloc] initSourceWithTimestamp:originMessage.timestamp
                                                                               sourceDevice:originMessage.sourceDeviceId?:[OWSDevice currentDeviceId]
@@ -531,11 +544,11 @@ NS_ASSUME_NONNULL_BEGIN
                                                                                 sequenceId:originMessage.sequenceId
                                                                           notifySequenceId:originMessage.notifySequenceId];
     originSource.serverTimestamp = originMessage.serverTimestamp;
-    
-    DTRecallMessage *recallMessage = [[DTRecallMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
+
+    DTRecallMessage *recallMessage = [[DTRecallMessage alloc] initWithTimestamp:explicitTimestamp
                                                                          source:originSource];
-    
-    DTRecallOutgoingMessage *message = [DTRecallOutgoingMessage recallOutgoingMessageWithTimestamp:[NSDate ows_millisecondTimeStamp]
+
+    DTRecallOutgoingMessage *message = [DTRecallOutgoingMessage recallOutgoingMessageWithTimestamp:explicitTimestamp
                                                                                             recall:recallMessage
                                                                                           inThread:thread
                                                                                   expiresInSeconds:expiresInSeconds];

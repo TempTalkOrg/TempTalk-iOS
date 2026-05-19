@@ -152,7 +152,8 @@ NS_ASSUME_NONNULL_BEGIN
     SignalAccount *account = [self.contactsManager signalAccountForRecipientId:contactIdentifier];
     NSString *diaplayName = account.contact.fullName;
 
-    [avatarView setImageWithContactAvatar:account.contact.avatar recipientId:contactIdentifier displayName:diaplayName];
+    NSDictionary *avatarDict = account.contact.remarkAvatar ?: account.contact.avatar;
+    [avatarView setImageWithContactAvatar:avatarDict recipientId:contactIdentifier displayName:diaplayName];
 
     [avatarView autoSetDimension:ALDimensionWidth toSize:self.iconSize];
     [avatarView autoSetDimension:ALDimensionHeight toSize:self.iconSize];

@@ -13,7 +13,8 @@ struct RoomContextView: View {
     @State private var isGroupMembers: Bool = false
     @State private var showQuickPanel = false
     @State private var isPopupPresented = false
-    @State private var hasRaiseHands: Bool = RoomDataManager.shared.hasRaiseHands
+    // 举手入口已下掉，注释保留逻辑
+    // @State private var hasRaiseHands: Bool = RoomDataManager.shared.hasRaiseHands
     @State private var localRaiseHand: Bool = RoomDataManager.shared.localRaiseHand
 
     @State private var delayTask: Task<Void, Never>?
@@ -23,60 +24,57 @@ struct RoomContextView: View {
         let toolbarBottomPadding: CGFloat = 24
         let overlayBottomInset = toolbarHeight + toolbarBottomPadding
 
-        ZStack {
-            // 背景色
-            backgroundView
+        GeometryReader { geometry in
+            let containerSize = geometry.size
 
-            // 主内容
-            CallContentView(currentCall: currentCall)
-                .environmentObject(appCtx)
-                .environmentObject(roomCtx)
+            ZStack {
+                backgroundView
 
-            // 弹幕和控制层（放在底部工具栏之上）
-            BulletOverlayView(
-                bottomInset: overlayBottomInset,
-                showQuickPanel: $showQuickPanel,
-                hasRaiseHand: $hasRaiseHands
-            )
+                CallContentView(currentCall: currentCall)
 
-            // 顶部导航
-            CallNavigationView(
-                currentCall: roomCtx.currentCall,
-                cameraRotateItemHidden: $isRightItemHidden,
-                leftItemAction: { roomCtx.toolbarMinimizeTaped() },
-                cameraRotateAction: switchCamera
-            )
-            .environmentObject(roomCtx.room)
-            .environmentObject(roomCtx)
-            .frame(maxHeight: .infinity, alignment: .top)
+                BulletOverlayView(
+                    bottomInset: overlayBottomInset,
+                    showQuickPanel: $showQuickPanel,
+                    // 举手入口已下掉，注释保留逻辑
+                    // hasRaiseHand: $hasRaiseHands,
+                    containerSize: containerSize
+                )
 
-            // 底部工具栏
-            BottomToolbarView(
-                isScreenSharing: false,
-                cameraPublishHandler: { isCameraEnabled in
-                    isRightItemHidden = !isCameraEnabled
-                },
-                barClickHandler: {},
-                moreClickHandler: {
-                    DTMeetingManager.shared.presentMicNoiseVC()
-                },
-                isGroupMembers: $isGroupMembers,
-                localRaiseHand: $localRaiseHand
-            )
-            .environmentObject(appCtx)
-            .environmentObject(roomCtx)
-            .environmentObject(roomCtx.room)
-            .frame(maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, toolbarBottomPadding)
+                CallNavigationView(
+                    currentCall: roomCtx.currentCall,
+                    cameraRotateItemHidden: $isRightItemHidden,
+                    leftItemAction: { roomCtx.toolbarMinimizeTaped() },
+                    cameraRotateAction: switchCamera
+                )
+                .frame(maxHeight: .infinity, alignment: .top)
+
+                BottomToolbarView(
+                    isScreenSharing: false,
+                    containerSize: containerSize,
+                    cameraPublishHandler: { isCameraEnabled in
+                        isRightItemHidden = !isCameraEnabled
+                    },
+                    barClickHandler: {},
+                    moreClickHandler: {
+                        DTMeetingManager.shared.presentMicNoiseVC()
+                    },
+                    isGroupMembers: $isGroupMembers,
+                    localRaiseHand: $localRaiseHand
+                )
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, toolbarBottomPadding)
+            }
+            .frame(width: containerSize.width, height: containerSize.height)
         }
-        .onReceive(RoomDataManager.shared.$hasRaiseHands) { hasRaiseHands = $0 }
+        // 举手入口已下掉，注释保留逻辑
+        // .onReceive(RoomDataManager.shared.$hasRaiseHands) { hasRaiseHands = $0 }
         .onReceive(RoomDataManager.shared.$localRaiseHand) { localRaiseHand = $0 }
         .onAppear {
             delayTask = Task {
                 if DTMeetingManager.shared.isFromCallkit && needLayoutTopVCScreenShare() {
                     Logger.info("[newCall] callkit open sharePresent")
                     DTMeetingManager.shared.isFromCallkit = false
-                    roomCtx.presentShareView()
+                    DTMeetingManager.shared.roomContext?.tryPresentShareView(maxRetryCount: 3)
                 }
             }
         }
@@ -85,22 +83,21 @@ struct RoomContextView: View {
         }
     }
     
+    @ViewBuilder
     private var backgroundView: some View {
-        Group {
-            if currentCall.callType == .private {
-                Color.dtBackground
-            } else {
-                Color(hex: 0x0B0E11)
-            }
-        }.ignoresSafeArea()
+        if currentCall.callType == .private {
+            Color.dtBackground.ignoresSafeArea()
+        } else {
+            Color(hex: 0x0B0E11).ignoresSafeArea()
+        }
     }
     
     private func switchCamera() {
+        guard let track = roomCtx.room.localParticipant.firstCameraVideoTrack as? LocalVideoTrack,
+              let cameraCapturer = track.capturer as? CameraCapturer else {
+            return
+        }
         Task {
-            guard let track = roomCtx.room.localParticipant.firstCameraVideoTrack as? LocalVideoTrack,
-                  let cameraCapturer = track.capturer as? CameraCapturer else {
-                return
-            }
             try await cameraCapturer.switchCameraPosition()
         }
     }
@@ -125,25 +122,18 @@ struct CallContentView: View {
     @EnvironmentObject var roomCtx: RoomContext
     @EnvironmentObject var appCtx: LiveKitContext
 
+    @ViewBuilder
     var body: some View {
         let currentCall = roomCtx.currentCall
 
-        Group {
-            if currentCall.callType == .private {
-                if currentCall.isCaller && currentCall.callState != .answering {
-                    CallerWaitingView()
-                } else {
-                    Room1on1ContentView()
-                        .environmentObject(appCtx)
-                        .environmentObject(roomCtx)
-                        .environmentObject(roomCtx.room)
-                }
+        if currentCall.callType == .private {
+            if currentCall.isCaller && currentCall.callState != .answering {
+                CallerWaitingView()
             } else {
-                RoomView()
-                    .environmentObject(appCtx)
-                    .environmentObject(roomCtx)
-                    .environmentObject(roomCtx.room)
+                Room1on1ContentView()
             }
+        } else {
+            RoomView()
         }
     }
 }
@@ -179,73 +169,64 @@ struct CallerWaitingView: View {
         let recipientId = otherRecipientId()
         let name = DTLiveKitCallModel.getDisplayName(recipientId: recipientId)
 
-        VStack {
-            ZStack(alignment: .top) {
-                // 背景内容
-                VStack {
-                    Spacer() // 让内容整体居中偏下
-                    AvatarImageViewRepresentable(recipientId: recipientId)
-                        .frame(width: 120, height: 120)
-                        .offset(y: -40)
-                    Text(name)
-                        .font(.system(size: 17))
+        ZStack(alignment: .top) {
+            VStack {
+                AvatarImageViewRepresentable(recipientId: recipientId)
+                    .frame(width: 120, height: 120)
+                Text(name)
+                    .font(.system(size: 17))
+                    .foregroundColor(.white)
+                    .padding(.top, 10)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .offset(y: -40)
+        
+            if showTimeoutAlert {
+                HStack(spacing: 8) {
+                    Image("call_calling_critical")
+
+                    Text(Localized("MEETING_CRITICAL_ALERT_NO_ANSWER"))
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundColor(.white)
-                        .padding(.top, 10)
-                        .offset(y: -40)
-                    Spacer()
-                }
-            
-                if showTimeoutAlert {
-                    HStack(spacing: 8) {
-                        Image("call_calling_critical")
 
-                        HStack(spacing: 0) {
-                            Text(Localized("MEETING_CRITICAL_ALERT_NO_ANSWER"))
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundColor(.white)
-
-                            Button(action: sendTimeoutMessage) {
-                                Text(Localized("MEETING_CRITICAL_ALERT_SEND"))
-                                    .font(.system(size: 14, weight: .regular))
-                                    .foregroundColor(Color(hex: 0x82C1FC))
-                            }
-                        }
-
-                        // Tips 按钮（在同一个背景内）
-                        Button(action: {
-                            showTipsBubble.toggle()
-                        }) {
-                            Image("critical_alert_confirm_tips")
-                                .resizable()
-                                .frame(width: 14, height: 14)
-                        }
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear.preference(
-                                    key: CallerWaitingTipsButtonFramePreferenceKey.self,
-                                    value: geo.frame(in: .global)
-                                )
-                            }
-                        )
+                    Button(action: sendTimeoutMessage) {
+                        Text(Localized("MEETING_CRITICAL_ALERT_SEND"))
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundColor(Color(hex: 0x82C1FC))
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(Color(rgbHex: 0x2B3139))
-                    .cornerRadius(8)
-                    .shadow(radius: 2)
-                    .padding(.top, 45)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .animation(.easeInOut(duration: 0.3), value: showTimeoutAlert)
-                }
 
-                // Tips 气泡（只在超时提示显示时才显示）
-                if showTipsBubble && showTimeoutAlert {
-                    CallerWaitingTipsBubbleView(
-                        text: Localized("CRITICAL_ALERT_CONFIRM_TIPS_MESSAGE"),
-                        buttonFrame: tipsButtonFrame
+                    Button(action: {
+                        showTipsBubble.toggle()
+                    }) {
+                        Image("critical_alert_confirm_tips")
+                            .resizable()
+                            .frame(width: 14, height: 14)
+                    }
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: CallerWaitingTipsButtonFramePreferenceKey.self,
+                                value: geo.frame(in: .global)
+                            )
+                        }
                     )
-                    .transition(.opacity)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color(rgbHex: 0x2B3139))
+                .cornerRadius(8)
+                .shadow(radius: 2)
+                .padding(.top, 45)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.3), value: showTimeoutAlert)
+            }
+
+            if showTipsBubble && showTimeoutAlert {
+                CallerWaitingTipsBubbleView(
+                    text: Localized("CRITICAL_ALERT_CONFIRM_TIPS_MESSAGE"),
+                    buttonFrame: tipsButtonFrame
+                )
+                .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -307,21 +288,26 @@ struct CallerWaitingView: View {
 struct BulletOverlayView: View {
     let bottomInset: CGFloat
     @Binding var showQuickPanel: Bool
-    @Binding var hasRaiseHand: Bool
-    @State private var raiseHandsWidth: CGFloat = DTMeetingManager.shared.calculateRaiseHandsWidth()
+    // 举手入口已下掉，注释保留逻辑
+    // @Binding var hasRaiseHand: Bool
+    var containerSize: CGSize = UIScreen.main.bounds.size
+    // 举手入口已下掉，注释保留逻辑
+    // @State private var raiseHandsWidth: CGFloat = DTMeetingManager.shared.calculateRaiseHandsWidth()
+    @State private var quickPanelHeight: CGFloat = 170
 
     var body: some View {
         let paddingLeading: CGFloat = 30
         let paddingOverlayLeading: CGFloat = 45
         let controlViewHeight: CGFloat = 36
         let spacing: CGFloat = 10
-        let controlStackHeight = controlViewHeight + (hasRaiseHand ? controlViewHeight + spacing : 0)
+        // 举手入口已下掉，注释保留逻辑
+        // let controlStackHeight = controlViewHeight + (hasRaiseHand ? controlViewHeight + spacing : 0)
+        let controlStackHeight = controlViewHeight
         let quickPanelBottom = bottomInset + controlStackHeight + spacing
         let bulletBottom = quickPanelBottom
 
-        let currentScreenSize = UIScreen.main.bounds.size
-        let isLandscape = currentScreenSize.width > currentScreenSize.height
-        let bulletChatWidth = isLandscape ? currentScreenSize.width * 0.5 : min(currentScreenSize.width, currentScreenSize.height)
+        let isLandscape = containerSize.width > containerSize.height
+        let bulletChatWidth = isLandscape ? containerSize.width * 0.5 : min(containerSize.width, containerSize.height)
 
         return ZStack {
             DTBulletChatViewRepresentable()
@@ -331,8 +317,7 @@ struct BulletOverlayView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .allowsHitTesting(false)
 
-            // 添加气泡消息视图
-            DTEmojiFlyingViewRepresentable(containerSize: CGSize(width: bulletChatWidth, height: 0))
+            DTEmojiFlyingViewRepresentable(containerSize: CGSize(width: bulletChatWidth, height: 0), isLandscape: isLandscape)
                 .frame(width: bulletChatWidth)
                 .padding(.leading, paddingLeading)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -347,46 +332,47 @@ struct BulletOverlayView: View {
                     .allowsHitTesting(true)
                     .simultaneousGesture(
                         DragGesture()
-                            .onChanged { _ in
-                            }
+                            .onChanged { _ in }
                     )
-            }
-            
-            if showQuickPanel {
+
                 let config = DTMeetingManager.shared.bubbleMessageConfig()
                 QuickMessagePanelUIKitWrapper(
                     emojiPresets: config.emojiPresets,
-                    textPresets: config.textPresets
-                ) { message in
-                    Task {
-                        // 发送气泡类型消息
-                        await DTMeetingManager.shared.sendDanmu(message, type: .bubble)
-                        showQuickPanel = false
+                    textPresets: config.textPresets,
+                    onTap: { message in
+                        Task {
+                            await DTMeetingManager.shared.sendDanmu(message, type: .bubble)
+                            showQuickPanel = false
+                        }
+                    },
+                    onContentSizeChange: { size in
+                        if abs(size.height - quickPanelHeight) > 0.5 {
+                            quickPanelHeight = size.height
+                        }
                     }
-                }
-                .frame(width: 300, height: 170)
+                )
+                .frame(width: 300, height: quickPanelHeight)
                 .padding(.leading, paddingOverlayLeading)
                 .padding(.bottom, quickPanelBottom)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .allowsHitTesting(true)
-                .onTapGesture {
-                }
+                .onTapGesture { }
                 .simultaneousGesture(
                     DragGesture()
-                        .onChanged { _ in
-                        }
+                        .onChanged { _ in }
                 )
             }
             
-            if hasRaiseHand {
-                HandsControlViewRepresentable()
-                    .frame(height: controlViewHeight)
-                    .frame(width: raiseHandsWidth)
-                    .padding(.leading, paddingOverlayLeading)
-                    .padding(.bottom, bottomInset + controlViewHeight + spacing)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                    .allowsHitTesting(hasRaiseHand)
-            }
+            // 举手入口已下掉，注释保留逻辑
+            // if hasRaiseHand {
+            //     HandsControlViewRepresentable()
+            //         .frame(height: controlViewHeight)
+            //         .frame(width: raiseHandsWidth)
+            //         .padding(.leading, paddingOverlayLeading)
+            //         .padding(.bottom, bottomInset + controlViewHeight + spacing)
+            //         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            //         .allowsHitTesting(hasRaiseHand)
+            // }
 
             DTBulletChatControlViewRepresentable(showQuickPanel: $showQuickPanel)
                 .frame(height: controlViewHeight)
@@ -396,9 +382,10 @@ struct BulletOverlayView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .allowsHitTesting(true)
         }
-        .onReceive(RoomDataManager.shared.raiseHandsPublisher) { _ in
-            raiseHandsWidth = DTMeetingManager.shared.calculateRaiseHandsWidth()
-        }
+        // 举手入口已下掉，注释保留逻辑
+        // .onReceive(RoomDataManager.shared.raiseHandsPublisher) { _ in
+        //     raiseHandsWidth = DTMeetingManager.shared.calculateRaiseHandsWidth()
+        // }
     }
 }
 

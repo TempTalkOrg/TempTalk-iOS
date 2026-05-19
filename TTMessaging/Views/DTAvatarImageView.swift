@@ -146,6 +146,16 @@ public extension DTAvatarImageView {
         self.recipientId = recipientId;
         avatarImageView.setImageWithContactAvatar(avatar, recipientId: recipientId, displayName: displayName, completion: completion)
     }
+
+    /// 优先展示本端备注头像。
+    @objc
+    func setImage(signalAccount: SignalAccount?, displayName: String?, completion: ((UIImage) -> Void)?) {
+        let recipientId = signalAccount?.recipientId
+        let avatar = (signalAccount?.contact?.remarkAvatar as? [String: Any])
+            ?? (signalAccount?.contact?.avatar as? [String: Any])
+        self.recipientId = recipientId
+        avatarImageView.setImageWithContactAvatar(avatar, recipientId: recipientId, displayName: displayName, completion: completion)
+    }
     
 //    @objc
 //    func setImageWithContactAvatar(avatar: [String : Any],recipientId: String?) {

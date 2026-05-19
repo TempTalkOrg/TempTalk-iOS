@@ -390,20 +390,33 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
         groupModel.autoClear = baseInfo.autoClear;
         groupModel.privilegeConfidential = baseInfo.privilegeConfidential;
         groupModel.criticalAlert = baseInfo.criticalAlert;
+        groupModel.groupCryptoMode = baseInfo.groupCryptoMode;
     };
     
     void (^saveNewThreadBlock)(DTGroupBaseInfoEntity *, SDSAnyWriteTransaction *) = ^(DTGroupBaseInfoEntity *baseInfo, SDSAnyWriteTransaction *transaction) {
         DTGroupBaseInfoEntity *localGroupInfo = [DTGroupBaseInfoEntity anyFetchWithUniqueId:baseInfo.uniqueId transaction:transaction];
         if (!localGroupInfo || ![localGroupInfo isEqual:baseInfo]) {
             
+            if (localGroupInfo.groupCryptoMode > 0 && baseInfo.groupCryptoMode == 0) {
+                OWSLogInfo(@"[GroupCrypto] Sync preserving local crypto fields for gid: %@, local cryptoMode: %ld", baseInfo.gid, (long)localGroupInfo.groupCryptoMode);
+                baseInfo.groupCryptoMode = localGroupInfo.groupCryptoMode;
+                if (!baseInfo.encryptedName && localGroupInfo.encryptedName) {
+                    baseInfo.encryptedName = localGroupInfo.encryptedName;
+                }
+                if (!baseInfo.encryptedAvatar && localGroupInfo.encryptedAvatar) {
+                    baseInfo.encryptedAvatar = localGroupInfo.encryptedAvatar;
+                }
+            }
             [baseInfo anyUpsertWithTransaction:transaction];
-            
+
             NSData *groupId = [TSGroupThread transformToLocalGroupIdWithServerGroupId:baseInfo.gid];
             TSGroupThread *groupThread = [TSGroupThread threadWithGroupId:groupId
                                                               transaction:transaction];
             NSArray *memberIds = self.localNumber ? @[self.localNumber] : @[];
             TSGroupModel *newGroupModel = nil;
+            BOOL isNewThread = NO;
             if (!groupThread) {
+                isNewThread = YES;
                 newGroupModel = [[TSGroupModel alloc] initWithTitle:baseInfo.name memberIds:memberIds image:nil groupId:groupId groupOwner:nil groupAdmin:nil transaction:transaction];
                 newGroupModelBlock(newGroupModel, baseInfo);
                 groupThread = [[TSGroupThread alloc] initWithGroupModel:newGroupModel];
@@ -418,6 +431,15 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
                         groupThread.groupModel = newGroupModel;
                     }];
                 }
+            }
+            if (baseInfo.groupCryptoMode > 0) {
+                BOOL hasKey = [DTGroupCryptoDisplayHelper.shared hasGroupKeyWithGid:baseInfo.gid transaction:transaction];
+                OWSLogInfo(@"[GroupCrypto] Sync baseInfo upsert gid=%@, cryptoMode=%ld, hasEncName=%d, hasEncAvatar=%d, isNewThread=%d, hasKey=%d",
+                           baseInfo.gid, (long)baseInfo.groupCryptoMode,
+                           baseInfo.encryptedName.length > 0, baseInfo.encryptedAvatar.length > 0,
+                           isNewThread, hasKey);
+                [DTGroupKeyMessageHandler downloadEncryptedAvatarIfNeededWithGid:baseInfo.gid
+                                                                      transaction:transaction];
             }
         }
     };
@@ -602,7 +624,7 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
                                remindCycle:(NSString *)remindCycle
                                transaction:(SDSAnyWriteTransaction *)transaction {
     
-    DTGroupReminderConfig *reminderConfig = [DTGroupConfig fetchGroupConfig].groupRemind;
+    DTGroupReminderConfig *reminderConfig = [DTGroupConfig fetchGroupConfigWithTransaction:transaction].groupRemind;
     
     NSString *none = @"none";
     NSString *daily = @"daily";

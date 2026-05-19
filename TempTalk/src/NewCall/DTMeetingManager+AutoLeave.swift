@@ -9,25 +9,28 @@
 import Foundation
 
 extension DTMeetingManager {
-    //处理会话弹窗逻辑
     func currentCallTalkingPop() {
         if checkCloseAutoLeaveTimer() {
-            //如果有弹窗，弹窗就取消掉
-            Task { @MainActor in
-                self.dismissAutoLeaveTipView()
+            Task { @MainActor [weak self] in
+                self?.dismissAutoLeaveTipView()
             }
-            //有人在会 重置 倒计时等数据
             stopCheckTalking()
         } else {
-            // 开始倒计时
+            timerLock.lock()
+            if let oldTimer = sourceTimer {
+                oldTimer.setEventHandler {}
+                oldTimer.cancel()
+                sourceTimer = nil
+            }
+            timerLock.unlock()
             sourceTimer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "com.call.timerQueue"))
             sourceTimer?.schedule(deadline: .now(), repeating: 1)
             sourceTimer?.setEventHandler { [weak self] in
                 guard let self = self else { return }
                 DTMeetingManager.countDownInterval += 1
                 if DTMeetingManager.countDownInterval > self.meetingTimeoutResult {
-                    //超过时间展示弹窗
-                    Task { @MainActor in
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
                         self.showAutoLeaveTipView(self.checkSoloMember())
                     }
                     self.stopCheckTalking()
@@ -49,11 +52,10 @@ extension DTMeetingManager {
     
     // 检测当前 call 中是否有认在说话
     func checkCloseAutoLeaveTimer() -> Bool {
-        // 如果有人数变化的话都要取消一次定时器
         if checkUpdateParticipantsCount() {
             Logger.info("\(logTag) auto leave meeting Participants change")
-            Task { @MainActor in
-                self.dismissAutoLeaveTipView()
+            Task { @MainActor [weak self] in
+                self?.dismissAutoLeaveTipView()
             }
             stopCheckTalking()
         }
@@ -126,8 +128,8 @@ extension DTMeetingManager {
     func suspendAutoLeaveForBackground() {
         Logger.info("\(logTag) suspending auto-leave for background")
         stopCheckTalking()
-        Task { @MainActor in
-            self.dismissAutoLeaveTipView()
+        Task { @MainActor [weak self] in
+            self?.dismissAutoLeaveTipView()
         }
     }
 

@@ -457,6 +457,12 @@ NS_ASSUME_NONNULL_BEGIN
             }  else if (content.notifyMessage) {
                 [self handleIncomingEnvelopeJob:job envelope:envelope withNotifyMessage:content.notifyMessage transaction:transaction];
                 OWSLogInfo(@"%@ received notifyMessage", self.logTag);
+            } else if (content.groupKeyMessage) {
+                [DTGroupKeyMessageHandler.shared handleGroupKeyMessage:content.groupKeyMessage transaction:transaction];
+            } else if (content.forwardNotice) {
+                [self handleIncomingEnvelope:envelope
+                           withForwardNotice:content.forwardNotice
+                                 transaction:transaction];
             } else {
                 OWSLogWarn(@"%@ Ignoring envelope. Content with no known payload", self.logTag);
             }
@@ -497,6 +503,10 @@ NS_ASSUME_NONNULL_BEGIN
         return;
     }
     
+    if (dataMessage.group) {
+        [DTGroupKeyMessageHandler.shared handleFallbackGroupRootKeyWithGroupContext:dataMessage.group transaction:transaction];
+    }
+
     if (dataMessage.hasProfileKey) {
         NSData *profileKey = [dataMessage profileKey];
         NSString *recipientId = envelope.source;
@@ -1073,12 +1083,120 @@ NS_ASSUME_NONNULL_BEGIN
         [self processIncomingSyncMessageWithTopicMark:syncMessage.topicMark serverTimestamp:envelope.systemShowTimestamp transaction:transaction];
     } else if (syncMessage.topicAction) {
         [self processIncomingSyncMessageWithTopicAction:syncMessage.topicAction serverTimestamp:envelope.systemShowTimestamp transaction:transaction];
+    } else if (syncMessage.forwardNoticeSync) {
+        [self handleIncomingEnvelope:envelope
+                   withForwardNotice:syncMessage.forwardNoticeSync
+                         transaction:transaction];
     }
     else if (syncMessage.conversationArchive) { // 热数据不会记
         [DTMessageArchiveProcessor processIncomingSyncMessageWithArchiveMessage:syncMessage.conversationArchive serverTimestamp:envelope.systemShowTimestamp transaction:transaction];
     } else {
         OWSLogWarn(@"%@ Ignoring unsupported sync message.", self.logTag);
     }
+}
+
+- (void)handleIncomingEnvelope:(DSKProtoEnvelope *)envelope
+             withForwardNotice:(DSKProtoForwardNoticeMessage *)forwardNotice
+                   transaction:(SDSAnyWriteTransaction *)transaction
+{
+    OWSAssertDebug(envelope);
+    OWSAssertDebug(forwardNotice);
+    OWSAssertDebug(transaction);
+
+    NSString *localNumber = [TSAccountManager localNumber];
+    BOOL isSelfSync = DTParamsUtils.validateString(localNumber)
+        && DTParamsUtils.validateString(envelope.source)
+        && [envelope.source isEqualToString:localNumber];
+    OWSLogInfo(@"%@ ForwardNotice recv source=%@ scene=%d count=%u authors=%lu isSelfSync=%d",
+               self.logTag,
+               envelope.source,
+               (int)forwardNotice.unwrappedScene,
+               forwardNotice.hasMessageCount ? forwardNotice.messageCount : 0,
+               (unsigned long)forwardNotice.sourceAuthorIds.count,
+               isSelfSync);
+
+    TSThread *thread = [self threadForForwardNoticeEnvelope:envelope
+                                              forwardNotice:forwardNotice
+                                                transaction:transaction];
+    if (!thread) {
+        OWSLogError(@"%@ ForwardNotice dropped: thread not found.", self.logTag);
+        return;
+    }
+
+    if (envelope.timestamp > 0) {
+        NSError *findError;
+        NSArray<TSInteraction *> *existing = [InteractionFinder
+            interactionsWithTimestamp:envelope.timestamp
+                               filter:^BOOL(TSInteraction *interaction) {
+                                   if (![interaction isKindOfClass:[TSInfoMessage class]]) {
+                                       return NO;
+                                   }
+                                   return ((TSInfoMessage *)interaction).messageType == TSInfoMessageForwardNotice;
+                               }
+                          transaction:transaction
+                                error:&findError];
+        if (findError) {
+            OWSLogError(@"%@ ForwardNotice dedup query error: %@", self.logTag, findError);
+        }
+        NSString *envelopeSource = envelope.source ?: @"";
+        for (TSInteraction *interaction in existing) {
+            TSInfoMessage *info = (TSInfoMessage *)interaction;
+            if ([info.uniqueThreadId isEqualToString:thread.uniqueId]
+                && [(info.authorId ?: @"") isEqualToString:envelopeSource]) {
+                OWSLogInfo(@"%@ ForwardNotice dedup: thread=%@ ts=%llu source=%@",
+                           self.logTag, thread.uniqueId, envelope.timestamp, envelopeSource);
+                return;
+            }
+        }
+    }
+
+    uint32_t messageCount = forwardNotice.hasMessageCount ? forwardNotice.messageCount : 0;
+    if (messageCount == 0) {
+        messageCount = 1;
+    }
+
+    NSString *noticeText = [DTForwardNoticeTextFormatter textWithOperatorId:envelope.source
+                                                               messageCount:messageCount
+                                                            sourceAuthorIds:forwardNotice.sourceAuthorIds
+                                                                transaction:transaction];
+
+    TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:envelope.timestamp
+                                                                 inThread:thread
+                                                              messageType:TSInfoMessageForwardNotice
+                                                            customMessage:noticeText];
+    infoMessage.serverTimestamp = envelope.systemShowTimestamp;
+    infoMessage.authorId = envelope.source;
+    infoMessage.sourceDeviceId = envelope.sourceDevice;
+    [infoMessage anyInsertWithTransaction:transaction];
+    OWSLogInfo(@"%@ ForwardNotice inserted thread=%@ ts=%llu", self.logTag, thread.uniqueId, infoMessage.timestamp);
+}
+
+- (nullable TSThread *)threadForForwardNoticeEnvelope:(DSKProtoEnvelope *)envelope
+                                         forwardNotice:(DSKProtoForwardNoticeMessage *)forwardNotice
+                                           transaction:(SDSAnyWriteTransaction *)transaction
+{
+    DSKProtoConversationId *payloadConv = forwardNotice.conversation;
+
+    NSData *groupID = payloadConv.groupID;
+    if (groupID.length > 0) {
+        return [TSGroupThread threadWithGroupId:groupID transaction:transaction];
+    }
+
+    NSString *localNumber = [TSAccountManager localNumber];
+    BOOL isSelfSync = DTParamsUtils.validateString(localNumber) && [envelope.source isEqualToString:localNumber];
+
+    if (isSelfSync) {
+        NSString *number = payloadConv.number;
+        if (DTParamsUtils.validateString(number)) {
+            return [TSContactThread getOrCreateThreadWithContactId:number transaction:transaction];
+        }
+        // Defensive NTS fallback: payload missing → my own NTS thread.
+        OWSLogError(@"%@ ForwardNotice self-sync payload missing number, fallback to NTS.", self.logTag);
+        return [TSContactThread getOrCreateThreadWithContactId:localNumber transaction:transaction];
+    }
+
+    // Primary 1v1: envelope.source is the peer.
+    return [TSContactThread getOrCreateThreadWithContactId:envelope.source transaction:transaction];
 }
 
 - (void)handleExpirationTimerUpdateMessageWithEnvelope:(DSKProtoEnvelope *)envelope
@@ -1209,7 +1327,7 @@ NS_ASSUME_NONNULL_BEGIN
     NSString *updateGroupInfo = @"";
 //        [gThread.groupModel getInfoStringAboutUpdateTo:gThread.groupModel contactsManager:self.contactsManager];
 
-    uint32_t expiresInSeconds = [gThread messageExpiresInSeconds];
+    uint32_t expiresInSeconds = [gThread messageExpiresInSecondsWithTransaction:transaction];
     TSOutgoingMessage *message = [TSOutgoingMessage outgoingMessageInThread:gThread
                                                            groupMetaMessage:TSGroupMessageUpdate
                                                                   atPersons:nil

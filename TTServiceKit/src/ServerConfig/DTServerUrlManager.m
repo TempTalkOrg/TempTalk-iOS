@@ -239,6 +239,14 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
     entity.isAvailable = NO;
 }
 
+- (void)cancelAllSpeedTests{
+    @synchronized(self){
+        [self.speedTestQueueMap enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSOperationQueue *queue, BOOL *stop) {
+            [queue cancelAllOperations];
+        }];
+    }
+}
+
 - (void)startSpeedTestAll{
     OWSLogInfo(@"Multi-server: startSpeedTestAll.");
     
@@ -270,7 +278,7 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
 - (void)resetAll{
     @synchronized(self){
         _serversEntity = nil;
-        [self.serverUrlsInfo removeAllObjects];
+        self.serverUrlsInfo = @{}.mutableCopy;
         OWSLogInfo(@"Multi-server: %@ reset all servers",self.logTag);
     }
 }
@@ -315,6 +323,7 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
     
     OWSLogInfo(@"Multi-server: %@ server config updated nofity",self.logTag);
     
+    [self cancelAllSpeedTests];
     [self resetAll];
     [self startSpeedTestAll];
 }

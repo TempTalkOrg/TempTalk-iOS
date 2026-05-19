@@ -404,6 +404,8 @@ struct DifftServiceProtos_Envelope: @unchecked Sendable {
     case msgClientNotify = 10
     case msgScheduleNormal = 11
     case msgEncCall = 12
+    case msgGroupKey = 13
+    case msgForwardNotice = 14
 
     init() {
       self = .msgUnknown
@@ -496,11 +498,117 @@ struct DifftServiceProtos_Content: @unchecked Sendable {
   /// Clears the value of `callMessage`. Subsequent reads from it will return its default value.
   mutating func clearCallMessage() {_uniqueStorage()._callMessage = nil}
 
+  var groupKeyMessage: DifftServiceProtos_GroupKeyMessage {
+    get {return _storage._groupKeyMessage ?? DifftServiceProtos_GroupKeyMessage()}
+    set {_uniqueStorage()._groupKeyMessage = newValue}
+  }
+  /// Returns true if `groupKeyMessage` has been explicitly set.
+  var hasGroupKeyMessage: Bool {return _storage._groupKeyMessage != nil}
+  /// Clears the value of `groupKeyMessage`. Subsequent reads from it will return its default value.
+  mutating func clearGroupKeyMessage() {_uniqueStorage()._groupKeyMessage = nil}
+
+  var forwardNotice: DifftServiceProtos_ForwardNoticeMessage {
+    get {return _storage._forwardNotice ?? DifftServiceProtos_ForwardNoticeMessage()}
+    set {_uniqueStorage()._forwardNotice = newValue}
+  }
+  /// Returns true if `forwardNotice` has been explicitly set.
+  var hasForwardNotice: Bool {return _storage._forwardNotice != nil}
+  /// Clears the value of `forwardNotice`. Subsequent reads from it will return its default value.
+  mutating func clearForwardNotice() {_uniqueStorage()._forwardNotice = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+struct DifftServiceProtos_GroupKeyMessage: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var groupID: Data {
+    get {return _groupID ?? Data()}
+    set {_groupID = newValue}
+  }
+  /// Returns true if `groupID` has been explicitly set.
+  var hasGroupID: Bool {return self._groupID != nil}
+  /// Clears the value of `groupID`. Subsequent reads from it will return its default value.
+  mutating func clearGroupID() {self._groupID = nil}
+
+  var groupRootKey: Data {
+    get {return _groupRootKey ?? Data()}
+    set {_groupRootKey = newValue}
+  }
+  /// Returns true if `groupRootKey` has been explicitly set.
+  var hasGroupRootKey: Bool {return self._groupRootKey != nil}
+  /// Clears the value of `groupRootKey`. Subsequent reads from it will return its default value.
+  mutating func clearGroupRootKey() {self._groupRootKey = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _groupID: Data? = nil
+  fileprivate var _groupRootKey: Data? = nil
+}
+
+struct DifftServiceProtos_ForwardNoticeMessage: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var scene: DifftServiceProtos_ForwardNoticeMessage.ForwardScene {
+    get {return _scene ?? .unknown}
+    set {_scene = newValue}
+  }
+  /// Returns true if `scene` has been explicitly set.
+  var hasScene: Bool {return self._scene != nil}
+  /// Clears the value of `scene`. Subsequent reads from it will return its default value.
+  mutating func clearScene() {self._scene = nil}
+
+  var sourceAuthorIds: [String] = []
+
+  var messageCount: UInt32 {
+    get {return _messageCount ?? 0}
+    set {_messageCount = newValue}
+  }
+  /// Returns true if `messageCount` has been explicitly set.
+  var hasMessageCount: Bool {return self._messageCount != nil}
+  /// Clears the value of `messageCount`. Subsequent reads from it will return its default value.
+  mutating func clearMessageCount() {self._messageCount = nil}
+
+  /// v3: notice 所属"原消息会话"身份(group: groupId / 1v1+NTS: number)
+  var conversation: DifftServiceProtos_ConversationId {
+    get {return _conversation ?? DifftServiceProtos_ConversationId()}
+    set {_conversation = newValue}
+  }
+  /// Returns true if `conversation` has been explicitly set.
+  var hasConversation: Bool {return self._conversation != nil}
+  /// Clears the value of `conversation`. Subsequent reads from it will return its default value.
+  mutating func clearConversation() {self._conversation = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  enum ForwardScene: Int, SwiftProtobuf.Enum, Swift.CaseIterable {
+    case unknown = 0
+    case single = 1
+    case oneByOne = 2
+    case combined = 3
+    case saveToNotes = 4
+
+    init() {
+      self = .unknown
+    }
+
+  }
+
+  init() {}
+
+  fileprivate var _scene: DifftServiceProtos_ForwardNoticeMessage.ForwardScene? = nil
+  fileprivate var _messageCount: UInt32? = nil
+  fileprivate var _conversation: DifftServiceProtos_ConversationId? = nil
 }
 
 struct DifftServiceProtos_CallMessage: Sendable {
@@ -3184,6 +3292,16 @@ struct DifftServiceProtos_SyncMessage: @unchecked Sendable {
     set {_uniqueStorage()._criticalRead = newValue}
   }
 
+  /// v3: 直接引用 ForwardNoticeMessage(去 wrapper)
+  var forwardNoticeSync: DifftServiceProtos_ForwardNoticeMessage {
+    get {return _storage._forwardNoticeSync ?? DifftServiceProtos_ForwardNoticeMessage()}
+    set {_uniqueStorage()._forwardNoticeSync = newValue}
+  }
+  /// Returns true if `forwardNoticeSync` has been explicitly set.
+  var hasForwardNoticeSync: Bool {return _storage._forwardNoticeSync != nil}
+  /// Clears the value of `forwardNoticeSync`. Subsequent reads from it will return its default value.
+  mutating func clearForwardNoticeSync() {_uniqueStorage()._forwardNoticeSync = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   struct Sent: Sendable {
@@ -3808,6 +3926,15 @@ struct DifftServiceProtos_GroupContext: @unchecked Sendable {
   /// Clears the value of `avatar`. Subsequent reads from it will return its default value.
   mutating func clearAvatar() {self._avatar = nil}
 
+  var groupRootKey: Data {
+    get {return _groupRootKey ?? Data()}
+    set {_groupRootKey = newValue}
+  }
+  /// Returns true if `groupRootKey` has been explicitly set.
+  var hasGroupRootKey: Bool {return self._groupRootKey != nil}
+  /// Clears the value of `groupRootKey`. Subsequent reads from it will return its default value.
+  mutating func clearGroupRootKey() {self._groupRootKey = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   enum TypeEnum: Int, SwiftProtobuf.Enum, Swift.CaseIterable {
@@ -3829,6 +3956,7 @@ struct DifftServiceProtos_GroupContext: @unchecked Sendable {
   fileprivate var _type: DifftServiceProtos_GroupContext.TypeEnum? = nil
   fileprivate var _name: String? = nil
   fileprivate var _avatar: DifftServiceProtos_AttachmentPointer? = nil
+  fileprivate var _groupRootKey: Data? = nil
 }
 
 struct DifftServiceProtos_ContactDetails: @unchecked Sendable {
@@ -4475,6 +4603,8 @@ extension DifftServiceProtos_Envelope.MsgType: SwiftProtobuf._ProtoNameProviding
     10: .same(proto: "MSG_CLIENT_NOTIFY"),
     11: .same(proto: "MSG_SCHEDULE_NORMAL"),
     12: .same(proto: "MSG_ENC_CALL"),
+    13: .same(proto: "MSG_GROUP_KEY"),
+    14: .same(proto: "MSG_FORWARD_NOTICE"),
   ]
 }
 
@@ -4495,6 +4625,8 @@ extension DifftServiceProtos_Content: SwiftProtobuf.Message, SwiftProtobuf._Mess
     6: .same(proto: "typingMessage"),
     7: .same(proto: "notifyMessage"),
     8: .same(proto: "callMessage"),
+    9: .same(proto: "groupKeyMessage"),
+    10: .same(proto: "forwardNotice"),
   ]
 
   fileprivate class _StorageClass {
@@ -4505,6 +4637,8 @@ extension DifftServiceProtos_Content: SwiftProtobuf.Message, SwiftProtobuf._Mess
     var _typingMessage: DifftServiceProtos_TypingMessage? = nil
     var _notifyMessage: DifftServiceProtos_NotifyMessage? = nil
     var _callMessage: DifftServiceProtos_CallMessage? = nil
+    var _groupKeyMessage: DifftServiceProtos_GroupKeyMessage? = nil
+    var _forwardNotice: DifftServiceProtos_ForwardNoticeMessage? = nil
 
     #if swift(>=5.10)
       // This property is used as the initial default value for new instances of the type.
@@ -4526,6 +4660,8 @@ extension DifftServiceProtos_Content: SwiftProtobuf.Message, SwiftProtobuf._Mess
       _typingMessage = source._typingMessage
       _notifyMessage = source._notifyMessage
       _callMessage = source._callMessage
+      _groupKeyMessage = source._groupKeyMessage
+      _forwardNotice = source._forwardNotice
     }
   }
 
@@ -4551,6 +4687,8 @@ extension DifftServiceProtos_Content: SwiftProtobuf.Message, SwiftProtobuf._Mess
         case 6: try { try decoder.decodeSingularMessageField(value: &_storage._typingMessage) }()
         case 7: try { try decoder.decodeSingularMessageField(value: &_storage._notifyMessage) }()
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._callMessage) }()
+        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._groupKeyMessage) }()
+        case 10: try { try decoder.decodeSingularMessageField(value: &_storage._forwardNotice) }()
         default: break
         }
       }
@@ -4584,6 +4722,12 @@ extension DifftServiceProtos_Content: SwiftProtobuf.Message, SwiftProtobuf._Mess
       try { if let v = _storage._callMessage {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
       } }()
+      try { if let v = _storage._groupKeyMessage {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+      } }()
+      try { if let v = _storage._forwardNotice {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -4600,6 +4744,8 @@ extension DifftServiceProtos_Content: SwiftProtobuf.Message, SwiftProtobuf._Mess
         if _storage._typingMessage != rhs_storage._typingMessage {return false}
         if _storage._notifyMessage != rhs_storage._notifyMessage {return false}
         if _storage._callMessage != rhs_storage._callMessage {return false}
+        if _storage._groupKeyMessage != rhs_storage._groupKeyMessage {return false}
+        if _storage._forwardNotice != rhs_storage._forwardNotice {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -4607,6 +4753,112 @@ extension DifftServiceProtos_Content: SwiftProtobuf.Message, SwiftProtobuf._Mess
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
+}
+
+extension DifftServiceProtos_GroupKeyMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".GroupKeyMessage"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "groupId"),
+    2: .same(proto: "groupRootKey"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self._groupID) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self._groupRootKey) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._groupID {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._groupRootKey {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: DifftServiceProtos_GroupKeyMessage, rhs: DifftServiceProtos_GroupKeyMessage) -> Bool {
+    if lhs._groupID != rhs._groupID {return false}
+    if lhs._groupRootKey != rhs._groupRootKey {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension DifftServiceProtos_ForwardNoticeMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".ForwardNoticeMessage"
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    1: .same(proto: "scene"),
+    2: .same(proto: "sourceAuthorIds"),
+    3: .same(proto: "messageCount"),
+    4: .same(proto: "conversation"),
+  ]
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self._scene) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.sourceAuthorIds) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self._messageCount) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._conversation) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._scene {
+      try visitor.visitSingularEnumField(value: v, fieldNumber: 1)
+    } }()
+    if !self.sourceAuthorIds.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.sourceAuthorIds, fieldNumber: 2)
+    }
+    try { if let v = self._messageCount {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._conversation {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: DifftServiceProtos_ForwardNoticeMessage, rhs: DifftServiceProtos_ForwardNoticeMessage) -> Bool {
+    if lhs._scene != rhs._scene {return false}
+    if lhs.sourceAuthorIds != rhs.sourceAuthorIds {return false}
+    if lhs._messageCount != rhs._messageCount {return false}
+    if lhs._conversation != rhs._conversation {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+extension DifftServiceProtos_ForwardNoticeMessage.ForwardScene: SwiftProtobuf._ProtoNameProviding {
+  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
+    0: .same(proto: "UNKNOWN"),
+    1: .same(proto: "SINGLE"),
+    2: .same(proto: "ONE_BY_ONE"),
+    3: .same(proto: "COMBINED"),
+    4: .same(proto: "SAVE_TO_NOTES"),
+  ]
 }
 
 extension DifftServiceProtos_CallMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
@@ -7407,6 +7659,7 @@ extension DifftServiceProtos_SyncMessage: SwiftProtobuf.Message, SwiftProtobuf._
     15: .same(proto: "topicAction"),
     16: .same(proto: "serverTimestamp"),
     17: .same(proto: "criticalRead"),
+    18: .same(proto: "forwardNoticeSync"),
   ]
 
   fileprivate class _StorageClass {
@@ -7427,6 +7680,7 @@ extension DifftServiceProtos_SyncMessage: SwiftProtobuf.Message, SwiftProtobuf._
     var _topicAction: DifftServiceProtos_TopicAction? = nil
     var _serverTimestamp: UInt64? = nil
     var _criticalRead: [DifftServiceProtos_SyncMessage.Read] = []
+    var _forwardNoticeSync: DifftServiceProtos_ForwardNoticeMessage? = nil
 
     #if swift(>=5.10)
       // This property is used as the initial default value for new instances of the type.
@@ -7458,6 +7712,7 @@ extension DifftServiceProtos_SyncMessage: SwiftProtobuf.Message, SwiftProtobuf._
       _topicAction = source._topicAction
       _serverTimestamp = source._serverTimestamp
       _criticalRead = source._criticalRead
+      _forwardNoticeSync = source._forwardNoticeSync
     }
   }
 
@@ -7493,6 +7748,7 @@ extension DifftServiceProtos_SyncMessage: SwiftProtobuf.Message, SwiftProtobuf._
         case 15: try { try decoder.decodeSingularMessageField(value: &_storage._topicAction) }()
         case 16: try { try decoder.decodeSingularUInt64Field(value: &_storage._serverTimestamp) }()
         case 17: try { try decoder.decodeRepeatedMessageField(value: &_storage._criticalRead) }()
+        case 18: try { try decoder.decodeSingularMessageField(value: &_storage._forwardNoticeSync) }()
         default: break
         }
       }
@@ -7556,6 +7812,9 @@ extension DifftServiceProtos_SyncMessage: SwiftProtobuf.Message, SwiftProtobuf._
       if !_storage._criticalRead.isEmpty {
         try visitor.visitRepeatedMessageField(value: _storage._criticalRead, fieldNumber: 17)
       }
+      try { if let v = _storage._forwardNoticeSync {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 18)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -7582,6 +7841,7 @@ extension DifftServiceProtos_SyncMessage: SwiftProtobuf.Message, SwiftProtobuf._
         if _storage._topicAction != rhs_storage._topicAction {return false}
         if _storage._serverTimestamp != rhs_storage._serverTimestamp {return false}
         if _storage._criticalRead != rhs_storage._criticalRead {return false}
+        if _storage._forwardNoticeSync != rhs_storage._forwardNoticeSync {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -8233,6 +8493,7 @@ extension DifftServiceProtos_GroupContext: SwiftProtobuf.Message, SwiftProtobuf.
     3: .same(proto: "name"),
     4: .same(proto: "members"),
     5: .same(proto: "avatar"),
+    6: .same(proto: "groupRootKey"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -8246,6 +8507,7 @@ extension DifftServiceProtos_GroupContext: SwiftProtobuf.Message, SwiftProtobuf.
       case 3: try { try decoder.decodeSingularStringField(value: &self._name) }()
       case 4: try { try decoder.decodeRepeatedStringField(value: &self.members) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._avatar) }()
+      case 6: try { try decoder.decodeSingularBytesField(value: &self._groupRootKey) }()
       default: break
       }
     }
@@ -8271,6 +8533,9 @@ extension DifftServiceProtos_GroupContext: SwiftProtobuf.Message, SwiftProtobuf.
     try { if let v = self._avatar {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
+    try { if let v = self._groupRootKey {
+      try visitor.visitSingularBytesField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8280,6 +8545,7 @@ extension DifftServiceProtos_GroupContext: SwiftProtobuf.Message, SwiftProtobuf.
     if lhs._name != rhs._name {return false}
     if lhs.members != rhs.members {return false}
     if lhs._avatar != rhs._avatar {return false}
+    if lhs._groupRootKey != rhs._groupRootKey {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

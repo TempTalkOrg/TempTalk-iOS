@@ -39,11 +39,11 @@ NSString *NSStringForScreenLockUIState(ScreenLockUIState value)
 @implementation ScreenLockViewController
 
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations {
-    return UIInterfaceOrientationMaskPortrait | UIInterfaceOrientationMaskLandscapeRight;
+    return UIInterfaceOrientationMaskPortrait;
 }
 
 - (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation {
-    return UIInterfaceOrientationPortrait | UIInterfaceOrientationLandscapeRight;
+    return UIInterfaceOrientationPortrait;
 }
 
 

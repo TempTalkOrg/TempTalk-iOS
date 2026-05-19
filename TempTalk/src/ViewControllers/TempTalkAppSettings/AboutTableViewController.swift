@@ -152,13 +152,6 @@ extension AboutTableViewController : UITableViewDelegate, UITableViewDataSource 
                 self.navigationController?.present(safariVC, animated: true)
                 
             }
-        } else if settingItem.tag == AboutViewItemType.submitDebugLog.rawValue {
-            OWSLogger.info("Submitting debug logs")
-            DTToastHelper.show()
-            DDLog.flushLog()
-            Pastelog.submitLogs {
-                DTToastHelper.hide()
-            }
         }
     }
     
@@ -190,7 +183,6 @@ extension AboutTableViewController {
         case build = 2
         case checkForUpdate = 3
         case website = 4
-        case submitDebugLog = 5
     }
  
     func getDataSource() -> [[DTSettingItem]] {
@@ -207,8 +199,6 @@ extension AboutTableViewController {
         checkForUpdateItem.tag = AboutViewItemType.checkForUpdate.rawValue
         let websiteItem = DTSettingItem(icon: "", title: Localized("SETTINGS_WEBSITE"), description: "Yelling.pro", cellStyle: SettingCellStyle.accessoryAndDescription.rawValue, plainText: "")
         websiteItem.tag = AboutViewItemType.website.rawValue
-        let submitDebugLogItem = DTSettingItem(icon: "", title: Localized("SETTINGS_ADVANCED_SUBMIT_DEBUGLOG"), description: "", cellStyle: SettingCellStyle.accessoryAndDescription.rawValue, plainText: "")
-        submitDebugLogItem.tag = AboutViewItemType.submitDebugLog.rawValue
         
         return [
             [spaceItem],
@@ -220,9 +210,7 @@ extension AboutTableViewController {
             [spaceItem],
             [checkForUpdateItem],
             [spaceItem],
-            [websiteItem],
-            [spaceItem],
-            [submitDebugLogItem]
+            [websiteItem]
         ]
     }
     

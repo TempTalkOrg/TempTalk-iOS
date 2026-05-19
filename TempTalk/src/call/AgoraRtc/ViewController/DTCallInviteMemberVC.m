@@ -400,7 +400,8 @@ NS_ASSUME_NONNULL_BEGIN
 #pragma mark - Methods
 
 - (void)dismissPressed {
-    
+    [self.view endEditing:YES];
+
     if (self.presentingViewController) {
         [self dismissViewControllerAnimated:YES completion:nil];
         return;

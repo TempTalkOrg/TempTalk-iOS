@@ -11,244 +11,70 @@ import TTServiceKit
 import TTMessaging
 import SignalCoreKit
 
-// MARK: - Public
+// MARK: - Public entry points
 
 @objc extension ConversationViewController {
-    var forwardToolbar: DTMultiSelectToolbar {
-        get {
-            if let toolbar = viewState.forwardToolbar {
-                return toolbar
-            }
-            let newToolbar = DTMultiSelectToolbar()
-            newToolbar.delegate = self
-            viewState.forwardToolbar = newToolbar
-            return newToolbar
-        }
-        set {
-            viewState.forwardToolbar = newValue
-        }
-    }
-    
-    var isMultiSelectMode: Bool {
-        get {
-            viewState.isMultiSelectMode
-        }
-        set {
-            viewState.isMultiSelectMode = newValue
-        }
-    }
-    
-    /// 转发单条消息
+
+    /// 长按单条消息 → 转发到其他会话(走 select-thread 流程)
     func forwardSingleMessage(_ viewItem: ConversationViewItem) {
         addForwardMessage(viewItem)
         viewState.forwardType = .oneByOne
-        
+
         showSelectThreadViewController()
     }
-    
-    /// 转发单条信息至备忘录
+
+    /// 长按单条消息 → 保存到备忘录(跳过选择会话,直接发)
     func forwardSingleMessageToNote(_ viewItem: ConversationViewItem) {
         guard let message = viewItem.interaction as? TSMessage else { return }
         guard let localNumber = TSAccountManager.localNumber() else { return }
-        
+
         let noteThread = TSContactThread.getOrCreateThread(contactId: localNumber)
         if let attachmentStream = viewItem.attachmentStream(), attachmentStream.isVoiceMessage() {
             OWSAttachmentsProcessor.decryptVoiceAttachment(attachmentStream)
         }
-        DTForwardMessageHelper.forwardMessageIs(
-            fromGroup: self.thread.isGroupThread(),
-            targetThread: noteThread,
-            messages: [message]
-        ) {
-            DispatchMainThreadSafe {
-                DTToastHelper.toast(
-                    withText: Localized("MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SENT", "Sent"),
-                    durationTime: 1.5
-                )
-            }
-            if let attachmentStream = viewItem.attachmentStream(), attachmentStream.isVoiceMessage() {
-                attachmentStream.removeVoicePlaintextFile()
-            }
-        } failure: { error in
-            DispatchMainThreadSafe {
-                DTToastHelper.toast(
-                    withText: Localized("MESSAGE_STATUS_FAILED", "Sent"),
-                    durationTime: 1.5
-                )
-            }
-            if let attachmentStream = viewItem.attachmentStream(), attachmentStream.isVoiceMessage() {
-                attachmentStream.removeVoicePlaintextFile()
-            }
-        }
-    }
-    
-    /// 多选模式下，是否已经选中了 message
-    func isSelectedViewItemInMultiSelectMode(_ viewItem: ConversationViewItem) -> Bool {
-        guard isMultiSelectMode else {
-            return false
-        }
-        return viewState.forwardMessageItems.first(where: { $0.isEqual(to: viewItem) }) != nil
-    }
-    
-    /// 多选模式下，选中或取消选中 message
-    func didSelectMessageInMultiSelectMode(indexPath: IndexPath) {
-        guard isMultiSelectMode else {
-            return
-        }
-        collectionView.deselectItem(at: indexPath, animated: false)
-        
-        let viewItems = self.viewItems
-        guard let viewItem = viewItems[safe: indexPath.row] else {
-            owsFailDebug("Invalid view item index: \(indexPath.row)")
-            return
-        }
-        
-        if viewItem.isConfidentialMessage {
-            DTToastHelper.toast(withText: Localized("FORWARD_MESSAGE_CONFIDENTIAL"))
-            return
-        }
-        
-        // 超过最大转发数量
-        let isSelected = isSelectedViewItemInMultiSelectMode(viewItem)
-        let maxMsgCount = 50
-        if viewState.forwardMessageItems.count == maxMsgCount, !isSelected {
-            DTToastHelper.toast(
-                withText: String(format: Localized("FORWARD_MESSAGE_SELECT_MESSAGE_MAX_COUNT"), maxMsgCount),
-                durationTime: 1
-            )
-            return
-        }
-        // 不支持转发的消息类型
-        if isUnsupportMessageType(viewItem.messageCellType()) {
-            DTToastHelper.toast(
-                withText: Localized("FORWARD_MESSAGE_FORBIDDEN_REMINDER", comment: "attachment unsupported"),
-                durationTime: 1
-            )
-            return
-        }
-        
-        if !isSelected {
-            addForwardMessage(viewItem)
-        } else {
-            removeForwardMessage(viewItem)
-        }
 
-        let recallableCount = countRecallableMessages()
-        forwardToolbar.updateActionItemsSelectedCount(
-            UInt(viewState.forwardMessageItems.count),
-            maxCount: 50,
-            enableCounts: [1, 2, 1, NSNumber(value: recallableCount > 0 ? 1 : UInt.max)],
-            recallableCount: UInt(recallableCount)
+        let request = ForwardMessageService.Request(
+            messages: [message],
+            targets: [noteThread],
+            type: .note,
+            sourceConversation: self.thread,
+            leaveMessage: nil
         )
-        reloadItems(at: [indexPath])
-    }
-    
-    func addForwardMessage(_ forwardMessage: ConversationViewItem) {
-        viewState.forwardMessageItems.append(forwardMessage)
-    }
-    
-    func removeForwardMessage(_ forwardMessage: ConversationViewItem) {
-        let newForwardMessages = viewState.forwardMessageItems.filter { !$0.isEqual(to: forwardMessage) }
-        viewState.forwardMessageItems = newForwardMessages
-    }
 
-    func clearAllForwardMessages() {
-        viewState.forwardMessageItems.removeAll()
-    }
-
-    func countRecallableMessages() -> Int {
-        let currentTimestamp = NSDate.ows_millisecondTimeStamp()
-        let recallThreshold = DTRecallConfig.fetch().timeoutInterval
-
-        return viewState.forwardMessageItems.filter { viewItem in
-            // Must be outgoing message
-            guard viewItem.interaction is TSOutgoingMessage else {
-                return false
+        Task { [weak self] in
+            let result = await ForwardMessageService.shared.forward(request)
+            await MainActor.run {
+                self?.handleForwardResult(result)
+                if let stream = viewItem.attachmentStream(), stream.isVoiceMessage() {
+                    stream.removeVoicePlaintextFile()
+                }
             }
-
-            // Must be within time window
-            let msgTimestamp = viewItem.interaction.timestamp
-            guard currentTimestamp >= msgTimestamp else {
-                return false
-            }
-
-            let messageDuration = Double(currentTimestamp - msgTimestamp)
-            return messageDuration <= (recallThreshold * 1000)
-        }.count
-    }
-    
-    func applyThemeForForwardToolbar() {
-        guard isMultiSelectMode else {
-            return
         }
-        guard let toolbar = viewState.forwardToolbar else {
-            return
-        }
-        toolbar.applyTheme()
-    }
-}
-
-// MARK: - DTMultiSelectToolbarDelegate
-
-extension ConversationViewController: DTMultiSelectToolbarDelegate {
-    func multiSelectToolbar(_: DTMultiSelectToolbar, didSelectIndex index: Int) {
-        let forwardType: DTForwardMessageType = .init(rawValue: index) ?? .oneByOne
-
-        if forwardType == .batchRecall {
-            batchRecallMessages()
-        } else {
-            forwardMessages(forwardType: forwardType)
-        }
-    }
-    
-    func items(for multiSelectToolBar: DTMultiSelectToolbar) -> [DTMultiSelectToolbarItem] {
-        [
-            .init(
-                imageName: "toolbar-forward",
-                title: Localized("MESSAGE_ACTION_FORWARD")
-            ),
-            .init(
-                imageName: "toolbar-combine-forward",
-                title: Localized("MESSAGE_ACTION_COMBINE_FORWARD")
-            ),
-            .init(
-                imageName: "toolbar-save",
-                title: Localized("MESSAGE_ACTION_SAVE")
-            ),
-            .init(
-                imageName: "toolbar-combine-recalled",
-                title: Localized("MESSAGE_ACTION_BATCH_RECALL"),
-                isRecallButton: true
-            )
-        ]
     }
 }
 
 // MARK: - SelectThreadViewControllerDelegate
 
 extension ConversationViewController: SelectThreadViewControllerDelegate {
-    /// 会话是否允许转发消息
     public func forwordThreadCanBeSelested(_ thread: TSThread) -> Bool {
         TSThreadPermissionHelper.checkCanSpeakAndToastTipMessage(thread)
     }
-    
-    /// 是否允许选择被 block 的会话
+
     public func canSelectBlockedContact() -> Bool {
         false
     }
-    
-    /// 选择了需要转发到哪些会话，跳转到 preview 页面
+
     public func threadsWasSelected(_ threads: [TSThread]) {
         viewState.targetThreads = threads
-        
+
         owsAssertDebug(!threads.isEmpty)
         owsAssertDebug(presentedViewController != nil)
         owsAssertDebug(!viewState.forwardMessageItems.isEmpty)
-        
+
         if viewState.forwardMessageItems.isEmpty {
             Logger.info("forwardMessageItem is nil")
         }
-        
+
         let forwardPreviewVC = DTForwardPreviewViewController()
         forwardPreviewVC.delegate = self
         forwardPreviewVC.modalPresentationStyle = .overFullScreen
@@ -259,28 +85,16 @@ extension ConversationViewController: SelectThreadViewControllerDelegate {
 // MARK: - DTForwardPreviewDelegate
 
 extension ConversationViewController: DTForwardPreviewDelegate {
-    /// 转发到哪些会话
     func getThreadsToForwarding() -> [TSThread] {
         viewState.targetThreads
     }
-    
-    /// 点击预览弹窗上的发送按钮
+
+    /// 点击预览弹窗上的发送按钮。
     func previewView(_ previewView: DTForwardPreviewViewController, sendLeaveMessage leaveMessage: String?) {
-        
         forwardMultipleMessages(leaveMessage: leaveMessage)
-        
-        if isMultiSelectMode {
-            cancelMultiSelectMode()
-        }
-        dismiss(animated: true) {
-            DTToastHelper.toast(
-                withText: Localized("MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SENT", "Sent"),
-                durationTime: 1.5
-            )
-        }
+        dismiss(animated: true)
     }
-    
-    /// 预览弹窗上展示的文字内容
+
     func overviewOfMessage(for previewView: DTForwardPreviewViewController) -> String {
         DTForwardMessageHelper.previewOfMessageText(
             withForwardType: viewState.forwardType,
@@ -290,186 +104,93 @@ extension ConversationViewController: DTForwardPreviewDelegate {
     }
 }
 
-// MARK: - Private
+// MARK: - Internal (visible to MultiSelect / BatchRecall extensions)
 
-private extension ConversationViewController {
-    func isUnsupportMessageType(_ type: OWSMessageCellType) -> Bool {
-        let unsupportMessageTypes: [OWSMessageCellType] = [.audio]
-        return unsupportMessageTypes.contains(type)
-    }
-    
+extension ConversationViewController {
+    /// 多选后从工具栏点击某种转发动作。由 MultiSelect extension 的 toolbar delegate 触发。
     func forwardMessages(forwardType: DTForwardMessageType) {
         viewState.forwardType = forwardType
-        
-        // 按照时间增序排序
+
+        // 按时间增序,保证合并/逐条转发的顺序与用户选择时一致
         let sortedForwardMessages = viewState.forwardMessageItems.sorted(by: {
             $0.interaction.compare(forSorting: $1.interaction) != .orderedDescending
         })
         viewState.forwardMessageItems = sortedForwardMessages
-        
+
         if forwardType == .note {
             forwardMessagesToNode()
         } else {
             showSelectThreadViewController()
         }
     }
-    
-    /// 转发多条消息至备忘录（与转发单条信息至备忘录的区别是，全部按成功状态处理，待确认是否需要优化）
+}
+
+// MARK: - Private
+
+private extension ConversationViewController {
+
+    /// 多选 → 保存到备忘录
     func forwardMessagesToNode() {
-        guard let contractId = TSAccountManager.localNumber() else {
-            return
-        }
-        let forwardMessages = DTForwardMessageHelper.messages(from: viewState.forwardMessageItems)
-        let noteThread = TSContactThread.getOrCreateThread(contactId: contractId)
-        DTForwardMessageHelper.forwardMessageIs(
-            fromGroup: self.thread.isGroupThread(),
-            targetThread: noteThread,
-            messages: forwardMessages,
-            success: nil,
-            failure: nil
+        guard let localNumber = TSAccountManager.localNumber() else { return }
+
+        let messages = DTForwardMessageHelper.messages(from: viewState.forwardMessageItems)
+        let noteThread = TSContactThread.getOrCreateThread(contactId: localNumber)
+
+        let request = ForwardMessageService.Request(
+            messages: messages,
+            targets: [noteThread],
+            type: .note,
+            sourceConversation: self.thread,
+            leaveMessage: nil
         )
+
+        Task { [weak self] in
+            let result = await ForwardMessageService.shared.forward(request)
+            await MainActor.run {
+                self?.handleForwardResult(result)
+            }
+        }
+    }
+
+    /// 多选 → 逐条/合并转发到若干目标会话(附 leaveMessage)
+    func forwardMultipleMessages(leaveMessage: String?) {
+        let messages = DTForwardMessageHelper.messages(from: viewState.forwardMessageItems)
+
+        let request = ForwardMessageService.Request(
+            messages: messages,
+            targets: viewState.targetThreads,
+            type: viewState.forwardType,
+            sourceConversation: self.thread,
+            leaveMessage: leaveMessage?.ows_stripped()
+        )
+
+        Task { [weak self] in
+            let result = await ForwardMessageService.shared.forward(request)
+            await MainActor.run {
+                self?.handleForwardResult(result)
+            }
+        }
+    }
+
+    /// 统一 UI 反馈:取消多选 + Toast(成功/部分成功/失败根据结果)
+    @MainActor
+    func handleForwardResult(_ result: ForwardMessageService.Result) {
         if isMultiSelectMode {
             cancelMultiSelectMode()
         }
-        DTToastHelper.toast(withText: Localized("MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SENT", "Sent"), durationTime: 1.5)
-    }
-    
-    /// 转发多条消息（一条一条转发或者聚合转发）
-    func forwardMultipleMessages(leaveMessage: String?) {
-        let forwardMessages = DTForwardMessageHelper.messages(from: viewState.forwardMessageItems)
-        let finalLeaveMessage = leaveMessage?.ows_stripped()
-        let targetThreads = viewState.targetThreads
-        let forwardType = viewState.forwardType
-        let isFromGroup = self.thread.isGroupThread()
-        let messageSender = self.messageSender
-        
-        func forward(to targetThread: TSThread, messags: [TSMessage]) {
-            // NOTE: 这里注意使用的是同步函数，确保队列执行结束再执行后续操作，否则可能会造成消息时间戳一致导致消息丢失问题
-            DispatchQueue.main.sync {
-                DTForwardMessageHelper.forwardMessageIs(
-                    fromGroup: isFromGroup,
-                    targetThread: targetThread,
-                    messages: messags,
-                    success: nil,
-                    failure: nil
-                )
-            }
+        let key: String
+        let fallback: String
+        if result.allSucceeded {
+            key = "MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SENT"
+            fallback = "Sent"
+        } else if result.anySucceeded {
+            key = "MESSAGE_STATUS_PARTIALLY_FAILED"
+            fallback = "Partially sent"
+        } else {
+            key = "MESSAGE_STATUS_FAILED"
+            fallback = "Send failed"
         }
-        
-        func send(to targetThread: TSThread, message: String) {
-            // NOTE: 这里注意使用的是同步函数，确保队列执行结束再执行后续操作，否则可能会造成消息时间戳一致导致消息丢失问题
-            DispatchQueue.main.sync {
-                _ = ThreadUtil.sendMessage(
-                    withText: message,
-                    atPersons: nil,
-                    mentions: nil,
-                    in: targetThread,
-                    quotedReplyModel: nil,
-                    messageSender: messageSender,
-                    success: {},
-                    failure: { _ in }
-                )
-            }
-        }
-        
-        // Note: 这里加延迟的目的是，若转发/发送消息的时间戳相同，消息会出现丢失情况
-        DispatchQueue.global(qos: .default).async {
-            targetThreads.forEach { targetThread in
-                if forwardType == .oneByOne {
-                    forwardMessages.forEach {
-                        forward(to: targetThread, messags: [$0])
-                        Thread.sleep(forTimeInterval: 0.05)
-                    }
-                } else {
-                    forward(to: targetThread, messags: forwardMessages)
-                    Thread.sleep(forTimeInterval: 0.05)
-                }
-                if let finalLeaveMessage, !finalLeaveMessage.isEmpty {
-                    send(to: targetThread, message: finalLeaveMessage)
-                    Thread.sleep(forTimeInterval: 0.05)
-                }
-            }
-        }
-    }
-
-    /// 批量撤回选中的消息
-    func batchRecallMessages() {
-        let recallableMessages = filterRecallableMessages()
-
-        guard !recallableMessages.isEmpty else {
-            return
-        }
-
-        showRecallConfirmationDialog(messageCount: recallableMessages.count) { [weak self] in
-            self?.executeBatchRecall(recallableMessages: recallableMessages)
-        }
-    }
-
-    /// Filter messages that can be recalled
-    private func filterRecallableMessages() -> [ConversationViewItem] {
-        let currentTimestamp = NSDate.ows_millisecondTimeStamp()
-        let recallThreshold = DTRecallConfig.fetch().timeoutInterval
-
-        return viewState.forwardMessageItems.filter { viewItem in
-            guard viewItem.interaction is TSOutgoingMessage else {
-                return false
-            }
-
-            let msgTimestamp = viewItem.interaction.timestamp
-            guard currentTimestamp >= msgTimestamp else {
-                return false
-            }
-
-            let messageDuration = Double(currentTimestamp - msgTimestamp)
-            return messageDuration <= (recallThreshold * 1000)
-        }
-    }
-
-    /// Show confirmation dialog before recall
-    private func showRecallConfirmationDialog(messageCount: Int, onConfirm: @escaping () -> Void) {
-        let title = String(format: Localized("BATCH_RECALL_CONFIRM_TITLE"), messageCount)
-        let actionSheetController = ActionSheetController(title: title)
-        actionSheetController.addAction(OWSActionSheets.cancelAction)
-
-        let recallAction = ActionSheetAction(
-            title: Localized("OK"),
-            style: .destructive
-        ) { _ in
-            onConfirm()
-        }
-        actionSheetController.addAction(recallAction)
-        presentActionSheet(actionSheetController)
-    }
-
-    /// Execute batch recall for validated messages
-    private func executeBatchRecall(recallableMessages: [ConversationViewItem]) {
-        cancelMultiSelectMode()
-        DTToastHelper.show()
-
-        let dispatchGroup = DispatchGroup()
-
-        for viewItem in recallableMessages {
-            guard let outgoingMessage = viewItem.interaction as? TSOutgoingMessage else {
-                continue
-            }
-
-            dispatchGroup.enter()
-
-            DispatchQueue.main.async {
-                ThreadUtil.sendRecallMessage(
-                    withOriginMessage: outgoingMessage,
-                    in: self.thread
-                ) {
-                    dispatchGroup.leave()
-                } failure: { _ in
-                    dispatchGroup.leave()
-                }
-            }
-        }
-
-        dispatchGroup.notify(queue: .main) {
-            DTToastHelper.hide()
-        }
+        DTToastHelper.toast(withText: Localized(key, fallback), durationTime: 1.5)
     }
 
     /// 展示选择会话页面

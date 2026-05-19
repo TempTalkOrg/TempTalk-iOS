@@ -306,7 +306,7 @@ static dispatch_source_t _timer;
 
 - (void)applyTheme {
     [super applyTheme];
-    self.view.backgroundColor = Theme.bg1Color;
+    self.view.backgroundColor = Theme.bgpagePrimaryColor;
     self.titleLabel.textColor = Theme.tprimaryColor;
     self.descLabel.textColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xB7BDC6] :[UIColor colorWithRGBHex:0x474D57];
     self.bottomTipLabel.textColor = Theme.isDarkThemeEnabled ? [UIColor colorWithRGBHex:0xEAECEF] : [UIColor colorWithRGBHex:0x1E2329];
@@ -926,7 +926,7 @@ static dispatch_source_t _timer;
         dispatch_source_cancel(_timer);
         _timer = nil;
     }
-    [[TSAccountManager shared] setIsDeregistered:true];
+    [[TSAccountManager shared] setIsDeregistered:NO];
     [[TSAccountManager shared] setTransferedSucess:false];
     [DTToastHelper hide];
     

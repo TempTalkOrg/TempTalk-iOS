@@ -7,22 +7,33 @@
 
 #import <Foundation/Foundation.h>
 #import <CallKit/CallKit.h>
+#import "DTCallKitManagerDelegate.h"
 @class DSKProtoCallMessageCalling;
-
+@class OWSBackgroundTask;
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface DTCallKitManager : NSObject
 
+@property (nonatomic, weak, nullable) id<DTCallKitManagerDelegate> delegate;
+
 + (DTCallKitManager *)shared;
 
-@property (nonatomic, strong, nullable) NSTimer *callKitTimeOutTimer;
-@property (nonatomic, strong, nullable) NSTimer *detectiveStatusTimer;
+/// 是否有任何已接听的通话（计算属性，基于 callerMap）
 @property (nonatomic, assign, readonly) BOOL haveAcceptCall;
-@property (nonatomic, assign) NSUInteger callsCount;
+
+/// CXCallController 中的活跃通话数
+@property (nonatomic, assign, readonly) NSUInteger callsCount;
+
+/// callerMap（key: uuid.UUIDString, value: WeaCallKitCaller）
+/// ⚠️ 所有读写必须持有 callerMapLock
 @property (nonatomic, strong, readonly) NSMutableDictionary *callerMap;
 
-@property (nonatomic, assign) BOOL isLocalEndCall;
+/// 保护 callerMap 的递归锁（同一线程可重入，跨线程互斥）
+@property (nonatomic, strong, readonly) NSRecursiveLock *callerMapLock;
+
+/// Per-call timeout timers (key: uuidString, value: NSTimer)
+@property (nonatomic, strong, readonly) NSMutableDictionary<NSString *, NSTimer *> *timeoutTimers;
 
 - (nullable CXCall *)findCallByUUID:(NSUUID *)uuid;
 
@@ -36,31 +47,31 @@ NS_ASSUME_NONNULL_BEGIN
              meetingId:(NSString *)meetingId
            meetingName:(nullable NSString *)meetingName
                   mode:(nullable NSString *)mode
-                   emk:(nullable NSString * )emkString
+                   emk:(nullable NSString *)emkString
         meetingVersion:(NSNumber *)meetingVersion
             isSchedule:(BOOL)isSchedule
           isLiveStream:(BOOL)isLiveStream
                    eid:(nullable NSString *)eid
         liveKitCalling:(nullable DSKProtoCallMessageCalling *)calling
+       preReportedUUID:(nullable NSUUID *)preReportedUUID
             completion:(void (^__nullable)(void))completion;
-/**** 拨打方 呼出电话 ****/
+
+/**** 拨打方 呼出电话（仍传 callerId，内部生成 UUID）****/
 - (void)starCall:(NSString *)callerId;
 
 /****接电话 (app内接通，同步到 callkit) ****/
-- (void)answerCallAction:(NSString *)callerId;
+- (void)answerCallAction:(NSString *)uuidString;
 
 //拨打方 开始连接
-- (void)startedConnectingOutgoingCall:(NSString *)callerId;
+- (void)startedConnectingOutgoingCall:(NSString *)uuidString;
 //拨打方 通话连接成功 显示通话时间
-- (void)connectedOutgoingCall:(NSString *)callerId;
+- (void)connectedOutgoingCall:(NSString *)uuidString;
 
 /****结束通话 (app 同步到 callkit) ****/
-- (void)endCallAction:(NSString *)callerId onlyForCallKit:(BOOL)onlyForCallKit;
-
-- (void)endCallActionWithCallerId:(NSString *)callerId onlyForCallKit:(BOOL)onlyForCallKit;
+- (void)endCallAction:(NSString *)uuidString onlyForCallKit:(BOOL)onlyForCallKit;
 
 /****静音按钮事件 (app 同步到 callkit) ****/
-- (void)muteCurrentCall:(BOOL)isMute callerId:(NSString *)callerId;
+- (void)muteCurrentCall:(BOOL)isMute uuidString:(NSString *)uuidString;
 
 - (void)handleVoipCallNotify:(NSDictionary *)apnsInfo completion:(void (^__nullable)(void))completion;
 

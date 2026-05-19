@@ -32,6 +32,7 @@
 #import <TTServiceKit/TSOutgoingMessage.h>
 #import <TTServiceKit/TSThread.h>
 #import <TTServiceKit/DTConversationConfig.h>
+#import <TTServiceKit/TTServiceKit-Swift.h>
 #import "DTRemoveMembersOfAGroupAPI.h"
 #import "SVProgressHUD.h"
 #import "DTChangeYourSettingsInAGroupAPI.h"
@@ -177,6 +178,14 @@ const CGFloat kIconViewLength = 24;
                                              selector:@selector(conversationBlockUserDidChange:)
                                                  name:@"kConversationDidChangeNotification"
                                                object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(groupCryptoKeyDidArrive:)
+                                                 name:DTGroupCryptoConstants.groupCryptoKeyDidArriveNotification
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(groupAvatarDidChange:)
+                                                 name:TSGroupThreadAvatarChangedNotification
+                                               object:nil];
 
 }
 
@@ -196,8 +205,18 @@ const CGFloat kIconViewLength = 24;
         self.title = [self.contactsManager displayNameForPhoneIdentifier:self.thread.contactIdentifier];
     } else {
         TSGroupThread *groupThread = (TSGroupThread *)self.thread;
-        NSString *groupName = groupThread.groupModel.groupName;
+        __block NSString *groupName = groupThread.groupModel.groupName;
         NSUInteger groupMemberCount = groupThread.groupModel.groupMemberIds.count;
+
+        if (groupThread.groupModel.isEncryptedGroup) {
+            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                groupName = [DTGroupCryptoDisplayHelper.shared displayGroupNameWithGid:groupThread.serverThreadId
+                                                                       groupCryptoMode:groupThread.groupModel.groupCryptoMode
+                                                                         encryptedName:nil
+                                                                          originalName:groupThread.groupModel.groupName
+                                                                           transaction:transaction];
+            }];
+        }
         self.title = [groupName stringByAppendingFormat:@"(%ld)", groupMemberCount];
     }
 }
@@ -307,10 +326,7 @@ const CGFloat kIconViewLength = 24;
         @strongify(self);
         [self updateTableContents];
         if (self.thread.isGroupThread) {
-            TSGroupThread *groupThread = (TSGroupThread *)self.thread;
-            NSString *groupName = groupThread.groupModel.groupName;
-            NSUInteger groupMemberCount = groupThread.groupModel.groupMemberIds.count;
-            self.title = [groupName stringByAppendingFormat:@"(%ld)", groupMemberCount];
+            [self refreshTitle];
         }
     }];
 }
@@ -363,29 +379,90 @@ const CGFloat kIconViewLength = 24;
     contents.title = Localized(@"CONVERSATION_SETTINGS", @"title for conversation settings screen");
 
     @weakify(self);
-
-    // Main section.
-
-    OWSTableSection *mainSection = [OWSTableSection new];
-
+    // header section
+    OWSTableSection *headerSection = [OWSTableSection new];
     UIView *headerView = [self mainSectionHeader];
     if (headerView) {
-        mainSection.customHeaderView = headerView;
+        headerSection.customHeaderView = headerView;
         if (!self.isGroupThread) {
-            mainSection.customHeaderHeight = @(114.f);
+            headerSection.customHeaderHeight = @(114.f);
         } else {
             NSUInteger memberCount = self.sortedGroupMemberIds.count;
             if (memberCount < 4) {
-                mainSection.customHeaderHeight = @(146.f);
+                headerSection.customHeaderHeight = @(146.f);
             } else if (memberCount == 4 || memberCount == 5) {
-                mainSection.customHeaderHeight = @(208.f);
+                headerSection.customHeaderHeight = @(208.f);
             } else {
-                mainSection.customHeaderHeight = @(228.f);
+                headerSection.customHeaderHeight = @(228.f);
             }
         }
     }
-    [mainSection addItem:self.blankItem];
+    [headerSection addItem:self.blankItem];
+    [contents addSection:headerSection];
+    
+    // crypto section
+    if (self.isGroupThread) {
+        TSGroupThread *groupThread = (TSGroupThread *)self.thread;
+        BOOL encryptionEnabled = [DTGroupConfig fetchGroupConfig].encryptionEnabled;
+        if (groupThread.groupModel.isEncryptedGroup) {
+            OWSTableSection *cryptoInfoSection = [OWSTableSection new];
+            [cryptoInfoSection addItem:[OWSTableItem itemWithCustomCellBlock:^{
+                UITableViewCell *cell = [UITableViewCell new];
+                cell.backgroundColor = Theme.bg1Color;
+                cell.selectionStyle = UITableViewCellSelectionStyleNone;
 
+                UIImageView *lockIcon = [[UIImageView alloc] initWithImage:
+                    [[UIImage imageNamed:@"group_settings_lock"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]];
+                lockIcon.contentMode = UIViewContentModeScaleAspectFit;
+                lockIcon.tintColor = Theme.iconColor;
+                [lockIcon autoSetDimensionsToSize:CGSizeMake(16, 16)];
+                [cell.contentView addSubview:lockIcon];
+
+                UILabel *label = [UILabel new];
+                label.text = Localized(@"GROUP_CRYPTO_INFO_TITLE", nil);
+                label.font = self.primaryFont;
+                label.textColor = Theme.tprimaryColor;
+                [cell.contentView addSubview:label];
+
+                [lockIcon autoPinEdgeToSuperviewEdge:ALEdgeLeading withInset:16];
+                [lockIcon autoVCenterInSuperview];
+                [label autoPinEdge:ALEdgeLeading toEdge:ALEdgeTrailing ofView:lockIcon withOffset:4];
+                [label autoVCenterInSuperview];
+                [label autoPinEdgeToSuperviewEdge:ALEdgeTrailing withInset:8 relation:NSLayoutRelationGreaterThanOrEqual];
+
+                cell.accessoryView = self.accessoryArrow;
+
+                return cell;
+            } actionBlock:^{
+                @strongify(self);
+                [self showEncryptedGroupInfo];
+            }]];
+            [cryptoInfoSection addItem:self.blankItem];
+            [contents addSection:cryptoInfoSection];
+        } else if (encryptionEnabled && (groupThread.groupModel.isSelfGroupOwner || groupThread.groupModel.isSelfGroupModerator)) {
+            OWSTableSection *upgradeSection = [OWSTableSection new];
+            [upgradeSection addItem:[OWSTableItem itemWithCustomCellBlock:^{
+                UITableViewCell *cell = [UITableViewCell new];
+                cell.backgroundColor = Theme.bg1Color;
+                cell.selectionStyle = UITableViewCellSelectionStyleNone;
+                UILabel *label = [UILabel new];
+                label.text = Localized(@"GROUP_CRYPTO_UPGRADE_TITLE", nil);
+                label.font = self.primaryFont;
+                label.textColor = Theme.primaryColor;
+                [cell.contentView addSubview:label];
+                [label autoPinEdgesToSuperviewMarginsWithInsets:UIEdgeInsetsMake(2, 0, 2, 6)];
+                return cell;
+            } actionBlock:^{
+                @strongify(self);
+                [self showUpgradeToEncryptedConfirmation];
+            }]];
+            [upgradeSection addItem:self.blankItem];
+            [contents addSection:upgradeSection];
+        }
+    }
+
+    // Main section.
+    OWSTableSection *mainSection = [OWSTableSection new];
     if (!self.thread.isGroupThread && !self.isLocalNumber) {
         [mainSection addItem:[OWSTableItem itemWithCustomCellBlock:^{
             @strongify(self);
@@ -459,9 +536,9 @@ const CGFloat kIconViewLength = 24;
         }];
         
         [mGroupItems addObject:editGroupInfoItem];
-        
+
         [mGroupItems addObject:self.blankItem];
-        
+
         OWSTableSection *groupManagementSection = [OWSTableSection new];
         [groupManagementSection addTableItems:mGroupItems.copy];
 
@@ -809,7 +886,7 @@ const CGFloat kIconViewLength = 24;
         [self.databaseStorage asyncReadWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
             TSThread *lastestThread = [TSThread anyFetchWithUniqueId:self.thread.uniqueId
                                                          transaction:transaction];
-            messageExpiry = [lastestThread messageExpiresInSeconds];
+            messageExpiry = [lastestThread messageExpiresInSecondsWithTransaction:transaction];
         } completion:^{
             NSString *defaultString = @"";
             
@@ -880,7 +957,7 @@ const CGFloat kIconViewLength = 24;
 
         TSThread *lastestThread = [TSThread anyFetchWithUniqueId:self.thread.uniqueId
                                                      transaction:transaction];
-        archiveMessageSettingVC.durationSeconds = [lastestThread messageExpiresInSeconds];
+        archiveMessageSettingVC.durationSeconds = [lastestThread messageExpiresInSecondsWithTransaction:transaction];
         archiveMessageSettingVC.conversationSettingsViewDelegate = self.conversationSettingsViewDelegate;
         archiveMessageSettingVC.thread = lastestThread;
         [self.navigationController pushViewController:archiveMessageSettingVC animated:true];
@@ -1389,8 +1466,10 @@ const CGFloat kIconViewLength = 24;
     if (!self.isGroupThread) {
         return;
     }
-    
-    [self showUpdateGroupView:UpdateGroupMode_EditGroupName];
+
+    TSGroupThread *groupThread = (TSGroupThread *)self.thread;
+    DTEditGroupInfoViewController *editVC = [[DTEditGroupInfoViewController alloc] initWithGroupThread:groupThread];
+    [self.navigationController pushViewController:editVC animated:YES];
 }
 
 /*
@@ -1420,9 +1499,9 @@ const CGFloat kIconViewLength = 24;
             [self.thread anyReloadWithTransaction:readTransaction];
         }];
     }
-    
+
     [self refreshTitle];
-   
+
     // HACK to unselect rows when swiping back
     // http://stackoverflow.com/questions/19379510/uitableviewcell-doesnt-get-deselected-when-swiping-back-quickly
     [self.tableView deselectRowAtIndexPath:[self.tableView indexPathForSelectedRow] animated:animated];
@@ -1572,6 +1651,33 @@ const CGFloat kIconViewLength = 24;
 }
 
 - (void)conversationBlockUserDidChange:(NSNotification *)notify {
+    [self updateTableContents];
+}
+
+- (void)groupCryptoKeyDidArrive:(NSNotification *)notify {
+    OWSAssertIsOnMainThread();
+    NSString *gid = notify.userInfo[DTGroupCryptoConstants.groupCryptoKeyGidKey];
+    if (!gid.length) { return; }
+    if (![self.thread isKindOfClass:[TSGroupThread class]]) { return; }
+    TSGroupThread *groupThread = (TSGroupThread *)self.thread;
+    if (![groupThread.serverThreadId isEqualToString:gid]) { return; }
+
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
+        [self.thread anyReloadWithTransaction:readTransaction];
+    }];
+    [self refreshTitle];
+    [self updateTableContents];
+}
+
+- (void)groupAvatarDidChange:(NSNotification *)notify {
+    OWSAssertIsOnMainThread();
+    NSString *threadId = notify.userInfo[TSGroupThread_NotificationKey_UniqueId];
+    if (!threadId.length) { return; }
+    if (![threadId isEqualToString:self.thread.uniqueId]) { return; }
+
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
+        [self.thread anyReloadWithTransaction:readTransaction];
+    }];
     [self updateTableContents];
 }
 

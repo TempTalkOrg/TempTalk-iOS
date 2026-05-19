@@ -18,6 +18,7 @@
 #import "DTRecallMessage.h"
 #import "DTRecallOutgoingMessage.h"
 #import <TTServiceKit/Localize_Swift.h>
+#import <TTServiceKit/TTServiceKit-Swift.h>
 
 @implementation DTApnsMessageInfo
 
@@ -52,6 +53,7 @@
 @property (nonatomic, strong)TSOutgoingMessage *message;
 @property (nonatomic, strong)TSThread *thread;
 @property (nonatomic, strong)SignalRecipient *recipient;
+@property (nonatomic, strong)SDSAnyReadTransaction *transaction;
 
 @end
 
@@ -59,19 +61,21 @@
 
 - (instancetype)initWithMessage:(TSOutgoingMessage *)message
                          thread:(TSThread *)thread
-                   forRecipient:(SignalRecipient *)recipient{
-    
+                   forRecipient:(SignalRecipient *)recipient
+                    transaction:(SDSAnyReadTransaction *)transaction{
+
     if(self = [super init]){
-        
+
         self.apnsMessageInfo = [[DTApnsMessageInfo alloc] init];
         self.message = message;
         self.thread = thread;
         self.recipient = recipient;
-        
+        self.transaction = transaction;
+
         [self handleMessage];
-        
+
     }
-    
+
     return self;
 }
 
@@ -150,10 +154,12 @@
         self.apnsMessageInfo.messageType = DTApnsMessageType_GROUP_NORMAL;
     }
     
-    if ([self.thread nameWithTransaction:nil].length == 0) {
+    // 加密群必须在 transaction 内解析,否则 APNs payload 里会是占位符;事务由调用方传入,避免重入
+    NSString *resolvedGroupName = [self.thread nameWithTransaction:self.transaction] ?: @"";
+    if (resolvedGroupName.length == 0) {
         self.apnsMessageInfo.groupName = Localized(@"NEW_GROUP_DEFAULT_TITLE", @"");
     } else {
-        self.apnsMessageInfo.groupName = [self.thread nameWithTransaction:nil];
+        self.apnsMessageInfo.groupName = resolvedGroupName;
     }
     TSGroupThread *groupThread = (TSGroupThread *)self.thread;
     self.apnsMessageInfo.groupID = [TSGroupThread transformToServerGroupIdWithLocalGroupId:groupThread.groupModel.groupId];

@@ -39,7 +39,9 @@ public class DTPasskeyForRegisterApi : DTBaseAPI {
         let request : TSRequest = TSRequest.init(url: url, method: self.requestMethod, parameters: nil)
         request.shouldHaveAuthorizationHeaders = true
         DTTokenHelper.sharedInstance.asyncFetchGlobalAuthToken {[weak self] token, error in
-            guard let weakSelf = self, error == nil else {
+            guard let weakSelf = self else { return }
+            if let error = error {
+                failure?(error, nil)
                 return
             }
             request.authToken = token
@@ -66,20 +68,23 @@ public class DTPasskeyForRegisterApi : DTBaseAPI {
                 }
                 let json  =  errorWrapper.error.httpResponseJson
                 guard let jsonDic = json as? [String : Any] else {
-                    failure(DTErrorWithCodeDescription(DTAPIRequestResponseStatus.dataError, kDTAPIDataErrorDescription),nil)
+                    let error = errorWrapper.asNSError
+                    failure(error, nil)
                     return
                 }
                 do {
                     let errorResponse =  try MTLJSONAdapter.model(of: DTAPIMetaEntity.self, fromJSONDictionary: jsonDic)
                     guard let errorResponseEntity = errorResponse as? DTAPIMetaEntity else {
-                        failure(DTErrorWithCodeDescription(DTAPIRequestResponseStatus.dataError, kDTAPIDataErrorDescription),nil)
+                        let error = errorWrapper.asNSError
+                        failure(error, nil)
                         return
                     }
                     let error = errorWrapper.asNSError
                     failure(error, errorResponseEntity)
                     return
                 } catch _ {
-                    failure(DTErrorWithCodeDescription(DTAPIRequestResponseStatus.dataError, kDTAPIDataErrorDescription),nil)
+                    let error = errorWrapper.asNSError
+                    failure(error, nil)
                 }
             });
         };

@@ -134,7 +134,11 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
             infoMessage.isShouldAffectThreadSorting = true
             infoMessage.anyInsert(transaction: transaction)
         }
-        
+
+        downloadAvatarIfNeeded(groupNotifyEntity: groupNotifyEntity,
+                               newGroupModel: newGroupModel,
+                               newGroupThread: newGroupThread,
+                               transaction: transaction)
     }
     
     func leaveGroup(envelope: DSKProtoEnvelope,
@@ -253,7 +257,13 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
                   newGroupThread: newGroupThread,
                   timeStamp:timeStamp,
                   transaction: transaction)
-        
+
+        if oldGroupModel.groupImage == nil {
+            downloadAvatarIfNeeded(groupNotifyEntity: groupNotifyEntity,
+                                   newGroupModel: newGroupModel,
+                                   newGroupThread: newGroupThread,
+                                   transaction: transaction)
+        }
     }
     
     ///主动进群的操作，包括群链接和rejoin
@@ -289,8 +299,23 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
         // 合并两个集合并转换为数组
         let mergedGroupMembers = Array(groupMemberIdsSet.union(filteredUidsSet))
         newGroupModel.groupMemberIds = mergedGroupMembers
-        if let groupName = groupNotifyEntity.group?.name {
-            newGroupModel.groupName = groupName
+        if let group = groupNotifyEntity.group {
+            var resolvedName = group.name
+            if group.groupCryptoMode > 0,
+               let encryptedName = group.encryptedName, !encryptedName.isEmpty,
+               let decrypted = DTGroupCryptoManager.shared.decryptedGroupName(
+                   gid: groupNotifyEntity.gid,
+                   encryptedName: encryptedName,
+                   transaction: transaction),
+               !decrypted.isEmpty {
+                resolvedName = decrypted
+            }
+            if !resolvedName.isEmpty {
+                newGroupModel.groupName = resolvedName
+            }
+            if group.groupCryptoMode > 0 {
+                newGroupModel.groupCryptoMode = group.groupCryptoMode
+            }
         }
         newGroupThread.anyUpdateGroupThread(transaction: transaction) { gThread in
             gThread.groupModel = newGroupModel
@@ -327,7 +352,15 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
           
             baseInfo.gid = groupNotifyEntity.gid;
             
-            if let groupName = groupNotifyEntity.group?.name {
+            if baseInfo.groupCryptoMode > 0,
+               let encryptedName = baseInfo.encryptedName, !encryptedName.isEmpty,
+               let decrypted = DTGroupCryptoManager.shared.decryptedGroupName(
+                   gid: groupNotifyEntity.gid,
+                   encryptedName: encryptedName,
+                   transaction: transaction),
+               !decrypted.isEmpty {
+                baseInfo.name = decrypted
+            } else if let groupName = groupNotifyEntity.group?.name {
                 baseInfo.name = groupName
             }
             baseInfo.anyInsert(transaction: transaction)
@@ -335,26 +368,57 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
             
         }
         
+        // Verify new member signatures for encrypted groups.
+        // 聚合所有签名不通过的成员，一次性调用 cryptoDispose，避免对单次 notify 产生 N 次并发请求。
+        if newGroupModel.isEncryptedGroup {
+            let gid = groupNotifyEntity.gid
+            let cryptoManager = DTGroupCryptoManager.shared
+            var disposeUids: [String] = []
+            for member in groupNotifyEntity.members where member.action == .add {
+                guard let uidSig = member.uidSignature, !uidSig.isEmpty else { continue }
+                if let verified = cryptoManager.verifyMember(gid: gid,
+                                                              uid: member.uid,
+                                                              uidSignature: uidSig,
+                                                              transaction: transaction),
+                   !verified {
+                    Logger.error("[GroupCrypto] Member verification failed for uid: \(member.uid) in gid: \(gid)")
+                    disposeUids.append(member.uid)
+                }
+            }
+            if !disposeUids.isEmpty {
+                Task {
+                    do {
+                        try await DTGroupCryptoAPIImpl().cryptoDispose(
+                            groupId: gid,
+                            request: CryptoDisposeRequest(members: disposeUids)
+                        )
+                    } catch {
+                        Logger.error("[GroupCrypto] cryptoDispose failed for gid: \(gid), members: \(disposeUids), error: \(error)")
+                    }
+                }
+            }
+        }
+
         guard display else { return }
-        
+
         if let localNumber = localNumber,
             !uidsSet.contains(localNumber),
            groupNotifyEntity.groupNotifyDetailedType == .joinGroup {
-            
+
             let infoMessage = TSInfoMessage.init(timestamp: timeStamp,
                                                  in: newGroupThread,
                                                  messageType: .groupAddMember,
                                                  customMessage: updatedGroupInfoString)
-            
+
             infoMessage.anyInsert(transaction: transaction)
         } else {
-            
+
             let infoMessage = TSInfoMessage.init(timestamp: timeStamp, in: newGroupThread, messageType: .typeGroupUpdate, customMessage: updatedGroupInfoString)
             infoMessage.isShouldAffectThreadSorting = shouldAffectThreadSorting
             infoMessage.anyInsert(transaction: transaction)
-            
+
         }
-        
+
     }
     
     func kickoutGroup(envelope: DSKProtoEnvelope,
@@ -389,13 +453,7 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
         
         let meGroupNotifyEntity = groupNotifyEntity.members.filter {$0.uid == localNumber}.first
         let inviteCode = meGroupNotifyEntity?.inviteCode;
-        
-        DTGroupUtils.removeGroupBaseInfo(withGid: groupNotifyEntity.gid, transaction: transaction)
-        if newGroupThread.isSticked {
-            newGroupThread.unstickThread(with: transaction)
-        }
-        newGroupThread.clearDraft(with: transaction)
-        
+
         if let group = groupNotifyEntity.group, group.ext != oldGroupModel.isExt {
             newGroupModel.isExt = group.ext
             transaction.addAsyncCompletionOffMain {
@@ -501,5 +559,78 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
         DTGroupUtils.removeGroupBaseInfo(withGid: groupNotifyEntity.gid, transaction: transaction)
 
         newGroupThread.anyRemove(transaction: transaction)
+    }
+
+    // MARK: - Avatar Download
+
+    private lazy var groupAvatarUpdateProcessor: DTGroupAvatarUpdateProcessor = {
+        DTGroupAvatarUpdateProcessor(groupThread: nil)
+    }()
+
+    private func downloadAvatarIfNeeded(groupNotifyEntity: DTGroupNotifyEntity,
+                                        newGroupModel: TSGroupModel,
+                                        newGroupThread: TSGroupThread,
+                                        transaction: SDSAnyWriteTransaction) {
+        let gid = groupNotifyEntity.gid
+        guard !gid.isEmpty,
+              let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid),
+              !groupId.isEmpty else { return }
+
+        let cryptoMode = groupNotifyEntity.group?.groupCryptoMode ?? 0
+        let isEncrypted = DTGroupCryptoDisplayHelper.shared.isEncryptedGroup(cryptoMode)
+        guard let avatar = DTGroupCryptoDisplayHelper.shared.prepareAvatarUpdate(
+            plainAvatar: groupNotifyEntity.group?.avatar,
+            encryptedAvatar: groupNotifyEntity.group?.encryptedAvatar,
+            groupCryptoMode: cryptoMode,
+            gid: gid,
+            transaction: transaction
+        ), !avatar.isEmpty else {
+            return
+        }
+
+        let isPlainFallback = isEncrypted && !DTGroupCryptoDisplayHelper.shared.hasGroupKey(gid: gid, transaction: transaction)
+
+        let capturedGroupId = groupId
+        let version = newGroupModel.version
+        let capturedEncryptedAvatar = groupNotifyEntity.group?.encryptedAvatar ?? ""
+
+        Logger.info("[GroupAvatar] GroupNotify avatar download starting, gid: \(gid), version: \(version), plainFallback: \(isPlainFallback)")
+        groupAvatarUpdateProcessor.groupThread = newGroupThread
+        groupAvatarUpdateProcessor.handleReceivedGroupAvatarUpdate(withAvatarUpdate: avatar, success: { attachmentStream in
+            let serialQueue = DTGroupUpdateMessageProcessor.self.serialQueue()
+            serialQueue.async {
+                guard let image = attachmentStream.image() else {
+                    Logger.error("[GroupAvatar] GroupNotify: attachmentStream.image() nil, gid: \(gid)")
+                    return
+                }
+
+                NSObject.databaseStorage.asyncWrite { writeTransaction in
+                    let groupThread = TSGroupThread.getOrCreateThread(withGroupId: capturedGroupId, transaction: writeTransaction)
+
+                    if isPlainFallback,
+                       DTGroupCryptoDisplayHelper.shared.hasAvatarDownloaded(gid: gid) {
+                        Logger.info("[GroupAvatar] GroupNotify skip plainFallback: real avatar already persisted by GroupKey path, gid: \(gid)")
+                        return
+                    }
+
+                    guard version >= groupThread.groupModel.groupAvatarVersion else {
+                        Logger.info("[GroupAvatar] GroupNotify skip: older version \(version) < local \(groupThread.groupModel.groupAvatarVersion), gid: \(gid)")
+                        return
+                    }
+
+                    groupThread.anyUpdateGroupThread(transaction: writeTransaction) { g_thread in
+                        g_thread.groupModel.groupImage = image
+                        g_thread.groupModel.groupAvatarVersion = version
+                    }
+                    groupThread.fireAvatarChangedNotification()
+                    Logger.info("[GroupAvatar] GroupNotify avatar download success, gid: \(gid), version: \(version)")
+                    if !isPlainFallback {
+                        DTGroupCryptoDisplayHelper.shared.markAvatarDownloaded(gid: gid, encryptedAvatar: capturedEncryptedAvatar)
+                    }
+                }
+            }
+        }, failure: { error in
+            Logger.error("[GroupAvatar] GroupNotify avatar download failed, gid: \(gid), error: \(error)")
+        })
     }
 }

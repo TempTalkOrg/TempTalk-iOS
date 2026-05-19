@@ -51,7 +51,6 @@
 #import "DTSignChativeController.h"
 #import "SMLagMonitor.h"
 #import "SMCallTrace.h"
-#import "Pastelog.h"
 
 @import FirebaseCrashlytics;
 @import FirebaseCore;
@@ -314,10 +313,7 @@ static NSTimeInterval launchStartedAt;
     [controller addAction:[UIAlertAction actionWithTitle:Localized(@"SETTINGS_ADVANCED_SUBMIT_DEBUGLOG", nil)
                                                    style:UIAlertActionStyleDefault
                                                  handler:^(UIAlertAction *_Nonnull action) {
-        [Pastelog submitLogsWithCompletion:^{
-            OWSLogInfo(
-                @"%@ exiting after sharing debug logs.", self.logTag);
-            [DDLog flushLog];
+        [DTToastHelper toastWithText:@"Not supported and will exit." durationTime:3 completion:^{
             exit(0);
         }];
     }]];
@@ -1083,7 +1079,9 @@ extern bool bScreenLockDone;
         } else {
             return UIInterfaceOrientationMaskPortrait | UIInterfaceOrientationMaskLandscape;
         }
-    } else if (window.windowLevel == UIWindowLevel_ScreenBlocking() || window.windowLevel == UIWindowLevel_Background) {
+    } else if (window.windowLevel == UIWindowLevel_ScreenBlocking()) {
+        return UIInterfaceOrientationMaskPortrait;
+    } else if (window.windowLevel == UIWindowLevel_Background) {
         UIViewController *topVC = [window findTopViewController];
         if (topVC) {
             NSString *className = NSStringFromClass([topVC class]);

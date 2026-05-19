@@ -12,6 +12,7 @@ struct MemberContainerView: View {
     @EnvironmentObject var roomCtx: RoomContext
     var onCancel: () -> Void
     var onAddMember: () -> Void
+    var containerSize: CGSize = UIScreen.main.bounds.size
 
     var body: some View {
         VStack {
@@ -44,7 +45,7 @@ struct MemberContainerView: View {
             
             Spacer()
         }
-        .frame(maxHeight: min(screenWidth, screenHeight))
+        .frame(maxHeight: min(containerSize.width, containerSize.height))
         .padding(.top, 8)
     }
 }

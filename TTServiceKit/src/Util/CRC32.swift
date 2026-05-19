@@ -39,33 +39,3 @@ public struct CRC32 {
         return CRC32(rawValue: newRawValue)
     }
 }
-
-struct CRC32Util {
-    private static let table: [UInt32] = {
-        (0...255).map { i -> UInt32 in
-            var c = UInt32(i)
-            for _ in 0..<8 {
-                if c & 1 != 0 {
-                    c = 0xEDB88320 ^ (c >> 1)
-                } else {
-                    c = c >> 1
-                }
-            }
-            return c
-        }
-    }()
-
-    static func checksum(_ data: Data) -> UInt32 {
-        var crc: UInt32 = 0xffffffff
-        for byte in data {
-            let idx = Int((crc ^ UInt32(byte)) & 0xff)
-            crc = (crc >> 8) ^ table[idx]
-        }
-        return crc ^ 0xffffffff
-    }
-
-    static func checksum(_ string: String) -> UInt32 {
-        let data = Data(string.utf8)
-        return checksum(data)
-    }
-}

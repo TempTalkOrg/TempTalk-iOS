@@ -40,6 +40,11 @@ class CVMessageFooterRenderItem: ConversationRenderItem {
             titleWidth += calculateTextWidth(text: footerViewTitle, font: UIFont.systemFont(ofSize: 12.0))
             elementCount += 1
         }
+        // confidential icon: 20pt + 5pt spacing
+        if viewItem.isConfidentialMessage {
+            titleWidth += 25
+            if elementCount == 0 { elementCount = 1 }
+        }
         if elementCount == 0 {
             return 0
         } else if elementCount == 1 {
@@ -47,7 +52,7 @@ class CVMessageFooterRenderItem: ConversationRenderItem {
         } else if elementCount == 2 {
             return titleWidth + 2 * footerViewSpace + 4
         }
-        return 0
+        return titleWidth + 2 * footerViewSpace + 4
     }
     
     static func calculateTextWidth(text: String, font: UIFont) -> CGFloat {

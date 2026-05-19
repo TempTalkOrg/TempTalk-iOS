@@ -15,6 +15,7 @@ public struct BottomToolbarView: View {
     let logTag: String = "[newcall][bottomControlView]"
     
     let isScreenSharing: Bool
+    let containerSize: CGSize
     
     var cameraPublishHandler: (Bool) -> Void
     
@@ -34,15 +35,22 @@ public struct BottomToolbarView: View {
     @Binding var localRaiseHand: Bool
     
     @State private var hasTriggerCloseNoise = false
+    @State private var voiceChangerPreset: String = DTMeetingManager.shared.roomContext?.currentVoicePreset() ?? "original"
     
-    let paddingSpacer = ((min(screenWidth, screenHeight) - 48 * 5) / 6) - 10
+    private var portraitWidth: CGFloat {
+        min(containerSize.width, containerSize.height)
+    }
+    
+    private var paddingSpacer: CGFloat {
+        ((portraitWidth - 48 * 5) / 6) - 10
+    }
     
     public var body: some View {
         HStack {
             if isScreenSharing {
-                Spacer().frame(width: max(screenWidth, screenHeight) * 0.25)
+                Spacer().frame(width: max(containerSize.width, containerSize.height) * 0.25)
                 
-                HStack(spacing: 120) {   // 👈 控制间距
+                HStack(spacing: 120) {
                     toolbarButtonGroup
                     endCallButton
                 }
@@ -52,7 +60,7 @@ public struct BottomToolbarView: View {
             } else {
                 Spacer()
                 
-                HStack(spacing: paddingSpacer) {   // 👈 控制间距
+                HStack(spacing: paddingSpacer) {
                     toolbarButtonGroup
                     endCallButton
                 }
@@ -79,28 +87,73 @@ public struct BottomToolbarView: View {
         image: Image,
         action: @escaping () -> Void
     ) -> some View {
-        VStack {
+        Circle()
+            .fill(.clear)
+            .frame(width: size, height: size)
+            .overlay(
+                Button(action: action) {
+                    image
+                        .resizable()
+                        .scaledToFit()
+                }
+            )
+    }
+    
+    private var isVoiceChangerActive: Bool {
+        voiceChangerPreset != "original"
+    }
+
+    private var voiceChangerEmoji: String {
+        DTUpdateNoiseController.voicePresets.first(where: { $0.key == voiceChangerPreset })?.emoji ?? ""
+    }
+
+    private var micButton: some View {
+        let isMicEnabled = room.localParticipant.isMicrophoneEnabled()
+        return ZStack(alignment: .topTrailing) {
             Circle()
                 .fill(.clear)
-                .frame(width: size, height: size)
+                .frame(width: 48, height: 48)
                 .overlay(
-                    Button(action: action) {
-                        image
+                    Button(action: {
+                        Logger.info("\(logTag) mic pressed isMicEnabled \(isMicEnabled)")
+                        barClickHandler()
+                        didTapMicrophone(isMicrophoneEnabled: isMicEnabled)
+                    }) {
+                        Image(isMicEnabled ? "ic_call_microphone_enable" : "ic_call_microphone_disable")
                             .resizable()
                             .scaledToFit()
                     }
                 )
+                .overlay(
+                    isVoiceChangerActive
+                        ? Circle().stroke(
+                            LinearGradient(
+                                colors: [Color(hex: 0x328AFD), Color(hex: 0x0891B2)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 2
+                        )
+                        : nil
+                )
+
+            if isVoiceChangerActive, !voiceChangerEmoji.isEmpty {
+                Text(voiceChangerEmoji)
+                    .font(.system(size: 10))
+                    .frame(width: 18, height: 18)
+                    .background(
+                        LinearGradient(
+                            colors: [Color(hex: 0x328AFD), Color(hex: 0x0891B2)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .clipShape(Circle())
+                    .offset(x: 2, y: -2)
+            }
         }
-    }
-    
-    private var micButton: some View {
-        let isMicEnabled = room.localParticipant.isMicrophoneEnabled()
-        return toolbarCircleButton(
-            image: Image(isMicEnabled ? "ic_call_microphone_enable" : "ic_call_microphone_disable")
-        ) {
-            Logger.info("\(logTag) mic pressed isMicEnabled \(isMicEnabled)")
-            barClickHandler()
-            didTapMicrophone(isMicrophoneEnabled: isMicEnabled)
+        .onReceive(NotificationCenter.default.publisher(for: .voiceChangerPresetDidChange)) { _ in
+            voiceChangerPreset = DTMeetingManager.shared.roomContext?.currentVoicePreset() ?? "original"
         }
         .onDisappear { hasTriggerCloseNoise = false }
     }
@@ -116,23 +169,22 @@ public struct BottomToolbarView: View {
         }
     }
 
+    @ViewBuilder
     private var speakerOrPickerButton: some View {
-        Group {
-            if appCtx.isExternalConnected {
-                RoutePickerView(portType: appCtx.portType)
-                    .frame(width: 48, height: 48)
-            } else {
-                let speakerEnabled = appCtx.portType == .builtInSpeaker
-                toolbarCircleButton(
-                    image: speakerEnabled ? Image("ic_call_speaker") : Image("ic_call_phone")
-                ) {
-                    barClickHandler()
-                    isSpeakerPhoneChangingBusy = true
-                    defer { Task { @MainActor in isSpeakerPhoneChangingBusy = false } }
-                    let newSpeakerState = !speakerEnabled
-                    Logger.info("\(logTag) pressed speaker: \(speakerEnabled) -> \(newSpeakerState)")
-                    DTRTCAudioSession.shared.switchToSpeaker(newSpeakerState)
-                }
+        if appCtx.isExternalConnected {
+            RoutePickerView(portType: appCtx.portType)
+                .frame(width: 48, height: 48)
+        } else {
+            let speakerEnabled = appCtx.portType == .builtInSpeaker
+            toolbarCircleButton(
+                image: speakerEnabled ? Image("ic_call_speaker") : Image("ic_call_phone")
+            ) {
+                barClickHandler()
+                isSpeakerPhoneChangingBusy = true
+                defer { Task { @MainActor in isSpeakerPhoneChangingBusy = false } }
+                let newSpeakerState = !speakerEnabled
+                Logger.info("\(logTag) pressed speaker: \(speakerEnabled) -> \(newSpeakerState)")
+                DTRTCAudioSession.shared.switchToSpeaker(newSpeakerState)
             }
         }
     }
@@ -160,37 +212,36 @@ public struct BottomToolbarView: View {
         }
     }
     
+    @ViewBuilder
     private var endCallButton: some View {
-        VStack {
-            if DTMeetingManager.shared.currentCall.callType == .private {
-                toolbarCircleButton(image: Image("ic_call_hangup")) {
-                    Logger.info("\(logTag) End Call pressed")
-                    Task { await roomCtx.toolbarEndCallTaped() }
-                }
-            } else {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(Color(rgbHex: 0x1E2329))
-                        .frame(width: 78, height: 48)
-                    
-                    HStack {
-                        toolbarCircleButton(
-                            image: Image("ic_call_exit")) {
-                            Logger.info("\(logTag) End Call pressed")
-                            Task { await roomCtx.toolbarEndCallTaped() }
-                        }
-                        
-                        Button(action: {
-                            roomCtx.presentHangupActionSheet()
-                        }) {
-                            Image("tabler_chevron-right")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 14, height: 14)
-                                .padding(2)
-                        }
-                        .padding(.trailing, 6)
+        if DTMeetingManager.shared.currentCall.callType == .private {
+            toolbarCircleButton(image: Image("ic_call_hangup")) {
+                Logger.info("\(logTag) End Call pressed")
+                Task { await roomCtx.toolbarEndCallTaped() }
+            }
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color(rgbHex: 0x1E2329))
+                    .frame(width: 78, height: 48)
+                
+                HStack {
+                    toolbarCircleButton(
+                        image: Image("ic_call_exit")) {
+                        Logger.info("\(logTag) End Call pressed")
+                        Task { await roomCtx.toolbarEndCallTaped() }
                     }
+                    
+                    Button(action: {
+                        roomCtx.presentHangupActionSheet()
+                    }) {
+                        Image("tabler_chevron-right")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 14, height: 14)
+                            .padding(2)
+                    }
+                    .padding(.trailing, 6)
                 }
             }
         }
@@ -207,24 +258,26 @@ public struct BottomToolbarView: View {
             }
         }
         
+        let localParticipant = room.localParticipant
+        let portName = roomCtx.lastPortName ?? ""
         Task {
             isMicrophonePublishingBusy = true
             defer { Task { @MainActor in isMicrophonePublishingBusy = false } }
 
             do {
-                try await room.localParticipant.setMicrophone(enabled: !isMicrophoneEnabled)
+                try await localParticipant.setMicrophone(enabled: !isMicrophoneEnabled)
 
-                let portName = roomCtx.lastPortName ?? ""
                 if !isMicrophoneEnabled, !hasTriggerCloseNoise, DTMeetingManager.shared.isInputAirPods(portName: portName) {
                     hasTriggerCloseNoise = true
                     DTMeetingManager.shared.roomContext?.setDenoiseFilter(enabled: false)
                 }
                 Logger.info("\(logTag) Successfully Microphone muted track \(isMicrophoneEnabled)")
+                RoomDataManager.shared.updateSeakingParticipant()
             } catch {
                 Logger.error("\(logTag) Failed to Microphone mute track: \(error)")
             }
 
-            roomCtx.syncLocalMicrophoneStateToCallKit(muted: isMicrophoneEnabled)
+            DTMeetingManager.shared.roomContext?.syncLocalMicrophoneStateToCallKit(muted: isMicrophoneEnabled)
         }
     }
     
@@ -241,23 +294,17 @@ public struct BottomToolbarView: View {
         
         DTMeetingManager.shared.openCallCamera = !isCameraEnabled
         
+        let localParticipant = room.localParticipant
         Task {
             isCameraPublishingBusy = true
             defer { Task { @MainActor in isCameraPublishingBusy = false } }
-            if let track = room.localParticipant.firstCameraVideoTrack as? LocalVideoTrack,
+            if let track = localParticipant.firstCameraVideoTrack as? LocalVideoTrack,
                let cameraCapturer = track.capturer as? CameraCapturer,
                cameraCapturer.position != .front {
                 try await cameraCapturer.switchCameraPosition()
             }
             
-            let captureOptions = CameraCaptureOptions(
-                dimensions: .h720_169,
-                fps: 30
-            )
-            let publishOptions = VideoPublishOptions(
-                encoding: VideoParameters.presetH1080_169.encoding
-            )
-            try await room.localParticipant.setCamera(enabled: !isCameraEnabled, captureOptions: captureOptions, publishOptions: publishOptions)
+            try await localParticipant.setCamera(enabled: !isCameraEnabled)
             
             cameraPublishHandler(!isCameraEnabled)
         }

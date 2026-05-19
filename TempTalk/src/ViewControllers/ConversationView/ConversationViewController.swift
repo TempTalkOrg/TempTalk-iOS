@@ -98,7 +98,7 @@ final class ConversationViewController: OWSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        Logger.info("[Conversation] viewDidLoad threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
+        Logger.info("[Conversation] viewDidLoad threadId=\(thread.uniqueId) isViewVisible=\(isViewVisible) shouldBeVisible=\(thread.shouldBeVisible) isArchived=\(thread.isArchived) hasEverHadMessage=\(thread.hasEverHadMessage) archivalDate=\(String(describing: thread.archivalDate)) creationDate=\(String(describing: thread.creationDate))")
         
         OWSArchivedMessageJob.shared().inConversation = true
         
@@ -116,9 +116,8 @@ final class ConversationViewController: OWSViewController {
     
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
-        
         Logger.info("[Conversation] viewIsAppearing threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
-        
+        registerScreenshotObserver()
         checkBotBlock()
         safeUpdateBlockStatus()
         
@@ -162,6 +161,8 @@ final class ConversationViewController: OWSViewController {
         super.viewDidLayoutSubviews()
 
         updateWarningHeaderLayout()
+
+        guard !isInteractivePopTransitioning else { return }
 
         // We resize the inputToolbar whenever it's text is modified, including when setting saved draft-text.
         // However it's possible this draft-text is set before the inputToolbar (an inputAccessoryView) is mounted
@@ -219,6 +220,8 @@ final class ConversationViewController: OWSViewController {
         // Clear the "on open" state after the view has been presented.
         actionOnOpen = .none
 
+        syncBottomBarWithKeyboardState()
+
         ensureScrollDownButton()
         inputToolbar.viewDidAppear()
         loadDraftInCompose()
@@ -238,6 +241,18 @@ final class ConversationViewController: OWSViewController {
         isViewCompletelyAppeared = false
         forceDissmissKeyBoard()  // 页面即将消失，强制收起键盘
 
+        if let transitionCoordinator, transitionCoordinator.isInteractive {
+            isInteractivePopTransitioning = true
+            transitionCoordinator.animate(alongsideTransition: nil) { [weak self] context in
+                guard let self else { return }
+                self.isInteractivePopTransitioning = false
+                if context.isCancelled {
+                    self.view.setNeedsLayout()
+                    self.view.layoutIfNeeded()
+                    self.syncBottomBarWithKeyboardState()
+                }
+            }
+        }
     }
     
     override func viewDidDisappear(_ animated: Bool) {
@@ -290,8 +305,10 @@ final class ConversationViewController: OWSViewController {
         // conveniently bubbled up the responder chain.
         if result {
             resignFirstResponder()
-            inputToolbar.resignFirstResponder()
-            inputToolbar.clearDesiredKeyboard()
+            if presentedViewController == nil {
+                inputToolbar.resignFirstResponder()
+                inputToolbar.clearDesiredKeyboard()
+            }
         }
         
         return result
@@ -524,7 +541,8 @@ extension ConversationViewController {
                     // 查询contact会话更新
                     DataUpdateUtil.shared.updateConversation(thread: instance,
                                                              expireTime: entity.messageExpiry,
-                                                             messageClearAnchor: NSNumber(value: entity.messageClearAnchor))
+                                                             messageClearAnchor: NSNumber(value: entity.messageClearAnchor),
+                                                             transaction: transaction)
                 }
                 
                 if entity.askedVersion > 0 {
@@ -729,7 +747,8 @@ extension ConversationViewController {
 
                     DataUpdateUtil.shared.updateConversation(thread: thread,
                                                              expireTime: conversationEntity.messageExpiry,
-                                                             messageClearAnchor: NSNumber(value: conversationEntity.messageClearAnchor))
+                                                             messageClearAnchor: NSNumber(value: conversationEntity.messageClearAnchor),
+                                                             transaction: wTransaction)
                 }
                 wTransaction.addAsyncCompletionOnMain {
                     NotificationCenter.default.post(name: .DTConversationDidChange, object: nil)

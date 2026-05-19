@@ -31,6 +31,13 @@
             success(@[]);
             return;;
         }
+        for (NSDictionary *groupJSON in groupsData) {
+            if ([groupJSON[@"groupCryptoMode"] integerValue] > 0) {
+                OWSLogInfo(@"[GroupCrypto] Sync - server returned encrypted group: gid=%@, groupCryptoMode=%@, hasEncName=%d, hasEncAvatar=%d",
+                           groupJSON[@"gid"], groupJSON[@"groupCryptoMode"],
+                           groupJSON[@"encryptedName"] != nil, groupJSON[@"encryptedAvatar"] != nil);
+            }
+        }
         NSError *error;
         NSArray *groups = [MTLJSONAdapter modelsOfClass:[DTGroupBaseInfoEntity class] fromJSONArray:groupsData error:&error];
         if(error){

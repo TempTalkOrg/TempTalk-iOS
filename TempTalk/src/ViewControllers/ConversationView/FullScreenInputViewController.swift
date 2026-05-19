@@ -122,14 +122,13 @@ class FullScreenInputViewController: OWSViewController {
     
     
     @objc func conversationSettingDidChange(_ notification: Notification) {
-        
+        AssertIsOnMainThread()
         guard let thread else { return }
-        
-        databaseStorage.asyncRead { transaction in
+
+        databaseStorage.uiRead { transaction in
             thread.anyReload(transaction: transaction)
-        } completion: {
-            self.checkConfideStatus()
         }
+        self.checkConfideStatus()
     }
     
     func checkConfideStatus() {

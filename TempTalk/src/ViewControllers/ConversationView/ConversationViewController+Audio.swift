@@ -71,6 +71,10 @@ extension ConversationViewController {
         playOrPauseAudioPlayer(viewItem: viewItem, attachmentStream: attachmentStream)
     }
     
+    @objc func pauseAudioPlayer() {
+        audioPlayer?.pause()
+    }
+
     @objc func stopAudioPlayer() {
         audioPlayer?.stop()
         audioPlayer = nil

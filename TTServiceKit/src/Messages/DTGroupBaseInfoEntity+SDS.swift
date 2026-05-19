@@ -43,6 +43,9 @@ public struct DTGroupBaseInfoEntityRecord: SDSRecord {
     public let publishRule: UInt32?
     public let messageClearAnchor: UInt64
     public let criticalAlert: Bool
+    public let groupCryptoMode: Int
+    public let encryptedName: String?
+    public let encryptedAvatar: String?
 
     public enum CodingKeys: String, CodingKey, ColumnExpression, CaseIterable {
         case id
@@ -61,6 +64,9 @@ public struct DTGroupBaseInfoEntityRecord: SDSRecord {
         case publishRule
         case messageClearAnchor
         case criticalAlert
+        case groupCryptoMode
+        case encryptedName
+        case encryptedAvatar
     }
 
     public static func columnName(_ column: DTGroupBaseInfoEntityRecord.CodingKeys, fullyQualified: Bool = false) -> String {
@@ -100,6 +106,9 @@ public extension DTGroupBaseInfoEntityRecord {
         publishRule = row[13]
         messageClearAnchor = row[14]
         criticalAlert = row[15]
+        groupCryptoMode = row[16]
+        encryptedName = row[17]
+        encryptedAvatar = row[18]
     }
 }
 
@@ -134,8 +143,11 @@ extension DTGroupBaseInfoEntity {
             let anyoneRemove: Bool = record.anyoneRemove
             let avatar: String = record.avatar
             let criticalAlert: Bool = record.criticalAlert
+            let encryptedAvatar: String? = record.encryptedAvatar
+            let encryptedName: String? = record.encryptedName
             let ext: Bool = record.ext
             let gid: String = record.gid
+            let groupCryptoMode: Int = record.groupCryptoMode
             let invitationRule: NSNumber? = SDSDeserialization.optionalNumericAsNSNumber(record.invitationRule, name: "invitationRule", conversion: { NSNumber(value: $0) })
             let messageClearAnchor: UInt64 = record.messageClearAnchor
             let messageExpiry: NSNumber? = SDSDeserialization.optionalNumericAsNSNumber(record.messageExpiry, name: "messageExpiry", conversion: { NSNumber(value: $0) })
@@ -149,8 +161,11 @@ extension DTGroupBaseInfoEntity {
                                          anyoneRemove: anyoneRemove,
                                          avatar: avatar,
                                          criticalAlert: criticalAlert,
+                                         encryptedAvatar: encryptedAvatar,
+                                         encryptedName: encryptedName,
                                          ext: ext,
                                          gid: gid,
+                                         groupCryptoMode: groupCryptoMode,
                                          invitationRule: invitationRule,
                                          messageClearAnchor: messageClearAnchor,
                                          messageExpiry: messageExpiry,
@@ -165,8 +180,11 @@ extension DTGroupBaseInfoEntity {
             let anyoneRemove: Bool = record.anyoneRemove
             let avatar: String = record.avatar
             let criticalAlert: Bool = record.criticalAlert
+            let encryptedAvatar: String? = record.encryptedAvatar
+            let encryptedName: String? = record.encryptedName
             let ext: Bool = record.ext
             let gid: String = record.gid
+            let groupCryptoMode: Int = record.groupCryptoMode
             let invitationRule: NSNumber? = SDSDeserialization.optionalNumericAsNSNumber(record.invitationRule, name: "invitationRule", conversion: { NSNumber(value: $0) })
             let messageClearAnchor: UInt64 = record.messageClearAnchor
             let messageExpiry: NSNumber? = SDSDeserialization.optionalNumericAsNSNumber(record.messageExpiry, name: "messageExpiry", conversion: { NSNumber(value: $0) })
@@ -183,8 +201,11 @@ extension DTGroupBaseInfoEntity {
                                                anyoneRemove: anyoneRemove,
                                                avatar: avatar,
                                                criticalAlert: criticalAlert,
+                                               encryptedAvatar: encryptedAvatar,
+                                               encryptedName: encryptedName,
                                                ext: ext,
                                                gid: gid,
+                                               groupCryptoMode: groupCryptoMode,
                                                invitationRule: invitationRule,
                                                messageClearAnchor: messageClearAnchor,
                                                messageExpiry: messageExpiry,
@@ -248,8 +269,11 @@ extension DTGroupBaseInfoEntity: DeepCopyable {
             let anyoneRemove: Bool = modelToCopy.anyoneRemove
             let avatar: String = modelToCopy.avatar
             let criticalAlert: Bool = modelToCopy.criticalAlert
+            let encryptedAvatar: String? = modelToCopy.encryptedAvatar
+            let encryptedName: String? = modelToCopy.encryptedName
             let ext: Bool = modelToCopy.ext
             let gid: String = modelToCopy.gid
+            let groupCryptoMode: Int = modelToCopy.groupCryptoMode
             let invitationRule: NSNumber? = modelToCopy.invitationRule
             let messageClearAnchor: UInt64 = modelToCopy.messageClearAnchor
             let messageExpiry: NSNumber? = modelToCopy.messageExpiry
@@ -264,8 +288,11 @@ extension DTGroupBaseInfoEntity: DeepCopyable {
                                                anyoneRemove: anyoneRemove,
                                                avatar: avatar,
                                                criticalAlert: criticalAlert,
+                                               encryptedAvatar: encryptedAvatar,
+                                               encryptedName: encryptedName,
                                                ext: ext,
                                                gid: gid,
+                                               groupCryptoMode: groupCryptoMode,
                                                invitationRule: invitationRule,
                                                messageClearAnchor: messageClearAnchor,
                                                messageExpiry: messageExpiry,
@@ -283,8 +310,11 @@ extension DTGroupBaseInfoEntity: DeepCopyable {
             let anyoneRemove: Bool = modelToCopy.anyoneRemove
             let avatar: String = modelToCopy.avatar
             let criticalAlert: Bool = modelToCopy.criticalAlert
+            let encryptedAvatar: String? = modelToCopy.encryptedAvatar
+            let encryptedName: String? = modelToCopy.encryptedName
             let ext: Bool = modelToCopy.ext
             let gid: String = modelToCopy.gid
+            let groupCryptoMode: Int = modelToCopy.groupCryptoMode
             let invitationRule: NSNumber? = modelToCopy.invitationRule
             let messageClearAnchor: UInt64 = modelToCopy.messageClearAnchor
             let messageExpiry: NSNumber? = modelToCopy.messageExpiry
@@ -298,8 +328,11 @@ extension DTGroupBaseInfoEntity: DeepCopyable {
                                          anyoneRemove: anyoneRemove,
                                          avatar: avatar,
                                          criticalAlert: criticalAlert,
+                                         encryptedAvatar: encryptedAvatar,
+                                         encryptedName: encryptedName,
                                          ext: ext,
                                          gid: gid,
+                                         groupCryptoMode: groupCryptoMode,
                                          invitationRule: invitationRule,
                                          messageClearAnchor: messageClearAnchor,
                                          messageExpiry: messageExpiry,
@@ -335,6 +368,9 @@ extension DTGroupBaseInfoEntitySerializer {
     static var publishRuleColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "publishRule", columnType: .int64, isOptional: true) }
     static var messageClearAnchorColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "messageClearAnchor", columnType: .int64) }
     static var criticalAlertColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "criticalAlert", columnType: .int) }
+    static var groupCryptoModeColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "groupCryptoMode", columnType: .int64) }
+    static var encryptedNameColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "encryptedName", columnType: .unicodeString, isOptional: true) }
+    static var encryptedAvatarColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "encryptedAvatar", columnType: .unicodeString, isOptional: true) }
 
     // TODO: We should decide on a naming convention for
     //       tables that store models.
@@ -357,7 +393,10 @@ extension DTGroupBaseInfoEntitySerializer {
         extColumn,
         publishRuleColumn,
         messageClearAnchorColumn,
-        criticalAlertColumn
+        criticalAlertColumn,
+        groupCryptoModeColumn,
+        encryptedNameColumn,
+        encryptedAvatarColumn
         ])
     }
 }
@@ -767,8 +806,11 @@ class DTGroupBaseInfoEntitySerializer: SDSSerializer {
         let publishRule: UInt32? = archiveOptionalNSNumber(model.publishRule, conversion: { $0.uint32Value })
         let messageClearAnchor: UInt64 = model.messageClearAnchor
         let criticalAlert: Bool = model.criticalAlert
+        let groupCryptoMode: Int = model.groupCryptoMode
+        let encryptedName: String? = model.encryptedName
+        let encryptedAvatar: String? = model.encryptedAvatar
 
-        return DTGroupBaseInfoEntityRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, action: action, anyoneRemove: anyoneRemove, avatar: avatar, gid: gid, invitationRule: invitationRule, messageExpiry: messageExpiry, name: name, rejoin: rejoin, remindCycle: remindCycle, ext: ext, publishRule: publishRule, messageClearAnchor: messageClearAnchor, criticalAlert: criticalAlert)
+        return DTGroupBaseInfoEntityRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, action: action, anyoneRemove: anyoneRemove, avatar: avatar, gid: gid, invitationRule: invitationRule, messageExpiry: messageExpiry, name: name, rejoin: rejoin, remindCycle: remindCycle, ext: ext, publishRule: publishRule, messageClearAnchor: messageClearAnchor, criticalAlert: criticalAlert, groupCryptoMode: groupCryptoMode, encryptedName: encryptedName, encryptedAvatar: encryptedAvatar)
     }
 }
 
@@ -788,4 +830,4 @@ public extension DTGroupBaseInfoEntity {
     }
 }
 #endif
-                                                                                   
+  

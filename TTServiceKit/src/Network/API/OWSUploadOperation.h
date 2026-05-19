@@ -43,6 +43,10 @@ extern NSString *const kAttachmentUploadAttachmentIDKey;
 
 - (void)syncrunWithProfileName:(NSString *)profileName profileKey:(SSKAES256Key*)profileKey;
 
+/// 仅上传附件，不更新个人 profile。同步阻塞等待，调用前需切到后台队列。
+- (void)syncrunForUploadOnlyWithSuccess:(void (^)(NSString *attachmentId, NSString *location))successBlock
+                                 failure:(void (^)(NSError *error))failureBlock;
+
 - (void)uploadDebugLogRunSuccess:(void (^)(void))uploadSuccess
                    uploadFailure:(void (^)(NSError *error))uploadFailure;
 

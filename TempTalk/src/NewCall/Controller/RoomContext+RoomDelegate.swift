@@ -28,7 +28,7 @@ extension RoomContext: RoomDelegate {
         Logger.debug("\(logTag) Did update e2eeState")
     }
 
-    public nonisolated func room(_ room: Room, didUpdateConnectionState connectionState: ConnectionState, from oldValue: ConnectionState) {
+    public nonisolated func room(_: Room, didUpdateConnectionState connectionState: ConnectionState, from oldValue: ConnectionState) {
         Task { @MainActor [weak self] in
             guard let self else { return }
             Logger.info("\(logTag) Did update connectionState \(oldValue) -> \(connectionState)")
@@ -47,11 +47,13 @@ extension RoomContext: RoomDelegate {
         }
     }
 
-    public nonisolated func roomDidConnect(_ room: Room) {
+    public nonisolated func roomDidConnect(_: Room) {
         Logger.info("\(logTag) roomDidConnect")
 
         Task { @MainActor [weak self] in
             guard let self else { return }
+
+            callManager.stopConnectionPhaseTimer()
 
             let isPrivate = currentCall.callType == .private
             let needPublishSilenceAudio = currentCall.ttcalResponseOptions?.autoPublishSilenceAudio ?? false
@@ -102,8 +104,7 @@ extension RoomContext: RoomDelegate {
             }
             // 超时计时停止
             callManager.stopCallTimeoutTimer()
-            // 正在会议中
-            callManager.inMeeting = true
+            callManager.tryTransition(from: .connecting, to: .connected)
             // 非会议中的人，展示 instant
             Logger.info("\(logTag) check localParticipant \(room.localParticipant.identity?.stringValue)")
             checkPartiantInRoom(room.localParticipant.identity?.stringValue ?? "")
@@ -119,19 +120,19 @@ extension RoomContext: RoomDelegate {
                     currentCall.callState = .answering
                     callManager.stopSound()
                     callManager.stopCallTimeoutTimer()
-                    callManager.inMeeting = true
+                    callManager.tryTransition(from: .connecting, to: .connected)
                 }
             } else {
                 currentCall.callState = .answering
                 callManager.handleMeetingBar(call: currentCall, action: .add)
-                callManager.inMeeting = true
+                callManager.tryTransition(from: .connecting, to: .connected)
                 // 异步调用 joinedCall
                 Task { await callManager.joinedCall() }
             }
         }
     }
 
-    public nonisolated func roomDidSignalConnect(_ room: Room) {
+    public nonisolated func roomDidSignalConnect(_: Room) {
         Task { @MainActor [weak self] in
             guard let self else { return }
             Logger.info("\(logTag) roomDidSignalConnect")
@@ -156,12 +157,13 @@ extension RoomContext: RoomDelegate {
 
             /// 超时处理
             func handleTimeout() {
-                Logger.error("\(logTag) ttCallResp is nil or body empty after 15s")
+                Logger.error("[newcall] ttCallResp is nil or body empty after 15s")
+                let roomId = DTMeetingManager.shared.currentCall.roomId
                 Task {
-                    await self.callManager.hangupCall(
+                    await DTMeetingManager.shared.hangupCall(
                         needSyncCallKit: true,
                         isByLocal: true,
-                        roomId: self.currentCall.roomId,
+                        roomId: roomId,
                         showErrorToast: true
                     )
                 }
@@ -198,7 +200,7 @@ extension RoomContext: RoomDelegate {
 
     /// 断开异常
     /// 注意：此回调只处理「已连接后」的断开错误，连接阶段的错误由 didFailToConnectWithError 处理
-    public nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
+    public nonisolated func room(_: Room, didDisconnectWithError error: LiveKitError?) {
         Task { @MainActor [weak self] in
             guard let self else { return }
 
@@ -223,12 +225,15 @@ extension RoomContext: RoomDelegate {
                 Logger.info("\(logTag) didDisconnect error: \(error) errortype:\(error.type)")
 
                 // 标记为已处理
-                errorHandlingState = .handled
+                markHandled()
 
-                await callManager.hangupCall(needSyncCallKit: true,
-                                             isByLocal: true,
-                                             roomId: currentCall.roomId,
-                                             showErrorToast: true)
+                await callManager.hangupCoordinator.terminate(
+                    reason: .connectError,
+                    options: TerminationOptions(
+                        roomId: currentCall.roomId,
+                        showErrorToast: true
+                    )
+                )
             } else {
                 Logger.info("\(logTag): normal disconnect")
             }
@@ -239,16 +244,20 @@ extension RoomContext: RoomDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             Logger.info("\(logTag) room reconnected - canceling disconnect timer")
+            isRoomReconnecting = false
             callManager.stopParticipantDisTimer()
             // 重连后检查是否有屏幕共享未展示
             checkAndPresentScreenShareIfNeeded()
+            callManager.setVisibleParticipants([])
+            bumpVideoRefreshToken()
         }
     }
 
-    public nonisolated func roomIsReconnecting(_ room: Room) {
+    public nonisolated func roomIsReconnecting(_: Room) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            Logger.info("\(logTag) room is Reconencting")
+            Logger.info("\(logTag) room is Reconnecting")
+            isRoomReconnecting = true
 
             let local = room.localParticipant
             let isLocalValid = local.sid?.stringValue.isEmpty == false
@@ -278,9 +287,9 @@ extension RoomContext: RoomDelegate {
     // MARK: remote participant state
 
     // remote online
-    public nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
+    public nonisolated func room(_: Room, participantDidConnect participant: RemoteParticipant) {
+        Task { @MainActor [weak self, weak participant] in
+            guard let self, let participant else { return }
             Logger.info("\(logTag) remote connected")
             if case .private = currentCall.callType {
                 // 1v1
@@ -293,8 +302,7 @@ extension RoomContext: RoomDelegate {
                     callManager.stopSound()
                     callManager.stopCallTimeoutTimer()
 
-                    // callee入会双方均进入频道, 开始计时
-                    callManager.inMeeting = true
+                    callManager.tryTransition(from: .connecting, to: .connected)
                 }
 
                 if case .answering = currentCall.callState, room.allParticipants.keys.count > 2 {
@@ -307,6 +315,10 @@ extension RoomContext: RoomDelegate {
             } else if case .group = currentCall.callType {
                 // 非会议中的人，展示instant
                 checkPartiantInRoom(room.localParticipant.identity?.stringValue ?? "")
+            } else if case .instant = currentCall.callType {
+                // instant call
+                callManager.stopCallTimeoutTimer()
+                callManager.tryTransition(from: .connecting, to: .connected)
             }
 
             // 清理已入会用户的邀请记录
@@ -322,42 +334,41 @@ extension RoomContext: RoomDelegate {
     }
 
     // remote offline
-    public nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
-        Task { @MainActor [weak self] in
+    public nonisolated func room(_: Room, participantDidDisconnect participant: RemoteParticipant) {
+        let participantIdentity = participant.identity
+        Task { @MainActor [weak self, weak participant] in
             guard let self else { return }
-            let participantId = participant.identity?.stringValue ?? "unknown"
+            let participantId = participantIdentity?.stringValue ?? "unknown"
             Logger.debug("\(logTag) remote disconnected, participantId: \(participantId), remaining participants: \(room.allParticipants.count)")
 
-            // delegate 已在 main actor，直接执行
-            if let focusParticipant, focusParticipant.identity == participant.identity {
+            if let focusParticipant, focusParticipant.identity == participantIdentity {
                 self.focusParticipant = nil
             }
 
-            // 1v1 通话中，如果对方断开后只剩下本地用户，启动断开计时器
             if currentCall.callType == .private, room.allParticipants.count == 1 {
                 Logger.info("\(logTag) private call - only local participant remains, start disconnect timer")
-                callManager.startParticipantDisTimer { [weak self] in
-                    guard let self else { return }
-                    Logger.info("\(logTag) remote participant disconnected - initiating hangup")
+                callManager.startParticipantDisTimer {
+                    let roomId = DTMeetingManager.shared.currentCall.roomId
+                    Logger.info("[newcall] remote participant disconnected - initiating hangup")
                     Task {
-                        Logger.info("\(self.logTag) hangup remote participant timeout")
-                        await self.callManager.hangupCall(needSyncCallKit: true,
-                                                          roomId: self.currentCall.roomId)
+                        Logger.info("[newcall] hangup remote participant timeout")
+                        await DTMeetingManager.shared.hangupCall(needSyncCallKit: true,
+                                                                  roomId: roomId)
                     }
                 }
             }
 
-            // 自动离会处理
             callManager.currentCallTalkingPop()
-            // 远端入会人数发生变化
-            RoomDataManager.shared.disconnectParticipant(participant: participant)
+            if let participant {
+                RoomDataManager.shared.disconnectParticipant(participant: participant)
+            }
         }
     }
 
-    public nonisolated func room(_ room: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType _: EncryptionType) {
+    public nonisolated func room(_: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType _: EncryptionType) {
+        let participantId = participant?.identity?.stringValue.components(separatedBy: ".").first ?? ""
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let participantId = participant?.identity?.stringValue.components(separatedBy: ".").first ?? ""
 
             // 统一解析 base64 结构数据
             func extractSignatureAndPayload(from data: Data) -> (signature: Data, payload: Data)? {
@@ -442,9 +453,10 @@ extension RoomContext: RoomDelegate {
             case "end-call":
                 if let sid = room.sid?.stringValue, sid == currentCall.roomSid {
                     if let (signature, payload) = extractSignatureAndPayload(from: data) {
+                        let roomId = currentCall.roomId
                         Task {
-                            Logger.info("\(self.logTag) topic end call currentcall")
-                            await self.callManager.meetingNotificationEndAllClearData(roomId: self.currentCall.roomId)
+                            Logger.info("[newcall] topic end call currentcall")
+                            await DTMeetingManager.shared.meetingNotificationEndAllClearData(roomId: roomId)
                         }
                     } else {
                         Logger.error("\(logTag) Failed to parse data for topic 'end-call'")
@@ -474,19 +486,22 @@ extension RoomContext: RoomDelegate {
     // MARK: 谁开始了分享
 
     public nonisolated func room(_: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) {
-        Task { @MainActor [weak self] in
+        let kind = publication.kind
+        let source = publication.source
+        Task { @MainActor [weak self, weak participant] in
             guard let self else { return }
-            if publication.kind == .video, publication.source == .screenShareVideo {
+            if kind == .video, source == .screenShareVideo, let participant {
                 RoomDataManager.shared.openScreenSharedParticipant(participant: participant)
             }
         }
     }
 
     public nonisolated func room(_: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
+        let source = publication.source
+        Task { @MainActor [weak self, weak participant, weak publication] in
+            guard let self, let participant, let publication else { return }
             guard participant.isScreenShareEnabled(),
-                  publication.source == .screenShareVideo else { return }
+                  source == .screenShareVideo else { return }
 
             screenSharePublication = publication
             screenShareParticipant = participant
@@ -504,83 +519,98 @@ extension RoomContext: RoomDelegate {
     // MARK: 谁结束了分享
 
     public nonisolated func room(_ room: Room, participant: RemoteParticipant, didUnpublishTrack publication: RemoteTrackPublication) {
-        Task { @MainActor [weak self] in
+        let source = publication.source
+        Task { @MainActor [weak self, weak participant] in
             guard let self else { return }
-            if publication.source == .screenShareVideo {
+            guard source == .screenShareVideo else { return }
+
+            if let participant {
                 RoomDataManager.shared.closeScreenSharedParticipant(participant: participant)
+            }
 
-                // Delay to avoid dismissing during reconnection where tracks are
-                // temporarily unpublished then re-published.
+            unpublishScreenShareTask?.cancel()
+            unpublishScreenShareTask = Task { @MainActor [weak self, weak room] in
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
-
-                guard !room.isScreenShareActive() else {
-                    Logger.info("Screen share track unpublished but room still has active share (reconnection), keeping share view")
+                guard !Task.isCancelled, let self else { return }
+                guard let room, room.isScreenShareActive() else {
+                    Logger.info("Screen share track unpublished and no active share, dismissing")
+                    dismissShareViewIfNeeded()
                     return
                 }
 
-                Logger.info("Screen share track unpublished and confirmed no active share, dismissing")
-                dismissShareViewIfNeeded()
+                Logger.info("Screen share track unpublished but room still has active share (reconnection), keeping share view")
             }
         }
     }
 
     public nonisolated func room(_ room: Room, participant: RemoteParticipant, didUnsubscribeTrack publication: RemoteTrackPublication) {
-        Task { @MainActor [weak self] in
+        let source = publication.source
+        Task { @MainActor [weak self, weak room] in
             guard let self else { return }
-            if publication.source == .screenShareVideo {
-                Logger.info("Screen share track unsubscribed (local event, keeping share view). Published: \(room.isScreenShareActive())")
+            if source == .screenShareVideo {
+                let isActive = room?.isScreenShareActive() ?? false
+                Logger.info("Screen share track unsubscribed (local event, keeping share view). Published: \(isActive)")
             }
         }
     }
 
-    // 检测是否有人发言
     public nonisolated func room(_: Room, didUpdateSpeakingParticipants participants: [Participant]) {
+        let speakerIdentities = Set(participants.compactMap { $0.identity?.stringValue })
+        let hasSpeakers = !participants.isEmpty
         Task { @MainActor [weak self] in
             guard let self else { return }
             callManager.currentCallTalkingPop()
-            // 若没有变化，则跳过
-            guard lastParticipants != participants else {
+            guard lastSpeakerIdentities != speakerIdentities else {
                 return
             }
 
-            lastParticipants = participants
+            lastSpeakerIdentities = speakerIdentities
 
-            if participants.isEmpty {
-                handleNoSpeakers()
-            } else {
+            if hasSpeakers {
+                currentActiveSpeaker = participants.max(by: { $0.audioLevel < $1.audioLevel })
+            }
+            RoomDataManager.shared.onMeetingUpdate?()
+
+            if hasSpeakers {
                 handleActiveSpeakers()
+            } else {
+                handleNoSpeakers()
             }
         }
     }
 
-    // 检测 remote 麦克风关闭
     public nonisolated func room(_: Room, participant: Participant, trackPublication: TrackPublication, didUpdateIsMuted isMuted: Bool) {
-        Task { @MainActor [weak self] in
+        let isAudioTrack = trackPublication.track is AudioTrack
+        let isVideoTrack = trackPublication.track is VideoTrack
+        Task { @MainActor [weak self, weak participant] in
             guard let self else { return }
             callManager.currentCallTalkingPop()
-            if trackPublication.track is AudioTrack {
-                // 只处理音频的弹幕
+            guard let participant else { return }
+            if isAudioTrack {
                 if let identity = participant.identity?.stringValue, let localNumber = TSAccountManager.localNumber() {
                     if identity != "\(localNumber).2" {
                         RoomDataManager.shared.updateMuteParticipant(participant: participant, isMuted: isMuted)
+                    } else {
+                        RoomDataManager.shared.updateSeakingParticipant()
                     }
                 }
-            } else if trackPublication.track is VideoTrack {
-                // 视频
+            } else if isVideoTrack {
                 RoomDataManager.shared.updateVideoMuteParticipant(participant: participant)
             }
         }
     }
 
     public nonisolated func room(_: Room, participant: LocalParticipant, didPublishTrack publication: LocalTrackPublication) {
-        Task { @MainActor [weak self] in
+        let isAudioTrack = publication.track is AudioTrack
+        let isVideoTrack = publication.track is VideoTrack
+        let publicationIsMuted = publication.isMuted
+        Task { @MainActor [weak self, weak participant] in
             guard let self else { return }
             callManager.currentCallTalkingPop()
-            if publication.track is AudioTrack, !publication.isMuted {
-                // 只处理开麦的弹幕
+            guard let participant else { return }
+            if isAudioTrack, !publicationIsMuted {
                 RoomDataManager.shared.updateMuteParticipant(participant: participant, isMuted: false)
-            } else if publication.track is VideoTrack {
-                // 视频
+            } else if isVideoTrack {
                 RoomDataManager.shared.updateVideoMuteParticipant(participant: participant)
             }
         }
@@ -591,50 +621,32 @@ extension RoomContext: RoomDelegate {
 
 @MainActor
 extension RoomContext {
-    /// 有人说话：延迟 0.4 秒刷新说话人，取消还原共享人的任务
     private func handleActiveSpeakers() {
-        // 取消待还原的任务
         resetToDefaultWorkItem?.cancel()
         resetToDefaultWorkItem = nil
-
-        // 取消之前准备执行的刷新任务（节流）
         activeSpeakerWorkItem?.cancel()
 
-        let workItem = DispatchWorkItem { [weak self] in
-            Task { @MainActor in
-                self?.updateSpeakingUI()
-            }
+        let workItem = DispatchWorkItem {
+            RoomDataManager.shared.onPipUpdate?()
         }
 
         activeSpeakerWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + activeSpeakerDelay, execute: workItem)
     }
 
-    /// 没人说话：延迟 2.5 秒恢复共享人视图，取消刷新说话人的任务
     private func handleNoSpeakers() {
-        // 取消刷新说话人的节流任务
         activeSpeakerWorkItem?.cancel()
         activeSpeakerWorkItem = nil
-
-        // 取消之前待还原的任务（防止重复）
         resetToDefaultWorkItem?.cancel()
 
         let workItem = DispatchWorkItem { [weak self] in
-            Task { @MainActor in
-                self?.restoreDefaultSharingView()
-            }
+            self?.currentActiveSpeaker = nil
+            RoomDataManager.shared.onMeetingUpdate?()
+            RoomDataManager.shared.onPipUpdate?()
         }
 
         resetToDefaultWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + resetDelay, execute: workItem)
-    }
-
-    private func updateSpeakingUI() {
-        RoomDataManager.shared.updateSeakingParticipant()
-    }
-
-    private func restoreDefaultSharingView() {
-        RoomDataManager.shared.updateSeakingParticipant()
     }
 
     func cleanup() {
@@ -710,6 +722,12 @@ extension RoomContext {
                 Logger.info("[Livekit] App still not active after delay, deferring to didBecomeActive")
                 pendingShowUI = true
             }
+            return
+        }
+
+        if OWSScreenLockUI.sharedManager().isShowingScreenLockUI {
+            Logger.info("[Livekit] Screen lock is active, deferring screen share until unlock")
+            pendingShowUI = true
             return
         }
 

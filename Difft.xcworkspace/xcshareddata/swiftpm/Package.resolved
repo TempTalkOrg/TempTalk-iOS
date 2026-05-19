@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/difftim/client-sdk-swift.git",
       "state" : {
-        "revision" : "7e0b0cba48289ea52f9fe7b09ca6ec745be9a955",
-        "version" : "2.10.2-a9"
+        "revision" : "2545f1362dff259301522bf63b0db145c9903818",
+        "version" : "2.12.1-a6"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/difftim/denoise-plugin-swift",
       "state" : {
-        "revision" : "2ab3cd2f3db4007c6606f94ee229f1bb8ba6986a",
-        "version" : "1.0.7"
+        "revision" : "c7ad7b3978603e697edf62cd497a5bc08801f7c7",
+        "version" : "1.0.12"
       }
     },
     {
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/livekit/livekit-uniffi-xcframework.git",
       "state" : {
-        "revision" : "be164f3a9bfe83a7354a63e57950cc7d7c6393d0",
-        "version" : "0.0.3"
+        "revision" : "61229f4032131311b997ddb1bc1cb8f5afbe30c8",
+        "version" : "0.0.5"
       }
     },
     {
@@ -58,10 +58,10 @@
     {
       "identity" : "webrtc-xcframework",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/livekit/webrtc-xcframework.git",
+      "location" : "https://github.com/chative/webrtc-xcframework.git",
       "state" : {
-        "revision" : "5b40f56c637369064b9c82e8f9cfa820f942658f",
-        "version" : "137.7151.10"
+        "revision" : "8101a58d559e0cdfade802059f52044462c6d572",
+        "version" : "144.7559.4"
       }
     }
   ],

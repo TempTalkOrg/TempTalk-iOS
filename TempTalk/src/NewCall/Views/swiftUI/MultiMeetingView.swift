@@ -26,8 +26,9 @@ struct MultiMeetingView: UIViewRepresentable {
     
     func updateUIView(_ uiView: DTMultiMeetingView, context: Context) {
         // 更新视图逻辑（如果需要动态更新）
-        RoomDataManager.shared.onMeetingUpdate = {
-            DispatchMainThreadSafe {
+        RoomDataManager.shared.onMeetingUpdate = { [weak uiView] in
+            DispatchMainThreadSafe { [weak uiView] in
+                guard let uiView else { return }
                 uiView.update(withBroadcasters: broadcastersItems(), handupAudiences: nil)
             }
         }

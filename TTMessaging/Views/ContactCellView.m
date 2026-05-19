@@ -371,7 +371,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
         if (thread.isNoteToSelf) {
             [self.avatarView dt_setImageWith:nil placeholderImage:[UIImage imageNamed:@"icon_note_to_self"] recipientId:[TSAccountManager sharedInstance].localNumber];
         } else {
-            [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:self.recipientId displayName:account.contactFullName completion:nil];
+            [self.avatarView setImageWithSignalAccount:account displayName:account.contactFullName completion:nil];
         }
     } else {
         [self.avatarView setImageWithThread:(TSGroupThread *)thread  contactsManager:contactsManager];
@@ -421,7 +421,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
         }
     } else {
         SignalAccount *account = [self.contactsManager signalAccountForRecipientId:self.recipientId];
-        [self.avatarView setImageWithAvatar:account.contact.avatar recipientId:self.recipientId displayName:[self.contactsManager rawDisplayNameForPhoneIdentifier:recipientId] completion:nil];
+        [self.avatarView setImageWithSignalAccount:account displayName:[self.contactsManager rawDisplayNameForPhoneIdentifier:recipientId] completion:nil];
         self.avatarView.avatarImageView.contentMode = UIViewContentModeScaleAspectFill;
     }
 }

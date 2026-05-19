@@ -31,28 +31,6 @@ public class TSConstants: NSObject {
     private static let currentBundleId = Bundle.main.object(forInfoDictionaryKey: "CFBundleIdentifier")
     static let temptalkBundleId = "org.difft.chative"
     
-    private static var FlavorId: String {
-        let bundle = Bundle.main.infoDictionary ?? [:]
-        let appName = bundle["CFBundleDisplayName"] as? String ?? ""
-        let appId = Bundle.main.bundleIdentifier ?? ""
-        let version = bundle["CFBundleShortVersionString"] as? String ?? ""
-        let versionFlag = {
-            if let path = Bundle.main.path(forResource: "AppConfig", ofType: "plist"),
-                let dict = NSDictionary(contentsOfFile: path) as? [String: Any],
-                let flag = dict["OFFICIAL_VERSION_FLAG"] as? String,
-               DTParamsUtils.validateString(flag).boolValue,
-                !flag.contains("OFFICIAL_VERSION_FLAG")  {
-                return flag
-            }
-            return "cinnamon"
-        }()
-                
-        let crcInput = [appName, appId, version, versionFlag].joined(separator: "|")
-        let crc32Value = CRC32Util.checksum(crcInput)
-        let hexString = String(format: "%08x ", crc32Value)
-        return hexString
-    }
-    
     @objc public static var appName: DTAPPName {
         return .tempTalk
     }
@@ -60,7 +38,21 @@ public class TSConstants: NSObject {
     // Never instantiate this class.
     private override init() {}
     
-    @objc public static var defaultServerConfig: DTServersEntity { DTServersConfig.fetch() }
+    private static let _configLock = UnfairLock()
+    private static var _cachedServerConfig: DTServersEntity?
+    
+    private static let _hostLock = UnfairLock()
+
+    @objc public static var defaultServerConfig: DTServersEntity {
+        if let cached = _configLock.withLock({ _cachedServerConfig }) { return cached }
+        let config = DTServersConfig.fetch()
+        _configLock.withLock { _cachedServerConfig = config }
+        return config
+    }
+
+    @objc public static func invalidateServerConfigCache() {
+        _configLock.withLock { _cachedServerConfig = nil }
+    }
         
     @objc static var defaultSchema: String {
         "https://"
@@ -77,7 +69,7 @@ public class TSConstants: NSObject {
         
     @objc public static var mainServiceHost: String {
         set {
-            shared.mainServiceHost = newValue
+            _hostLock.withLock { shared.mainServiceHost = newValue }
         }
         get {
             guard let result = serviceUrlPath(with: DTServerToChat) else { return defaultMainHost }
@@ -86,7 +78,8 @@ public class TSConstants: NSObject {
     }
     
     public static var meetingWebSocketURL: String {
-        return "wss://" + shared.mainServiceHost + "/centrifugo/connection/websocket"
+        let host = _hostLock.withLock { shared.mainServiceHost }
+        return "wss://" + host + "/centrifugo/connection/websocket"
     }
     
     @objc
@@ -149,7 +142,7 @@ public class TSConstants: NSObject {
         }
     }
     
-    @objc public static var appUserAgent: String { "\(TSConstants.displayNameForUA)/\(AppVersion.shared().currentAppReleaseVersion) (\(AppVersion.shared().hardwareInfoString()); iOS \(UIDevice.current.systemVersion); Scale/\(UIScreen.main.scale); Build/\(AppVersion.shared().currentAppBuildVersion); AppId \(TSConstants.currentBundleId ?? TSConstants.temptalkBundleId); FlavorId \(TSConstants.FlavorId))" }
+    @objc public static var appUserAgent: String { "\(TSConstants.displayNameForUA)/\(AppVersion.shared().currentAppReleaseVersion) (\(UIDevice.current.model); iOS \(UIDevice.current.systemVersion); Scale/\(UIScreen.main.scale))" }
     
     @objc public static var appDisplayName: String { shared.appDisplayName }
     
@@ -254,12 +247,14 @@ extension TSConstants {
             return (url, finalDomain, finalCertType)
         }
 
+        let config = defaultServerConfig
+
         // 1. 找到服务
-        guard let service = defaultServerConfig.services.first(where: { $0.name == name }) else { return nil }
-        
+        guard let service = config.services.first(where: { $0.name == name }) else { return nil }
+
         // 2. 找到对应的 DTServerDomainEntity 对象
         let matchedDomains: [DTServerDomainEntity] = service.domains.compactMap { label in
-            defaultServerConfig.domains.first(where: { $0.label == label })
+            config.domains.first(where: { $0.label == label })
         }
         
         var fastestDomainEntity: DTServerDomainEntity? = nil
@@ -277,8 +272,9 @@ extension TSConstants {
         var finalDomain = ""
         var finalCertType = ""
         if name == DTServerToAvatar {
-            finalCertType = fastestDomainEntity?.certType ?? "authority"
-            finalDomain = fastestDomainEntity?.domain ?? "d272r1ud4wbyy4.cloudfront.net"
+            let fallbackDomainEntity = matchedDomains.first
+            finalCertType = fastestDomainEntity?.certType ?? fallbackDomainEntity?.certType ?? "authority"
+            finalDomain = fastestDomainEntity?.domain ?? fallbackDomainEntity?.domain ?? "d272r1ud4wbyy4.cloudfront.net"
         } else {
             finalCertType = fastestDomainEntity?.certType ?? "self"
             finalDomain = fastestDomainEntity?.domain ?? defaultMainHost

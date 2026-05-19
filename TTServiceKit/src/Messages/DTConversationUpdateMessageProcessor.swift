@@ -98,7 +98,8 @@ public extension DTConversationUpdateMessageProcessor {
         // 全量更新 contact notify
         DataUpdateUtil.shared.updateConversation(thread: thread,
                                                  expireTime: conversationNotifyEntity.messageExpiry,
-                                                 messageClearAnchor: NSNumber(value: conversationNotifyEntity.messageClearAnchor))
+                                                 messageClearAnchor: NSNumber(value: conversationNotifyEntity.messageClearAnchor),
+                                                 transaction: transaction)
         thread.anyUpsert(transaction: transaction)
 
         transaction.addAsyncCompletionOnMain({

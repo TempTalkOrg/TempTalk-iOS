@@ -23,6 +23,8 @@ class ConversationDateSeparatorView: UIView {
         return label
     }()
     
+    var showsBackground: Bool = true
+
     private lazy var containerView: UIView = {
         let view = UIView()
         view.layer.cornerRadius = Constants.height * 0.5
@@ -71,6 +73,7 @@ class ConversationDateSeparatorView: UIView {
     
     func refreshTheme() {
         dateLabel.textColor = Theme.tprimaryColor
-        containerView.backgroundColor = Theme.bg2Color
+        containerView.backgroundColor = showsBackground ? Theme.bg2Color : .clear
+        containerView.layer.cornerRadius = showsBackground ? Constants.height * 0.5 : 0
     }
 }

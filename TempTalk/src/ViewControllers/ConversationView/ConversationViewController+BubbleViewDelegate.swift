@@ -15,6 +15,7 @@ import TTServiceKit
 extension ConversationViewController {
     /// 展示个人信息卡片
     func showPersonalInfoCard(recipientId: String) {
+        dismissKeyBoard(byUserAction: true)
         // 判断是否是同一个 thread（1v1 会话）
         let isFromSameThread = !thread.isGroupThread() && thread.contactIdentifier() == recipientId
         self.showProfileCardInfo(with: recipientId, isFromSameThread: isFromSameThread)
@@ -316,7 +317,8 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
         didTapCombinedForwardingItemWith viewItem: any ConversationViewItem
     ) {
         AssertIsOnMainThread()
-        
+        dismissKeyBoard(byUserAction: true)
+
         guard let message = viewItem.interaction as? TSMessage else {
             return
         }

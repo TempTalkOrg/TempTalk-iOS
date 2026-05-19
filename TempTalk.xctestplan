@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "8BC5EE86-CE8E-4EBE-B47A-14E0DC5D7F72",
+      "name" : "Default",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:Difft.xcodeproj",
+        "identifier" : "D221A0A9169C9E5F00537ABF",
+        "name" : "TempTalkTests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -45,11 +45,11 @@ import TTServiceKit
 
     @objc
     public func configure(thread: TSGroupThread, contactsManager: OWSContactsManager) {
-        if let groupName = thread.groupModel.groupName, !groupName.isEmpty {
-            self.nameLabel.text = groupName
-        } else {
-            self.nameLabel.text = MessageStrings.newGroupDefaultTitle()
+        var displayName = ""
+        databaseStorage.read { transaction in
+            displayName = thread.name(with: transaction)
         }
+        self.nameLabel.text = displayName.isEmpty ? MessageStrings.newGroupDefaultTitle() : displayName
 
         let groupMemberIds: [String] = thread.groupModel.groupMemberIds
         let groupMemberNames = groupMemberIds.map { (recipientId: String) in

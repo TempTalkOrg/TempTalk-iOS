@@ -143,19 +143,19 @@ class DTEmojiFlyingView: UIView {
     private func createEmojiItem(emoji: String, senderName: String) -> UIView {
         let containerView = UIView()
         containerView.backgroundColor = .clear
-        
+
         let lbEmoji = UILabel()
         lbEmoji.text = emoji
         lbEmoji.font = UIFont.systemFont(ofSize: 48)
         lbEmoji.textAlignment = .center
         lbEmoji.backgroundColor = .clear
-        
+
         // 创建背景视图
         let nameBgView = UIView()
         nameBgView.backgroundColor = Theme.dark.bg3Color.withAlphaComponent(0.8)
         nameBgView.layer.cornerRadius = 4
         nameBgView.layer.masksToBounds = true
-        
+
         let lbName = UILabel()
         lbName.text = senderName
         lbName.font = UIFont.systemFont(ofSize: 14)
@@ -164,45 +164,45 @@ class DTEmojiFlyingView: UIView {
         lbName.backgroundColor = .clear
         lbName.numberOfLines = 1
         lbName.lineBreakMode = .byTruncatingTail
-        
+
         lbName.sizeToFit()
         let padding: CGFloat = 6
 
         let nameTextWidth = lbName.frame.width
         let totalWidth = min(200, nameTextWidth + padding * 2)
-        
+
         // 背景视图的宽度等于总宽度
         nameBgView.frame = CGRect(x: 0, y: 0, width: totalWidth, height: 24)
-        
+
         // label的宽度减去padding，确保文字不会贴边
         let labelWidth = totalWidth - padding * 2
         lbName.frame = CGRect(x: 0, y: 0, width: labelWidth, height: 24)
-        
+
         containerView.addSubview(lbEmoji)
         containerView.addSubview(nameBgView)
         nameBgView.addSubview(lbName)
-        
+
         let totalHeight: CGFloat = 80
-        
+
         containerView.frame = CGRect(x: 0, y: 0, width: totalWidth, height: totalHeight)
-        
+
         lbEmoji.frame = CGRect(
             x: (totalWidth - 48) / 2,
             y: 0,
             width: 48,
             height: 48
         )
-        
+
         nameBgView.center = CGPoint(
             x: totalWidth / 2,
             y: 68
         )
-        
+
         lbName.center = CGPoint(
             x: nameBgView.bounds.width / 2,
             y: nameBgView.bounds.height / 2
         )
-        
+
         return containerView
     }
     
@@ -222,11 +222,9 @@ class DTEmojiFlyingView: UIView {
         let deltaSpeed = 400  // 速度浮动范围 ±400 毫秒
 
         if orientation == .landscape {
-            // 横屏：更快的速度 1000 毫秒（1秒）
             baseSpeed = 1500
         } else {
-            // 竖屏：基础速度 3000 毫秒（3秒）
-            baseSpeed = 3000
+            baseSpeed = 3500
         }
 
         // 计算动画时长：baseSpeed ± deltaSpeed 的随机值，转换为秒

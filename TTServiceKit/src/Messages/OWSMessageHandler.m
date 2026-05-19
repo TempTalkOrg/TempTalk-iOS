@@ -88,6 +88,20 @@ NSString *envelopeAddress(DSKProtoEnvelope *envelope)
         return [NSString stringWithFormat:@"<ReceiptMessage: %@ />", content.receiptMessage];
     } else if (content.notifyMessage) {
         return [NSString stringWithFormat:@"<notifyMessage: %@ />", content.notifyMessage];
+    } else if (content.groupKeyMessage) {
+        return [NSString stringWithFormat:@"<GroupKeyMessage: groupID=%lu bytes, groupRootKey=%lu bytes />",
+                (unsigned long)content.groupKeyMessage.groupID.length,
+                (unsigned long)content.groupKeyMessage.groupRootKey.length];
+    } else if (content.forwardNotice) {
+        DSKProtoConversationId *payloadConv = content.forwardNotice.conversation;
+        NSString *convDesc = payloadConv.groupID.length > 0
+            ? [NSString stringWithFormat:@"group=%lu bytes", (unsigned long)payloadConv.groupID.length]
+            : (payloadConv.number.length > 0 ? [NSString stringWithFormat:@"peer=%@", payloadConv.number] : @"conv=<none>");
+        return [NSString stringWithFormat:@"<ForwardNotice: scene=%d, count=%u, sourceAuthors=%lu, %@ />",
+                (int)content.forwardNotice.unwrappedScene,
+                content.forwardNotice.messageCount,
+                (unsigned long)content.forwardNotice.sourceAuthorIds.count,
+                convDesc];
     }
     else {
         // Don't fire an analytics event; if we ever add a new content type, we'd generate a ton of
@@ -186,6 +200,8 @@ NSString *envelopeAddress(DSKProtoEnvelope *envelope)
         [description appendString:@"Task Notify"];
     } else if (syncMessage.markAsUnread) {
         [description appendString:@"Mark As Read"];
+    } else if (syncMessage.forwardNoticeSync) {
+        [description appendString:@"Forward Notice Sync"];
     } else if (syncMessage.hasPadding) {
         [description appendString:@"Padding Null"];
     } else if (syncMessage.conversationArchive) {

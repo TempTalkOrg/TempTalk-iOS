@@ -192,7 +192,8 @@ public class ConversationAvatarImageView: AvatarImageView {
                     self.image = OWSAvatarBuilder.buildImage(thread: thread, diameter: diameter, contactsManager: contactsManager)
                     return
                 }
-                self.setImageWithContactAvatar(contact.avatar, recipientId: thread.contactIdentifier(), displayName: account.contactFullName())
+                let avatar = (contact.remarkAvatar as? [AnyHashable: Any]) ?? contact.avatar
+                self.setImageWithContactAvatar(avatar, recipientId: thread.contactIdentifier(), displayName: account.contactFullName())
             }
         }
         

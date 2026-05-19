@@ -347,6 +347,15 @@ extension ConversationViewController {
             let viewItem = viewItem(for: indexPath.row)
         else { return }
 
+        // Skip floating date for archive system messages
+        if let infoMessage = viewItem.interaction as? TSInfoMessage,
+           infoMessage.messageType == .archiveMessage {
+            if let dateSeparatorView, !dateSeparatorView.isHidden {
+                hideDateSeparator()
+            }
+            return
+        }
+
         // 处理生成系统消息0，导致的日期显示问题
         let date = viewItem.interaction.dateForSorting()
         let dateFormatter = DateFormatter()
@@ -560,10 +569,7 @@ extension ConversationViewController: UIScrollViewDelegate {
         isUserScrolling = true
         actionMenuController?.hideMenu(animation: false)
 
-        // 只在键盘未激活时收起键盘
-        if !inputToolbar.isInputViewFirstResponder {
-            dismissKeyBoard(byUserAction: true)
-        }
+        dismissKeyBoard(byUserAction: true)
 
         // 清除搜索跳转的焦点消息
         if viewState.hasCompletedInitialScroll {

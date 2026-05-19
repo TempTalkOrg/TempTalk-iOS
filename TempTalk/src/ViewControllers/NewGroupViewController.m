@@ -27,6 +27,7 @@
 #import <TTServiceKit/TSGroupThread.h>
 #import <TTServiceKit/TSOutgoingMessage.h>
 #import "DTCreateANewGroupAPI.h"
+#import <TTServiceKit/DTGroupConfig.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -189,8 +190,12 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     switch (self.createType) {
         case DTCreateGroupTypeConvenient: {
             TSGroupThread *groupThread = (TSGroupThread *)self.thread;
-            NSString *fromThreadName = groupThread.groupModel.groupName;
-            groupNameTextField.placeholder = [NSString stringWithFormat:Localized(@"NEW_GROUP_CONVENIENT_NAME", @""), fromThreadName];;
+            // 加密群不能直接读 groupName,会是密文;nameWithTransaction: 会走解密流程
+            __block NSString *fromThreadName = @"";
+            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
+                fromThreadName = [groupThread nameWithTransaction:transaction] ?: @"";
+            }];
+            groupNameTextField.placeholder = [NSString stringWithFormat:Localized(@"NEW_GROUP_CONVENIENT_NAME", @""), fromThreadName];
         }
             break;
         case DTCreateGroupTypeContact: {
@@ -210,20 +215,6 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
         }
             break;
     }
-    
-//    if (self.createType == DTCreateGroupTypeConvenient) {
-//        TSGroupThread *groupThread = (TSGroupThread *)self.thread;
-//        NSString *fromThreadName = groupThread.groupModel.groupName;
-//        groupNameTextField.placeholder = [NSString stringWithFormat:Localized(@"NEW_GROUP_CONVENIENT_NAME", @""), fromThreadName];;
-//    } else if (self.createType == DTCreateGroupTypeContact) {
-//        NSString *lcoalName = [self.contactsViewHelper.contactsManager displayNameForPhoneIdentifier:TSAccountManager.localNumber];
-//        NSString *otherName = [self.contactsViewHelper.contactsManager displayNameForPhoneIdentifier:self.thread.contactIdentifier];
-//        groupNameTextField.placeholder
-//            = [lcoalName stringByAppendingFormat:@",%@", otherName];
-//    } else if (self.createType == DTCreateGroupTypeDefault) {
-//        groupNameTextField.placeholder
-//            = Localized(@"NEW_GROUP_NAMEGROUP_REQUEST_DEFAULT", @"Placeholder text for group name field");
-//    }
     groupNameTextField.delegate = self;
     [groupNameTextField addTarget:self
                            action:@selector(groupNameDidChange:)
@@ -712,6 +703,9 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     }
     
     NSArray *remainColors = colorMap.allValues;
+    if (remainColors.count == 0) {
+        remainColors = [UIColor ows_conversationThreadColorMap].allValues;
+    }
     UIColor *bgColor = remainColors[arc4random_uniform((uint32_t)remainColors.count)];
     self.groupAvatar = [TTGroupAvatarGenerator generateWith:letters.copy backgroundColor:bgColor sizePx:48];
 }
@@ -864,16 +858,6 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
                     [thread anyInsertWithTransaction:writeTransaction];
                     [OWSProfileManager.sharedManager addThreadToProfileWhitelist:thread transaction:writeTransaction];
                     
-                    //                NSString *updateGroupInfo = Localized(@"GROUP_CREATED", nil);
-                    //                uint64_t now = [NSDate ows_millisecondTimeStamp];
-                    //                
-                    //                TSInfoMessage *systemMessage = [[TSInfoMessage alloc] initWithTimestamp:now
-                    //                                                                               inThread:thread
-                    //                                                                            messageType:TSInfoMessageTypeGroupUpdate
-                    //                                                                          customMessage:updateGroupInfo];
-                    //                systemMessage.shouldAffectThreadSorting = YES;
-                    //                [systemMessage anyInsertWithTransaction:writeTransaction];
-                    
                     DTGroupBaseInfoEntity *groupBaseInfo = [DTGroupBaseInfoEntity new];
                     groupBaseInfo.name = groupName;
                     groupBaseInfo.gid = gid;
@@ -895,68 +879,194 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     } else {
         
         [self uploadGroupAvatarSuccess:^(NSString * avatar) {
-            [self.createANewGroupAPI sendRequestWithName:groupName
-                                                  avatar:avatar?:@""
-                                                 numbers:members
-                                                 success:^(DTCreateANewGroupDataEntity * _Nonnull entity) {
-                
-                DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-                    
-                    TSGroupModel *model = [self makeGroupWithId:entity.gid groupName:groupName transaction:writeTransaction];
-                    TSGroupThread *thread = [TSGroupThread getOrCreateThreadWithGroupModel:model transaction:writeTransaction];
-                    [thread anyInsertWithTransaction:writeTransaction];
-                    [OWSProfileManager.sharedManager addThreadToProfileWhitelist:thread transaction:writeTransaction];
-                    
-                    NSString *updateGroupInfo = Localized(@"GROUP_CREATED", nil);
-                    uint64_t now = [NSDate ows_millisecondTimeStamp];
-                    
-                    TSInfoMessage *systemMessage = [[TSInfoMessage alloc] initWithTimestamp:now
-                                                                                   inThread:thread
-                                                                                messageType:TSInfoMessageTypeGroupUpdate
-                                                                              customMessage:updateGroupInfo];
-                    systemMessage.shouldAffectThreadSorting = YES;
-                    [systemMessage anyInsertWithTransaction:writeTransaction];
-                    
-                    DTGroupBaseInfoEntity *groupBaseInfo = [DTGroupBaseInfoEntity new];
-                    groupBaseInfo.name = groupName;
-                    groupBaseInfo.gid = entity.gid;
-                    [DTGroupUtils addGroupBaseInfo:groupBaseInfo transaction:writeTransaction];
-                    DispatchMainThreadSafe(^{
-                        if (self.createType == DTCreateGroupTypeConvenient) {
-                            DTInviteToGroupAPI *inviteCodeApi = [DTInviteToGroupAPI new];
-                            [inviteCodeApi getInviteCodeWithGId:entity.gid success:^(NSString * _Nonnull inviteCode) {
-                                [DTToastHelper dismiss];
-                                [self.navigationController dismissViewControllerAnimated:YES completion:^{
-                                    
-                                }];
-                            } failure:^(NSError * _Nonnull error) {
-                                [DTToastHelper dismissWithInfo:error.localizedDescription delay:0.2];
-                            }];
-                        } else {
-                            [DTToastHelper dismiss];
-                            ConversationViewController *conversationVC = [[ConversationViewController alloc] initWithThread:thread
-                                                                                                                     action:ConversationViewActionNone
-                                                                                                             focusMessageId:nil
-                                                                                                                botViewItem:nil
-                                                                                                                   viewMode:ConversationViewMode_Main isFromPersonalCard:false];
-                            OWSNavigationController *nav = (OWSNavigationController *)self.navigationController;
-                            
-                            [nav pushViewController:conversationVC animated:YES completion:^{
-                                [nav removeToViewController:@"HomeViewController"];
-                            }];
-                        }
-                    });
-                });
-                
-            } failure:^(NSError * _Nonnull error) {
-                NSString *logError = error.localizedDescription;;
-                if(error.code == DTAPIRequestResponseStatusGroupIsFull) {
-                    logError = Localized(@"ENTER_GROUP_FAILURE_FULL", @"");
-                }
-                [DTToastHelper dismissWithInfo:logError];
-            }];
+            BOOL encryptionEnabled = [DTGroupConfig fetchGroupConfig].encryptionEnabled;
+            if (encryptionEnabled) {
+                [self createEncryptedGroupWithName:groupName avatar:avatar members:members];
+            } else {
+                [self createPlainGroupWithName:groupName avatar:avatar members:members];
+            }
         }];
     }
+}
+
+- (void)createPlainGroupWithName:(NSString *)groupName
+                          avatar:(NSString *)avatar
+                         members:(NSArray *)members
+{
+    [self.createANewGroupAPI sendRequestWithName:groupName
+                                          avatar:avatar ?: @""
+                                         numbers:members
+                                         success:^(DTCreateANewGroupDataEntity * _Nonnull entity) {
+
+        DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
+
+            TSGroupModel *model = [self makeGroupWithId:entity.gid groupName:groupName transaction:writeTransaction];
+            TSGroupThread *thread = [TSGroupThread getOrCreateThreadWithGroupModel:model transaction:writeTransaction];
+            [thread anyInsertWithTransaction:writeTransaction];
+            [OWSProfileManager.sharedManager addThreadToProfileWhitelist:thread transaction:writeTransaction];
+
+            NSString *updateGroupInfo = Localized(@"GROUP_CREATED", nil);
+            uint64_t now = [NSDate ows_millisecondTimeStamp];
+
+            TSInfoMessage *systemMessage = [[TSInfoMessage alloc] initWithTimestamp:now
+                                                                           inThread:thread
+                                                                        messageType:TSInfoMessageTypeGroupUpdate
+                                                                      customMessage:updateGroupInfo];
+            systemMessage.shouldAffectThreadSorting = YES;
+            [systemMessage anyInsertWithTransaction:writeTransaction];
+
+            DTGroupBaseInfoEntity *groupBaseInfo = [DTGroupBaseInfoEntity new];
+            groupBaseInfo.name = groupName;
+            groupBaseInfo.gid = entity.gid;
+            groupBaseInfo.avatar = avatar ?: @"";
+            [DTGroupUtils addGroupBaseInfo:groupBaseInfo transaction:writeTransaction];
+
+            DispatchMainThreadSafe(^{
+                if (self.createType == DTCreateGroupTypeConvenient) {
+                    DTInviteToGroupAPI *inviteCodeApi = [DTInviteToGroupAPI new];
+                    [inviteCodeApi getInviteCodeWithGId:entity.gid success:^(NSString * _Nonnull inviteCode) {
+                        [DTToastHelper dismiss];
+                        [self.navigationController dismissViewControllerAnimated:YES completion:^{
+
+                        }];
+                    } failure:^(NSError * _Nonnull error) {
+                        [DTToastHelper dismissWithInfo:error.localizedDescription delay:0.2];
+                    }];
+                } else {
+                    [DTToastHelper dismiss];
+                    ConversationViewController *conversationVC = [[ConversationViewController alloc] initWithThread:thread
+                                                                                                             action:ConversationViewActionNone
+                                                                                                     focusMessageId:nil
+                                                                                                        botViewItem:nil
+                                                                                                           viewMode:ConversationViewMode_Main isFromPersonalCard:false];
+                    OWSNavigationController *nav = (OWSNavigationController *)self.navigationController;
+
+                    [nav pushViewController:conversationVC animated:YES completion:^{
+                        [nav removeToViewController:@"HomeViewController"];
+                    }];
+                }
+            });
+        });
+
+    } failure:^(NSError * _Nonnull error) {
+        NSString *logError = error.localizedDescription;
+        if(error.code == DTAPIRequestResponseStatusGroupIsFull) {
+            logError = Localized(@"ENTER_GROUP_FAILURE_FULL", @"");
+        }
+        [DTToastHelper dismissWithInfo:logError];
+    }];
+}
+
+- (void)createEncryptedGroupWithName:(NSString *)groupName
+                              avatar:(NSString *)avatar
+                             members:(NSArray *)members
+{
+    DTGroupCryptoManager *cryptoManager = DTGroupCryptoManager.shared;
+    NSString *localNumber = self.contactsViewHelper.localNumber;
+    NSMutableArray *allMemberUids = [members mutableCopy];
+    if (localNumber && ![allMemberUids containsObject:localNumber]) {
+        [allMemberUids addObject:localNumber];
+    }
+    OWSLogInfo(@"[GroupCrypto] createEncryptedGroup start, groupName.len: %lu, avatar.len: %lu, members: %lu", (unsigned long)groupName.length, (unsigned long)avatar.length, (unsigned long)allMemberUids.count);
+    DTEncryptedGroupCreationParams *params = [cryptoManager prepareEncryptedGroupCreationObjCWithGroupName:groupName
+                                                                                                    avatar:avatar
+                                                                                                memberUids:allMemberUids];
+    if (!params) {
+        OWSLogError(@"[GroupCrypto] Failed to prepare encrypted group creation params");
+        [DTToastHelper dismissWithInfo:Localized(@"GROUP_CRYPTO_UPGRADE_FAILED", @"")];
+        return;
+    }
+    OWSLogInfo(@"[GroupCrypto] prepareEncryptedGroupCreation ok, encryptedAvatar.len: %lu", (unsigned long)params.encryptedAvatar.length);
+
+    // 加密群：明文 avatar URL 不上传给服务端，也不写本地 baseInfo.avatar（端到端加密要求）。
+    [self.createANewGroupAPI sendRequestWithName:groupName
+                                          avatar:@""
+                                         numbers:members
+                                 groupCryptoMode:params.groupCryptoMode
+                                   encryptedName:params.encryptedName
+                                 encryptedAvatar:params.encryptedAvatar
+                      groupMemberVerifyPublicKey:params.groupMemberVerifyPublicKey
+                                  memberBindings:params.memberBindingDicts
+                                         success:^(DTCreateANewGroupDataEntity * _Nonnull entity) {
+        OWSLogInfo(@"[GroupCrypto] createEncryptedGroup server ok, gid: %@", entity.gid);
+
+        DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
+
+            TSGroupModel *model = [self makeGroupWithId:entity.gid groupName:groupName transaction:writeTransaction];
+            model.groupCryptoMode = params.groupCryptoMode;
+            TSGroupThread *thread = [TSGroupThread getOrCreateThreadWithGroupModel:model transaction:writeTransaction];
+            if (thread.groupModel.groupCryptoMode != params.groupCryptoMode) {
+                [thread anyUpdateWithTransaction:writeTransaction block:^(TSThread * _Nonnull t) {
+                    ((TSGroupThread *)t).groupModel.groupCryptoMode = params.groupCryptoMode;
+                }];
+            }
+            [thread anyInsertWithTransaction:writeTransaction];
+            [OWSProfileManager.sharedManager addThreadToProfileWhitelist:thread transaction:writeTransaction];
+
+            NSString *updateGroupInfo = Localized(@"GROUP_CREATED", nil);
+            uint64_t now = [NSDate ows_millisecondTimeStamp];
+
+            TSInfoMessage *systemMessage = [[TSInfoMessage alloc] initWithTimestamp:now
+                                                                           inThread:thread
+                                                                        messageType:TSInfoMessageTypeGroupUpdate
+                                                                      customMessage:updateGroupInfo];
+            systemMessage.shouldAffectThreadSorting = YES;
+            [systemMessage anyInsertWithTransaction:writeTransaction];
+
+            DTGroupBaseInfoEntity *groupBaseInfo = [DTGroupBaseInfoEntity new];
+            groupBaseInfo.name = groupName;
+            groupBaseInfo.gid = entity.gid;
+            groupBaseInfo.avatar = @"";
+            groupBaseInfo.groupCryptoMode = params.groupCryptoMode;
+            groupBaseInfo.encryptedName = params.encryptedName;
+            groupBaseInfo.encryptedAvatar = params.encryptedAvatar;
+            [DTGroupUtils addGroupBaseInfo:groupBaseInfo transaction:writeTransaction];
+
+            [cryptoManager saveRGroupIfNeededWithGid:entity.gid
+                                                rGroup:params.rGroup
+                                           transaction:writeTransaction];
+
+            [DTGroupKeyMessageHandler downloadEncryptedAvatarIfNeededWithGid:entity.gid
+                                                                  transaction:writeTransaction];
+
+            DispatchMainThreadSafe(^{
+                [DTGroupKeyMessageHandler.shared sendGroupKeyMessageWithThread:thread
+                                                                       groupId:model.groupId
+                                                                        rGroup:params.rGroup];
+
+                if (self.createType == DTCreateGroupTypeConvenient) {
+                    DTInviteToGroupAPI *inviteCodeApi = [DTInviteToGroupAPI new];
+                    [inviteCodeApi getInviteCodeWithGId:entity.gid success:^(NSString * _Nonnull inviteCode) {
+                        [DTToastHelper dismiss];
+                        [self.navigationController dismissViewControllerAnimated:YES completion:^{
+
+                        }];
+                    } failure:^(NSError * _Nonnull error) {
+                        [DTToastHelper dismissWithInfo:error.localizedDescription delay:0.2];
+                    }];
+                } else {
+                    [DTToastHelper dismiss];
+                    ConversationViewController *conversationVC = [[ConversationViewController alloc] initWithThread:thread
+                                                                                                             action:ConversationViewActionNone
+                                                                                                     focusMessageId:nil
+                                                                                                        botViewItem:nil
+                                                                                                           viewMode:ConversationViewMode_Main isFromPersonalCard:false];
+                    OWSNavigationController *nav = (OWSNavigationController *)self.navigationController;
+
+                    [nav pushViewController:conversationVC animated:YES completion:^{
+                        [nav removeToViewController:@"HomeViewController"];
+                    }];
+                }
+            });
+        });
+
+    } failure:^(NSError * _Nonnull error) {
+        NSString *logError = error.localizedDescription;
+        if(error.code == DTAPIRequestResponseStatusGroupIsFull) {
+            logError = Localized(@"ENTER_GROUP_FAILURE_FULL", @"");
+        }
+        [DTToastHelper dismissWithInfo:logError];
+    }];
 }
 
 - (NSString *)localUserName {
@@ -967,92 +1077,11 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     return [Environment.shared.contactsManager contactOrProfileNameForPhoneIdentifier:[TSAccountManager localNumber]];
 }
 
-/*
-- (void)createGroupWithId:(NSString *)groupId
-{
-    OWSAssertIsOnMainThread();
-    
-    TSGroupModel *model = [self makeGroupWithId:groupId];
-
-    __block TSGroupThread *thread;
-    [OWSPrimaryStorage.dbReadWriteConnection
-     readWriteWithBlock:^(YapDatabaseReadWriteTransaction *_Nonnull transaction) {
-        thread = [TSGroupThread getOrCreateThreadWithGroupModel:model transaction:transaction];
-        OWSAssertDebug(thread);
-        [thread saveWithTransaction:transaction];
-        
-        [OWSProfileManager.sharedManager addThreadToProfileWhitelist:thread transaction:transaction];
-    }];
-
-
-    void (^successHandler)(void) = ^{
-        DDLogError(@"Group creation successful.");
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self dismissViewControllerAnimated:YES
-                                     completion:^{
-                                         // Pop to new group thread.
-                                         [SignalApp.sharedApp presentConversationForThread:thread];
-                                     }];
-
-        });
-    };
-
-    void (^failureHandler)(NSError *error) = ^(NSError *error) {
-        DDLogError(@"Group creation failed: %@", error);
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self dismissViewControllerAnimated:YES
-                                     completion:^{
-                                         // Add an error message to the new group indicating
-                                         // that group creation didn't succeed.
-                                         [[[TSErrorMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
-                                                                           inThread:thread
-                                                                  failedMessageType:TSErrorMessageGroupCreationFailed]
-                                             save];
-
-                                         [SignalApp.sharedApp presentConversationForThread:thread];
-                                     }];
-        });
-    };
-
-    [ModalActivityIndicatorViewController
-        presentFromViewController:self
-                        canCancel:NO
-                  backgroundBlock:^(ModalActivityIndicatorViewController *modalActivityIndicator) {
-                      TSOutgoingMessage *message = [TSOutgoingMessage outgoingMessageInThread:thread
-                                                                             groupMetaMessage:TSGroupMessageNew
-                                                                                    atPersons:nil
-                                                                             expiresInSeconds:0];
-
-                      [message updateWithCustomMessage:Localized(@"GROUP_CREATED", nil)];
-
-                      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                          if (model.groupImage) {
-                              NSData *data = UIImagePNGRepresentation(model.groupImage);
-                              id <DataSource> _Nullable dataSource =
-                                  [DataSourceValue dataSourceWithData:data fileExtension:@"png"];
-                              [self.messageSender enqueueAttachment:dataSource
-                                                        contentType:OWSMimeTypeImagePng
-                                                     sourceFilename:nil
-                                                          inMessage:message
-                                                            success:successHandler
-                                                            failure:failureHandler];
-                          } else {
-                              [self.messageSender enqueueMessage:message success:successHandler failure:failureHandler];
-                          }
-                      });
-                  }];
-}
-*/
-
 - (TSGroupModel *)makeGroupWithId:(NSString *)gId groupName:(NSString *)groupName transaction:(SDSAnyWriteTransaction *)transaction
 {
     NSMutableArray<NSString *> *recipientIds = [self.memberRecipientIds.allObjects mutableCopy];
     [recipientIds addObject:[self.contactsViewHelper localNumber]];
-    //NSData *groupId = [SecurityUtils generateRandomBytes:16];
     NSData *groupId = [gId dataUsingEncoding:NSUTF8StringEncoding];
-//    NSData *groupId = [NSData dataWithHexString:gId];
     return [[TSGroupModel alloc] initWithTitle:groupName memberIds:recipientIds image:self.groupAvatar groupId:groupId groupOwner:[self.contactsViewHelper localNumber] groupAdmin:nil transaction:transaction];
 }
 

@@ -41,7 +41,7 @@ NS_ASSUME_NONNULL_BEGIN
         [groupBuilder setAvatar:[avatarBuilder buildAndReturnError:nil]];
     }
 
-    [groupBuilder setExpireTimer:[groupThread messageExpiresInSeconds]];
+    [groupBuilder setExpireTimer:[groupThread messageExpiresInSecondsWithTransaction:transaction]];
 
     NSData *groupData = [groupBuilder buildSerializedDataAndReturnError:nil];
     

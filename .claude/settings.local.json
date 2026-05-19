@@ -1,6 +1,29 @@
 {
+  "permissions": {
+    "allow": [
+      "Skill(query-crashlytics)",
+      "Bash(git ls-tree:*)",
+      "Bash(md5:*)",
+      "Bash(make build:*)",
+      "Bash(gh secret:*)",
+      "Skill(insider-build)",
+      "Bash(bash:*)",
+      "Bash(mdfind *)",
+      "Bash(dwarfdump *)",
+      "Bash(python3 *)",
+      "mcp__plugin_figma_figma__get_metadata",
+      "mcp__plugin_figma_figma__get_screenshot",
+      "Bash(make:*)",
+      "Skill(figma-design-context)",
+      "Bash(ToolSearch select:TaskCreate,TaskUpdate *)",
+      "Bash(git check-ignore *)",
+      "Bash(.claude/scripts/copy-to-clipboard.sh *)",
+      "Skill(update-config)",
+      "Bash(git grep *)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "markitdown"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

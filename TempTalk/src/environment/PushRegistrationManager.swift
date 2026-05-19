@@ -92,8 +92,10 @@ public enum PushRegistrationError: Error {
         Logger.info("========>CallKit: \(payload)")
         
         if type == .voIP {
-            
-            self.pushManager.application(UIApplication.shared, didReceiveRemoteVoIPNotification: payload.dictionaryPayload, completion: completion);
+            self.pushManager.application(UIApplication.shared, didReceiveRemoteVoIPNotification: payload.dictionaryPayload, completion: completion)
+        } else {
+            Logger.error("========>CallKit:❌ unexpected push type: \(type), reporting fake call")
+            DTCallKitManager.shared().reportFakeCallCompletion(completion)
         }
     }
     

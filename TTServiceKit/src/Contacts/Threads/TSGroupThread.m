@@ -430,6 +430,20 @@ static NSString *const kDTOldToNewGroupIdPrefix = @"WEEK";
 
 - (NSString *)nameWithTransaction:(nullable SDSAnyReadTransaction *)transaction
 {
+    if (self.groupModel.isEncryptedGroup) {
+        if (transaction) {
+            NSString *displayName = [DTGroupCryptoDisplayHelper.shared displayGroupNameWithGid:self.serverThreadId
+                                                                               groupCryptoMode:self.groupModel.groupCryptoMode
+                                                                                 encryptedName:nil
+                                                                                  originalName:self.groupModel.groupName
+                                                                                   transaction:transaction];
+            if (displayName.length > 0) {
+                return displayName;
+            }
+        } else {
+            return DTGroupCryptoDisplayHelper.encryptedGroupNamePlaceholder;
+        }
+    }
     return self.groupModel.groupName && self.groupModel.groupName.length > 0 ? self.groupModel.groupName : Localized(@"NEW_GROUP_DEFAULT_TITLE", @"");
 }
 
@@ -556,7 +570,12 @@ static NSString *const kDTOldToNewGroupIdPrefix = @"WEEK";
 }
 
 - (uint32_t)messageExpiresInSecondsWithTransaction:(SDSAnyReadTransaction *)transaction {
-    return [self messageExpiresInSeconds];
+    NSNumber *messageExpiry = self.groupModel.messageExpiry;
+    if (!messageExpiry || messageExpiry.doubleValue < 0) {
+        return [super messageExpiresInSecondsWithTransaction:transaction];
+    } else {
+        return messageExpiry.unsignedIntValue;
+    }
 }
 
 @end

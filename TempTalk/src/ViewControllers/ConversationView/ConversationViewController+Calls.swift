@@ -26,7 +26,7 @@ extension ConversationViewController {
         guard !isUserDeregistered() else { return }
         
         if DTMeetingManager.shared.hasMeeting, OWSWindowManager.shared().hasCall() {
-            OWSWindowManager.shared().showCallView()
+            DTMeetingManager.shared.restoreFullScreenView()
             return
         }
         

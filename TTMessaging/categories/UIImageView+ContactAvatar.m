@@ -141,17 +141,20 @@ static void * loadKeyPropertyKey = &loadKeyPropertyKey;
             @strongify(self);
             if (!completion) {
                 DispatchMainThreadSafe(^{
-                    
+
                     if([cacheKey isEqualToString:self.loadKey]){
                         self.image = image;
                     }
-                    
-                    
+
+
                 });
             }
-            
+
         }                       progress:nil
                                completed:^(UIImage * _Nullable image, NSData * _Nullable data, NSError * _Nullable error, SDImageCacheType cacheType, BOOL finished, NSURL * _Nullable imageURL) {
+            if (error) {
+                OWSLogError(@"[Avatar] load fail rid=%@ err=%@", recipientId, error);
+            }
             if (completion && [cacheKey isEqualToString:self.loadKey]) {
                 completion(image);
             }
@@ -176,7 +179,8 @@ static void * loadKeyPropertyKey = &loadKeyPropertyKey;
 }
 
 + (NSString *)placeHolderImageCacherKey:(DTContactAvatarEntity *) entity {
-    return [TSConstants.avatarStorageServerURL stringByAppendingPathComponent:entity.attachmentId];
+    NSURL *baseURL = [NSURL URLWithString:TSConstants.avatarStorageServerURL];
+    return [[baseURL URLByAppendingPathComponent:entity.attachmentId] absoluteString];
 }
 
 - (void)setImageWithContactAvatar:(NSDictionary * _Nullable)avatar
@@ -225,7 +229,7 @@ static void * loadKeyPropertyKey = &loadKeyPropertyKey;
     SignalAccount *account = [contactsManager signalAccountForRecipientId:recipientId];
     NSDictionary *avatar = nil;
     if (account) {
-        avatar = account.contact.avatar;
+        avatar = account.contact.remarkAvatar ?: account.contact.avatar;
         if (!displayName || [displayName isEqualToString:recipientId]) {
             displayName = account.contact.fullName;
         }

@@ -231,7 +231,8 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
 
                     DataUpdateUtil.shared.updateConversation(thread: thread,
                                                              expireTime: conversationEntity.messageExpiry,
-                                                             messageClearAnchor: NSNumber(value: conversationEntity.messageClearAnchor))
+                                                             messageClearAnchor: NSNumber(value: conversationEntity.messageClearAnchor),
+                                                             transaction: wTransaction)
                 }
                 wTransaction.addAsyncCompletionOnMain {
                     NotificationCenter.default.post(name: .DTConversationDidChange, object: nil)

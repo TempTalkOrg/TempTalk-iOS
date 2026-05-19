@@ -105,13 +105,13 @@ extension MessageSender {
         var responseObject: Any?
         var responseError: Error?
         do {
-            if socketManager.socketState() != .open {
-                let sendResult = try await self.networkManager.asyncRequest(request)
-                responseObject = sendResult.responseBodyJson
+            let sendResult: HTTPResponse
+            if OWSWebSocket.canAppUseSocketsToMakeRequests {
+                sendResult = try await self.networkManager.asyncWebsocketRequest(request: request)
             } else {
-                let sendResult = try await self.networkManager.asyncWebsocketRequest(request: request)
-                responseObject = sendResult.responseBodyJson
+                sendResult = try await self.networkManager.asyncRequest(request)
             }
+            responseObject = sendResult.responseBodyJson
         } catch {
             OWSLogger.error("request private message error:\(error)")
             responseError = error
@@ -236,15 +236,14 @@ extension MessageSender {
         }
         
         let request = TSRequest(url: URL(string: "/v4/messages/group/\(thread.serverThreadId)")!, method: "PUT", parameters: messageParams)
-        
-        var responseObject: Any?
-        if socketManager.socketState() != .open {
-            let sendResult = try await self.networkManager.asyncRequest(request)
-            responseObject = sendResult.responseBodyJson
+
+        let sendResult: HTTPResponse
+        if OWSWebSocket.canAppUseSocketsToMakeRequests {
+            sendResult = try await self.networkManager.asyncWebsocketRequest(request: request)
         } else {
-            let sendResult = try await self.networkManager.asyncWebsocketRequest(request: request)
-            responseObject = sendResult.responseBodyJson
+            sendResult = try await self.networkManager.asyncRequest(request)
         }
+        let responseObject: Any? = sendResult.responseBodyJson
                 
         guard let jsonData = responseObject as? [AnyHashable : Any] else {
             let errorDesc = "data to json error!"
@@ -362,7 +361,6 @@ extension MessageSender {
     func generateSyncContent(for message: TSOutgoingMessage,
                             attempts: Int) async throws -> Data? {
         guard message.shouldSyncTranscript() else {
-            // note return
             return nil
         }
 
@@ -376,10 +374,27 @@ extension MessageSender {
             return nil
         }
 
+        if let forwardNotice = message as? TSOutgoingForwardNoticeMessage {
+            guard let syncPlainText = forwardNotice.buildSyncPlainTextData(selfRecipient) else {
+                OWSLogger.warn("ForwardNotice sync plaintext is nil")
+                return nil
+            }
+            do {
+                let serializedData = try encryptPlainText(
+                    syncPlainText,
+                    recipientId: selfRecipient.recipientId()
+                )
+                OWSLogger.info("Generated ForwardNotice sync content")
+                return serializedData
+            } catch {
+                OWSLogger.error("ForwardNotice sync encrypt failed (best-effort): \(error)")
+                return nil
+            }
+        }
+
         let sentMessageTranscript = OWSOutgoingSentMessageTranscript(outgoingMessage: message)
         sentMessageTranscript.toNote = false
 
-        // Encrypt sync message (same flow as regular message)
         let (_, serializedData, _) = try await getSerializedData(
             message: sentMessageTranscript,
             identifiers: [selfRecipient.recipientId()],
@@ -428,6 +443,24 @@ extension MessageSender {
         
     }
     
+    func encryptPlainText(_ plainText: Data, recipientId: String) throws -> Data {
+        let sessionCipher = DTSessionCipher(recipientId: recipientId, type: .private)
+        var encryptedMessage: DTEncryptedMessage?
+        var encryptError: Error?
+        databaseStorage.read { transaction in
+            do {
+                encryptedMessage = try sessionCipher.encryptMessage(plainText.paddedMessageBody, transaction: transaction)
+            } catch {
+                encryptError = error
+            }
+        }
+        if let encryptError { throw encryptError }
+        guard let encryptedMessage else {
+            throw OWSAssertionError("ForwardNotice sync encrypt failed")
+        }
+        return encryptedMessage.serialized
+    }
+
     public func storeSessions(prekeyBundles: [DTPrekeyBundle], transaction: SDSAnyWriteTransaction) {
         for prekey in  prekeyBundles {
             if let uid = prekey.uid, !uid.isEmpty, let identityKey = prekey.identityKey, !identityKey.isEmpty {

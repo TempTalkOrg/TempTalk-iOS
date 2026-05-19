@@ -17,6 +17,7 @@ struct CallConfig {
     let createCallMsg: Bool
     let clusters: [[String: String]]
     let excludedNameRegex: String
+    let denoiseMode: String
     let bubbleMessage: BubbleMessageConfig
 
     // 派生属性
@@ -65,13 +66,18 @@ struct CallConfig {
             self.clusters = []
         }
 
-        // excludedNameRegex
-        if let denoiseDict = dict["denoise"] as? [String: Any],
-           let bluetooth = denoiseDict["bluetooth"] as? [String: Any],
-           let excludedNameRegex = bluetooth["excludedNameRegex"] as? String {
-            self.excludedNameRegex = excludedNameRegex
+        // denoise
+        if let denoiseDict = dict["denoise"] as? [String: Any] {
+            if let bluetooth = denoiseDict["bluetooth"] as? [String: Any],
+               let excludedNameRegex = bluetooth["excludedNameRegex"] as? String {
+                self.excludedNameRegex = excludedNameRegex
+            } else {
+                self.excludedNameRegex = ""
+            }
+            self.denoiseMode = denoiseDict["mode"] as? String ?? "enhanced"
         } else {
             self.excludedNameRegex = ""
+            self.denoiseMode = "enhanced"
         }
 
         // muteOtherEnabled
@@ -247,8 +253,9 @@ class CallConfigManager {
             ],
             "denoise": [
                 "bluetooth": [
-                    "excludedNameRegex": "airpods"
-                ]
+                    "excludedNameRegex": "AirPodsDisable"
+                ],
+                "mode": "enhanced"
             ]
         ]
     }

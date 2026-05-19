@@ -208,6 +208,7 @@ final class EditContactNameViewController: SettingBaseViewController {
     }
 
     @objc func backButtonTapped() {
+        view.endEditing(true)
         self.navigationController?.popViewController(animated: true)
     }
 

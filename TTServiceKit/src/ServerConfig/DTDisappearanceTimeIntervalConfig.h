@@ -8,6 +8,8 @@
 #import <Foundation/Foundation.h>
 #import "DTDisappearanceTimeIntervalEntity.h"
 
+@class SDSAnyReadTransaction;
+
 NS_ASSUME_NONNULL_BEGIN
 
 @interface DTDisappearanceTimeIntervalConfig : NSObject
@@ -15,6 +17,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)fetchConfigWithCompletion:(void (^)(DTDisappearanceTimeIntervalEntity *entity, NSError *error))completion;
 
 + (DTDisappearanceTimeIntervalEntity *)fetchDisappearanceTimeInterval;
++ (DTDisappearanceTimeIntervalEntity *)fetchDisappearanceTimeIntervalWithTransaction:(SDSAnyReadTransaction *)transaction;
 
 @end
 

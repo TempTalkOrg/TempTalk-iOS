@@ -21,6 +21,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) int version;
 @property (nonatomic, assign) TSMessageModeType confidentialMode;
 @property (nonatomic, copy) NSString *remark;
+/// 备注头像（V1|base64 AES-GCM 密文，与 remark 同一加解密方案）。
+@property (nonatomic, copy) NSString *remarkAvatar;
 
 @property (nonatomic, strong) NSNumber *messageExpiry;
 @property (nonatomic, assign) uint64_t messageClearAnchor;

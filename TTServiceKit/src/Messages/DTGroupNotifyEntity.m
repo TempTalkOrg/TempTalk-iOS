@@ -28,8 +28,11 @@
                     anyoneRemove:(BOOL)anyoneRemove
                           avatar:(NSString *)avatar
                    criticalAlert:(BOOL)criticalAlert
+                 encryptedAvatar:(nullable NSString *)encryptedAvatar
+                   encryptedName:(nullable NSString *)encryptedName
                              ext:(BOOL)ext
                              gid:(NSString *)gid
+                 groupCryptoMode:(NSInteger)groupCryptoMode
                   invitationRule:(nullable NSNumber *)invitationRule
               messageClearAnchor:(unsigned long long)messageClearAnchor
                    messageExpiry:(nullable NSNumber *)messageExpiry
@@ -44,8 +47,11 @@
                       anyoneRemove:anyoneRemove
                             avatar:avatar
                      criticalAlert:criticalAlert
+                   encryptedAvatar:encryptedAvatar
+                     encryptedName:encryptedName
                                ext:ext
                                gid:gid
+                   groupCryptoMode:groupCryptoMode
                     invitationRule:invitationRule
                 messageClearAnchor:messageClearAnchor
                      messageExpiry:messageExpiry

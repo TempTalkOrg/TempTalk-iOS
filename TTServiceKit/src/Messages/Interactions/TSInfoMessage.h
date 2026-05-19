@@ -45,7 +45,9 @@ typedef NS_ENUM(NSInteger, TSInfoMessageType) {
     TSInfoMessageReportedMessage,
     TSInfoMessageResetIdentityKey,
     TSInfoMessageArchiveMessage,
-    TSInfoMessageConfidentialViewed
+    TSInfoMessageConfidentialViewed,
+    TSInfoMessageGroupCryptoUpgrade,
+    TSInfoMessageForwardNotice
 };
 
 //GRDB-Kris--

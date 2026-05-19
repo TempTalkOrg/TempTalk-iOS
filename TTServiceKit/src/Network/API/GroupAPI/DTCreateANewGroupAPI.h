@@ -23,6 +23,17 @@ NS_ASSUME_NONNULL_BEGIN
                     success:(void(^)(DTCreateANewGroupDataEntity *entity))success
                     failure:(DTAPIFailureBlock)failure;
 
+- (void)sendRequestWithName:(NSString *)name
+                     avatar:(NSString *)avatar
+                    numbers:(NSArray *)numbers
+            groupCryptoMode:(NSInteger)groupCryptoMode
+              encryptedName:(nullable NSString *)encryptedName
+            encryptedAvatar:(nullable NSString *)encryptedAvatar
+ groupMemberVerifyPublicKey:(nullable NSString *)groupMemberVerifyPublicKey
+             memberBindings:(nullable NSArray *)memberBindings
+                    success:(void(^)(DTCreateANewGroupDataEntity *entity))success
+                    failure:(DTAPIFailureBlock)failure;
+
 @end
 
 NS_ASSUME_NONNULL_END

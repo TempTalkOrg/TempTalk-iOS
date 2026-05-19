@@ -7,35 +7,29 @@ import Foundation
 // this module. This is a bit of light hackery to work with both.
 #if canImport(dtprotoFFI)
 import dtprotoFFI
-
-// Create public typealiases to avoid conflicts with LiveKit's RustBuffer
-// These are namespaced with DTProto prefix to prevent conflicts
-public typealias DTProtoRustBuffer = dtprotoFFI.RustBuffer
-public typealias DTProtoForeignBytes = dtprotoFFI.ForeignBytes
-public typealias DTProtoRustCallStatus = dtprotoFFI.RustCallStatus
 #endif
 
-fileprivate extension DTProtoRustBuffer {
+fileprivate extension RustBuffer {
     // Allocate a new buffer, copying the contents of a `UInt8` array.
     init(bytes: [UInt8]) {
         let rbuf = bytes.withUnsafeBufferPointer { ptr in
-            DTProtoRustBuffer.from(ptr)
+            RustBuffer.from(ptr)
         }
         self.init(capacity: rbuf.capacity, len: rbuf.len, data: rbuf.data)
     }
 
-    static func from(_ ptr: UnsafeBufferPointer<UInt8>) -> DTProtoRustBuffer {
-        try! rustCall { ffi_dtproto_d2a4_rustbuffer_from_bytes(DTProtoForeignBytes(bufferPointer: ptr), $0) }
+    static func from(_ ptr: UnsafeBufferPointer<UInt8>) -> RustBuffer {
+        try! rustCall { ffi_dtproto_b7db_rustbuffer_from_bytes(ForeignBytes(bufferPointer: ptr), $0) }
     }
 
     // Frees the buffer in place.
     // The buffer must not be used after this is called.
     func deallocate() {
-        try! rustCall { ffi_dtproto_d2a4_rustbuffer_free(self, $0) }
+        try! rustCall { ffi_dtproto_b7db_rustbuffer_free(self, $0) }
     }
 }
 
-fileprivate extension DTProtoForeignBytes {
+fileprivate extension ForeignBytes {
     init(bufferPointer: UnsafeBufferPointer<UInt8>) {
         self.init(len: Int32(bufferPointer.count), data: bufferPointer.baseAddress)
     }
@@ -49,7 +43,7 @@ fileprivate extension DTProtoForeignBytes {
 // Someday, this will be in a library of its own.
 
 fileprivate extension Data {
-    init(rustBuffer: DTProtoRustBuffer) {
+    init(rustBuffer: RustBuffer) {
         // TODO: This copies the buffer. Can we read directly from a
         // Rust buffer?
         self.init(bytes: rustBuffer.data!, count: Int(rustBuffer.len))
@@ -177,12 +171,12 @@ extension FfiConverterPrimitive {
     }
 }
 
-// Types conforming to `FfiConverterRustBuffer` lift and lower into a `DTProtoRustBuffer`.
+// Types conforming to `FfiConverterRustBuffer` lift and lower into a `RustBuffer`.
 // Used for complex types where it's hard to write a custom lift/lower.
-fileprivate protocol FfiConverterRustBuffer: FfiConverter where FfiType == DTProtoRustBuffer {}
+fileprivate protocol FfiConverterRustBuffer: FfiConverter where FfiType == RustBuffer {}
 
 extension FfiConverterRustBuffer {
-    public static func lift(_ buf: DTProtoRustBuffer) throws -> SwiftType {
+    public static func lift(_ buf: RustBuffer) throws -> SwiftType {
         var reader = createReader(data: Data(rustBuffer: buf))
         let value = try read(from: &reader)
         if hasRemaining(reader) {
@@ -192,10 +186,10 @@ extension FfiConverterRustBuffer {
         return value
     }
 
-    public static func lower(_ value: SwiftType) -> DTProtoRustBuffer {
+    public static func lower(_ value: SwiftType) -> RustBuffer {
           var writer = createWriter()
           write(value, into: &writer)
-          return DTProtoRustBuffer(bytes: writer)
+          return RustBuffer(bytes: writer)
     }
 }
 // An error type for FFI errors. These errors occur at the UniFFI level, not
@@ -218,7 +212,7 @@ fileprivate enum UniffiInternalError: LocalizedError {
         case .unexpectedOptionalTag: return "Unexpected optional tag; should be 0 or 1"
         case .unexpectedEnumCase: return "Raw enum value doesn't match any cases"
         case .unexpectedNullPointer: return "Raw pointer value was null"
-        case .unexpectedRustCallStatusCode: return "Unexpected DTProtoRustCallStatus code"
+        case .unexpectedRustCallStatusCode: return "Unexpected RustCallStatus code"
         case .unexpectedRustCallError: return "CALL_ERROR but no errorClass specified"
         case .unexpectedStaleHandle: return "The object in the handle map has been dropped already"
         case let .rustPanic(message): return message
@@ -230,11 +224,11 @@ fileprivate let CALL_SUCCESS: Int8 = 0
 fileprivate let CALL_ERROR: Int8 = 1
 fileprivate let CALL_PANIC: Int8 = 2
 
-fileprivate extension DTProtoRustCallStatus {
+fileprivate extension RustCallStatus {
     init() {
         self.init(
             code: CALL_SUCCESS,
-            errorBuf: DTProtoRustBuffer.init(
+            errorBuf: RustBuffer.init(
                 capacity: 0,
                 len: 0,
                 data: nil
@@ -243,7 +237,7 @@ fileprivate extension DTProtoRustCallStatus {
     }
 }
 
-private func rustCall<T>(_ callback: (UnsafeMutablePointer<DTProtoRustCallStatus>) -> T) throws -> T {
+private func rustCall<T>(_ callback: (UnsafeMutablePointer<RustCallStatus>) -> T) throws -> T {
     try makeRustCall(callback, errorHandler: {
         $0.deallocate()
         return UniffiInternalError.unexpectedRustCallError
@@ -251,14 +245,14 @@ private func rustCall<T>(_ callback: (UnsafeMutablePointer<DTProtoRustCallStatus
 }
 
 private func rustCallWithError<T, F: FfiConverter>
-    (_ errorFfiConverter: F.Type, _ callback: (UnsafeMutablePointer<DTProtoRustCallStatus>) -> T) throws -> T
-    where F.SwiftType: Error, F.FfiType == DTProtoRustBuffer
+    (_ errorFfiConverter: F.Type, _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T) throws -> T
+    where F.SwiftType: Error, F.FfiType == RustBuffer
     {
     try makeRustCall(callback, errorHandler: { return try errorFfiConverter.lift($0) })
 }
 
-private func makeRustCall<T>(_ callback: (UnsafeMutablePointer<DTProtoRustCallStatus>) -> T, errorHandler: (DTProtoRustBuffer) throws -> Error) throws -> T {
-    var callStatus = DTProtoRustCallStatus.init()
+private func makeRustCall<T>(_ callback: (UnsafeMutablePointer<RustCallStatus>) -> T, errorHandler: (RustBuffer) throws -> Error) throws -> T {
+    var callStatus = RustCallStatus.init()
     let returnedVal = callback(&callStatus)
     switch callStatus.code {
         case CALL_SUCCESS:
@@ -335,9 +329,9 @@ fileprivate struct FfiConverterBool : FfiConverter {
 
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
-    typealias FfiType = DTProtoRustBuffer
+    typealias FfiType = RustBuffer
 
-    public static func lift(_ value: DTProtoRustBuffer) throws -> String {
+    public static func lift(_ value: RustBuffer) throws -> String {
         defer {
             value.deallocate()
         }
@@ -348,13 +342,13 @@ fileprivate struct FfiConverterString: FfiConverter {
         return String(bytes: bytes, encoding: String.Encoding.utf8)!
     }
 
-    public static func lower(_ value: String) -> DTProtoRustBuffer {
+    public static func lower(_ value: String) -> RustBuffer {
         return value.utf8CString.withUnsafeBufferPointer { ptr in
             // The swift string gives us int8_t, we want uint8_t.
             ptr.withMemoryRebound(to: UInt8.self) { ptr in
                 // The swift string gives us a trailing null byte, we don't want it.
                 let buf = UnsafeBufferPointer(rebasing: ptr.prefix(upTo: ptr.count - 1))
-                return DTProtoRustBuffer.from(buf)
+                return RustBuffer.from(buf)
             }
         }
     }
@@ -372,8 +366,135 @@ fileprivate struct FfiConverterString: FfiConverter {
 }
 
 
+public protocol DTGroupCryptoProtocol {
+    func `deriveKeys`(`rGroup`: [UInt8]) throws -> GroupKeySet
+    func `encrypt`(`kGroup`: [UInt8], `plaintext`: [UInt8], `aad`: [UInt8]) throws -> [UInt8]
+    func `decrypt`(`kGroup`: [UInt8], `blob`: [UInt8], `aad`: [UInt8]) throws -> [UInt8]
+    func `signUid`(`skBind`: [UInt8], `uid`: String) throws -> [UInt8]
+    func `verifyUid`(`pkBind`: [UInt8], `uid`: String, `signature`: [UInt8]) throws -> Bool
+    
+}
+
+public class DtGroupCrypto: DTGroupCryptoProtocol {
+    fileprivate let pointer: UnsafeMutableRawPointer
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+    required init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+    public convenience init(`version`: UInt8)  {
+        self.init(unsafeFromRawPointer: try!
+    
+    rustCall() {
+    
+    dtproto_b7db_DTGroupCrypto_new(
+        FfiConverterUInt8.lower(`version`), $0)
+})
+    }
+
+    deinit {
+        try! rustCall { ffi_dtproto_b7db_DTGroupCrypto_object_free(pointer, $0) }
+    }
+
+    
+
+    
+    public func `deriveKeys`(`rGroup`: [UInt8]) throws -> GroupKeySet {
+        return try FfiConverterTypeGroupKeySet.lift(
+            try
+    rustCallWithError(FfiConverterTypeDtProtoError.self) {
+    dtproto_b7db_DTGroupCrypto_derive_keys(self.pointer, 
+        FfiConverterSequenceUInt8.lower(`rGroup`), $0
+    )
+}
+        )
+    }
+    public func `encrypt`(`kGroup`: [UInt8], `plaintext`: [UInt8], `aad`: [UInt8]) throws -> [UInt8] {
+        return try FfiConverterSequenceUInt8.lift(
+            try
+    rustCallWithError(FfiConverterTypeDtProtoError.self) {
+    dtproto_b7db_DTGroupCrypto_encrypt(self.pointer, 
+        FfiConverterSequenceUInt8.lower(`kGroup`), 
+        FfiConverterSequenceUInt8.lower(`plaintext`), 
+        FfiConverterSequenceUInt8.lower(`aad`), $0
+    )
+}
+        )
+    }
+    public func `decrypt`(`kGroup`: [UInt8], `blob`: [UInt8], `aad`: [UInt8]) throws -> [UInt8] {
+        return try FfiConverterSequenceUInt8.lift(
+            try
+    rustCallWithError(FfiConverterTypeDtProtoError.self) {
+    dtproto_b7db_DTGroupCrypto_decrypt(self.pointer, 
+        FfiConverterSequenceUInt8.lower(`kGroup`), 
+        FfiConverterSequenceUInt8.lower(`blob`), 
+        FfiConverterSequenceUInt8.lower(`aad`), $0
+    )
+}
+        )
+    }
+    public func `signUid`(`skBind`: [UInt8], `uid`: String) throws -> [UInt8] {
+        return try FfiConverterSequenceUInt8.lift(
+            try
+    rustCallWithError(FfiConverterTypeDtProtoError.self) {
+    dtproto_b7db_DTGroupCrypto_sign_uid(self.pointer, 
+        FfiConverterSequenceUInt8.lower(`skBind`), 
+        FfiConverterString.lower(`uid`), $0
+    )
+}
+        )
+    }
+    public func `verifyUid`(`pkBind`: [UInt8], `uid`: String, `signature`: [UInt8]) throws -> Bool {
+        return try FfiConverterBool.lift(
+            try
+    rustCallWithError(FfiConverterTypeDtProtoError.self) {
+    dtproto_b7db_DTGroupCrypto_verify_uid(self.pointer, 
+        FfiConverterSequenceUInt8.lower(`pkBind`), 
+        FfiConverterString.lower(`uid`), 
+        FfiConverterSequenceUInt8.lower(`signature`), $0
+    )
+}
+        )
+    }
+    
+}
+
+
+public struct FfiConverterTypeDtGroupCrypto: FfiConverter {
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = DtGroupCrypto
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DtGroupCrypto {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: DtGroupCrypto, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> DtGroupCrypto {
+        return DtGroupCrypto(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: DtGroupCrypto) -> UnsafeMutableRawPointer {
+        return value.pointer
+    }
+}
+
+
 public protocol DTProtoProtocol {
-    func `decryptMessage`(`signedEKey`: [UInt8], `theirIdKey`: [UInt8], `localTheirIdKey`: [UInt8], `eKey`: [UInt8], `localPriKey`: [UInt8], `ermKey`: [UInt8], `cipherText`: [UInt8]) throws -> DtDecryptedMessage
+    func `decryptMessage`(`signedEKey`: [UInt8], `theirIdKey`: [UInt8], `localTheirIdKey`: [UInt8], `cachedTheirIdKey`: [UInt8]?, `eKey`: [UInt8], `localPriKey`: [UInt8], `ermKey`: [UInt8], `cipherText`: [UInt8]) throws -> DtDecryptedMessage
     func `encryptMessage`(`pubIdKey`: [UInt8], `pubIdKeys`: [String: [UInt8]], `localPriKey`: [UInt8], `plainText`: [UInt8]) throws -> DtEncryptedMessage
     func `decryptKey`(`eKey`: [UInt8], `localPriKey`: [UInt8], `eMKey`: [UInt8]) throws -> DtDecryptedKey
     func `encryptKey`(`pubIdKeys`: [String: [UInt8]], `mKey`: [UInt8]?) throws -> DtEncryptedKey
@@ -397,26 +518,27 @@ public class DtProto: DTProtoProtocol {
     
     rustCall() {
     
-    dtproto_d2a4_DTProto_new(
+    dtproto_b7db_DTProto_new(
         FfiConverterInt32.lower(`version`), $0)
 })
     }
 
     deinit {
-        try! rustCall { ffi_dtproto_d2a4_DTProto_object_free(pointer, $0) }
+        try! rustCall { ffi_dtproto_b7db_DTProto_object_free(pointer, $0) }
     }
 
     
 
     
-    public func `decryptMessage`(`signedEKey`: [UInt8], `theirIdKey`: [UInt8], `localTheirIdKey`: [UInt8], `eKey`: [UInt8], `localPriKey`: [UInt8], `ermKey`: [UInt8], `cipherText`: [UInt8]) throws -> DtDecryptedMessage {
+    public func `decryptMessage`(`signedEKey`: [UInt8], `theirIdKey`: [UInt8], `localTheirIdKey`: [UInt8], `cachedTheirIdKey`: [UInt8]?, `eKey`: [UInt8], `localPriKey`: [UInt8], `ermKey`: [UInt8], `cipherText`: [UInt8]) throws -> DtDecryptedMessage {
         return try FfiConverterTypeDtDecryptedMessage.lift(
             try
     rustCallWithError(FfiConverterTypeDtProtoError.self) {
-    dtproto_d2a4_DTProto_decrypt_message(self.pointer, 
+    dtproto_b7db_DTProto_decrypt_message(self.pointer, 
         FfiConverterSequenceUInt8.lower(`signedEKey`), 
         FfiConverterSequenceUInt8.lower(`theirIdKey`), 
         FfiConverterSequenceUInt8.lower(`localTheirIdKey`), 
+        FfiConverterOptionSequenceUInt8.lower(`cachedTheirIdKey`), 
         FfiConverterSequenceUInt8.lower(`eKey`), 
         FfiConverterSequenceUInt8.lower(`localPriKey`), 
         FfiConverterSequenceUInt8.lower(`ermKey`), 
@@ -429,7 +551,7 @@ public class DtProto: DTProtoProtocol {
         return try FfiConverterTypeDtEncryptedMessage.lift(
             try
     rustCallWithError(FfiConverterTypeDtProtoError.self) {
-    dtproto_d2a4_DTProto_encrypt_message(self.pointer, 
+    dtproto_b7db_DTProto_encrypt_message(self.pointer, 
         FfiConverterSequenceUInt8.lower(`pubIdKey`), 
         FfiConverterDictionaryStringSequenceUInt8.lower(`pubIdKeys`), 
         FfiConverterSequenceUInt8.lower(`localPriKey`), 
@@ -442,7 +564,7 @@ public class DtProto: DTProtoProtocol {
         return try FfiConverterTypeDtDecryptedKey.lift(
             try
     rustCallWithError(FfiConverterTypeDtProtoError.self) {
-    dtproto_d2a4_DTProto_decrypt_key(self.pointer, 
+    dtproto_b7db_DTProto_decrypt_key(self.pointer, 
         FfiConverterSequenceUInt8.lower(`eKey`), 
         FfiConverterSequenceUInt8.lower(`localPriKey`), 
         FfiConverterSequenceUInt8.lower(`eMKey`), $0
@@ -454,7 +576,7 @@ public class DtProto: DTProtoProtocol {
         return try FfiConverterTypeDtEncryptedKey.lift(
             try
     rustCallWithError(FfiConverterTypeDtProtoError.self) {
-    dtproto_d2a4_DTProto_encrypt_key(self.pointer, 
+    dtproto_b7db_DTProto_encrypt_key(self.pointer, 
         FfiConverterDictionaryStringSequenceUInt8.lower(`pubIdKeys`), 
         FfiConverterOptionSequenceUInt8.lower(`mKey`), $0
     )
@@ -466,7 +588,7 @@ public class DtProto: DTProtoProtocol {
             try!
     rustCall() {
     
-    dtproto_d2a4_DTProto_generate_key(self.pointer, $0
+    dtproto_b7db_DTProto_generate_key(self.pointer, $0
     )
 }
         )
@@ -475,7 +597,7 @@ public class DtProto: DTProtoProtocol {
         return try FfiConverterTypeDtDecryptedRtmMessage.lift(
             try
     rustCallWithError(FfiConverterTypeDtProtoError.self) {
-    dtproto_d2a4_DTProto_decrypt_rtm_message(self.pointer, 
+    dtproto_b7db_DTProto_decrypt_rtm_message(self.pointer, 
         FfiConverterSequenceUInt8.lower(`signature`), 
         FfiConverterOptionSequenceUInt8.lower(`theirLocalIdKey`), 
         FfiConverterSequenceUInt8.lower(`aesKey`), 
@@ -488,7 +610,7 @@ public class DtProto: DTProtoProtocol {
         return try FfiConverterTypeDtEncryptedRtmMessage.lift(
             try
     rustCallWithError(FfiConverterTypeDtProtoError.self) {
-    dtproto_d2a4_DTProto_encrypt_rtm_message(self.pointer, 
+    dtproto_b7db_DTProto_encrypt_rtm_message(self.pointer, 
         FfiConverterSequenceUInt8.lower(`aesKey`), 
         FfiConverterSequenceUInt8.lower(`localPriKey`), 
         FfiConverterSequenceUInt8.lower(`plainText`), $0
@@ -569,24 +691,24 @@ public struct FfiConverterTypeDtDecryptedKey: FfiConverterRustBuffer {
 }
 
 
-public func FfiConverterTypeDtDecryptedKey_lift(_ buf: DTProtoRustBuffer) throws -> DtDecryptedKey {
+public func FfiConverterTypeDtDecryptedKey_lift(_ buf: RustBuffer) throws -> DtDecryptedKey {
     return try FfiConverterTypeDtDecryptedKey.lift(buf)
 }
 
-public func FfiConverterTypeDtDecryptedKey_lower(_ value: DtDecryptedKey) -> DTProtoRustBuffer {
+public func FfiConverterTypeDtDecryptedKey_lower(_ value: DtDecryptedKey) -> RustBuffer {
     return FfiConverterTypeDtDecryptedKey.lower(value)
 }
 
 
 public struct DtDecryptedMessage {
     public var `plainText`: [UInt8]
-    public var `verifiedIdResult`: Bool
+    public var `identityVerifyResult`: IdentityVerifyResult
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(`plainText`: [UInt8], `verifiedIdResult`: Bool) {
+    public init(`plainText`: [UInt8], `identityVerifyResult`: IdentityVerifyResult) {
         self.`plainText` = `plainText`
-        self.`verifiedIdResult` = `verifiedIdResult`
+        self.`identityVerifyResult` = `identityVerifyResult`
     }
 }
 
@@ -596,7 +718,7 @@ extension DtDecryptedMessage: Equatable, Hashable {
         if lhs.`plainText` != rhs.`plainText` {
             return false
         }
-        if lhs.`verifiedIdResult` != rhs.`verifiedIdResult` {
+        if lhs.`identityVerifyResult` != rhs.`identityVerifyResult` {
             return false
         }
         return true
@@ -604,7 +726,7 @@ extension DtDecryptedMessage: Equatable, Hashable {
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(`plainText`)
-        hasher.combine(`verifiedIdResult`)
+        hasher.combine(`identityVerifyResult`)
     }
 }
 
@@ -613,22 +735,22 @@ public struct FfiConverterTypeDtDecryptedMessage: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DtDecryptedMessage {
         return try DtDecryptedMessage(
             `plainText`: FfiConverterSequenceUInt8.read(from: &buf), 
-            `verifiedIdResult`: FfiConverterBool.read(from: &buf)
+            `identityVerifyResult`: FfiConverterTypeIdentityVerifyResult.read(from: &buf)
         )
     }
 
     public static func write(_ value: DtDecryptedMessage, into buf: inout [UInt8]) {
         FfiConverterSequenceUInt8.write(value.`plainText`, into: &buf)
-        FfiConverterBool.write(value.`verifiedIdResult`, into: &buf)
+        FfiConverterTypeIdentityVerifyResult.write(value.`identityVerifyResult`, into: &buf)
     }
 }
 
 
-public func FfiConverterTypeDtDecryptedMessage_lift(_ buf: DTProtoRustBuffer) throws -> DtDecryptedMessage {
+public func FfiConverterTypeDtDecryptedMessage_lift(_ buf: RustBuffer) throws -> DtDecryptedMessage {
     return try FfiConverterTypeDtDecryptedMessage.lift(buf)
 }
 
-public func FfiConverterTypeDtDecryptedMessage_lower(_ value: DtDecryptedMessage) -> DTProtoRustBuffer {
+public func FfiConverterTypeDtDecryptedMessage_lower(_ value: DtDecryptedMessage) -> RustBuffer {
     return FfiConverterTypeDtDecryptedMessage.lower(value)
 }
 
@@ -679,11 +801,11 @@ public struct FfiConverterTypeDtDecryptedRtmMessage: FfiConverterRustBuffer {
 }
 
 
-public func FfiConverterTypeDtDecryptedRtmMessage_lift(_ buf: DTProtoRustBuffer) throws -> DtDecryptedRtmMessage {
+public func FfiConverterTypeDtDecryptedRtmMessage_lift(_ buf: RustBuffer) throws -> DtDecryptedRtmMessage {
     return try FfiConverterTypeDtDecryptedRtmMessage.lift(buf)
 }
 
-public func FfiConverterTypeDtDecryptedRtmMessage_lower(_ value: DtDecryptedRtmMessage) -> DTProtoRustBuffer {
+public func FfiConverterTypeDtDecryptedRtmMessage_lower(_ value: DtDecryptedRtmMessage) -> RustBuffer {
     return FfiConverterTypeDtDecryptedRtmMessage.lower(value)
 }
 
@@ -742,11 +864,11 @@ public struct FfiConverterTypeDtEncryptedKey: FfiConverterRustBuffer {
 }
 
 
-public func FfiConverterTypeDtEncryptedKey_lift(_ buf: DTProtoRustBuffer) throws -> DtEncryptedKey {
+public func FfiConverterTypeDtEncryptedKey_lift(_ buf: RustBuffer) throws -> DtEncryptedKey {
     return try FfiConverterTypeDtEncryptedKey.lift(buf)
 }
 
-public func FfiConverterTypeDtEncryptedKey_lower(_ value: DtEncryptedKey) -> DTProtoRustBuffer {
+public func FfiConverterTypeDtEncryptedKey_lower(_ value: DtEncryptedKey) -> RustBuffer {
     return FfiConverterTypeDtEncryptedKey.lower(value)
 }
 
@@ -821,11 +943,11 @@ public struct FfiConverterTypeDtEncryptedMessage: FfiConverterRustBuffer {
 }
 
 
-public func FfiConverterTypeDtEncryptedMessage_lift(_ buf: DTProtoRustBuffer) throws -> DtEncryptedMessage {
+public func FfiConverterTypeDtEncryptedMessage_lift(_ buf: RustBuffer) throws -> DtEncryptedMessage {
     return try FfiConverterTypeDtEncryptedMessage.lift(buf)
 }
 
-public func FfiConverterTypeDtEncryptedMessage_lower(_ value: DtEncryptedMessage) -> DTProtoRustBuffer {
+public func FfiConverterTypeDtEncryptedMessage_lower(_ value: DtEncryptedMessage) -> RustBuffer {
     return FfiConverterTypeDtEncryptedMessage.lower(value)
 }
 
@@ -876,13 +998,141 @@ public struct FfiConverterTypeDtEncryptedRtmMessage: FfiConverterRustBuffer {
 }
 
 
-public func FfiConverterTypeDtEncryptedRtmMessage_lift(_ buf: DTProtoRustBuffer) throws -> DtEncryptedRtmMessage {
+public func FfiConverterTypeDtEncryptedRtmMessage_lift(_ buf: RustBuffer) throws -> DtEncryptedRtmMessage {
     return try FfiConverterTypeDtEncryptedRtmMessage.lift(buf)
 }
 
-public func FfiConverterTypeDtEncryptedRtmMessage_lower(_ value: DtEncryptedRtmMessage) -> DTProtoRustBuffer {
+public func FfiConverterTypeDtEncryptedRtmMessage_lower(_ value: DtEncryptedRtmMessage) -> RustBuffer {
     return FfiConverterTypeDtEncryptedRtmMessage.lower(value)
 }
+
+
+public struct GroupKeySet {
+    public var `kGroup`: [UInt8]
+    public var `skBind`: [UInt8]
+    public var `pkBind`: [UInt8]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(`kGroup`: [UInt8], `skBind`: [UInt8], `pkBind`: [UInt8]) {
+        self.`kGroup` = `kGroup`
+        self.`skBind` = `skBind`
+        self.`pkBind` = `pkBind`
+    }
+}
+
+
+extension GroupKeySet: Equatable, Hashable {
+    public static func ==(lhs: GroupKeySet, rhs: GroupKeySet) -> Bool {
+        if lhs.`kGroup` != rhs.`kGroup` {
+            return false
+        }
+        if lhs.`skBind` != rhs.`skBind` {
+            return false
+        }
+        if lhs.`pkBind` != rhs.`pkBind` {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(`kGroup`)
+        hasher.combine(`skBind`)
+        hasher.combine(`pkBind`)
+    }
+}
+
+
+public struct FfiConverterTypeGroupKeySet: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GroupKeySet {
+        return try GroupKeySet(
+            `kGroup`: FfiConverterSequenceUInt8.read(from: &buf), 
+            `skBind`: FfiConverterSequenceUInt8.read(from: &buf), 
+            `pkBind`: FfiConverterSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: GroupKeySet, into buf: inout [UInt8]) {
+        FfiConverterSequenceUInt8.write(value.`kGroup`, into: &buf)
+        FfiConverterSequenceUInt8.write(value.`skBind`, into: &buf)
+        FfiConverterSequenceUInt8.write(value.`pkBind`, into: &buf)
+    }
+}
+
+
+public func FfiConverterTypeGroupKeySet_lift(_ buf: RustBuffer) throws -> GroupKeySet {
+    return try FfiConverterTypeGroupKeySet.lift(buf)
+}
+
+public func FfiConverterTypeGroupKeySet_lower(_ value: GroupKeySet) -> RustBuffer {
+    return FfiConverterTypeGroupKeySet.lower(value)
+}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+public enum IdentityVerifyResult {
+    
+    case `match`
+    case `cacheOutdated`
+    case `senderKeyUpdated`
+    case `allMismatch`
+}
+
+public struct FfiConverterTypeIdentityVerifyResult: FfiConverterRustBuffer {
+    typealias SwiftType = IdentityVerifyResult
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> IdentityVerifyResult {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .`match`
+        
+        case 2: return .`cacheOutdated`
+        
+        case 3: return .`senderKeyUpdated`
+        
+        case 4: return .`allMismatch`
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: IdentityVerifyResult, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .`match`:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .`cacheOutdated`:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .`senderKeyUpdated`:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .`allMismatch`:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+public func FfiConverterTypeIdentityVerifyResult_lift(_ buf: RustBuffer) throws -> IdentityVerifyResult {
+    return try FfiConverterTypeIdentityVerifyResult.lift(buf)
+}
+
+public func FfiConverterTypeIdentityVerifyResult_lower(_ value: IdentityVerifyResult) -> RustBuffer {
+    return FfiConverterTypeIdentityVerifyResult.lower(value)
+}
+
+
+extension IdentityVerifyResult: Equatable, Hashable {}
+
 
 
 public enum DtProtoError {
@@ -909,6 +1159,36 @@ public enum DtProtoError {
     
     // Simple error enums only carry a message
     case DecryptMessageDataError(message: String)
+    
+    // Simple error enums only carry a message
+    case InvalidRGroupLength(message: String)
+    
+    // Simple error enums only carry a message
+    case InvalidKGroupLength(message: String)
+    
+    // Simple error enums only carry a message
+    case InvalidSkBindLength(message: String)
+    
+    // Simple error enums only carry a message
+    case InvalidPkBindLength(message: String)
+    
+    // Simple error enums only carry a message
+    case InvalidPkBindKey(message: String)
+    
+    // Simple error enums only carry a message
+    case InvalidSignatureLength(message: String)
+    
+    // Simple error enums only carry a message
+    case UnsupportedBlobVersion(message: String)
+    
+    // Simple error enums only carry a message
+    case BlobTooShort(message: String)
+    
+    // Simple error enums only carry a message
+    case GroupEncryptError(message: String)
+    
+    // Simple error enums only carry a message
+    case GroupDecryptError(message: String)
     
 }
 
@@ -950,6 +1230,46 @@ public struct FfiConverterTypeDtProtoError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 8: return .InvalidRGroupLength(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 9: return .InvalidKGroupLength(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 10: return .InvalidSkBindLength(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 11: return .InvalidPkBindLength(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 12: return .InvalidPkBindKey(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 13: return .InvalidSignatureLength(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 14: return .UnsupportedBlobVersion(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 15: return .BlobTooShort(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 16: return .GroupEncryptError(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 17: return .GroupDecryptError(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -981,6 +1301,36 @@ public struct FfiConverterTypeDtProtoError: FfiConverterRustBuffer {
             FfiConverterString.write(message, into: &buf)
         case let .DecryptMessageDataError(message):
             writeInt(&buf, Int32(7))
+            FfiConverterString.write(message, into: &buf)
+        case let .InvalidRGroupLength(message):
+            writeInt(&buf, Int32(8))
+            FfiConverterString.write(message, into: &buf)
+        case let .InvalidKGroupLength(message):
+            writeInt(&buf, Int32(9))
+            FfiConverterString.write(message, into: &buf)
+        case let .InvalidSkBindLength(message):
+            writeInt(&buf, Int32(10))
+            FfiConverterString.write(message, into: &buf)
+        case let .InvalidPkBindLength(message):
+            writeInt(&buf, Int32(11))
+            FfiConverterString.write(message, into: &buf)
+        case let .InvalidPkBindKey(message):
+            writeInt(&buf, Int32(12))
+            FfiConverterString.write(message, into: &buf)
+        case let .InvalidSignatureLength(message):
+            writeInt(&buf, Int32(13))
+            FfiConverterString.write(message, into: &buf)
+        case let .UnsupportedBlobVersion(message):
+            writeInt(&buf, Int32(14))
+            FfiConverterString.write(message, into: &buf)
+        case let .BlobTooShort(message):
+            writeInt(&buf, Int32(15))
+            FfiConverterString.write(message, into: &buf)
+        case let .GroupEncryptError(message):
+            writeInt(&buf, Int32(16))
+            FfiConverterString.write(message, into: &buf)
+        case let .GroupDecryptError(message):
+            writeInt(&buf, Int32(17))
             FfiConverterString.write(message, into: &buf)
 
         
@@ -1086,7 +1436,7 @@ public func `libName`()  -> String {
     
     rustCall() {
     
-    dtproto_d2a4_lib_name($0)
+    dtproto_b7db_lib_name($0)
 }
     )
 }

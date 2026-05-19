@@ -59,6 +59,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, assign) NSInteger version;
 
+/// 0 = normal group, >0 = encrypted group protocol version (currently 1)
+@property (nonatomic, assign) NSInteger groupCryptoMode;
+
+@property (nonatomic, readonly) BOOL isEncryptedGroup;
+
 #if TARGET_OS_IOS
 @property (nullable, nonatomic, strong) UIImage *groupImage;
 @property (nonatomic, assign) NSInteger groupAvatarVersion;

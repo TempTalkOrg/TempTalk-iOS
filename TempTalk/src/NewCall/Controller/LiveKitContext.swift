@@ -10,7 +10,6 @@ import LiveKit
 import SwiftUI
 import TTMessaging
 import AVFAudio
-import DenoisePluginFilter
 
 // This class contains the logic to control behavior of the whole app.
 public

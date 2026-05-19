@@ -197,6 +197,7 @@ public class EditContactShareNameViewController: OWSViewController, ContactNameF
 
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        view.endEditing(true)
     }
 
     override public func viewDidDisappear(_ animated: Bool) {
@@ -249,6 +250,7 @@ public class EditContactShareNameViewController: OWSViewController, ContactNameF
             return
         }
 
+        rootView.endEditing(true)
         for subview in rootView.subviews {
             subview.removeFromSuperview()
         }

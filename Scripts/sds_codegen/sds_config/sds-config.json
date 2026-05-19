@@ -102,6 +102,7 @@
         "DTClientNotifyOutgoingMessage",
         "DTSessionRecord",
         "DTScreenShotOutgoingMessage",
+        "TSOutgoingGroupKeyMessage",
         "NSString+DTMarkdown"
 	],
 	"manually_typed_fields": {

@@ -11,6 +11,7 @@
 #import <TTServiceKit/NSString+SSK.h>
 #import <TTServiceKit/TSConstants.h>
 #import <TTServiceKit/SignalAccount.h>
+#import <TTServiceKit/TTServiceKit-Swift.h>
 #import <SignalCoreKit/Threading.h>
 #import <TTMessaging/Environment.h>
 #import <TTMessaging/OWSContactsManager.h>
@@ -38,17 +39,14 @@ static dispatch_queue_t callKitQueue(void) {
 @interface DTCallKitManager () <CXCallObserverDelegate, CXProviderDelegate>
 
 @property (nonatomic, strong) CXProvider *provider;
-@property (nonatomic, strong) CXCallUpdate *callUpdate;
 @property (nonatomic, strong) CXProviderConfiguration *configuration;
 @property (nonatomic, strong) CXCallController *callController;
 
-@property (nonatomic, assign) BOOL haveAcceptCall;
-@property (nonatomic, assign) BOOL isMutedByApp;
 @property (nonatomic, strong) NSMutableDictionary *callerMap;
-@property (nonatomic, strong) NSString *currentChannelName;
-@property (nonatomic, assign) BOOL isPrivateCall;
-@property (nonatomic, assign) BOOL isEndCallOnlyForCallkit;
-@property (nonatomic, strong, nullable) OWSBackgroundTask *callBackgroundTask;
+@property (nonatomic, strong) NSRecursiveLock *callerMapLock;
+
+/// Per-call timeout timers (key: uuidString, value: NSTimer)
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSTimer *> *timeoutTimers;
 
 @end
 
@@ -72,23 +70,19 @@ static dispatch_queue_t callKitQueue(void) {
 {
     self = [super init];
     if (self) {
-
+        _callerMapLock = [[NSRecursiveLock alloc] init];
+        _callerMapLock.name = @"com.temptalk.callkit.callerMap";
         self.provider = [[CXProvider alloc] initWithConfiguration:self.configuration];
         [_provider setDelegate:self queue:callKitQueue()];
         [self.callController.callObserver setDelegate:self queue:callKitQueue()];
-        self.callerMap = [[NSMutableDictionary alloc] init];
-        self.isLocalEndCall = false;
-        self.isEndCallOnlyForCallkit = NO;
-        self.isPrivateCall = false;
+        _callerMap = [[NSMutableDictionary alloc] init];
+        _timeoutTimers = [NSMutableDictionary dictionary];
 
         // Register Darwin notification for background call termination
-        // CRITICAL: Must register early to handle locked/background state
         [[NotificationHandler shared] registerDarwinNotification];
     }
 
-    // 提前初始化 RTC / AudioSession 相关组件(较耗时)，缩短 PushKit 来电回调（didReceiveIncomingPushWith...）到
-    // reportNewIncomingCall + completion 的耗时，降低触发系统 Watchdog（0xbaadca11）导致进程被杀的风险。
-    // 参考：https://developer.apple.com/documentation/xcode/sigkill
+    // Pre-init RTC / AudioSession to reduce PushKit callback latency
     (void)[DTRTCAudioSession shared];
 
     return self;
@@ -98,17 +92,48 @@ static dispatch_queue_t callKitQueue(void) {
     return _callController.callObserver.calls.count;
 }
 
+- (BOOL)haveAcceptCall {
+    return [self hasAnyAcceptedCall];
+}
+
 - (void)reportFakeCallCompletion:(void (^__nullable)(void))completion{
     @weakify(self)
     NSUUID *uuid = [NSUUID UUID];
     [_provider reportNewIncomingCallWithUUID:uuid update:[CXCallUpdate new] completion:^(NSError * _Nullable error) {
         @strongify(self)
-        completion();
+        if (completion) { completion(); }
         [self.provider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonFailed];
     }];
 }
 
-#pragma mark - 收到呼叫
+/// 立即上报一个占位 incoming call。completion 会在 CallKit 回执后回传 UUID 与成功标志;
+/// 调用方必须据此决定后续路径 —— 若 succeeded==NO,CallKit 并未记录该 UUID,
+/// 不能再走 reportCallWithUUID:updated: 更新流程,否则会在 callerMap 里留下无 UI 的幽灵条目。
+- (void)reportPlaceholderIncomingCallWithCompletion:(void (^)(NSUUID *uuid, BOOL succeeded))completion {
+    NSUUID *uuid = [NSUUID UUID];
+    [_provider reportNewIncomingCallWithUUID:uuid
+                                      update:[CXCallUpdate new]
+                                  completion:^(NSError * _Nullable error) {
+        if (error) {
+            OWSLogError(@"%@ placeholder reportNewIncomingCall failed: %@", DTCallKitManager.logTag, error);
+        }
+        if (completion) {
+            completion(uuid, error == nil);
+        }
+    }];
+}
+
+/// 结束指定占位 UUID (fake / 过期 / 解密失败 / 重复等场景)。
+- (void)endPlaceholderCall:(nullable NSUUID *)uuid
+                completion:(void (^__nullable)(void))completion {
+    if (completion) { completion(); }
+    if (uuid) {
+        [_provider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonFailed];
+    }
+}
+
+#pragma mark - Receive Call
+
 - (void)didReceiveCall:(NSString *)callerName
          callerAccount:(NSString *)callerAccount
            channelName:(NSString *)channelName
@@ -121,169 +146,242 @@ static dispatch_queue_t callKitQueue(void) {
           isLiveStream:(BOOL)isLiveStream
                    eid:(NSString *)eid
         liveKitCalling:(DSKProtoCallMessageCalling *)calling
+       preReportedUUID:(NSUUID *)preReportedUUID
             completion:(void (^)(void))completion
 {
     NSString *callerID = [callerAccount transforUserAccountToCallNumber];
 
-    OWSLogInfo(@"%@ mode:%@ didReceiveCall has calling: %@", self.logTag, mode, calling ? @"YES" : @"NO");
+    OWSLogInfo(@"%@ mode:%@ didReceiveCall has calling: %@ preReported: %@", self.logTag, mode, calling ? @"YES" : @"NO", preReportedUUID ? @"YES" : @"NO");
 
-    // 一个周期内，重复的来电，不响应。
-    if (self.callerMap.allValues.count > 0) {
-        OWSLogError(@"%@ callerMap is not empty = %@", self.logTag, self.callerMap);
+    [self.callerMapLock lock];
 
-        [self reportFakeCallCompletion:completion];
-
-        // 发送拒绝消息给发起方，让发起方挂断
+    // Reject if already at max active calls
+    NSUInteger activeCount = [self getActiveCallsCountFromCallerMap];
+    if (activeCount >= 2) {
+        [self.callerMapLock unlock];
+        OWSLogInfo(@"[CALLKIT_DEBUG] didReceiveCall - already %lu active calls, rejecting", activeCount);
+        if (preReportedUUID) {
+            [self endPlaceholderCall:preReportedUUID completion:completion];
+        } else {
+            [self reportFakeCallCompletion:completion];
+        }
         if (calling) {
-            OWSLogInfo(@"%@ rejecting second incoming call and notifying caller", self.logTag);
             [self rejectCallFromCallKit:calling];
         }
         return;
     }
-    if ([self.callerMap objectForKey:callerID] != nil) {
-        OWSLogError(@"%@ callerMap has the same caller = %@", self.logTag, self.callerMap);
 
-        [self reportFakeCallCompletion:completion];
-    } else {
-
-        NSUUID *uuid = [NSUUID UUID];
-
-        //MARK: 群呼/instant呼叫不允许回拨
-        self.isPrivateCall = NO;
-        NSString *value = nil;
-        NSString *nameForDisplay = nil;
-        if (calling.conversationID.hasNumber) {
-            // 1v1 通话：使用 conversationID.number（发起方号码）作为 handle value
-            // conversationID.number 的设计：发给对方的消息里存的是发起方号码，B 收到后知道是 A 打来的
-            NSString *callerNumber = calling.conversationID.number;
-            value = [callerNumber stringByAppendingFormat:@".%@", meetingVersion];
-            nameForDisplay = [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerAccount];
-            self.isPrivateCall = YES;
-        } else if (calling.conversationID.hasGroupID) {
-            // 群呼：不允许回拨
-            TSGroupThread *groupThread = [TSGroupThread getThreadWithGroupId:calling.conversationID.groupID];
-            value = [NSString stringWithFormat:@"group.%@.%@", callerID, meetingVersion];
-            nameForDisplay = [groupThread nameWithTransaction:nil];
-            if (!DTParamsUtils.validateString(nameForDisplay)) {
-                nameForDisplay = meetingName;
-            }
-        } else {
-            // instant 会议：没有 conversationID，不允许回拨
-            value = [NSString stringWithFormat:@"instant.%@.%@", callerID, meetingVersion];
-            nameForDisplay = [NSString stringWithFormat:@"%@'s instant call", [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerID]];
-        }
-
-        if (!DTParamsUtils.validateString(nameForDisplay)) {
-            nameForDisplay = @"Call";
-        }
-
-        CXHandle *handle = [[CXHandle alloc] initWithType:CXHandleTypeGeneric
-                                                    value:value];
-
-        self.callUpdate.remoteHandle = handle;
-        self.callUpdate.hasVideo = NO;
-        self.callUpdate.localizedCallerName = nameForDisplay;
-
-        [DTRTCAudioSession.shared callkitReceiveCall:!self.isPrivateCall];
-
-        OWSLogInfo(@"%@ 准备展示系统 UI - %@ - %@", self.logTag, callerID, NSThread.currentThread);
-
-        @weakify(self)
-        [_provider reportNewIncomingCallWithUUID:uuid update:self.callUpdate completion:^(NSError * _Nullable error) {
-            //Report completion to CallKit
-            OWSLogInfo(@"%@ Report completion to CallKit - %@", self.logTag, callerID);
-            completion();
-
-            if (error) {
-                OWSLogError(@"[call]========>CallKit: Current error %@",error.userInfo);
-
-                [self resetVariableData:callerID];
-                return;
+    // Check if same callerAccount already has an active call (by roomId, not just account)
+    NSString *incomingRoomId = meetingId;
+    for (WeaCallKitCaller *existingCaller in self.callerMap.allValues) {
+        BOOL sameRoom = incomingRoomId && existingCaller.meetingId && [existingCaller.meetingId isEqualToString:incomingRoomId];
+        BOOL sameCallerNotEnded = [existingCaller.callerAccount isEqualToString:callerID] && !existingCaller.isEnded;
+        if (sameRoom || sameCallerNotEnded) {
+            [self.callerMapLock unlock];
+            OWSLogWarn(@"%@ duplicate call detected (sameRoom=%d, sameCallerNotEnded=%d), rejecting", self.logTag, sameRoom, sameCallerNotEnded);
+            if (preReportedUUID) {
+                [self endPlaceholderCall:preReportedUUID completion:completion];
             } else {
-                // Start background task to protect VoIP handling from being suspended
-                self.callBackgroundTask = [OWSBackgroundTask backgroundTaskWithLabelStr:__PRETTY_FUNCTION__];
-                OWSLogInfo(@"%@ Background task started for VoIP call handling", self.logTag);
+                [self reportFakeCallCompletion:completion];
+            }
+            if (calling) {
+                [self rejectCallFromCallKit:calling];
+            }
+            return;
+        }
+    }
+
+    OWSLogInfo(@"[CALLKIT_DEBUG] didReceiveCall - processing call, current callerMap count: %lu, keys: %@",
+               self.callerMap.count, [self.callerMap allKeys]);
+
+    NSUUID *uuid = preReportedUUID ?: [NSUUID UUID];
+    NSString *uuidString = uuid.UUIDString;
+
+    WeaCallKitCaller *newCaller = [[WeaCallKitCaller alloc] init];
+    newCaller.uuid = uuid;
+    newCaller.callerAccount = callerID;
+    // Pre-populate meetingId so concurrent code won't see a half-initialized caller (B3 fix)
+    newCaller.meetingId = meetingId;
+    [self.callerMap setObject:newCaller forKey:uuidString];
+
+    [self.callerMapLock unlock];
+
+    // Determine call type and display name
+    newCaller.isPrivateCall = NO;
+    NSString *value = nil;
+    NSString *nameForDisplay = nil;
+    if (calling.conversationID.hasNumber) {
+        NSString *callerNumber = calling.conversationID.number;
+        value = [callerNumber stringByAppendingFormat:@".%@", meetingVersion];
+        nameForDisplay = [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerAccount];
+        newCaller.isPrivateCall = YES;
+    } else if (calling.conversationID.hasGroupID) {
+        value = [NSString stringWithFormat:@"group.%@.%@", callerID, meetingVersion];
+        NSString *serverGid = [TSGroupThread transformToServerGroupIdWithLocalGroupId:calling.conversationID.groupID];
+        __block NSString *resolvedName = nil;
+        [SDSDatabaseStorage.shared readWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
+            resolvedName = [DTGroupCryptoDisplayHelper.shared resolveGroupDisplayNameWithServerGroupId:serverGid
+                                                                                          fallbackName:meetingName
+                                                                                           transaction:transaction];
+        }];
+        nameForDisplay = resolvedName;
+        if (!DTParamsUtils.validateString(nameForDisplay)) {
+            nameForDisplay = meetingName;
+        }
+    } else {
+        value = [NSString stringWithFormat:@"instant.%@.%@", callerID, meetingVersion];
+        nameForDisplay = [NSString stringWithFormat:@"%@'s instant call", [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerID]];
+    }
+
+    if (!DTParamsUtils.validateString(nameForDisplay)) {
+        nameForDisplay = @"Call";
+    }
+
+    CXHandle *handle = [[CXHandle alloc] initWithType:CXHandleTypeGeneric
+                                                value:value];
+
+    CXCallUpdate *callUpdate = [CXCallUpdate new];
+    callUpdate.supportsGrouping = NO;
+    callUpdate.supportsUngrouping = NO;
+    callUpdate.supportsHolding = NO;
+    callUpdate.supportsDTMF = NO;
+    callUpdate.remoteHandle = handle;
+    callUpdate.hasVideo = NO;
+    callUpdate.localizedCallerName = nameForDisplay;
+
+    [DTRTCAudioSession.shared callkitReceiveCall:!newCaller.isPrivateCall];
+
+    OWSLogInfo(@"%@ reporting incoming call - %@ - %@", self.logTag, uuidString, NSThread.currentThread);
+
+    // Success callback: populate callerMap + start timeout timer
+    @weakify(self)
+    void (^onReportSuccess)(void) = ^{
+        @strongify(self)
+        newCaller.backgroundTask = [OWSBackgroundTask backgroundTaskWithLabelStr:__PRETTY_FUNCTION__];
+
+        [self setChannelName:channelName
+                   meetingId:meetingId
+                 meetingName:meetingName
+                isLiveStream:isLiveStream
+                  isSchedule:isSchedule
+                         eid:eid
+                      byUUID:uuidString];
+        [self setMode:mode byUUID:uuidString];
+        [self setEncryptMeetingKey:emkString byUUID:uuidString];
+        [self setMeetingVersionKey:meetingVersion byUUID:uuidString];
+        [self setCallerAccount:callerAccount byUUID:uuidString];
+        [self setCalling:calling uuid:uuidString];
+
+        WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+        caller.systemState = CKCallSystemStateReported;
+
+        OWSLogInfo(@"[CALLKIT_DEBUG] didReceiveCall - call data set, callerMap.count: %lu",
+                   self.callerMap.count);
+
+        if (completion) { completion(); }
+
+        if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallStatus:uuidString:)]) {
+            [self.delegate refreshCurrentCallStatus:CallStatusNone uuidString:uuidString];
+        }
+
+        [self startTimeoutTimerForUUID:uuidString];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[DTMeetingManager shared] startCallTimeoutTimer];
+        });
+    };
+
+    if (preReportedUUID) {
+        // 已由 handleVoipCallNotify 预先 report
+        [_provider reportCallWithUUID:uuid updated:callUpdate];
+        onReportSuccess();
+    } else {
+        [_provider reportNewIncomingCallWithUUID:uuid update:callUpdate completion:^(NSError * _Nullable error) {
+            @strongify(self)
+            if (!error) {
+                onReportSuccess();
+                return;
             }
 
-            [self setUUID:uuid byCallerID:callerID];
-            [self setChannelName:channelName
-                       meetingId:meetingId
-                     meetingName:meetingName
-                    isLiveStream:isLiveStream
-                      isSchedule:isSchedule
-                             eid:eid
-                      byCallerID:callerID];
-            [self setMode:mode byCallerID:callerID];
-            [self setEncryptMeetingKey:emkString byCallerID:callerID];
-            [self setMeetingVersionKey:meetingVersion byCallerID:callerID];
-            [self setCallerAccount:callerAccount byCallerID:callerID];
-            [self setCalling:calling callerId:callerID];
-            
-            @strongify(self)
-            [self startTimeoutTimerWithCallerId:callerID];
-            
-            dispatch_async(dispatch_get_main_queue(), ^{
-                OWSLogInfo(@"[call]========>CallKit: startCallTimeoutTimer");
-                [[DTMeetingManager shared] startCallTimeoutTimer];
-            });
-            
+            OWSLogError(@"[CALLKIT_DEBUG] didReceiveCall - reportNewIncomingCall error: %@ (code: %ld, domain: %@)",
+                        error.localizedDescription, (long)error.code, error.domain);
+            if (completion) { completion(); }
+
+            if (calling && [self getActiveCallsCountFromCallerMap] > 0) {
+                OWSLogWarn(@"[CALLKIT_DEBUG] didReceiveCall - report rejected with active call, forwarding to in-app UI");
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[DTMeetingManager shared] handleIncomingCallRejectedByCallKit:calling];
+                });
+            }
+
+            [self resetVariableData:uuidString];
         }];
     }
 }
 
-#pragma mark - 打电话
+#pragma mark - Start Call
+
 - (void)starCall:(NSString *)callerId {
-    if (self.haveAcceptCall) {
-        //已有正在进行中通话  busy
+    if (!callerId || callerId.length == 0) {
+        OWSLogError(@"%@ starCall - invalid callerId", self.logTag);
+        if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallStatus:uuidString:)]) {
+            [self.delegate refreshCurrentCallStatus:CallStatusBuildCallerFail uuidString:nil];
+        }
         return;
     }
-    
-    //创建新会话
+
+    NSUInteger activeCallCount = [self getActiveCallsCountFromCallerMap];
+    OWSLogInfo(@"%@ starCall - current active calls: %lu", self.logTag, activeCallCount);
+
     NSUUID *uuid = [NSUUID UUID];
-    [self setUUID:uuid byCallerID:callerId];
-    
-    CXHandle *handle = [[CXHandle alloc] initWithType:CXHandleTypeGeneric value: callerId];
+    NSString *uuidString = uuid.UUIDString;
+
+    WeaCallKitCaller *newCaller = [[WeaCallKitCaller alloc] init];
+    newCaller.uuid = uuid;
+    newCaller.callerAccount = callerId;
+
+    [self.callerMapLock lock];
+    [self.callerMap setObject:newCaller forKey:uuidString];
+    [self.callerMapLock unlock];
+
+    CXHandle *handle = [[CXHandle alloc] initWithType:CXHandleTypeGeneric value:callerId];
     CXStartCallAction *startCallAction = [[CXStartCallAction alloc] initWithCallUUID:uuid handle:handle];
     startCallAction.video = NO;
     CXTransaction *transaction = [[CXTransaction alloc] init];
     [transaction addAction:startCallAction];
-    
+
     [DTRTCAudioSession.shared callkitStartCall:NO];
-    
+
     __weak __typeof(self) wself = self;
-    [_callController requestTransaction:transaction completion:^( NSError *_Nullable error){
-        if (error !=nil) {
-            [wself resetVariableData:callerId];
-            }
+    [_callController requestTransaction:transaction completion:^(NSError *_Nullable error) {
+        if (error != nil) {
+            [wself resetVariableData:uuidString];
+        }
     }];
 }
 
-#pragma mark - 接电话 (app内接通，同步到 callkit)
-- (void)answerCallAction:(NSString *)callerId {
-    // 不存在 CallKit 电话
-    NSUUID *currentUUID = [self uuidFromCallerID:callerId];
+#pragma mark - Answer Call
+
+- (void)answerCallAction:(NSString *)uuidString {
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    [self.callerMapLock unlock];
+    NSUUID *currentUUID = caller.uuid;
     if (currentUUID == nil) {
-        
-        OWSLogWarn(@"%@ answerCallAction - failed:%@", self.logTag, callerId);
+        OWSLogWarn(@"%@ answerCallAction - failed:%@", self.logTag, uuidString);
         return;
     }
-    
-    // 来自 CallKit 的接听，不需要再通知 CallKit
-    BOOL answerd = [self answerStateFromCallerID:callerId];
-    if (answerd) {
-        OWSLogWarn(@"%@ answerCallAction From callkit:%@", self.logTag, callerId);
+    if (caller.answered) {
+        OWSLogWarn(@"%@ answerCallAction From callkit:%@", self.logTag, uuidString);
         return;
     }
-    
     OWSLogInfo(@"%@ answerCallAction - success", self.logTag);
-    [self setAnswerState:YES byCallerID:callerId];
-    CXAnswerCallAction *answerCallAction = [[CXAnswerCallAction alloc] initWithCallUUID: currentUUID];
+    [self setAnswerState:YES byUUID:uuidString];
+    CXAnswerCallAction *answerCallAction = [[CXAnswerCallAction alloc] initWithCallUUID:currentUUID];
     CXTransaction *transaction = [[CXTransaction alloc] init];
     [transaction addAction:answerCallAction];
-    [_callController requestTransaction:transaction completion:^( NSError *_Nullable error){
+    [_callController requestTransaction:transaction completion:^(NSError *_Nullable error) {
         if (error == nil) {
-            
-            self.haveAcceptCall = YES;
+            caller.isAccepted = YES;
             OWSLogInfo(@"%@ CXAnswerCallAction - success", self.logTag);
         } else {
             OWSLogError(@"%@ CXAnswerCallAction - failed", self.logTag);
@@ -291,30 +389,31 @@ static dispatch_queue_t callKitQueue(void) {
     }];
 }
 
-- (void)muteCurrentCall:(BOOL)isMute callerId:(NSString *)callerId
+#pragma mark - Mute Call
+
+- (void)muteCurrentCall:(BOOL)isMute uuidString:(NSString *)uuidString
 {
-    NSUUID *currentUUID = [self uuidFromCallerID:callerId];
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    [self.callerMapLock unlock];
+    NSUUID *currentUUID = caller.uuid;
     if (currentUUID == nil) {
         OWSLogError(@"%@ currentUUID == nil", self.logTag);
         return;
     }
-    
-    if (!self.haveAcceptCall) {
-        OWSLogError(@"%@ haveAcceptCall == NO", self.logTag);
+    if (!caller.isAccepted) {
+        OWSLogError(@"%@ call not accepted yet", self.logTag);
         return;
     }
-    
-    // 来自 CallKit 的 Mute，不需要再通知 CallKit
-    if (self.isMutedByApp) {
+    if (caller.isMutedByApp) {
         OWSLogError(@"%@ isMutedByApp == YES", self.logTag);
         return;
     }
-
-    self.isMutedByApp = YES;
+    caller.isMutedByApp = YES;
     OWSLogInfo(@"%@ muteCurrentCall", self.logTag);
     CXSetMutedCallAction *muteCallAction = [[CXSetMutedCallAction alloc] initWithCallUUID:currentUUID muted:isMute];
     CXTransaction *transaction = [[CXTransaction alloc] initWithAction:muteCallAction];
-    [_callController requestTransaction:transaction completion:^( NSError *_Nullable error){
+    [_callController requestTransaction:transaction completion:^(NSError *_Nullable error) {
         if (error == nil) {
             OWSLogInfo(@"%@ CXSetMutedCallAction - success isMute=%d", self.logTag, isMute);
         } else {
@@ -323,49 +422,41 @@ static dispatch_queue_t callKitQueue(void) {
     }];
 }
 
-- (void)endCallAction:(NSString *)callerId onlyForCallKit:(BOOL)onlyForCallKit
+#pragma mark - End Call
+
+- (void)endCallAction:(NSString *)uuidString onlyForCallKit:(BOOL)onlyForCallKit
 {
-    // 不存在 CallKit 电话
-    NSUUID *currentUUID = [self uuidFromCallerID:callerId];
-    
-    OWSLogInfo(@"%@ callerId: %@, callMap: %@", self.logTag, callerId, self.callerMap);
-    
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    [self.callerMapLock unlock];
+    NSUUID *currentUUID = caller.uuid;
+    OWSLogInfo(@"%@ endCallAction uuid: %@", self.logTag, uuidString);
     if (currentUUID == nil) {
-        
         OWSLogWarn(@"%@ error: no currentUUID", self.logTag);
         return;
     }
-    
-    CXCall *cuttentCall = [self findCallByUUID:currentUUID];
-    if (cuttentCall == nil) {
+    CXCall *currentCall = [self findCallByUUID:currentUUID];
+    if (currentCall == nil) {
         OWSLogWarn(@"%@ error: no currentCall", self.logTag);
         return;
     }
-    
-    // 来自 CallKit 的挂断，不需要再通知 CallKit
-    BOOL hungup = [self hungupStateFromCallerID:callerId];
-    if (hungup) {
+    if (caller.hungup) {
         OWSLogWarn(@"%@ hungup, no need to report to callkit", self.logTag);
         return;
     }
-    
-    OWSLogInfo(@"%@ end call UUid", self.logTag, currentUUID.UUIDString);
-    
-    [self setHungupState:YES byCallerID:callerId];
-    self.isLocalEndCall = YES;
-    self.isEndCallOnlyForCallkit = onlyForCallKit;
+    OWSLogInfo(@"%@ end call UUID: %@", self.logTag, currentUUID.UUIDString);
+    [self setHungupState:YES byUUID:uuidString];
     CXEndCallAction *endCallAction = [[CXEndCallAction alloc] initWithCallUUID:currentUUID];
     CXTransaction *transaction = [[CXTransaction alloc] init];
     [transaction addAction:endCallAction];
-    [_callController requestTransaction:transaction completion:^( NSError *_Nullable error) {
+    [_callController requestTransaction:transaction completion:^(NSError *_Nullable error) {
         if (error) {
             OWSLogError(@"%@ endcall complete error:%@", self.logTag, error);
         } else {
             OWSLogInfo(@"%@ end complete", self.logTag);
         }
     }];
-    
-    DSKProtoCallMessageCalling *calling = [self callingFromCallerId:callerId];
+    DSKProtoCallMessageCalling *calling = [self callingFromUUID:uuidString];
     DispatchMainThreadSafe(^{
         if (!CurrentAppContext().isMainAppAndActive && !calling) {
             OWSLogInfo(@"%@ oldcall rtm logout", self.logTag);
@@ -373,97 +464,59 @@ static dispatch_queue_t callKitQueue(void) {
     });
 }
 
-- (void)endCallActionWithCallerId:(NSString *)callerId onlyForCallKit:(BOOL)onlyForCallKit
-{
-    OWSLogInfo(@"%@ callerid:%@", self.logTag, callerId);
-    
-    // 不存在 CallKit 电话
-    NSUUID *currentUUID = [self uuidFromCallerID:callerId];
-    if (currentUUID == nil) {
-        
-        OWSLogError(@"%@ no currentUUID", self.logTag);
-        return;
-    }
-    
-    CXCall *cuttentCall = [self findCallByUUID:currentUUID];
-    if (cuttentCall == nil) {
-        OWSLogInfo(@"%@ no currentCall", self.logTag);
-        return;
-    }
-    
-    OWSLogInfo(@"%@ callerUUID:%@", self.logTag, currentUUID.UUIDString);
-    
-    [self setHungupState:YES byCallerID:callerId];
-    self.isLocalEndCall = YES;
-    self.isEndCallOnlyForCallkit = onlyForCallKit;
-    CXEndCallAction *endCallAction = [[CXEndCallAction alloc] initWithCallUUID:currentUUID];
-    CXTransaction *transaction = [[CXTransaction alloc] init];
-    [transaction addAction:endCallAction];
-    [_callController requestTransaction:transaction completion:^( NSError *_Nullable error) {
-        if (error) {
-            OWSLogError(@"%@ source:timeout error:%@", self.logTag, error);
-        } else {
-            OWSLogInfo(@"%@ source:timeout complete", self.logTag);
-        }
-    }];
-    
-    DSKProtoCallMessageCalling *calling = [self callingFromCallerId:callerId];
-    if (!CurrentAppContext().isMainAppAndActive && !calling) {
-        OWSLogInfo(@"%@ oldcall rtm logout", self.logTag);
-    }
+#pragma mark - Outgoing Call State
+
+- (void)startedConnectingOutgoingCall:(NSString *)uuidString {
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    [self.callerMapLock unlock];
+    if (caller.uuid == nil) return;
+    [_provider reportOutgoingCallWithUUID:caller.uuid startedConnectingAtDate:nil];
 }
 
-//开始连接
-- (void)startedConnectingOutgoingCall:(NSString *)callerId
-{
-    NSUUID *currentUUID = [self uuidFromCallerID:callerId];
-    if (currentUUID == nil) {
-        return;
-    }
-    [_provider reportOutgoingCallWithUUID:currentUUID startedConnectingAtDate:nil];
-}
-
-//通话连接成功 显示通话时间 作为拨打方
-- (void)connectedOutgoingCall:(NSString *)callerId
-{
-    NSUUID *currentUUID = [self uuidFromCallerID:callerId];
-    if (currentUUID == nil) {
-        return;
-    }
-    [_provider reportOutgoingCallWithUUID:currentUUID connectedAtDate:nil];
+- (void)connectedOutgoingCall:(NSString *)uuidString {
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    [self.callerMapLock unlock];
+    if (caller.uuid == nil) return;
+    [_provider reportOutgoingCallWithUUID:caller.uuid connectedAtDate:nil];
 }
 
 #pragma mark - CXCallObserverDelegate
+
 - (void)callObserver:(CXCallObserver *)callObserver callChanged:(CXCall *)call {
-    OWSLogInfo(@"%@ 通话状态变更: isOutgoing=%d, hasConnected=%d, hasEnded=%d, callUUID=%@", self.logTag,
+    OWSLogInfo(@"%@ call state changed: isOutgoing=%d, hasConnected=%d, hasEnded=%d, callUUID=%@", self.logTag,
                call.isOutgoing, call.hasConnected, call.hasEnded, call.UUID.UUIDString);
 }
 
 #pragma mark - CXProviderDelegate
-- (void)providerDidReset:(CXProvider *)provider
-{
-    // If this reset is from an old (invalidated) provider, skip cleanup
+
+- (void)providerDidReset:(CXProvider *)provider {
     if (provider != self.provider) {
         OWSLogInfo(@"%@ providerDidReset from old provider - skipping", self.logTag);
         return;
     }
+    OWSLogInfo(@"%@ providerDidReset - cleaning up all state", self.logTag);
 
-    OWSLogInfo(@"%@ providerDidReset - cleaning up all state, pendingTransactions:%ld", self.logTag, provider.pendingTransactions.count);
+    [self stopAllTimeoutTimers];
 
-    // Clear all caller data
-    [self.callerMap removeAllObjects];
+    [self.callerMapLock lock];
+    NSArray *allUUIDs = [self.callerMap.allKeys copy];
+    for (NSString *uuidString in allUUIDs) {
+        WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+        caller.backgroundTask = nil;
+        [self.callerMap removeObjectForKey:uuidString];
+    }
+    [self.callerMapLock unlock];
 
-    // Reset all state flags
-    self.haveAcceptCall = NO;
-    self.isMutedByApp = NO;
-    self.isPrivateCall = NO;
-    self.isLocalEndCall = NO;
-    self.isEndCallOnlyForCallkit = NO;
-    self.currentChannelName = nil;
-
-    // Stop timeout timer
-    [self stopTimeroutTimer];
-
+    // Clear stale CallKit UUID to prevent operating on invalidated calls.
+    // Do NOT disconnect LiveKit — media connections are independent of CallKit.
+    // Re-sync server calls to recover JoinBar if needed.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [DTMeetingManager shared].currentCall.callKitUUID = nil;
+        [[DTMeetingManager shared] syncServerCalls];
+    });
+    OWSLogInfo(@"[CALLKIT_DEBUG] providerDidReset completed");
 }
 
 - (void)providerDidBegin:(CXProvider *)provider
@@ -471,190 +524,185 @@ static dispatch_queue_t callKitQueue(void) {
     OWSLogInfo(@"%@ provider begin", self.logTag);
 }
 
-
 - (BOOL)provider:(CXProvider *)provider executeTransaction:(CXTransaction *)transaction
 {
-    //返回true 不执行系统通话界面 直接End
     OWSLogInfo(@"%@ executeTransaction", self.logTag);
-    
     return NO;
 }
 
-- (void)provider:(CXProvider *)provider performStartCallAction:(CXStartCallAction *)action
-{
-    //通话开始
-    NSString *callerID = [self callerIDFromUUID: action.callUUID];
-    
-    OWSLogInfo(@"%@ start call action uuid: %@, callerID: %@", self.logTag, action.callUUID.UUIDString, callerID);
-
-    [DTRTCAudioSession.shared callkitHandleCall: NO];
-    [self startedConnectingOutgoingCall: callerID];
-    
+- (void)provider:(CXProvider *)provider performStartCallAction:(CXStartCallAction *)action {
+    NSString *uuidString = action.callUUID.UUIDString;
+    OWSLogInfo(@"%@ performStartCallAction - uuid: %@", self.logTag, uuidString);
+    [DTRTCAudioSession.shared callkitHandleCall:NO];
+    [self startedConnectingOutgoingCall:uuidString];
     [action fulfill];
-}
-
-- (void)provider:(CXProvider *)provider performAnswerCallAction:(CXAnswerCallAction *)action
-{
-    OWSLogInfo(@"%@ provider--answer callUUID: %@", self.logTag, action.callUUID.UUIDString);
-
-    self.haveAcceptCall = YES;
-    NSString *callerId = [self callerIDFromUUID:action.callUUID];
-    DSKProtoCallMessageCalling *calling = [self callingFromCallerId:callerId];
-
-    [self stopTimeroutTimer];
-
-    // End background task — CallKit now owns the audio session
-    [self endCallBackgroundTask];
-
-    // Notify DTMeetingManager to stop its timeout timer (lightweight, async to main)
-    DispatchMainThreadSafe(^{
-        [[DTMeetingManager shared] stopCallTimeoutTimer];
-    });
-
-    // Group calls: mute by default (lightweight CXTransaction)
-    BOOL is1on1Call = calling.conversationID.hasNumber;
-    if (!is1on1Call) {
-        self.isMutedByApp = NO;
-        DispatchMainThreadSafe(^{
-            [self muteCurrentCall:YES callerId:callerId];
-        });
+    if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallStatus:uuidString:)]) {
+        [self.delegate refreshCurrentCallStatus:CallStatusReadyStart uuidString:uuidString];
     }
-
-    [action fulfill];
-
-    [DTRTCAudioSession.shared callkitHandleCall: YES];
-    [self acceptCallWithCalling:calling];
 }
 
-//拨打方挂断或被叫方拒绝接听 锁屏情况下接通通话到最后挂断
-- (void)provider:(CXProvider *)provider performEndCallAction:(CXEndCallAction *)action
-{
-    OWSLogInfo(@"%@ end call action 收到挂断指令 localEnd: %d, onlyForCallKit: %d UUID: %@", self.logTag, self.isLocalEndCall, self.isEndCallOnlyForCallkit, action.callUUID.UUIDString);
-
-    //结束通话
-    self.haveAcceptCall = NO;
-
-    NSString *callerId = [self callerIDFromUUID:action.callUUID];
-
-    // 如果找不到 callerId，说明是 reportFakeCallCompletion 的假通话触发的，直接忽略
-    if (!callerId) {
-        OWSLogWarn(@"%@ performEndCallAction: unknown UUID (fake call), ignoring", self.logTag);
+- (void)provider:(CXProvider *)provider performAnswerCallAction:(CXAnswerCallAction *)action {
+    NSString *uuidString = action.callUUID.UUIDString;
+    OWSLogInfo(@"[CALLKIT_DEBUG] performAnswerCallAction - UUID: %@", uuidString);
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    [self.callerMapLock unlock];
+    if (!caller) {
+        OWSLogError(@"[CALLKIT_DEBUG] performAnswerCallAction - caller not found");
         [action fulfill];
         return;
     }
+    caller.isAccepted = YES;
+    caller.answered = YES;
+    [DTRTCAudioSession.shared callkitHandleCall:YES];
+    [self stopTimeoutTimerForUUID:uuidString];
+    [action fulfill];
+    if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallStatus:uuidString:)]) {
+        [self.delegate refreshCurrentCallStatus:CallStatusAccept uuidString:uuidString];
+    }
+    OWSLogInfo(@"[CALLKIT_DEBUG] performAnswerCallAction - done, uuid: %@", uuidString);
+}
 
-    DSKProtoCallMessageCalling *calling = [self callingFromCallerId:callerId];
+- (void)provider:(CXProvider *)provider performEndCallAction:(CXEndCallAction *)action {
+    NSString *uuidString = action.callUUID.UUIDString;
+    OWSLogInfo(@"[CALLKIT_DEBUG] performEndCallAction - UUID: %@", uuidString);
 
-    [self stopTimeroutTimer];
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    [self.callerMapLock unlock];
 
-    // Validate roomId matches current call
-    NSString *currentRoomId = DTMeetingManager.shared.currentCall.roomId;
-    NSString *targetRoomId = calling.roomID;
-
-    if (currentRoomId && targetRoomId && ![currentRoomId isEqualToString:targetRoomId]) {
-        OWSLogWarn(@"%@ performEndCallAction roomId mismatch, current: %@, target: %@", self.logTag, currentRoomId, targetRoomId);
-        // Stop timer before resetting and returning
-        [[DTMeetingManager shared] stopCallTimeoutTimer];
-        [self resetVariableData:callerId];
+    if (!caller) {
         [action fulfill];
         return;
     }
-
-    // 停止 callTimeoutTimer (after validation passes)
-    [[DTMeetingManager shared] stopCallTimeoutTimer];
-
-    if (self.isLocalEndCall) {
-        if (!self.isEndCallOnlyForCallkit && !DTMeetingManager.shared.inMeeting) {
-            NSString *localNumber = [TSAccountManager localNumber];
-            BOOL isCallee = localNumber && calling.caller && ![calling.caller isEqualToString:localNumber];
-            if (isCallee) {
-                [self rejectCallFromCallKit:calling];
-                OWSLogInfo(@"%@ local timeout trigger reject call (callee)", self.logTag);
-            } else {
-                [self hangupFromCallKit:calling.roomID];
-                OWSLogInfo(@"%@ local code trigger end call", self.logTag);
-            }
+    if (caller.isEnded) {
+        OWSLogInfo(@"[CALLKIT_DEBUG] performEndCallAction - already handled for %@, cleanup only", uuidString);
+        [self stopTimeoutTimerForUUID:uuidString];
+        [self resetVariableData:uuidString];
+        NSUInteger activeCallCount = [self getActiveCallsCountFromCallerMap];
+        if (activeCallCount == 0) {
+            [DTRTCAudioSession.shared callkitHandleCall:NO];
         }
-        self.isLocalEndCall = NO;
-        self.isEndCallOnlyForCallkit = NO;
-    } else {
-        NSString *localNumber = [TSAccountManager localNumber];
-        BOOL isCallee = localNumber && calling.caller && ![calling.caller isEqualToString:localNumber];
-        if (isCallee && !DTMeetingManager.shared.inMeeting) {
-            [self rejectCallFromCallKit:calling];
-            OWSLogInfo(@"%@ system UI trigger reject call (callee)", self.logTag);
-        } else {
-            [self hangupFromCallKit:calling.roomID];
-            OWSLogInfo(@"%@ system UI trigger end call", self.logTag);
-        }
+        [action fulfill];
+        return;
     }
-
-    [self resetVariableData:callerId];//通话结束
-    [action fulfill]; //通话结束立即执行 时间也可以选
-}
-
-- (void)provider:(CXProvider *)provider performSetMutedCallAction:(CXSetMutedCallAction *)action
-{
+    caller.isEnded = YES;
+    caller.hungup = YES;
+    caller.systemState = CKCallSystemStateRemoved;
+    [self stopTimeoutTimerForUUID:uuidString];
+    if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallStatus:uuidString:)]) {
+        [self.delegate refreshCurrentCallStatus:CallStatusEnd uuidString:uuidString];
+    }
+    [self resetVariableData:uuidString];
+    NSUInteger activeCallCount = [self getActiveCallsCountFromCallerMap];
+    if (activeCallCount == 0) {
+        [DTRTCAudioSession.shared callkitHandleCall:NO];
+    }
     [action fulfill];
-    //静音
-    if (!self.isMutedByApp) {
-        OWSLogInfo(@"%@ Notice app should mute - %d", self.logTag, action.muted);
-        [self muteAudioFromCallKit:action.muted];
-    } else {
-        OWSLogInfo(@"%@ Mute action is from app", self.logTag);
+    OWSLogInfo(@"[CALLKIT_DEBUG] performEndCallAction - done, uuid: %@, remaining: %lu", uuidString, [self getActiveCallsCount]);
+}
+
+- (void)provider:(CXProvider *)provider performSetMutedCallAction:(CXSetMutedCallAction *)action {
+    NSString *uuidString = action.callUUID.UUIDString;
+    OWSLogInfo(@"%@ performSetMutedCallAction - muted: %d", self.logTag, action.muted);
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    [self.callerMapLock unlock];
+    if (!caller || caller.isEnded) {
+        [action fulfill];
+        return;
     }
-    self.isMutedByApp = NO;
+    [action fulfill];
+    if (caller.isMutedByApp) {
+        caller.isMutedByApp = NO;
+        return;
+    }
+    caller.isMuted = action.muted;
+    if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallMuteState:uuidString:)]) {
+        [self.delegate refreshCurrentCallMuteState:action.muted uuidString:uuidString];
+    }
 }
 
-- (void)provider:(CXProvider *)provider timedOutPerformingAction:(CXAction *)action
-{
-    //超时
-    OWSLogInfo(@"%@ action:%@ timeOut", self.logTag, action);
-//    [action fulfill];
+- (void)provider:(CXProvider *)provider timedOutPerformingAction:(CXAction *)action {
+    OWSLogInfo(@"%@ timedOutPerformingAction - action: %@", self.logTag, action);
+    if ([action isKindOfClass:[CXSetMutedCallAction class]]) {
+        CXSetMutedCallAction *muteAction = (CXSetMutedCallAction *)action;
+        NSString *uuidString = muteAction.callUUID.UUIDString;
+        if (![self hasCallWithUUID:uuidString]) {
+            OWSLogInfo(@"%@ Ignoring timeout for ended call: %@", self.logTag, uuidString);
+            [action fulfill];
+            return;
+        }
+    }
+    OWSLogWarn(@"%@ CallKit action timed out, fulfilling: %@", self.logTag, action);
+    [action fulfill];
 }
 
-/// Called when the provider's audio session activation state changes.
-- (void)provider:(CXProvider *)provider didActivateAudioSession:(AVAudioSession *)audioSession
-{
-    //audio session 设置
+- (void)provider:(CXProvider *)provider didActivateAudioSession:(AVAudioSession *)audioSession {
     OWSLogInfo(@"%@ didActivateAudioSession", self.logTag);
-    BOOL speaker = [DTRTCAudioSession.shared shouldUseSpeaker:!self.isPrivateCall];
+
+    // Find the most recently accepted, non-ended caller for audio routing (D1 fix)
+    [self.callerMapLock lock];
+    NSArray<WeaCallKitCaller *> *snapshot = [self.callerMap.allValues copy];
+    [self.callerMapLock unlock];
+
+    BOOL isPrivate = NO;
+    WeaCallKitCaller *activeCaller = nil;
+    for (WeaCallKitCaller *caller in snapshot) {
+        if (caller.isAccepted && !caller.isEnded) {
+            activeCaller = caller;
+        }
+    }
+    if (activeCaller) {
+        isPrivate = activeCaller.isPrivateCall;
+    }
+
+    BOOL speaker = [DTRTCAudioSession.shared shouldUseSpeaker:!isPrivate];
     [DTRTCAudioSession.shared callkitDidActivateAudioSession:audioSession speaker:speaker];
 }
 
 - (void)provider:(CXProvider *)provider didDeactivateAudioSession:(AVAudioSession *)audioSession
 {
-    //call end
     OWSLogInfo(@"%@ didDeactivateAudioSession", self.logTag);
     [DTRTCAudioSession.shared callkitDidDeactivateAudioSession:audioSession];
 }
 
-#pragma mark - mainPrivate
+#pragma mark - Private
 
-//重置变量
-- (void)resetVariableData:(NSString *)callerId
-{
-    if (callerId) {
-        [self.callerMap removeObjectForKey:callerId];
-    }
-    // Reset all call-related state flags
-    self.haveAcceptCall = NO;
-    self.isMutedByApp = NO;
-    self.isPrivateCall = NO;
-    self.isLocalEndCall = NO;
-    self.isEndCallOnlyForCallkit = NO;
-    self.currentChannelName = nil;
-    [self endCallBackgroundTask];
-}
+- (void)resetVariableData:(NSString *)uuidString {
+    if (uuidString) {
+        // Always stop the timeout timer when cleaning up a caller (F3 fix)
+        [self stopTimeoutTimerForUUID:uuidString];
 
-- (void)endCallBackgroundTask {
-    if (self.callBackgroundTask) {
-        self.callBackgroundTask = nil;
-        OWSLogInfo(@"%@ Background task ended", self.logTag);
+        [self.callerMapLock lock];
+        WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+        caller.backgroundTask = nil;
+        [self.callerMap removeObjectForKey:uuidString];
+        [self.callerMapLock unlock];
     }
 }
 
 - (void)recreateProvider {
+    // Clean stale callerMap entries before recreating (C2 fix)
+    // Old provider's calls won't be findable after invalidation
+    [self.callerMapLock lock];
+    NSMutableArray *staleKeys = [NSMutableArray array];
+    for (NSString *key in self.callerMap) {
+        WeaCallKitCaller *caller = [self.callerMap objectForKey:key];
+        if (caller.isEnded) {
+            [staleKeys addObject:key];
+        }
+    }
+    if (staleKeys.count > 0) {
+        for (NSString *key in staleKeys) {
+            WeaCallKitCaller *caller = [self.callerMap objectForKey:key];
+            caller.backgroundTask = nil;
+            [self.callerMap removeObjectForKey:key];
+        }
+        OWSLogInfo(@"%@ cleaned %lu stale callerMap entries before provider recreate", self.logTag, staleKeys.count);
+    }
+    [self.callerMapLock unlock];
+
     CXProvider *oldProvider = self.provider;
     CXProvider *newProvider = [[CXProvider alloc] initWithConfiguration:self.configuration];
     [newProvider setDelegate:self queue:callKitQueue()];
@@ -663,7 +711,8 @@ static dispatch_queue_t callKitQueue(void) {
     OWSLogInfo(@"%@ CXProvider recreated to refresh XPC connection", self.logTag);
 }
 
-#pragma mark - 配置
+#pragma mark - Configuration
+
 - (CXProviderConfiguration *)configuration
 {
     if (!_configuration) {
@@ -678,18 +727,6 @@ static dispatch_queue_t callKitQueue(void) {
     return _configuration;
 }
 
-- (CXCallUpdate *)callUpdate
-{
-    if (!_callUpdate) {
-        _callUpdate = [CXCallUpdate new];
-        _callUpdate.supportsGrouping = false;
-        _callUpdate.supportsUngrouping = false;
-        _callUpdate.supportsHolding = false;
-        _callUpdate.supportsDTMF = false;
-    }
-    return _callUpdate;
-}
-
 - (CXCallController *)callController
 {
     if (!_callController) {
@@ -701,35 +738,54 @@ static dispatch_queue_t callKitQueue(void) {
 - (nullable CXCall *)findCallByUUID:(NSUUID *)uuid {
     for (CXCall *call in _callController.callObserver.calls) {
         if ([call.UUID.UUIDString isEqualToString:uuid.UUIDString]) {
-            return  call;
+            return call;
         }
     }
     return nil;
 }
 
+#pragma mark - VoIP Push
+
 - (void)handleVoipCallNotify:(NSDictionary *)apnsInfo completion:(void (^__nullable)(void))completion {
 
     OWSLogInfo(@"========>CallKit: apnsInfo:%@", apnsInfo);
-
-    // Recreate provider when idle to refresh XPC connection after long background periods
-    if (self.callerMap.allValues.count == 0) {
+    if ([self getActiveCallsCountFromCallerMap] == 0) {
         [self recreateProvider];
     }
 
+    @weakify(self)
+    [self reportPlaceholderIncomingCallWithCompletion:^(NSUUID *uuid, BOOL succeeded) {
+        @strongify(self)
+        if (!self) { return; }
+        if (!succeeded) {
+            OWSLogWarn(@"%@ placeholder report failed, falling back to non-placeholder flow", DTCallKitManager.logTag);
+        }
+        NSUUID *placeholderUUID = succeeded ? uuid : nil;
+        dispatch_async(callKitQueue(), ^{
+            [self processVoipPushWithInfo:apnsInfo
+                          placeholderUUID:placeholderUUID
+                               completion:completion];
+        });
+    }];
+}
+
+- (void)processVoipPushWithInfo:(NSDictionary *)apnsInfo
+                placeholderUUID:(NSUUID *)placeholderUUID
+                     completion:(void (^__nullable)(void))completion {
     NSDictionary *callInfo = apnsInfo[@"callInfo"];
     NSString *encMsg = apnsInfo[@"msg"];
-    
+
     if (DTParamsUtils.validateDictionary(callInfo)) {
         NSString *channelName = callInfo[@"channelName"];
         if (!channelName || !channelName.length) {
-            OWSLogError(@"========>CallKit:❌ channelName reportFakeCall");
-            [self reportFakeCallCompletion:completion];
+            OWSLogError(@"========>CallKit: channelName invalid, ending placeholder");
+            [self endPlaceholderCall:placeholderUUID completion:completion];
             return;
         }
-        
+
         NSString *caller = callInfo[@"caller"];
         NSString *callerRecipientId = [caller transforUserAccountToCallNumber];
-        
+
         NSString *mode = callInfo[@"mode"];
         caller = caller ?: callInfo[@"host"];
         NSString *meetingId = callInfo[@"meetingId"];
@@ -741,29 +797,29 @@ static dispatch_queue_t callKitQueue(void) {
         if (DTParamsUtils.validateString(name)) {
             name = [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerRecipientId];
         }
-        
+
         OWSLogDebug(@"%@ startAt: %@", self.logTag, number_startAt);
-        
+
         if (number_startAt) {
             NSTimeInterval startAt = [number_startAt doubleValue];
             NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-            
+
             if (now - startAt > 70) {
-                OWSLogWarn(@"========>CallKit:❌ unexpected voip: %.0f", startAt);
-                [self reportFakeCallCompletion:completion];
+                OWSLogWarn(@"========>CallKit: unexpected voip: %.0f", startAt);
+                [self endPlaceholderCall:placeholderUUID completion:completion];
                 return;
             }
         }
-        
+
         BOOL isSchedule = [callInfo[@"type"] isEqualToString:@"meeting-popups"];
         BOOL isLiveStream = NO;
         if (number_isLiveStream) {
             isLiveStream = [number_isLiveStream boolValue];
         }
-        
+
         NSString *emkString = callInfo[@"emk"];
         NSNumber *meetingVersion = callInfo[@"meetingVersion"];
-        
+
         [self didReceiveCall:name
                callerAccount:caller
                  channelName:channelName
@@ -776,12 +832,24 @@ static dispatch_queue_t callKitQueue(void) {
                 isLiveStream:isLiveStream
                          eid:eid
               liveKitCalling:nil
+             preReportedUUID:placeholderUUID
                   completion:completion];
     } else if (DTParamsUtils.validateString(encMsg)) {
         DSKProtoCallMessageCalling *calling = [self decryptMsg:encMsg];
         if (!calling) {
-            [self reportFakeCallCompletion:completion];
+            [self endPlaceholderCall:placeholderUUID completion:completion];
         } else {
+            // Apply startAt filter for encrypted path too (G2 fix)
+            if ([calling hasTimestamp]) {
+                NSTimeInterval startAt = (NSTimeInterval)[calling timestamp] / 1000.0;
+                NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+                if (now - startAt > 70) {
+                    OWSLogWarn(@"========>CallKit: encrypted call expired: %.0fs ago", now - startAt);
+                    [self endPlaceholderCall:placeholderUUID completion:completion];
+                    return;
+                }
+            }
+
             NSString *roomId = calling.roomID;
             if (DTParamsUtils.validateString(roomId)) {
                 [self didReceiveCall:nil
@@ -796,38 +864,25 @@ static dispatch_queue_t callKitQueue(void) {
                         isLiveStream:NO
                                  eid:nil
                       liveKitCalling:calling
+                     preReportedUUID:placeholderUUID
                           completion:completion];
+            } else {
+                OWSLogError(@"========>CallKit: roomId invalid, ending placeholder");
+                [self endPlaceholderCall:placeholderUUID completion:completion];
             }
         }
     } else {
-        [self reportFakeCallCompletion:completion];
-        OWSLogInfo(@"========>CallKit:❌ callInfo/msg reportFakeCall");
+        OWSLogInfo(@"========>CallKit: callInfo/msg empty, ending placeholder");
+        [self endPlaceholderCall:placeholderUUID completion:completion];
     }
-    
 }
 
-#pragma mark - private
+#pragma mark - LiveKit Call Check
 
 - (BOOL)isLiveKitCall:(CXSetMutedCallAction *)action {
-    NSString *callerId = [self callerIDFromUUID: action.callUUID];
-    DSKProtoCallMessageCalling *calling = [self callingFromCallerId:callerId];
-    
+    NSString *uuidString = action.callUUID.UUIDString;
+    DSKProtoCallMessageCalling *calling = [self callingFromUUID:uuidString];
     return calling != nil;
 }
-
-#pragma mark - notification
-// REMOVED: Old Darwin notification implementation
-// The Darwin notification "com.temptalk.nseCallkitStop" is now handled by
-// NotificationHandler.swift which provides:
-// - Proper roomId validation from UserDefaults
-// - Specific call matching before termination
-// - Better error handling and logging
-// - Avoids duplicate callback registrations
-//
-// Previous implementation issues:
-// 1. No validation of notification name
-// 2. No roomId matching - would end any active call
-// 3. Caused duplicate registrations with NotificationHandler.swift
-// 4. Led to race conditions and potential state corruption
 
 @end

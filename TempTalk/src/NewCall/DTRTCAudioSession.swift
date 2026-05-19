@@ -23,6 +23,8 @@ public protocol DTRTCAudioSessionObserver: AnyObject {
     )
 }
 
+let kAudioEngineErrorFailedToConfigureAudioSession = -4100
+
 @objc
 public class DTRTCAudioSession: NSObject {
     // Force singleton access
@@ -63,7 +65,6 @@ public class DTRTCAudioSession: NSObject {
     private var isForceSetConfig: Bool?
 
     private var routeChangeToken: NSObjectProtocol?
-    private var hasCalledDisconnect: Bool = false
     private var hasInCalling: Bool { currentActiveObject != nil }
     private var prepareToProcessNewCallkitCall: Bool = false
 
@@ -84,13 +85,7 @@ public class DTRTCAudioSession: NSObject {
                 return self.isForceSetConfig ?? false
             }()
 
-            let stateChanged = (new_.isPlayoutEnabled != old_.isPlayoutEnabled) ||
-                (new_.isRecordingEnabled != old_.isRecordingEnabled) ||
-                (new_.isSpeakerOutputPreferred != old_.isSpeakerOutputPreferred)
-
-            if (new_.isAutomaticConfigurationEnabled && stateChanged) || forceSet {
-                self.configure(oldState: old_, newState: new_, forceSet: forceSet)
-            }
+            _ = self.configureIfNeeded(oldState: old_, newState: new_, forceSet: forceSet)
         }
 
         AudioManager.shared.set(engineObservers: [self, AudioManager.shared.mixer])
@@ -228,7 +223,6 @@ public class DTRTCAudioSession: NSObject {
         _state.mutate {
             $0.isAutomaticConfigurationEnabled = !fromCallKit
             $0.isSpeakerOutputPreferred = speaker
-            hasCalledDisconnect = false
             prepareToProcessNewCallkitCall = false
         }
 
@@ -249,10 +243,6 @@ public class DTRTCAudioSession: NSObject {
 
         currentActiveObject = nil
         Logger.info("obj=\(Unmanaged.passUnretained(obj).toOpaque())")
-
-        hasCalledDisconnect = true
-
-        await setAudioManagerRecordingAlwaysPreparedMode(false, "disconnect room")
     }
 
     public func switchToSpeaker(_ speaker: Bool) {
@@ -287,9 +277,6 @@ public class DTRTCAudioSession: NSObject {
 
     public func connectRoomSuccessConfig() async {
         setAudioManagerEngineAvailability(.default, "connect room success")
-
-        // Ensure remote audio can still play even when local mic capture is not started; only for inputMixer.
-        await setAudioManagerRecordingAlwaysPreparedMode(true, "connect room success")
     }
 
     private func setAudioManagerEngineAvailability(_ availability: AudioEngineAvailability, _ reason: String) {
@@ -298,16 +285,6 @@ public class DTRTCAudioSession: NSObject {
             Logger.info("setEngineAvailability success: \(availability.pretty), reason=\(reason)")
         } catch {
             Logger.error("setEngineAvailability failed with availability: \(availability.pretty), reason=\(reason), error=\(error)")
-        }
-    }
-
-    private func setAudioManagerRecordingAlwaysPreparedMode(_ enable: Bool, _ reason: String) async {
-        do {
-            Logger.info("setRecordingAlwaysPreparedMode beg: \(enable), reason=\(reason)")
-            try await AudioManager.shared.setRecordingAlwaysPreparedMode(enable)
-            Logger.info("setRecordingAlwaysPreparedMode end success: \(enable), reason=\(reason)")
-        } catch {
-            Logger.error("setRecordingAlwaysPreparedMode end failed with error: \(enable), reason=\(reason), error=\(error)")
         }
     }
 
@@ -582,20 +559,25 @@ extension DTRTCAudioSession: AudioEngineObserver, @unchecked Sendable {
         set { _state.mutate { $0.next = newValue } }
     }
 
-    @Sendable func configure(oldState: State, newState: State, forceSet: Bool) {
+    private func configureIfNeeded(oldState: State, newState: State, forceSet: Bool) -> Int {
+        if (newState.isAutomaticConfigurationEnabled) || forceSet {
+            do {
+                try configureAudioSession(oldState: oldState, newState: newState, forceSet: forceSet)
+                return 0
+            } catch {
+                return kAudioEngineErrorFailedToConfigureAudioSession
+            }
+        } else {
+            return 0
+        }
+    }
+
+    @Sendable func configureAudioSession(oldState: State, newState: State, forceSet: Bool) throws {
         if (!newState.isPlayoutEnabled && !newState.isRecordingEnabled)
             && (oldState.isPlayoutEnabled || oldState.isRecordingEnabled)
         {
             if newState.isAutomaticDeactivationEnabled {
-                do {
-                    if hasCalledDisconnect {
-                        safeSetAudioSessionCategory(rtcConfPlayback, "configuring")
-                    }
-
-                    safeSetAudioSessionActive(false, "configuring")
-                } catch {
-                    Logger.error("AudioSession failed to deactivate with error: \(error)")
-                }
+                safeSetAudioSessionActive(false, "configuring")
             } else {
                 Logger.info("AudioSession deactivation skipped...")
             }
@@ -611,6 +593,13 @@ extension DTRTCAudioSession: AudioEngineObserver, @unchecked Sendable {
 
             safeSetAudioSessionCategory(config, "configuring")
 
+            do {
+                try session.setPreferredIOBufferDuration(LKRTCAudioSessionConfiguration.webRTC().ioBufferDuration)
+            } catch {
+                Logger.error("AudioSession failed to configure with error: \(error)")
+                throw error
+            }
+
             if !oldState.isPlayoutEnabled, !oldState.isRecordingEnabled {
                 safeSetAudioSessionActive(true, "configuring")
             }
@@ -625,28 +614,75 @@ extension DTRTCAudioSession: AudioEngineObserver, @unchecked Sendable {
     public func engineWillEnable(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
         // The audio session must be configured before this method; otherwise it may cause no-audio issues.
         Logger.info("engineWillEnable beg: isPlayoutEnabled=\(isPlayoutEnabled) isRecordingEnabled=\(isRecordingEnabled)")
-        _state.mutate {
+        let result: Int = _state.mutate {
+            let oldState = $0
             $0.isPlayoutEnabled = isPlayoutEnabled
             $0.isRecordingEnabled = isRecordingEnabled
             $0.isEngineWillEnable = true
+            let result = configureIfNeeded(oldState: oldState, newState: $0, forceSet: false)
+            if result != 0 {
+                // Rollback state on failure so it stays consistent with WebRTC's rollback.
+                $0 = oldState
+            }
+            return result
         }
-        Logger.info("engineWillEnable end: isPlayoutEnabled=\(isPlayoutEnabled) isRecordingEnabled=\(isRecordingEnabled)")
+        Logger.info("engineWillEnable end: isPlayoutEnabled=\(isPlayoutEnabled) isRecordingEnabled=\(isRecordingEnabled) result=\(result)")
+
+        guard result == 0 else { return result }
 
         // Call next last
         return _state.next?.engineWillEnable(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
     }
 
     public func engineDidDisable(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
+        Logger.info("engineDidDisable beg: isPlayoutEnabled=\(isPlayoutEnabled) isRecordingEnabled=\(isRecordingEnabled)")
         // Call next first
         let nextResult = _state.next?.engineDidDisable(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled)
 
-        _state.mutate {
+        let result: Int = _state.mutate {
+            let oldState = $0
             $0.isPlayoutEnabled = isPlayoutEnabled
             $0.isRecordingEnabled = isRecordingEnabled
             $0.isEngineWillEnable = false
+            let result = configureIfNeeded(oldState: oldState, newState: $0, forceSet: false)
+            if result != 0 {
+                // Rollback state on failure so it stays consistent with WebRTC's rollback.
+                $0 = oldState
+            }
+            return result
         }
 
+        Logger.info("engineDidDisable end: isPlayoutEnabled=\(isPlayoutEnabled) isRecordingEnabled=\(isRecordingEnabled) result=\(result)")
+
+        guard result == 0 else { return result }
+
         return nextResult ?? 0
+    }
+
+    public func engineWillStart(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
+        let nextResult = _state.next?.engineWillStart(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
+
+        let (speaker, fromCallKit) = _state.read {
+            let speaker = lastStatus.map { $0.0 == .builtInSpeaker } ?? $0.isSpeakerOutputPreferred
+            let fromCallKit = !$0.isAutomaticConfigurationEnabled
+
+            return (speaker, fromCallKit)
+        }
+
+        if fromCallKit {
+            let config = if speaker, Self.callkitUseVideoMode {
+                rtcConfVideo
+            } else {
+                rtcConfVoice
+            }
+            safeSetAudioSessionCategory(config, "engineWillStart restore")
+
+            if !Self.callkitUseVideoMode {
+                safeAudioSessionOverrideOutputAudioPort(speaker, "engineWillStart restore")
+            }
+        }
+
+        return nextResult
     }
 }
 

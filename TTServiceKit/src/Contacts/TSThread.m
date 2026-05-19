@@ -200,26 +200,9 @@ BOOL IsNoteToSelfEnabled(void)
             continue;
         }
 
-        // Skip TSInfoMessageArchiveMessage - these are system messages showing "Messages above have expired"
-        if ([interaction isKindOfClass:[TSInfoMessage class]]) {
-            TSInfoMessage *infoMessage = (TSInfoMessage *)interaction;
-            if (infoMessage.messageType == TSInfoMessageArchiveMessage) {
-                OWSLogInfo(@"Skipping archive system message during thread cleanup");
-                continue;
-            }
-        }
-
         [interaction anyRemoveWithTransaction:transaction];
         OWSLogInfo(@"removeAllThreadInteractions message timestamp for sorting: %llu", interaction.timestampForSorting);
     }
-
-    // As an optimization, we called `ignoreInteractionUpdatesForThreadUniqueId` so as not
-    // to re-save the thread after *each* interaction deletion. However, we still need to resave
-    // the thread just once, after all the interactions are deleted.
-//    [self anyUpdateWithTransaction:transaction
-//                             block:^(TSThread *thread) {
-//                                 thread.lastInteractionRowId = 0;
-//                             }];
 }
 
 // 清理空的会话
@@ -227,6 +210,7 @@ BOOL IsNoteToSelfEnabled(void)
 {
     OWSLogInfo(@"[Archive] Starting cleanup of empty visible threads");
 
+    // 1. 清理 shouldBeVisible=1 的空会话（按清理间隔等待）
     NSArray<NSString *> *emptyThreadIds = [InteractionFinder findThreadsWithOnlyArchiveMessagesWithTransaction:transaction];
     OWSLogInfo(@"[Archive] Found %lu threads with only archived messages", (unsigned long)emptyThreadIds.count);
 
@@ -238,6 +222,24 @@ BOOL IsNoteToSelfEnabled(void)
     }
 
     OWSLogInfo(@"[Archive] Cleanup completed");
+}
+
++ (void)cleanupOrphanThreadsWithTransaction:(SDSAnyWriteTransaction *)transaction
+{
+    NSArray<NSString *> *orphanThreadIds = [InteractionFinder findOrphanThreadIdsWithTransaction:transaction];
+    NSUInteger deletedCount = 0;
+    for (NSString *orphanId in orphanThreadIds) {
+        TSThread *orphan = [TSThread anyFetchWithUniqueId:orphanId transaction:transaction];
+        if (!orphan) continue;
+        if ([DTActiveConversationConfigHelper shouldSkipCleanupForThread:orphan]) {
+            OWSLogInfo(@"[Archive] Orphan cleanup skipping protected thread: %@", orphanId);
+            continue;
+        }
+        [orphan anyRemoveWithTransaction:transaction];
+        deletedCount++;
+    }
+    OWSLogInfo(@"[Archive] Once-ever orphan cleanup: deleted %lu of %lu candidate threads (shouldBeVisible=0)",
+              (unsigned long)deletedCount, (unsigned long)orphanThreadIds.count);
 }
 
 // 处理单个 thread 的清理逻辑
@@ -253,7 +255,6 @@ BOOL IsNoteToSelfEnabled(void)
         return;
     }
 
-    // 如果没有 archivalDate，说明这是旧数据或时序问题
     // 需要设置 archivalDate 和 isArchived，开始 7 天倒计时
     if (!thread.archivalDate) {
         OWSLogInfo(@"[Archive] Setting archivalDate for thread: %@ (old data or timing issue)", threadId);
@@ -261,7 +262,7 @@ BOOL IsNoteToSelfEnabled(void)
             t.archivalDate = now;
             t.isArchived = YES;
         }];
-        return;  // 本次不删除，等待下次检查时超过清理间隔再删除
+        return;
     }
 
     // 获取该 thread 类型的清理间隔
@@ -269,7 +270,7 @@ BOOL IsNoteToSelfEnabled(void)
 
     // 间隔为 0，表示不清理
     if (cleanupInterval == 0) {
-        OWSLogInfo(@"[Archive] Skipping thread: %@ (cleanup interval is 0)", threadId);
+        OWSLogInfo(@"[Archive] Skipping thread: %@ (cleanup interval is 0, isGroupThread=%d, isNoteToSelf=%d)", threadId, thread.isGroupThread, thread.isNoteToSelf);
         return;
     }
 
@@ -817,7 +818,7 @@ BOOL IsNoteToSelfEnabled(void)
 
 - (uint32_t)messageExpiresInSecondsWithTransaction:(SDSAnyReadTransaction *)transaction {
     uint32_t interval = 0;
-    DTDisappearanceTimeIntervalEntity *entity = [DTDisappearanceTimeIntervalConfig fetchDisappearanceTimeInterval];
+    DTDisappearanceTimeIntervalEntity *entity = [DTDisappearanceTimeIntervalConfig fetchDisappearanceTimeIntervalWithTransaction:transaction];
     if([self isNoteToSelfWithTransaction:transaction]){
         interval = [entity.messageMe unsignedIntValue];
     }else{
@@ -864,8 +865,6 @@ BOOL IsNoteToSelfEnabled(void)
     // _stickDate = nil;
     self.archivalDate = [NSDate date];
     [self resetIsArchivedColum];
-    OWSLogInfo(@"[Archive] updateArchiveState: thread %@ - isArchived=%d, archivalDate=%@, stickDate=%@",
-               self.uniqueId, self.isArchived, self.archivalDate, self.stickDate);
 }
 
 - (void)unarchiveThread {
@@ -1200,7 +1199,6 @@ BOOL IsNoteToSelfEnabled(void)
             // 新消息比归档时间晚，说明有新消息到来，清除归档状态
             _archivalDate = nil;
             _isArchived = NO;
-            OWSLogInfo(@"[Archive] resetIsArchivedColum: thread %@ - new message arrived, clearing archivalDate and setting isArchived=NO", self.uniqueId);
         } else {
             // 归档时间比最后消息晚，保持归档状态
             _isArchived = YES;
@@ -1214,8 +1212,6 @@ BOOL IsNoteToSelfEnabled(void)
     }
 
     if(_isArchived != previousStatus){
-        OWSLogInfo(@"[Archive] resetIsArchivedColum: thread %@ - isArchived changed from %d to %d (lastMessageDate=%@, archivalDate=%@)",
-                   self.uniqueId, previousStatus, _isArchived, lastMessageDate, archivalDate);
         self.isArchived = _isArchived;
     }
 }

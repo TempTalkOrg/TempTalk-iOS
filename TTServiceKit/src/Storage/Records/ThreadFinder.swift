@@ -14,7 +14,7 @@ public protocol ThreadFinder {
     func enumerateVisibleThreads(isArchived: Bool, range: NSRange, transaction: ReadTransaction, block: @escaping (TSThread) -> Void) throws
     /// enum limit visible threads
     func enumerateVisibleThreads(isArchived: Bool, limit: Int, transaction: ReadTransaction, block: @escaping (TSThread) -> Void) throws
-    func enumerateInactiveThreads(transaction: ReadTransaction, block: @escaping (TSThread) -> Void) throws
+    func enumerateInactiveThreads(groupInterval: Double, contactInterval: Double, transaction: ReadTransaction, block: @escaping (TSThread) -> Void) throws
     func enumerateVisibleThreads(isArchived: Bool, transaction: ReadTransaction, block: @escaping (TSThread) -> Void) throws
     func enumerateVisibleThreads(limit: Int, transaction: ReadTransaction, block: @escaping (TSThread) -> Void) throws
     func enumerateVisibleThreadIds(isArchived: Bool, transaction: ReadTransaction, block: @escaping (String) -> Void) throws
@@ -108,10 +108,10 @@ public class AnyThreadFinder: NSObject, ThreadFinder {
     }
         
     @objc
-    public func enumerateInactiveThreads(transaction: SDSAnyReadTransaction, block: @escaping (TSThread) -> Void) throws {
+    public func enumerateInactiveThreads(groupInterval: Double, contactInterval: Double, transaction: SDSAnyReadTransaction, block: @escaping (TSThread) -> Void) throws {
         switch transaction.readTransaction {
         case .grdbRead(let grdb):
-            try grdbAdapter.enumerateInactiveThreads(transaction: grdb, block: block)
+            try grdbAdapter.enumerateInactiveThreads(groupInterval: groupInterval, contactInterval: contactInterval, transaction: grdb, block: block)
         }
     }
 
@@ -316,10 +316,8 @@ struct GRDBThreadFinder: ThreadFinder {
         }
     }
 
-    func enumerateInactiveThreads(transaction: GRDBReadTransaction, block: @escaping (TSThread) -> Void) throws {
-        
-        let groupInterval = DTDisappearanceTimeIntervalConfig.fetchDisappearanceTimeInterval().conversationGroup.doubleValue;
-        let contactInterval = DTDisappearanceTimeIntervalConfig.fetchDisappearanceTimeInterval().conversationOthers.doubleValue;
+    func enumerateInactiveThreads(groupInterval: Double, contactInterval: Double, transaction: GRDBReadTransaction, block: @escaping (TSThread) -> Void) throws {
+
         let currentInterval = NSDate().timeIntervalSince1970
         let groupArchiveT = currentInterval - groupInterval
         let contactArchiveT = currentInterval - contactInterval

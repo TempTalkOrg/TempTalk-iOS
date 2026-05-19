@@ -13,18 +13,19 @@ import Combine
 class ParticipantSnapshot: ObservableObject, Identifiable, Equatable {
     let id: String
     let identity: String
- 
+    let isMicMuted: Bool
 
-    init(id: String, identity: String) {
+    init(id: String, identity: String, isMicMuted: Bool = true) {
         self.id = id
         self.identity = identity
+        self.isMicMuted = isMicMuted
     }
 
-    // 或者从原始 Participant 初始化
     convenience init(from participant: Participant) {
         self.init(
             id: Self.parseId(participant),
-            identity: Self.parseIdentity(participant)
+            identity: Self.parseIdentity(participant),
+            isMicMuted: participant.firstAudioPublication?.isMuted ?? true
         )
     }
     
@@ -37,9 +38,10 @@ class ParticipantSnapshot: ObservableObject, Identifiable, Equatable {
     }
     
     static func == (lhs: ParticipantSnapshot, rhs: ParticipantSnapshot) -> Bool {
-            return lhs.id == rhs.id &&
-                   lhs.identity == rhs.identity
-        }
+        return lhs.id == rhs.id &&
+               lhs.identity == rhs.identity &&
+               lhs.isMicMuted == rhs.isMicMuted
+    }
     
     func snapshotParticipants(_ participants: [Participant]) -> [ParticipantSnapshot] {
         return participants.map { ParticipantSnapshot(from: $0) }

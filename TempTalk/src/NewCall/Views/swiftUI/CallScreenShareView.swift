@@ -19,6 +19,7 @@ struct CallScreenShareView: View {
     // 展示快速点击的弹幕
     @State private var showQuickPanel = false
     @State private var showPlaceholder = true
+    @State private var screenShareUnmuteCounter: Int = 0
     // 用于防抖的任务
     @State private var debounceTask: Task<Void, Never>?
 
@@ -37,29 +38,29 @@ struct CallScreenShareView: View {
     @State private var isPopupPresented = false
     @State private var showCriticalAlertConfirm = false
     @State private var raiseHandsWidth: CGFloat = DTMeetingManager.shared.calculateRaiseHandsWidth()
+    @State private var quickPanelHeight: CGFloat = 170
 
     public var body: some View {
         GeometryReader { geometry in
+            let containerSize = geometry.size
+
             ZStack {
-                // 屏幕共享内容
                 screenShareContentView(geometry: geometry)
 
-                // 顶部控制栏
                 topBarView
                     .opacity(viewModel.showControls ? 1 : 0)
                     .allowsHitTesting(viewModel.showControls)
                     .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
 
+                // 举手入口已下掉，注释保留逻辑
                 // 右上角”举手”按钮
-                if roomDataManager.hasRaiseHands {
-                    raiseHandButtonView
-                }
+                // if roomDataManager.hasRaiseHands {
+                //     raiseHandButtonView
+                // }
 
-                // 左下角弹幕 & 控制栏 & 快捷弹幕面板
-                bulletChatOverlay
+                bulletChatOverlay(containerSize: containerSize)
 
-                // 底部工具栏
-                bottomToolbarView(geometry: geometry)
+                bottomToolbarView(containerSize: containerSize)
                     .opacity(viewModel.showControls ? 1 : 0)
                     .allowsHitTesting(viewModel.showControls)
                     .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
@@ -71,39 +72,39 @@ struct CallScreenShareView: View {
                         },
                         onShowCriticalAlertConfirm: {
                             showCriticalAlertConfirm = true
-                        }
+                        },
+                        containerSize: containerSize
                     )
                     .transition(.move(edge: .bottom))
                     .animation(.easeOut(duration: 0.3), value: isPopupPresented)
                     .allowsHitTesting(isPopupPresented)
                 }
 
-                // Critical Alert 确认弹窗
                 if showCriticalAlertConfirm {
                     CriticalAlertConfirmBottomPopupView(
                         onDismiss: {
                             showCriticalAlertConfirm = false
                         },
                         invitedUserIds: Array(DTMeetingManager.shared.currentCall.invitedCriticalAlertUsers),
-                        callType: DTMeetingManager.shared.currentCall.callType
+                        callType: DTMeetingManager.shared.currentCall.callType,
+                        containerSize: containerSize
                     )
                     .transition(.opacity)
                     .animation(.easeOut(duration: 0.3), value: showCriticalAlertConfirm)
                 }
                 
-                // 右侧滑出成员列表
-                memberListOverlay
+                memberListOverlay(containerSize: containerSize)
             }
+            .frame(width: containerSize.width, height: containerSize.height)
             .onAppear {
                 DTMeetingManager.shared.setCameraRotation(orientation: .landscapeRight)
                 viewModel.hiddenTopBottomBar()
             }
             .onDisappear {
                 DTMeetingManager.shared.setCameraRotation(orientation: .portrait)
-                // 清理邀请好友页面（如果存在）
                 roomCtx.inviteVC?.dismiss(animated: false)
                 roomCtx.inviteVC = nil
-                Task { await cleanUpResources() }
+                cleanUpResourcesSync()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                 handleAppDidBecomeActive()
@@ -122,12 +123,11 @@ struct CallScreenShareView: View {
     
     private func screenShareContentView(geometry: GeometryProxy) -> some View {
         let screenSize = geometry.size
-        let maxDimension = max(screenSize.width, screenSize.height)
-        let minDimension = min(screenSize.width, screenSize.height)
+        let insets = OWSWindowManager.shared().callViewWindow.safeAreaInsets
+        let safeWidth = screenSize.width - insets.left - insets.right
 
         return ZStack {
             if let publication = roomCtx.screenSharePublication,
-               !publication.isMuted,
                let track = publication.track as? VideoTrack
             {
                 ZoomableScrollView {
@@ -139,12 +139,14 @@ struct CallScreenShareView: View {
                         pinchToZoomOptions: .resetOnRelease,
                         didRenderFirstFrame: $isRendering
                     )
-                    .id(track.sid)
+                    .id("\(track.sid?.stringValue ?? "")-\(screenShareUnmuteCounter)-\(roomCtx.videoRefreshToken)")
                     .frame(
-                        width: maxDimension - 200,
-                        height: minDimension,
+                        width: safeWidth,
+                        height: screenSize.height,
                         alignment: .center
                     )
+                    .padding(.leading, insets.left)
+                    .padding(.trailing, insets.right)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .onChange(of: isRendering) { rendering in
@@ -158,9 +160,14 @@ struct CallScreenShareView: View {
                         }
                     }
                 }
+                .onChange(of: publication.isMuted) { isMuted in
+                    if !isMuted {
+                        screenShareUnmuteCounter += 1
+                    }
+                }
             }
-            
-            if showPlaceholder {
+
+            if showPlaceholder || roomCtx.isRoomReconnecting || roomCtx.screenSharePublication?.isMuted == true {
                 waitingForScreenPlaceholder
                         .transition(.opacity)
             }
@@ -173,96 +180,96 @@ struct CallScreenShareView: View {
                 viewModel.hiddenTopBottomBar()
             }
         }
-    }
-    
-    // 占位图视图
-    private var waitingForScreenPlaceholder: some View {
-        ZStack {
-            Color.dtBackground.ignoresSafeArea()
-            
-            VStack(spacing: 8) {
-                Image("call_screen_share")
-                    .font(.system(size: 20))
-                    .foregroundColor(.gray.opacity(0.6))
-                
-                Text("Waiting for screen…")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.gray.opacity(0.8))
-            }
+        .onChange(of: roomCtx.videoRefreshToken) { _ in
+            isRendering = false
         }
+    }
+
+    private var waitingForScreenPlaceholder: some View {
+        VStack(spacing: 8) {
+            Image("call_screen_share")
+                .font(.system(size: 20))
+                .foregroundColor(.gray.opacity(0.6))
+            
+            Text("Waiting for screen…")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.gray.opacity(0.8))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.dtBackground.ignoresSafeArea())
         .allowsHitTesting(false)
     }
     
     
     private var topBarView: some View {
-        VStack {
-            ZStack {
-                LinearGradient(
-                    gradient: Gradient(colors: [Color.black.opacity(0.4), Color.clear]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+        let insets = OWSWindowManager.shared().callViewWindow.safeAreaInsets
+        let barHeight = 62 + insets.top
+        return ZStack {
+            LinearGradient(
+                gradient: Gradient(colors: [Color.black.opacity(0.4), Color.clear]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
 
-                HStack {
-                    Button(action: minimizeAction) {
-                        Image("ic_call_mini")
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    Spacer()
-
-                    HStack(spacing: 10) {
-                        if roomCtx.currentCall.callType != .private {
-                            Text("\(roomCtx.currentCall.roomName)")
-                                .font(.system(size: 16, weight: .medium))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
-
-                        if let duration = timerManager.duration, duration > 0 {
-                            let stringDuration = DTLiveKitCallModel.stringDuration(duration)
-                            Text(stringDuration)
-                        } else if roomCtx.currentCall.callType == .private {
-                            Text("connecting...")
-                        }
-                    }
-                    .font(.system(size: 16, weight: .medium))
-                    .offset(x: -30, y: -10)
-
-                    Spacer()
+            HStack {
+                Button(action: minimizeAction) {
+                    Image("ic_call_mini")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
-                .padding(.leading, 16)
-            }
-            .frame(height: 62)
-            .frame(maxWidth: .infinity)
+                .offset(y: insets.top < 10 ? 10 - insets.top : 0)
+                Spacer()
 
-            Spacer()
+                HStack(spacing: 10) {
+                    if roomCtx.currentCall.callType != .private {
+                        Text("\(roomCtx.currentCall.roomName)")
+                            .font(.system(size: 16, weight: .medium))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+
+                    if let duration = timerManager.duration, duration > 0 {
+                        let stringDuration = DTLiveKitCallModel.stringDuration(duration)
+                        Text(stringDuration)
+                    } else if roomCtx.currentCall.callType == .private {
+                        Text("connecting...")
+                    }
+                }
+                .font(.system(size: 16, weight: .medium))
+                .offset(x: -36)
+
+                Spacer()
+            }
+            .padding(.top, insets.top)
+            .padding(.leading, 43)
+            .padding(.trailing, insets.right)
         }
+        .frame(height: barHeight)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     
     
     private var raiseHandButtonView: some View {
-        VStack {
-            HStack {
-                Spacer()
-                HandsControlViewRepresentable {
-                    isGroupMembers.toggle()
-                }
-                .frame(width: raiseHandsWidth)
-                .frame(height: 36)
-            }
-            .padding(.top, 10)
-            .padding(.trailing, 15)
-            Spacer()
+        let controlBottom: CGFloat = 30
+        let controlHeight: CGFloat = 36
+        let bottomPadding = viewModel.showControls
+            ? controlBottom + controlHeight + 10
+            : controlBottom
+
+        return HandsControlViewRepresentable {
+            isGroupMembers.toggle()
         }
+        .frame(width: raiseHandsWidth, height: 36)
+        .padding(.bottom, bottomPadding)
+        .padding(.leading, 45)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
     }
     
     
-    private var bulletChatOverlay: some View {
-        // 根据屏幕方向动态计算弹幕宽度
-        let currentScreenSize = UIScreen.main.bounds.size
-        let isLandscape = currentScreenSize.width > currentScreenSize.height
-        let bulletChatWidth = isLandscape ? currentScreenSize.width * 0.5 : currentScreenSize.width
+    private func bulletChatOverlay(containerSize: CGSize) -> some View {
+        let isLandscape = containerSize.width > containerSize.height
+        let bulletChatWidth = isLandscape ? containerSize.width * 0.5 : containerSize.width
 
         return ZStack(alignment: .bottomLeading) {
             VStack(alignment: .leading, spacing: 0) {
@@ -287,93 +294,98 @@ struct CallScreenShareView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            DTEmojiFlyingViewRepresentable(containerSize: CGSize(width: bulletChatWidth, height: 0))
+            DTEmojiFlyingViewRepresentable(containerSize: CGSize(width: bulletChatWidth, height: 0), isLandscape: isLandscape)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .allowsHitTesting(false)
 
             if showQuickPanel, viewModel.showControls {
                 Color.black.opacity(0.001)
                     .ignoresSafeArea()
-                    .onTapGesture {
-                        showQuickPanel = false
-                    }
+                    .onTapGesture { showQuickPanel = false }
                     .allowsHitTesting(viewModel.showControls)
 
                 let config = DTMeetingManager.shared.bubbleMessageConfig()
                 QuickMessagePanelUIKitWrapper(
                     emojiPresets: config.emojiPresets,
-                    textPresets: config.textPresets
-                ) { message in
-                    Task {
-                        // 发送气泡类型消息
-                        await DTMeetingManager.shared.sendDanmu(message, type: .bubble)
-                        showQuickPanel = false
+                    textPresets: config.textPresets,
+                    onTap: { message in
+                        Task {
+                            await DTMeetingManager.shared.sendDanmu(message, type: .bubble)
+                            showQuickPanel = false
+                        }
+                    },
+                    onContentSizeChange: { size in
+                        if abs(size.height - quickPanelHeight) > 0.5 {
+                            quickPanelHeight = size.height
+                        }
                     }
-                }
-                .frame(width: 300, height: 170)
+                )
+                .frame(width: 300, height: quickPanelHeight)
                 .padding(.leading, 30)
                 .padding(.bottom, 75)
                 .allowsHitTesting(showQuickPanel && viewModel.showControls)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .padding(.leading, 15) // 整体向右偏移15px，避开灵动岛和摄像头
+        .padding(.leading, 15)
     }
     
     
-    private func bottomToolbarView(geometry: GeometryProxy) -> some View {
+    @ViewBuilder
+    private func bottomToolbarView(containerSize: CGSize) -> some View {
         let bottomInset: CGFloat = OWSWindowManager.shared().callViewWindow.safeAreaInsets.bottom
-        return BottomToolbarView(
-            isScreenSharing: true,
-            cameraPublishHandler: { _ in },
-            barClickHandler: {
-                viewModel.userPressedButton()
-            },
-            moreClickHandler: {
-                isPopupPresented = true
-            },
-            isGroupMembers: $isGroupMembers,
-            localRaiseHand: $roomDataManager.localRaiseHand
-        )
-        .environmentObject(appCtx!)
-        .environmentObject(roomCtx)
-        .environmentObject(roomCtx.room)
-        .environment(\.colorScheme, .dark)
-        .padding(.bottom, max(20, bottomInset + 10))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-    }
-    
-    
-    private var memberListOverlay: some View {
-        HStack {
-            Spacer()
-            if isGroupMembers {
-                VStack {
-                    MemberContainerView(
-                        onCancel: { isGroupMembers = false },
-                        onAddMember: { roomCtx.presentInviteView() }
-                    )
-                    .environmentObject(roomCtx)
-                }
-                .frame(width: 200)
-                .frame(maxHeight: .infinity)
-                .background(Color(rgbHex: 0x2B3139))
-                .transition(.move(edge: .trailing))
-                .animation(.easeOut(duration: 0.2), value: isGroupMembers)
-            }
+        if let appCtx {
+            BottomToolbarView(
+                isScreenSharing: true,
+                containerSize: containerSize,
+                cameraPublishHandler: { _ in },
+                barClickHandler: {
+                    viewModel.userPressedButton()
+                },
+                moreClickHandler: {
+                    isPopupPresented = true
+                },
+                isGroupMembers: $isGroupMembers,
+                localRaiseHand: $roomDataManager.localRaiseHand
+            )
+            .environmentObject(appCtx)
+            .environment(\.colorScheme, .dark)
+            .padding(.bottom, max(20, bottomInset + 10))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
     }
     
     
-    private func cleanUpResources() async {
+    @ViewBuilder
+    private func memberListOverlay(containerSize: CGSize) -> some View {
+        if isGroupMembers {
+            MemberContainerView(
+                onCancel: { isGroupMembers = false },
+                onAddMember: { roomCtx.presentInviteView() },
+                containerSize: containerSize
+            )
+            .frame(width: 200)
+            .frame(maxHeight: .infinity, alignment: .trailing)
+            .background(Color(rgbHex: 0x2B3139))
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .transition(.move(edge: .trailing))
+            .animation(.easeOut(duration: 0.2), value: isGroupMembers)
+        }
+    }
+    
+    
+    private func cleanUpResourcesSync() {
         debounceTask?.cancel()
         debounceTask = nil
         isRendering = false
         showQuickPanel = false
         isGroupMembers = false
         RoomDataManager.shared.onPipUpdate = nil
+        // 提前捕获 track 引用，避免在 async 中访问可能已析构的 roomCtx
         if let track = roomCtx.screenSharePublication?.track as? VideoTrack {
-            try? await track.stop()
+            Task { [weak track] in
+                try? await track?.stop()
+            }
         }
     }
 }
@@ -413,28 +425,16 @@ struct ZoomableScrollView<Content: View>: UIViewRepresentable {
             make.height.equalTo(scrollView.frameLayoutGuide)
         }
 
-        let pipView = DTPIPView()
         let callWindow = OWSWindowManager.shared().callViewWindow
         let topVC = callWindow.findTopViewController()
-        if NSStringFromClass(type(of: topVC)).contains("DTHostingController"), NSStringFromClass(type(of: topVC)).contains("CallScreenShareView") {
-            pipView.addToSuperview(topVC.view)
-            pipView.updatePipViewCountDown()
-            if let shareItem = DTMeetingManager.shared.fetchSharingItem() {
-                pipView.setNewSpeakingItem(shareItem)
-            }
-            RoomDataManager.shared.onPipUpdate = { [weak pipView] in
-                DispatchQueue.main.async {
-                    guard let pipView else { return }
-                    if let speakingItem = DTMeetingManager.shared.fetchSpeakingItem() {
-                        pipView.setNewSpeakingItem(speakingItem)
-                    } else if let shareItem = DTMeetingManager.shared.fetchSharingItem() {
-                        pipView.setNewSpeakingItem(shareItem)
-                    }
-                    if DTMeetingManager.shared.isPresentedShare() {
-                        pipView.updatePipViewCountDown()
-                    }
-                }
-            }
+        if DTMeetingManager.shared.roomContext?.isShareViewController(topVC) == true {
+            topVC.view.subviews.filter { $0 is SpeakerFloatingContainer }.forEach { $0.removeFromSuperview() }
+
+            let container = SpeakerFloatingContainer()
+            container.addToSuperview(topVC.view)
+
+            let speakerFloating = SpeakerFloatingUIView()
+            speakerFloating.addToContainer(container, in: topVC)
         }
 
         context.coordinator.observeZoomChange(for: scrollView)
@@ -443,7 +443,10 @@ struct ZoomableScrollView<Content: View>: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIScrollView, context: Context) {
-        context.coordinator.hostingController?.rootView = content
+        let newContent = content
+        DispatchQueue.main.async {
+            context.coordinator.hostingController?.rootView = newContent
+        }
         if context.coordinator.needsInitialLayout, uiView.bounds.size != .zero {
             context.coordinator.needsInitialLayout = false
             uiView.contentOffset = .zero
@@ -463,6 +466,17 @@ struct ZoomableScrollView<Content: View>: UIViewRepresentable {
         deinit {
             if let observer = zoomChangeObserver {
                 NotificationCenter.default.removeObserver(observer)
+            }
+            let hc = hostingController
+            hostingController = nil
+            if Thread.isMainThread {
+                hc?.view.removeFromSuperview()
+                hc?.removeFromParent()
+            } else {
+                DispatchQueue.main.async {
+                    hc?.view.removeFromSuperview()
+                    hc?.removeFromParent()
+                }
             }
         }
 

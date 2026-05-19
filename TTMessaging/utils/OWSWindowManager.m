@@ -362,7 +362,11 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
         OWSLogInfo(@"[Window] show screen windows");
         [self ensureScreenBlockWindowShown];
         [self ensureRootWindowHidden];
-        [self ensureCallViewWindowHidden];
+        if (self.callViewController && self.shouldShowCallView) {
+            OWSLogInfo(@"[Window] keeping call window visible behind screen block (in meeting)");
+        } else {
+            [self ensureCallViewWindowHidden];
+        }
     } else if (self.callViewController && self.shouldShowCallView) {
         // Show Call View.
         OWSLogInfo(@"[Window] show call windows");
@@ -384,8 +388,13 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
     }
     
     if (@available(iOS 16, *)) {
-        [self.rootWindow.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];
-        [self.callViewWindow.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];
+        if (self.isScreenBlockActive) {
+            [self.screenBlockingWindow.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];
+        } else if (self.callViewController && self.shouldShowCallView) {
+            [self.callViewWindow.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];
+        } else {
+            [self.rootWindow.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];
+        }
     }
 }
 

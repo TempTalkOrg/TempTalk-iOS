@@ -68,6 +68,41 @@
     
 }
 
++ (DTDisappearanceTimeIntervalEntity *)fetchDisappearanceTimeIntervalWithTransaction:(SDSAnyReadTransaction *)transaction {
+
+    __block DTDisappearanceTimeIntervalEntity *entity = nil;
+    [[DTServerConfigManager sharedManager] fetchConfigFromLocalWithSpaceName:@"disappearanceTimeInterval"
+                                                                transaction:transaction
+                                                                  completion:^(id  _Nonnull config, NSError * _Nonnull error) {
+
+        NSError *transformError = nil;
+        if(error || config == nil){
+            entity = [MTLJSONAdapter modelOfClass:[DTDisappearanceTimeIntervalEntity class]
+                                                                  fromJSONDictionary:[self defaultConfig]
+                                                                               error:&transformError];
+        }else{
+            entity = [MTLJSONAdapter modelOfClass:[DTDisappearanceTimeIntervalEntity class] fromJSONDictionary:config error:&transformError];
+        }
+
+        if(!entity || transformError){
+            entity = [DTDisappearanceTimeIntervalEntity new];
+
+            entity.globalDefault = @(kMonthInterval);
+            entity.messageDefault = @(kMonthInterval);
+            entity.messageOthers = @(kMonthInterval);
+            entity.messageGroup = @(kMonthInterval);
+
+            entity.messageMe = @(0);
+            entity.conversationDefault = @(kMonthInterval);
+            entity.conversationMe = @(0);
+            entity.conversationOthers = @(kMonthInterval);
+            entity.conversationGroup = @(kMonthInterval);
+        }
+    }];
+
+    return entity;
+}
+
 + (NSDictionary *)defaultConfig{
     return @{
         @"default":@(2*kDayInterval),
