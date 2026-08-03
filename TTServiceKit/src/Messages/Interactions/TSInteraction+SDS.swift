@@ -88,6 +88,8 @@ public struct InteractionRecord: SDSRecord {
     public let cardUniqueId: String?
     public let cardVersion: UInt32?
     public let messageModeType: TSMessageModeType?
+    public let callState: Int?
+    public let roomId: String?
 
     public enum CodingKeys: String, CodingKey, ColumnExpression, CaseIterable {
         case id
@@ -151,6 +153,8 @@ public struct InteractionRecord: SDSRecord {
         case cardUniqueId
         case cardVersion
         case messageModeType
+        case callState
+        case roomId
     }
 
     public static func columnName(_ column: InteractionRecord.CodingKeys, fullyQualified: Bool = false) -> String {
@@ -235,6 +239,8 @@ public extension InteractionRecord {
         cardVersion = row[58]
         messageModeType = row[59]
         translateMessage = row[60]
+        callState = row[61]
+        roomId = row[62]
     }
 }
 
@@ -925,6 +931,105 @@ extension TSInteraction {
                                   read: read,
                                   recipientId: recipientId)
 
+        case .incomingCallMessage:
+
+            let uniqueId: String = record.uniqueId
+            let associatedUniqueThreadId: String = record.associatedUniqueThreadId
+            let notifySequenceId: UInt64 = record.notifySequenceId
+            let receivedAtTimestamp: UInt64 = record.receivedAtTimestamp
+            let sequenceId: UInt64 = record.sequenceId
+            let serverTimestamp: UInt64 = record.serverTimestamp
+            let timestamp: UInt64 = record.timestamp
+            let uniqueThreadId: String = record.threadUniqueId
+            let atPersons: String? = record.atPersons
+            let attachmentIdsSerialized: Data? = record.attachmentIds
+            let attachmentIds: [String] = try SDSDeserialization.unarchive(attachmentIdsSerialized, name: "attachmentIds")
+            let body: String? = record.body
+            let cardSerialized: Data? = record.card
+            let card: DTCardMessageEntity? = try SDSDeserialization.optionalUnarchive(cardSerialized, name: "card")
+            let cardUniqueId: String? = record.cardUniqueId
+            let cardVersion: UInt32 = try SDSDeserialization.required(record.cardVersion, name: "cardVersion")
+            let combinedForwardingMessageSerialized: Data? = record.combinedForwardingMessage
+            let combinedForwardingMessage: DTCombinedForwardingMessage? = try SDSDeserialization.optionalUnarchive(combinedForwardingMessageSerialized, name: "combinedForwardingMessage")
+            let contactShareSerialized: Data? = record.contactShare
+            let contactShare: OWSContact? = try SDSDeserialization.optionalUnarchive(contactShareSerialized, name: "contactShare")
+            let editable: Bool = try SDSDeserialization.required(record.editable, name: "editable")
+            let envelopSource: String? = record.envelopSource
+            let expireStartedAt: UInt64 = try SDSDeserialization.required(record.expireStartedAt, name: "expireStartedAt")
+            let expiresAt: UInt64 = try SDSDeserialization.required(record.expiresAt, name: "expiresAt")
+            let expiresInSeconds: UInt32 = try SDSDeserialization.required(record.expiresInSeconds, name: "expiresInSeconds")
+            let isPinnedMessage: Bool = try SDSDeserialization.required(record.isPinnedMessage, name: "isPinnedMessage")
+            let mentionsSerialized: Data? = record.mentions
+            let mentions: [DTMention]? = try SDSDeserialization.optionalUnarchive(mentionsSerialized, name: "mentions")
+            guard let messageModeType: TSMessageModeType = record.messageModeType else {
+               throw SDSError.missingRequiredField
+            }
+            let pinId: String? = record.pinId
+            let quotedMessageSerialized: Data? = record.quotedMessage
+            let quotedMessage: TSQuotedMessage? = try SDSDeserialization.optionalUnarchive(quotedMessageSerialized, name: "quotedMessage")
+            let reactionMapSerialized: Data? = record.reactionMap
+            let reactionMap: [String: [DTReactionSource]]? = try SDSDeserialization.optionalUnarchive(reactionMapSerialized, name: "reactionMap")
+            let reactionMessageSerialized: Data? = record.reactionMessage
+            let reactionMessage: DTReactionMessage? = try SDSDeserialization.optionalUnarchive(reactionMessageSerialized, name: "reactionMessage")
+            let recallSerialized: Data? = record.recall
+            let recall: DTRecallMessage? = try SDSDeserialization.optionalUnarchive(recallSerialized, name: "recall")
+            let storedShouldStartExpireTimer: Bool = try SDSDeserialization.required(record.storedShouldStartExpireTimer, name: "storedShouldStartExpireTimer")
+            let translateMessageSerialized: Data? = record.translateMessage
+            let translateMessage: DTTranslateMessage? = try SDSDeserialization.optionalUnarchive(translateMessageSerialized, name: "translateMessage")
+            guard let whisperMessageType: TSWhisperMessageType = record.whisperMessageType else {
+               throw SDSError.missingRequiredField
+            }
+            let authorId: String = try SDSDeserialization.required(record.authorId, name: "authorId")
+            guard let mentionedMsgType: OWSMentionedMsgType = record.mentionedMsgType else {
+               throw SDSError.missingRequiredField
+            }
+            let read: Bool = try SDSDeserialization.required(record.read, name: "read")
+            let sourceDeviceId: UInt32 = try SDSDeserialization.required(record.sourceDeviceId, name: "sourceDeviceId")
+            // Call-message stored fields (see DTIncomingCallMessage).
+            let callState: Int? = record.callState
+            let roomId: String? = record.roomId
+
+            let incomingCallMessage = DTIncomingCallMessage(grdbId: recordId,
+                                     uniqueId: uniqueId,
+                                     associatedUniqueThreadId: associatedUniqueThreadId,
+                                     notifySequenceId: notifySequenceId,
+                                     receivedAtTimestamp: receivedAtTimestamp,
+                                     sequenceId: sequenceId,
+                                     serverTimestamp: serverTimestamp,
+                                     timestamp: timestamp,
+                                     uniqueThreadId: uniqueThreadId,
+                                     atPersons: atPersons,
+                                     attachmentIds: attachmentIds,
+                                     body: body,
+                                     card: card,
+                                     cardUniqueId: cardUniqueId,
+                                     cardVersion: cardVersion,
+                                     combinedForwardingMessage: combinedForwardingMessage,
+                                     contactShare: contactShare,
+                                     editable: editable,
+                                     envelopSource: envelopSource,
+                                     expireStartedAt: expireStartedAt,
+                                     expiresAt: expiresAt,
+                                     expiresInSeconds: expiresInSeconds,
+                                     isPinnedMessage: isPinnedMessage,
+                                     mentions: mentions,
+                                     messageModeType: messageModeType,
+                                     pinId: pinId,
+                                     quotedMessage: quotedMessage,
+                                     reactionMap: reactionMap,
+                                     reactionMessage: reactionMessage,
+                                     recall: recall,
+                                     storedShouldStartExpireTimer: storedShouldStartExpireTimer,
+                                     translateMessage: translateMessage,
+                                     whisperMessageType: whisperMessageType,
+                                     authorId: authorId,
+                                     mentionedMsgType: mentionedMsgType,
+                                     read: read,
+                                     sourceDeviceId: sourceDeviceId)
+            incomingCallMessage.callState = callState ?? 0
+            incomingCallMessage.roomId = roomId
+            return incomingCallMessage
+
         case .incomingMessage:
 
             let uniqueId: String = record.uniqueId
@@ -1412,6 +1517,9 @@ extension TSInteraction: SDSModel {
         case let model as TSInfoMessage:
             assert(type(of: model) == TSInfoMessage.self)
             return TSInfoMessageSerializer(model: model)
+        case let model as DTIncomingCallMessage:
+            assert(type(of: model) == DTIncomingCallMessage.self)
+            return DTIncomingCallMessageSerializer(model: model)
         case let model as TSIncomingMessage:
             assert(type(of: model) == TSIncomingMessage.self)
             return TSIncomingMessageSerializer(model: model)
@@ -2970,6 +3078,134 @@ extension TSInteraction: DeepCopyable {
                                  unregisteredRecipientId: unregisteredRecipientId)
         }
 
+        if let modelToCopy = self as? DTIncomingCallMessage {
+            assert(type(of: modelToCopy) == DTIncomingCallMessage.self)
+            let uniqueId: String = modelToCopy.uniqueId
+            let associatedUniqueThreadId: String = modelToCopy.associatedUniqueThreadId
+            let notifySequenceId: UInt64 = modelToCopy.notifySequenceId
+            let receivedAtTimestamp: UInt64 = modelToCopy.receivedAtTimestamp
+            let sequenceId: UInt64 = modelToCopy.sequenceId
+            let serverTimestamp: UInt64 = modelToCopy.serverTimestamp
+            let timestamp: UInt64 = modelToCopy.timestamp
+            let uniqueThreadId: String = modelToCopy.uniqueThreadId
+            let atPersons: String? = modelToCopy.atPersons
+            // NOTE: If this generates build errors, you made need to
+            // implement DeepCopyable for this type in DeepCopy.swift.
+            let attachmentIds: [String] = try DeepCopies.deepCopy(modelToCopy.attachmentIds)
+            let body: String? = modelToCopy.body
+            let card: DTCardMessageEntity?
+            if let cardForCopy = modelToCopy.card {
+               card = try DeepCopies.deepCopy(cardForCopy)
+            } else {
+               card = nil
+            }
+            let cardUniqueId: String? = modelToCopy.cardUniqueId
+            let cardVersion: UInt32 = modelToCopy.cardVersion
+            let combinedForwardingMessage: DTCombinedForwardingMessage?
+            if let combinedForwardingMessageForCopy = modelToCopy.combinedForwardingMessage {
+               combinedForwardingMessage = try DeepCopies.deepCopy(combinedForwardingMessageForCopy)
+            } else {
+               combinedForwardingMessage = nil
+            }
+            let contactShare: OWSContact?
+            if let contactShareForCopy = modelToCopy.contactShare {
+               contactShare = try DeepCopies.deepCopy(contactShareForCopy)
+            } else {
+               contactShare = nil
+            }
+            let editable: Bool = modelToCopy.editable
+            let envelopSource: String? = modelToCopy.envelopSource
+            let expireStartedAt: UInt64 = modelToCopy.expireStartedAt
+            let expiresAt: UInt64 = modelToCopy.expiresAt
+            let expiresInSeconds: UInt32 = modelToCopy.expiresInSeconds
+            let isPinnedMessage: Bool = modelToCopy.isPinnedMessage
+            let mentions: [DTMention]?
+            if let mentionsForCopy = modelToCopy.mentions {
+               mentions = try DeepCopies.deepCopy(mentionsForCopy)
+            } else {
+               mentions = nil
+            }
+            let messageModeType: TSMessageModeType = modelToCopy.messageModeType
+            let pinId: String? = modelToCopy.pinId
+            let quotedMessage: TSQuotedMessage?
+            if let quotedMessageForCopy = modelToCopy.quotedMessage {
+               quotedMessage = try DeepCopies.deepCopy(quotedMessageForCopy)
+            } else {
+               quotedMessage = nil
+            }
+            let reactionMap: [String: [DTReactionSource]]?
+            if let reactionMapForCopy = modelToCopy.reactionMap {
+               reactionMap = try DeepCopies.deepCopy(reactionMapForCopy)
+            } else {
+               reactionMap = nil
+            }
+            let reactionMessage: DTReactionMessage?
+            if let reactionMessageForCopy = modelToCopy.reactionMessage {
+               reactionMessage = try DeepCopies.deepCopy(reactionMessageForCopy)
+            } else {
+               reactionMessage = nil
+            }
+            let recall: DTRecallMessage?
+            if let recallForCopy = modelToCopy.recall {
+               recall = try DeepCopies.deepCopy(recallForCopy)
+            } else {
+               recall = nil
+            }
+            let storedShouldStartExpireTimer: Bool = modelToCopy.storedShouldStartExpireTimer
+            let translateMessage: DTTranslateMessage?
+            if let translateMessageForCopy = modelToCopy.translateMessage {
+               translateMessage = try DeepCopies.deepCopy(translateMessageForCopy)
+            } else {
+               translateMessage = nil
+            }
+            let whisperMessageType: TSWhisperMessageType = modelToCopy.whisperMessageType
+            let authorId: String = modelToCopy.authorId
+            let mentionedMsgType: OWSMentionedMsgType = modelToCopy.mentionedMsgType
+            let read: Bool = modelToCopy.wasRead
+            let sourceDeviceId: UInt32 = modelToCopy.sourceDeviceId
+
+            let modelCopy = DTIncomingCallMessage(grdbId: id,
+                                     uniqueId: uniqueId,
+                                     associatedUniqueThreadId: associatedUniqueThreadId,
+                                     notifySequenceId: notifySequenceId,
+                                     receivedAtTimestamp: receivedAtTimestamp,
+                                     sequenceId: sequenceId,
+                                     serverTimestamp: serverTimestamp,
+                                     timestamp: timestamp,
+                                     uniqueThreadId: uniqueThreadId,
+                                     atPersons: atPersons,
+                                     attachmentIds: attachmentIds,
+                                     body: body,
+                                     card: card,
+                                     cardUniqueId: cardUniqueId,
+                                     cardVersion: cardVersion,
+                                     combinedForwardingMessage: combinedForwardingMessage,
+                                     contactShare: contactShare,
+                                     editable: editable,
+                                     envelopSource: envelopSource,
+                                     expireStartedAt: expireStartedAt,
+                                     expiresAt: expiresAt,
+                                     expiresInSeconds: expiresInSeconds,
+                                     isPinnedMessage: isPinnedMessage,
+                                     mentions: mentions,
+                                     messageModeType: messageModeType,
+                                     pinId: pinId,
+                                     quotedMessage: quotedMessage,
+                                     reactionMap: reactionMap,
+                                     reactionMessage: reactionMessage,
+                                     recall: recall,
+                                     storedShouldStartExpireTimer: storedShouldStartExpireTimer,
+                                     translateMessage: translateMessage,
+                                     whisperMessageType: whisperMessageType,
+                                     authorId: authorId,
+                                     mentionedMsgType: mentionedMsgType,
+                                     read: read,
+                                     sourceDeviceId: sourceDeviceId)
+            modelCopy.callState = modelToCopy.callState
+            modelCopy.roomId = modelToCopy.roomId
+            return modelCopy
+        }
+
         if let modelToCopy = self as? TSIncomingMessage {
             assert(type(of: modelToCopy) == TSIncomingMessage.self)
             let uniqueId: String = modelToCopy.uniqueId
@@ -3597,6 +3833,8 @@ extension TSInteractionSerializer {
     static var cardUniqueIdColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "cardUniqueId", columnType: .unicodeString, isOptional: true) }
     static var cardVersionColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "cardVersion", columnType: .int64, isOptional: true) }
     static var messageModeTypeColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "messageModeType", columnType: .int, isOptional: true) }
+    static var callStateColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "callState", columnType: .int, isOptional: true) }
+    static var roomIdColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "roomId", columnType: .unicodeString, isOptional: true) }
 
     // TODO: We should decide on a naming convention for
     //       tables that store models.
@@ -3664,7 +3902,9 @@ extension TSInteractionSerializer {
         envelopSourceColumn,
         cardUniqueIdColumn,
         cardVersionColumn,
-        messageModeTypeColumn
+        messageModeTypeColumn,
+        callStateColumn,
+        roomIdColumn
         ])
     }
 }
@@ -3722,6 +3962,17 @@ public extension TSInteraction {
     func anyUpdate(transaction: SDSAnyWriteTransaction, block: (TSInteraction) -> Void) {
 
         block(self)
+
+        // An unsaved model (shouldBeSaved == false) never owns a DB row, and uniqueIds are
+        // deterministic (authorId_deviceId_timestamp), so anyFetch here could only return a
+        // DIFFERENT record that shares the id — e.g. the forward-notice TSInfoMessage that
+        // ForwardNoticeDispatcher inserts at the unsaved TSOutgoingForwardNoticeMessage's
+        // timestamp. Updating/saving that foreign row is always wrong (and the failed cast
+        // in typed wrappers like anyUpdateOutgoingMessage is fatal in Debug). Mirrors the
+        // shouldBeSaved guard in SDSModel.sdsSave.
+        guard shouldBeSaved else {
+            return
+        }
 
         guard let dbCopy = type(of: self).anyFetch(uniqueId: uniqueId,
                                                    transaction: transaction) else {
@@ -4137,8 +4388,10 @@ class TSInteractionSerializer: SDSSerializer {
         let cardUniqueId: String? = nil
         let cardVersion: UInt32? = nil
         let messageModeType: TSMessageModeType? = nil
+        let callState: Int? = nil
+        let roomId: String? = nil
 
-        return InteractionRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, associatedUniqueThreadId: associatedUniqueThreadId, atPersons: atPersons, attachmentIds: attachmentIds, authorId: authorId, body: body, card: card, combinedForwardingMessage: combinedForwardingMessage, contactShare: contactShare, customAttributedMessage: customAttributedMessage, customMessage: customMessage, editable: editable, errorType: errorType, expireStartedAt: expireStartedAt, expiresAt: expiresAt, expiresInSeconds: expiresInSeconds, groupChatMode: groupChatMode, groupMetaMessage: groupMetaMessage, hasSyncedTranscript: hasSyncedTranscript, inviteCode: inviteCode, isFromLinkedDevice: isFromLinkedDevice, isPinnedMessage: isPinnedMessage, isVoiceMessage: isVoiceMessage, meetingDetailUrl: meetingDetailUrl, meetingName: meetingName, meetingReminderType: meetingReminderType, messageType: messageType, mostRecentFailureText: mostRecentFailureText, notifySequenceId: notifySequenceId, pinId: pinId, quotedMessage: quotedMessage, rapidFiles: rapidFiles, reactionMap: reactionMap, reactionMessage: reactionMessage, read: read, realSource: realSource, recall: recall, recallPreview: recallPreview, receivedAtTimestamp: receivedAtTimestamp, recipientId: recipientId, recipientStateMap: recipientStateMap, sequenceId: sequenceId, serverTimestamp: serverTimestamp, sourceDeviceId: sourceDeviceId, timestamp: timestamp, translateMessage: translateMessage, threadUniqueId: threadUniqueId, unregisteredRecipientId: unregisteredRecipientId, whisperMessageType: whisperMessageType, storedShouldStartExpireTimer: storedShouldStartExpireTimer, mentionedMsgType: mentionedMsgType, configurationDurationSeconds: configurationDurationSeconds, shouldAffectThreadSorting: shouldAffectThreadSorting, mentions: mentions, storedMessageState: storedMessageState, envelopSource: envelopSource, cardUniqueId: cardUniqueId, cardVersion: cardVersion, messageModeType: messageModeType)
+        return InteractionRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, associatedUniqueThreadId: associatedUniqueThreadId, atPersons: atPersons, attachmentIds: attachmentIds, authorId: authorId, body: body, card: card, combinedForwardingMessage: combinedForwardingMessage, contactShare: contactShare, customAttributedMessage: customAttributedMessage, customMessage: customMessage, editable: editable, errorType: errorType, expireStartedAt: expireStartedAt, expiresAt: expiresAt, expiresInSeconds: expiresInSeconds, groupChatMode: groupChatMode, groupMetaMessage: groupMetaMessage, hasSyncedTranscript: hasSyncedTranscript, inviteCode: inviteCode, isFromLinkedDevice: isFromLinkedDevice, isPinnedMessage: isPinnedMessage, isVoiceMessage: isVoiceMessage, meetingDetailUrl: meetingDetailUrl, meetingName: meetingName, meetingReminderType: meetingReminderType, messageType: messageType, mostRecentFailureText: mostRecentFailureText, notifySequenceId: notifySequenceId, pinId: pinId, quotedMessage: quotedMessage, rapidFiles: rapidFiles, reactionMap: reactionMap, reactionMessage: reactionMessage, read: read, realSource: realSource, recall: recall, recallPreview: recallPreview, receivedAtTimestamp: receivedAtTimestamp, recipientId: recipientId, recipientStateMap: recipientStateMap, sequenceId: sequenceId, serverTimestamp: serverTimestamp, sourceDeviceId: sourceDeviceId, timestamp: timestamp, translateMessage: translateMessage, threadUniqueId: threadUniqueId, unregisteredRecipientId: unregisteredRecipientId, whisperMessageType: whisperMessageType, storedShouldStartExpireTimer: storedShouldStartExpireTimer, mentionedMsgType: mentionedMsgType, configurationDurationSeconds: configurationDurationSeconds, shouldAffectThreadSorting: shouldAffectThreadSorting, mentions: mentions, storedMessageState: storedMessageState, envelopSource: envelopSource, cardUniqueId: cardUniqueId, cardVersion: cardVersion, messageModeType: messageModeType, callState: callState, roomId: roomId)
     }
 }
 

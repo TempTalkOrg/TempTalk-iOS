@@ -292,6 +292,7 @@ class ConversationMessageBubbleView: UIView {
         textView.textContainer.lineFragmentPadding = 0
         textView.delegate = self
         textView.isHidden = true
+        textView.accessibilityIdentifier = DTConversationAccessibilityID.messageBody
 
         // Note: 虽然 cell 在 MessageBubbleView 上已经添加了 LongPress，但在某些 iOS 版本中（例如 iOS 17.5），
         // 当 textView 内容是链接或 @ 时外层的 LongPress 无法触发，通过在 TextView 上添加 LongPress 来解决这个问题
@@ -315,6 +316,12 @@ class ConversationMessageBubbleView: UIView {
     
     var quotedMessageView: ConversationQuotedMessageView?
     var bodyMediaView: UIView?
+    // Per-cell reuse of the animated (GIF/WebP) view. Kept across reconfigures so the
+    // animation resumes from its current frame instead of restarting (the flash). Owned by
+    // this cell only — never shared across cells (a UIView has a single superview).
+    // Not `private`: createAnimatedImageView lives in a same-type extension in another file.
+    var reusableAnimatedView: YYAnimatedImageView?
+    var reusableAnimatedAttachmentId: String?
     var downloadView: AttachmentPointerView?
     var bodyTextSelectionView: DTTextSelectionView?
     
@@ -360,7 +367,9 @@ extension ConversationMessageBubbleView {
         
         if let bodyMediaView, bodyMediaView.superview != nil,
            let bodyMediaSize = renderItem.bodyMediaRenderItem?.viewSize {
-            bodyMediaView.snp.makeConstraints { make in
+            // remake (not make): a reused animated view survives across reconfigures, so make would
+            // append a duplicate height constraint on every reload. remake keeps exactly one.
+            bodyMediaView.snp.remakeConstraints { make in
                 make.height.equalTo(bodyMediaSize.height)
             }
         }

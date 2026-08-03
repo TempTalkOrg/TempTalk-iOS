@@ -51,6 +51,10 @@ extern NSString *const kLottieStickerFileExtension;
 + (nullable NSString *)getSupportedExtensionFromAnimatedMIMEType:(NSString *)supportedMIMEType;
 
 + (BOOL)isAnimated:(NSString *)contentType;
+
+// Animated by MIME alone, excluding the ambiguous image/webp (which needs the GIF flag). Use as the
+// MIME fallback when the GIF proto flag is absent so static WebP isn't misclassified as animated.
++ (BOOL)isMimeUnambiguouslyAnimated:(NSString *)contentType;
 + (BOOL)isImage:(NSString *)contentType;
 + (BOOL)isVideo:(NSString *)contentType;
 + (BOOL)isAudio:(NSString *)contentType;
@@ -78,6 +82,9 @@ extern NSString *const kLottieStickerFileExtension;
 
 // TODO: 放在此处产生耦合，后续看是否拆出到哪里合适
 + (BOOL)isVoiceMessage:(DSKProtoAttachmentPointer *)attachmentProto;
+
+// Reads the GIF bit (4) from AttachmentPointer.flags without downloading the file.
++ (BOOL)isAnimatedGifFlag:(DSKProtoAttachmentPointer *)attachmentProto;
 
 @end
 

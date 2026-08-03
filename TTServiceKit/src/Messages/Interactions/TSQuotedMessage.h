@@ -20,6 +20,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly, nullable) NSString *contentType;
 @property (nonatomic, readonly, nullable) NSString *sourceFilename;
 
+// Whether the quoted attachment is an animated image (GIF/animated-WebP/APNG).
+// Carried in the quote snapshot so previews can show [GIF] without the source file.
+// Readwrite so an incoming quote can OR in the wire GIF flag over the MIME-derived default.
+@property (nonatomic) BOOL isAnimated;
+
 // This is only set when sending a new attachment so we have a way
 // to reference the original attachment when generating a thumbnail.
 // We don't want to do this until the message is saved, when the user sends

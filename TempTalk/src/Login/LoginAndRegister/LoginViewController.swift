@@ -11,7 +11,7 @@ import Foundation
 @objc class LoginViewController: OWSViewController, UITextViewDelegate {
     
     private let window = UIApplication.shared.delegate?.window
-    private let legalPolicyURL = "https://yelling.pro/legal.html"
+    private let legalPolicyURL = "https://quicall.app/legal.html"
     
     // MARK: lifecycle
     override func viewDidLoad() {
@@ -23,7 +23,17 @@ import Foundation
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        self.navigationController?.isNavigationBarHidden = true
+        // iOS 17+: show a transparent nav bar so the proxy entry sits as a right bar-button item
+        // without a visible bar over the login page. Older iOS keeps the bar hidden (no proxy entry).
+        if #available(iOS 17, *) {
+            let appearance = UINavigationBarAppearance()
+            appearance.configureWithTransparentBackground()
+            navigationItem.standardAppearance = appearance
+            navigationItem.scrollEdgeAppearance = appearance
+            self.navigationController?.isNavigationBarHidden = false
+        } else {
+            self.navigationController?.isNavigationBarHidden = true
+        }
     }
     
     override func applyTheme() {
@@ -33,10 +43,27 @@ import Foundation
     }
     
     // MARK: action
+    @objc func proxyMenuTapped() {
+        let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: Localized("PROXY_USE_PROXY"), style: .default) { [weak self] _ in
+            self?.navigationController?.pushViewController(DTProxySettingsViewController(), animated: true)
+        })
+        sheet.addAction(UIAlertAction(title: CommonStrings.cancelButton(), style: .cancel))
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = proxyMenuButton
+            popover.sourceRect = proxyMenuButton.bounds
+        }
+        present(sheet, animated: true)
+    }
+
     @objc func signupButtonTapped() {
-//        navigationController?.pushViewController(, animated: true)
-        let profile = DTSettingEditProfileController(editProfileType: .signup)
-        navigationController?.pushViewController(profile, animated: true)
+        let tutorialVC = DTOnboardingTutorialViewController()
+        tutorialVC.onFinished = { [weak self] in
+            guard let self else { return }
+            let profile = DTSettingEditProfileController(editProfileType: .signup)
+            self.navigationController?.pushViewController(profile, animated: true)
+        }
+        navigationController?.pushViewController(tutorialVC, animated: true)
     }
     
     @objc func loginbuttonTapped() {
@@ -49,6 +76,14 @@ import Foundation
     }
     
     private func createViews() {
+        // Proxy "Use proxy" overflow entry as a nav-bar right item (the bar is shown transparent in
+        // viewWillAppear). Gated to iOS 17+ (see ProxyManager.isEnabled): the proxy can't run below
+        // 17, so don't surface its entry there.
+        if #available(iOS 17, *) {
+            proxyMenuButton.autoSetDimensions(to: CGSize(square: 44))
+            navigationItem.rightBarButtonItem = UIBarButtonItem(customView: proxyMenuButton)
+        }
+
         // center.y - 132
         let containerView = UIView()
         view.addSubview(containerView)
@@ -90,6 +125,14 @@ import Foundation
         return true
     }
     
+    private lazy var proxyMenuButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "ellipsis"), for: .normal)
+        button.tintColor = Theme.tprimaryColor
+        button.addTarget(self, action: #selector(proxyMenuTapped), for: .touchUpInside)
+        return button
+    }()
+
     private lazy var logoImageView: UIImageView = {
         let logoImageView = UIImageView()
         logoImageView.image = UIImage(named: "login_logo")

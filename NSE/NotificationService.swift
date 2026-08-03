@@ -28,14 +28,14 @@ let environment = NSEEnvironment()
 let hasShownFirstUnlockError = AtomicBool(false, lock: .sharedGlobal)
 
 class NotificationService: UNNotificationServiceExtension {
-    
+
     private var contentHandlers = AtomicArray<ContentHandlerObject>(lock: .sharedGlobal)
     private var plainAttemptContents = AtomicDictionary<String, UNNotificationContent>(lock: .sharedGlobal)
-    
+
     var threadHelper: DTThreadHelper {
         return DTThreadHelper.sharedManager()
     }
-    
+
     // MARK: -
 
     private static let unfairLock = UnfairLock()
@@ -94,7 +94,7 @@ class NotificationService: UNNotificationServiceExtension {
                 if allUnMutedUnreadCount >= 0 {
                     let latestBadge = allUnMutedUnreadCount
                     Logger.info("latestBadge \(latestBadge).")
-                    
+
                     // Modify the notification content
                     mutablePlainAttemptContent.badge = NSNumber(value: latestBadge)
                 }
@@ -103,27 +103,22 @@ class NotificationService: UNNotificationServiceExtension {
         } else {
             contentHandlerObject.contentHandler(plainAttemptContent)
         }
-
-        Logger.info("Invoking contentHandler, memoryUsage: \(LocalDevice.memoryUsageString), nseCount: \(nseCount).")
         Logger.flush()
     }
     
     func configWithNameAndPreview(title: String = "", body: String = "") {
-        
-        Logger.info("Invoking configWithNameAndPreview, memoryUsage: \(LocalDevice.memoryUsageString).")
-                
         guard let contentHandlerObject = contentHandlers.first else {
             Logger.warn("No contentHandlerObject, memoryUsage: \(LocalDevice.memoryUsageString).")
             Logger.flush()
             return
         }
-        
+
         guard let plainAttemptContent = plainAttemptContents[contentHandlerObject.identifier] else {
             Logger.warn("No contentHandler, memoryUsage: \(LocalDevice.memoryUsageString).")
             Logger.flush()
             return
         }
-        
+
         if let mutablePlainAttemptContent = plainAttemptContent.mutableCopy() as? UNMutableNotificationContent {
             // Modify the notification content
             if title.count > 0 {
@@ -132,9 +127,7 @@ class NotificationService: UNNotificationServiceExtension {
             if body.count > 0 {
                 mutablePlainAttemptContent.body = body
             }
-            
-            Logger.info("processPlainNotification received")
-            
+
             plainAttemptContents[contentHandlerObject.identifier] = mutablePlainAttemptContent
         }
     }
@@ -163,32 +156,26 @@ class NotificationService: UNNotificationServiceExtension {
         }
     }
 
-    func overridePlainContentWithResolvedName(replacementName: String, locargs: [String]) {
-        guard !replacementName.isEmpty else { return }
-
-        guard let contentHandlerObject = contentHandlers.first else {
-            Logger.warn("[NSE] overridePlainContent: no contentHandlerObject")
-            return
-        }
-        let identifier = contentHandlerObject.identifier
-
-        guard let plainAttemptContent = plainAttemptContents[identifier],
-              let mutableCopy = plainAttemptContent.mutableCopy() as? UNMutableNotificationContent else {
-            Logger.warn("[NSE] overridePlainContent: cannot mutate plainAttemptContent")
-            return
+    private func applyResolvedGroupName(to content: UNNotificationContent, replacementName: String) -> UNMutableNotificationContent? {
+        guard !replacementName.isEmpty,
+              let mutable = content.mutableCopy() as? UNMutableNotificationContent else {
+            return nil
         }
 
-        mutableCopy.title = replacementName
+        mutable.title = replacementName
 
         let placeholder = DTGroupCryptoDisplayHelper.encryptedGroupNamePlaceholder
-        if !mutableCopy.body.isEmpty {
-            mutableCopy.body = mutableCopy.body.replacingOccurrences(of: placeholder, with: replacementName)
+        if !mutable.body.isEmpty {
+            mutable.body = mutable.body.replacingOccurrences(of: placeholder, with: replacementName)
         }
 
-        var userInfo = mutableCopy.userInfo
+        var userInfo = mutable.userInfo
         if var apsDict = userInfo["aps"] as? [AnyHashable: Any] {
             if var alertDict = apsDict["alert"] as? [AnyHashable: Any] {
-                alertDict["loc-args"] = locargs
+                if var locargs = alertDict["loc-args"] as? [String], !locargs.isEmpty {
+                    locargs[0] = replacementName
+                    alertDict["loc-args"] = locargs
+                }
                 if alertDict["title"] != nil {
                     alertDict["title"] = replacementName
                 }
@@ -196,21 +183,135 @@ class NotificationService: UNNotificationServiceExtension {
             }
             userInfo["aps"] = apsDict
         }
-        mutableCopy.userInfo = userInfo
+        mutable.userInfo = userInfo
 
-        plainAttemptContents[identifier] = mutableCopy
-        Logger.info("[NSE] overridePlainContent: title overridden with resolved name")
+        return mutable
+    }
+
+    /// Plaintext group name from caller's `Calling.roomName` in the inline envelope.
+    /// Group calls only — 1-on-1 roomName is caller's view of callee, useless to receiver.
+    private func extractInlineGroupCallRoomName(aps: [String: Any]) -> String? {
+        guard let msgString = aps["msg"] as? String,
+              let data = Data(base64Encoded: msgString),
+              let signalingKey = TSAccountManager.signalingKey(),
+              let decryptedPayload = SSKCryptography.decryptAppleMessagePayload(data, withSignalingKey: signalingKey),
+              let envelope = try? DSKProtoEnvelope(serializedData: decryptedPayload),
+              envelope.hasContent else {
+            return nil
+        }
+
+        let plaintextData: Data
+        if envelope.type == .etoee {
+            // APS call envelopes are .etoee in practice; .plaintext is kept only as a defensive branch.
+            // decryptEnvelope advances the Signal session, but VoIP and alert pushes carry independent
+            // envelopes, so this does not race the main app's socket-path decrypt of the same ciphertext.
+            var decrypted: Data?
+            databaseStorage.write { tx in
+                let result = Self.messageDecrypter.decryptEnvelope(envelope, envelopeData: decryptedPayload, transaction: tx)
+                if case .success(let r) = result, let plain = r.plaintextData {
+                    decrypted = plain
+                }
+            }
+            guard let r = decrypted else { return nil }
+            plaintextData = r
+        } else if envelope.type == .plaintext, let content = envelope.content {
+            plaintextData = content
+        } else {
+            return nil
+        }
+
+        guard let content = try? DSKProtoContent(serializedData: plaintextData),
+              let calling = content.callMessage?.calling,
+              calling.conversationID?.groupID != nil,
+              let roomName = calling.roomName, !roomName.isEmpty else {
+            return nil
+        }
+        return roomName
+    }
+
+    /// Resolves encrypted group name locally; shared by call/normal notifications.
+    /// Path A: decrypt groupInfo.encryptedName using dataMessage.groupRootKey.
+    /// Path B: fall back to local DB-based resolver.
+    /// Path C: 🔒 lock fallback when local resolve also fails.
+    private func applyGroupNameResolution(to attemptContent: UNNotificationContent,
+                                          dataMessage: DSKProtoDataMessage? = nil) -> UNNotificationContent {
+        guard let aps = attemptContent.userInfo["aps"] as? [String: Any],
+              let alert = aps["alert"] as? [String: Any],
+              let lockey = alert["loc-key"] as? String else {
+            return attemptContent
+        }
+
+        // Path A: payload-direct decrypt
+        if let hit = NSEPayloadGroupNameDecryptor.tryDecrypt(aps: aps, dataMessage: dataMessage) {
+            let cipher = (aps["groupInfo"] as? [String: Any])?["encryptedName"] as? String
+            persistEncryptedName(gid: hit.gid, cipher: cipher)
+            return applyResolvedGroupName(to: attemptContent, replacementName: hit.plainName) ?? attemptContent
+        }
+
+        // Path B: local DB-based resolver
+        var resolution: GroupNameResolution = .useServerProvided
+        databaseStorage.read { transaction in
+            resolution = NSEGroupNameResolver().resolve(aps: aps, lockey: lockey, transaction: transaction)
+        }
+        switch resolution {
+        case .replace(let name):
+            return applyResolvedGroupName(to: attemptContent, replacementName: name) ?? attemptContent
+        case .useServerProvided:
+            // Path C: 🔒 fallback for encrypted groups only
+            return applyLockFallback(to: attemptContent, aps: aps) ?? attemptContent
+        }
+    }
+
+    private func applyLockFallback(to content: UNNotificationContent,
+                                   aps: [String: Any]) -> UNMutableNotificationContent? {
+        guard let locked = NSELockFallback.lockedTitle(aps: aps) else { return nil }
+        Logger.info("[NSE][groupInfo] lock-fallback")
+        return applyResolvedGroupName(to: content, replacementName: locked)
+    }
+
+    private func persistEncryptedName(gid: String, cipher: String?) {
+        guard let cipher, !cipher.isEmpty else { return }
+        databaseStorage.write { tx in
+            let existing = DTGroupBaseInfoEntity.anyFetch(uniqueId: gid, transaction: tx)
+            guard NSEEncryptedNamePersister.shouldUpsert(existing: existing, cipher: cipher),
+                  let existing else { return }
+            existing.encryptedName = cipher
+            existing.anyUpsert(transaction: tx)
+            Logger.info("[NSE][groupInfo] persist encryptedName gid=...\(gid.suffix(6))")
+        }
     }
 
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         let attemptContent = request.content
-        
+
         let isCall = isCallNotification(attemptContent: attemptContent)
-        // 如果是 call 相关的直接展示 notification，不拉数据
-        guard !isCall else {
-            Logger.info("call 相关的直接展示 notification，不拉数据")
+        if isCall {
+            // call 相关的不拉数据，但仍需对加密群名解密后再展示
+            environment.ensureAppContext()
+            if NSEEnvironment.verifyDBKeysAvailable() != nil {
+                Logger.error("DB Keys not accessible for call notification; showing original content")
+                Logger.flush()
+                contentHandler(attemptContent)
+                return
+            }
+            if environment.setupIfNecessary() != nil {
+                Logger.error("environment setup failed for call notification; showing original content")
+                Logger.flush()
+                contentHandler(attemptContent)
+                return
+            }
+
+            // Path 0: read caller's plaintext roomName from inline envelope; no local R_group needed.
+            let resolved: UNNotificationContent
+            if let aps = attemptContent.userInfo["aps"] as? [String: Any],
+               let inlineName = extractInlineGroupCallRoomName(aps: aps) {
+                Logger.info("[NSE][groupInfo] use inline calling.roomName")
+                resolved = applyResolvedGroupName(to: attemptContent, replacementName: inlineName) ?? attemptContent
+            } else {
+                resolved = applyGroupNameResolution(to: attemptContent)
+            }
             Logger.flush()
-            contentHandler(attemptContent)
+            contentHandler(resolved)
             return
         }
         
@@ -251,8 +352,11 @@ class NotificationService: UNNotificationServiceExtension {
             return
         }
 
+        // 前置解一次群名并写回 plainAttemptContents，保证任何兜底路径吐出的都是已解明文
+        plainAttemptContents[identifier] = applyGroupNameResolution(to: attemptContent)
+
         let nseCount = Self.nseDidStart()
-        
+
         Logger.info("Received notification in class: \(self), thread: \(Thread.current), pid: \(ProcessInfo.processInfo.processIdentifier), memoryUsage: \(LocalDevice.memoryUsageString), nseCount: \(nseCount)")
         
         AppReadiness.runNowOrWhenAppDidBecomeReadySync({
@@ -525,22 +629,22 @@ class NotificationService: UNNotificationServiceExtension {
                 if let hangup = callMessage.hangup, let roomID = hangup.roomID { // 挂断 call
                     Logger.debug("\(logTag) NSE receive hangup, roomID: \(roomID)")
                     Environment.preferences().endCallKitCall(withRoomId: roomID)
-                    configWithNameAndPreview(title: "Yelling", body: "The call has ended")
+                    configWithNameAndPreview(title: TSConstants.appDisplayName, body: "The call has ended")
                 } else if let reject = callMessage.reject, let roomID = reject.roomID {
                     Logger.debug("\(logTag) NSE receive reject, roomID: \(roomID)")
                     Environment.preferences().endCallKitCall(withRoomId: roomID)
-                    configWithNameAndPreview(title: "Yelling", body: "The call has been rejected")
+                    configWithNameAndPreview(title: TSConstants.appDisplayName, body: "The call has been rejected")
                 } else if let cancel = callMessage.cancel, let roomID = cancel.roomID {
                     Logger.debug("\(logTag) NSE receive cancel, roomID: \(roomID)")
                     Environment.preferences().endCallKitCall(withRoomId: roomID)
-                    configWithNameAndPreview(title: "Yelling", body: "The call has been canceled")
+                    configWithNameAndPreview(title: TSConstants.appDisplayName, body: "The call has been canceled")
                 }
             }
               
             guard let dataMessage = content.dataMessage else {
                 return
             }
-            
+
             Logger.info("Msg.timestamp = \(envelope.timestamp), source device: \(envelope.sourceDevice)")
             var displayName = ""
             if let source = envelope.source {
@@ -549,12 +653,10 @@ class NotificationService: UNNotificationServiceExtension {
                 }
             }
             
-            
-            
             processNotification(displayName: displayName, notiType: notiType, aps: aps, dataMessage: dataMessage)
         }
     }
-    
+
     func processNotification(displayName:String, notiType: NotificationType, aps: Dictionary<String, Any>, dataMessage: DSKProtoDataMessage?) {
         guard let alert = aps["alert"] as? Dictionary<String, Any> else {
             return
@@ -564,45 +666,50 @@ class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        let interruptionLevel = aps["interruption-level"] as? String ?? "none"
         let isCritical = isCriticalNotification(aps: aps)
-        Logger.info("[NSE] processNotification: loc-key=\(lockey), loc-args-count=\(locargs.count), interruption-level=\(interruptionLevel)")
 
+        // title/body already resolved in didReceive; only swap locargs[0] for plainBody assembly.
         if !locargs.isEmpty {
-            switch resolveGroupNameFromLocalDB(aps: aps, isCritical: isCritical, lockey: lockey) {
+            let resolution = resolveGroupNameFromLocalDB(aps: aps, lockey: lockey, dataMessage: dataMessage)
+            switch resolution {
             case .useServerProvided:
-                break
+                if let locked = NSELockFallback.lockedTitle(aps: aps) {
+                    locargs[0] = locked
+                }
             case .replace(let name):
                 locargs[0] = name
-                overridePlainContentWithResolvedName(replacementName: name, locargs: locargs)
-            case .encryptedPlaceholder:
-                locargs[0] = DTGroupCryptoDisplayHelper.encryptedGroupNamePlaceholder
             }
         }
 
         let result = processPlainNotification(displayName: displayName, notiType: notiType, title: alert["title"] as? String, body: alert["body"] as? String, lockey: lockey, locargs: locargs, dataMessage: dataMessage, isCritical: isCritical)
-        Logger.info("result = \(result)")
 
         if !result, isCritical {
             let resolvedTitle = locargs.first ?? defaultNewMessageBody
             let safeTitle = resolvedTitle.isEmpty ? defaultNewMessageBody : resolvedTitle
             let resolvedBody = (alert["body"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? defaultNewMessageBody
-            Logger.info("[NSE] processNotification: critical-alert outer fallback")
             configWithNameAndPreview(title: safeTitle, body: resolvedBody)
         }
     }
 
-    private func resolveGroupNameFromLocalDB(aps: [String: Any], isCritical: Bool, lockey: String) -> GroupNameResolution {
-        var resolution: GroupNameResolution = isCritical ? .encryptedPlaceholder : .useServerProvided
+    private func resolveGroupNameFromLocalDB(aps: [String: Any],
+                                             lockey: String,
+                                             dataMessage: DSKProtoDataMessage? = nil) -> GroupNameResolution {
+        // Path A: payload-direct decrypt
+        if let hit = NSEPayloadGroupNameDecryptor.tryDecrypt(aps: aps, dataMessage: dataMessage) {
+            let cipher = (aps["groupInfo"] as? [String: Any])?["encryptedName"] as? String
+            persistEncryptedName(gid: hit.gid, cipher: cipher)
+            return .replace(hit.plainName)
+        }
+        // Path B: local DB resolver
+        var resolution: GroupNameResolution = .useServerProvided
         databaseStorage.read { transaction in
-            resolution = NSEGroupNameResolver().resolve(aps: aps, isCritical: isCritical, lockey: lockey, transaction: transaction)
+            resolution = NSEGroupNameResolver().resolve(aps: aps, lockey: lockey, transaction: transaction)
         }
         return resolution
     }
     
     // TODO: 将后面处理 envelop 逻辑移出
     func processPlainNotification(displayName: String, notiType: NotificationType, title: String? = nil, body: String? = nil, lockey: String, locargs: Array<String>, dataMessage: DSKProtoDataMessage?, isCritical: Bool = false) -> Bool {
-        Logger.info("processPlainNotification notiType: \(notiType), isCritical: \(isCritical)")
 
         switch notiType {
         case .noNameNoPreview:
@@ -666,7 +773,7 @@ class NotificationService: UNNotificationServiceExtension {
             "TASK_ARCHIVED",
             "CALENDAR_FULL_UPDATE":
             if locargs.count == 1 {
-                let fromRecipient = locargs.first ?? "Yelling"
+                let fromRecipient = locargs.first ?? TSConstants.appDisplayName
                 if displayName.isEmpty {
                     plainTitle = fromRecipient
                 } else {
@@ -674,7 +781,7 @@ class NotificationService: UNNotificationServiceExtension {
                 }
                 plainBody = defaultNewMessageBody
             } else if (locargs.count > 1) {
-                plainTitle = locargs.first ?? "Yelling"
+                plainTitle = locargs.first ?? TSConstants.appDisplayName
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName
@@ -686,7 +793,6 @@ class NotificationService: UNNotificationServiceExtension {
                 plainTitle = locargs.first ?? defaultNewMessageBody
                 if plainTitle.isEmpty { plainTitle = defaultNewMessageBody }
                 plainBody = defaultNewMessageBody
-                Logger.info("[NSE] showNameNoPreview: critical-alert inner fallback")
             }
         }
 
@@ -799,7 +905,7 @@ class NotificationService: UNNotificationServiceExtension {
                         body = dataMessage.body ?? ""
                     }
                     
-                    plainTitle = locargs.first ?? "Yelling"
+                    plainTitle = locargs.first ?? TSConstants.appDisplayName
                     var fromRecipient = locargs[1]
                     if !displayName.isEmpty {
                         fromRecipient = displayName
@@ -817,7 +923,7 @@ class NotificationService: UNNotificationServiceExtension {
             
             if locargs.count >= 2 {
                 
-                plainTitle = locargs.first ?? "Yelling"
+                plainTitle = locargs.first ?? TSConstants.appDisplayName
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName
@@ -860,7 +966,7 @@ class NotificationService: UNNotificationServiceExtension {
             // TODO: @ 不展示附带文本，因为 body 里有 @ 人信息，不能去重
             if locargs.count >= 2 {
                 
-                plainTitle = locargs.first ?? "Yelling"
+                plainTitle = locargs.first ?? TSConstants.appDisplayName
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName
@@ -874,7 +980,7 @@ class NotificationService: UNNotificationServiceExtension {
             "GROUP_REPLY_OTHER":
             // TODO: @ 不展示附带文本，因为 body 里有 @ 人信息，不能去重
             if locargs.count >= 3 {
-                plainTitle = locargs.first ?? "Yelling"
+                plainTitle = locargs.first ?? TSConstants.appDisplayName
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName
@@ -886,7 +992,7 @@ class NotificationService: UNNotificationServiceExtension {
         case "GROUP_MENTIONS_ALL":
             //            // TODO: @ 不展示附带文本，因为 body 里有 @ 人信息，不能去重
             if locargs.count >= 2 {
-                plainTitle = locargs.first ?? "Yelling"
+                plainTitle = locargs.first ?? TSConstants.appDisplayName
                 var fromRecipient = locargs[1]
                 if !displayName.isEmpty {
                     fromRecipient = displayName
@@ -940,12 +1046,12 @@ class NotificationService: UNNotificationServiceExtension {
                     attachmentString = Localized("QUOTED_REPLY_TYPE_AUDIO", comment: "")
                 }
                 
+            } else if MIMETypeUtil.isAnimatedGifFlag(attachmentProto) || MIMETypeUtil.isMimeUnambiguouslyAnimated(contentType) {
+                attachmentString = Localized("QUOTED_REPLY_TYPE_GIF", comment: "")
             } else if MIMETypeUtil.isImage(contentType) {
                 attachmentString = Localized("QUOTED_REPLY_TYPE_IMAGE", comment: "")
             } else if MIMETypeUtil.isVideo(contentType) {
                 attachmentString = Localized("QUOTED_REPLY_TYPE_VIDEO", comment: "")
-            } else if MIMETypeUtil.isAnimated(contentType) {
-                attachmentString = Localized("QUOTED_REPLY_TYPE_GIF", comment: "")
             } else {
                 attachmentString = Localized("QUOTED_REPLY_TYPE_ATTACHMENT", comment: "")
             }

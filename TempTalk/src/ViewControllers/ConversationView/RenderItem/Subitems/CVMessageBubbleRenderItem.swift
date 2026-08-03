@@ -244,7 +244,10 @@ class CVMessageBubbleRenderItem: ConversationRenderItem {
                     }
                 }
             } else if let bodyTextRenderItem, !bodyTextRenderItem.isCombinedForwardingStyle,
-                      viewItem.messageCellType() != .contactShare{
+                      viewItem.messageCellType() != .contactShare,
+                      !bodyTextRenderItem.hasTapForMore {
+                // With an expand ("show more") button, the footer rides the button's row;
+                // reserving an extra footer row here leaves a blank band above the button.
                 cellSize.height += CVMessageFooterRenderItem.footerViewHeight + 4
 
             }

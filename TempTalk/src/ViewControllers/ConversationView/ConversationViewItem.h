@@ -48,7 +48,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType);
 // in the load window of the conversation view.
 @protocol ConversationViewItem <NSObject, OWSAudioPlayerDelegate>
 
-@property (nonatomic, readonly) TSInteraction *interaction;
+@property (atomic, readonly) TSInteraction *interaction;
 
 @property (nonatomic, readonly) TSThread *thread;
 @property (nonatomic, readonly) BOOL isGroupThread;
@@ -127,21 +127,21 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType);
 // After reaching max retries, loading is permanently skipped.
 @property (nonatomic) NSInteger cellMediaLoadFailureCount;
 
-@property (nonatomic, readonly, nullable) OWSQuotedReplyModel *quotedReply;
+@property (atomic, readonly, nullable) OWSQuotedReplyModel *quotedReply;
 
-@property (nonatomic, readonly, nullable) DTCombinedForwardingMessage *combinedForwardingMessage;
+@property (atomic, readonly, nullable) DTCombinedForwardingMessage *combinedForwardingMessage;
 
-@property (nonatomic, readonly, nullable) ContactShareViewModel *contactShare;
+@property (atomic, readonly, nullable) ContactShareViewModel *contactShare;
 // 系统消息 body
-@property (nonatomic, readonly, nullable) NSString *systemMessageText;
+@property (atomic, readonly, nullable) NSString *systemMessageText;
 // 长文本（转附件文本）长度
 @property (nonatomic, readonly) NSUInteger oversizeTextLength;
 
-@property (nonatomic, strong, nullable) DTCardMessageEntity *card;
+@property (atomic, strong, nullable) DTCardMessageEntity *card;
 @property (atomic, nullable) NSAttributedString *cardAttrString;
 @property (atomic, nullable) NSDictionary *gifElements;
 
-@property (nonatomic, readonly, nullable) NSArray <DTMention *> *mentions;
+@property (atomic, readonly, nullable) NSArray <DTMention *> *mentions;
 
 @property (nonatomic, strong) NSArray <NSString *> *emojiTitles;
 

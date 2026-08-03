@@ -430,7 +430,7 @@ NS_ASSUME_NONNULL_BEGIN
                         hotDataDestination = extraNumber;
                     }
                     
-                    // TODO: 预览消息入库
+                    // sync group message
                     if ([localNumber isEqualToString:envelope.source] &&
                         (DTParamsUtils.validateString(hotDataDestination) || content.dataMessage.group)) {
                         
@@ -459,6 +459,10 @@ NS_ASSUME_NONNULL_BEGIN
                 OWSLogInfo(@"%@ received notifyMessage", self.logTag);
             } else if (content.groupKeyMessage) {
                 [DTGroupKeyMessageHandler.shared handleGroupKeyMessage:content.groupKeyMessage transaction:transaction];
+            } else if (content.activityNotice) {
+                [self handleIncomingEnvelope:envelope
+                        withActivityNotice:content.activityNotice
+                                transaction:transaction];
             } else if (content.forwardNotice) {
                 [self handleIncomingEnvelope:envelope
                            withForwardNotice:content.forwardNotice
@@ -911,16 +915,24 @@ NS_ASSUME_NONNULL_BEGIN
     }
     
     if (dataMessage.group) {
+        // 先快照群状态再调 fallback，防止 fallback 链路扩展后影响下面的判断
         TSGroupThread *groupThread = [TSGroupThread threadWithGroupId:dataMessage.group.id transaction:transaction];
-        if (dataMessage.group && (!groupThread || (groupThread.groupModel && groupThread.groupModel.version == 0))) {
-            //获取群组信息
+        BOOL groupUnknown = !groupThread || (groupThread.groupModel && groupThread.groupModel.version == 0);
+        BOOL willFetchGroupInfo = groupUnknown && dataMessage.group.unwrappedType == DSKProtoGroupContextTypeDeliver;
+
+        // 外层即将自行拉取群信息时，让 fallback 跳过内部的 refresh，避免重复请求。
+        [DTGroupKeyMessageHandler.shared handleFallbackGroupRootKeyWithGroupContext:dataMessage.group
+                                                                 skipGroupInfoFetch:willFetchGroupInfo
+                                                                        transaction:transaction];
+
+        if (willFetchGroupInfo) {
             [self.notifyMessageHandler.groupUpdateMessageProcessor requestGroupInfoWithGroupId:dataMessage.group.id
                                                                                  targetVersion:0
                                                                              needSystemMessage:NO
-                                                                                      generate:false
+                                                                                      generate:NO
                                                                                       envelope:envelope
                                                                                    transaction:transaction
-                                                                                    completion:^(SDSAnyWriteTransaction * transaction) {
+                                                                                    completion:^(SDSAnyWriteTransaction *t) {
             }];
         }
     }
@@ -1083,6 +1095,10 @@ NS_ASSUME_NONNULL_BEGIN
         [self processIncomingSyncMessageWithTopicMark:syncMessage.topicMark serverTimestamp:envelope.systemShowTimestamp transaction:transaction];
     } else if (syncMessage.topicAction) {
         [self processIncomingSyncMessageWithTopicAction:syncMessage.topicAction serverTimestamp:envelope.systemShowTimestamp transaction:transaction];
+    } else if (syncMessage.activityNoticeSync) {
+        [self handleIncomingEnvelope:envelope
+                  withActivityNotice:syncMessage.activityNoticeSync
+                         transaction:transaction];
     } else if (syncMessage.forwardNoticeSync) {
         [self handleIncomingEnvelope:envelope
                    withForwardNotice:syncMessage.forwardNoticeSync
@@ -1131,7 +1147,8 @@ NS_ASSUME_NONNULL_BEGIN
                                    if (![interaction isKindOfClass:[TSInfoMessage class]]) {
                                        return NO;
                                    }
-                                   return ((TSInfoMessage *)interaction).messageType == TSInfoMessageForwardNotice;
+                                   TSInfoMessageType msgType = ((TSInfoMessage *)interaction).messageType;
+                                   return msgType == TSInfoMessageForwardNotice;
                                }
                           transaction:transaction
                                 error:&findError];
@@ -1155,10 +1172,16 @@ NS_ASSUME_NONNULL_BEGIN
         messageCount = 1;
     }
 
+    DTForwardNoticeCombinedForwardMode combinedForwardMode = DTForwardNoticeCombinedForwardModeUnknown;
+    if (forwardNotice.hasCombinedForwardMode) {
+        combinedForwardMode = (DTForwardNoticeCombinedForwardMode)forwardNotice.unwrappedCombinedForwardMode;
+    }
+
     NSString *noticeText = [DTForwardNoticeTextFormatter textWithOperatorId:envelope.source
-                                                               messageCount:messageCount
-                                                            sourceAuthorIds:forwardNotice.sourceAuthorIds
-                                                                transaction:transaction];
+                                                              messageCount:messageCount
+                                                           sourceAuthorIds:forwardNotice.sourceAuthorIds
+                                                       combinedForwardMode:combinedForwardMode
+                                                               transaction:transaction];
 
     TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:envelope.timestamp
                                                                  inThread:thread
@@ -1167,6 +1190,7 @@ NS_ASSUME_NONNULL_BEGIN
     infoMessage.serverTimestamp = envelope.systemShowTimestamp;
     infoMessage.authorId = envelope.source;
     infoMessage.sourceDeviceId = envelope.sourceDevice;
+    infoMessage.shouldAffectThreadSorting = YES;
     [infoMessage anyInsertWithTransaction:transaction];
     OWSLogInfo(@"%@ ForwardNotice inserted thread=%@ ts=%llu", self.logTag, thread.uniqueId, infoMessage.timestamp);
 }
@@ -1196,6 +1220,151 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     // Primary 1v1: envelope.source is the peer.
+    return [TSContactThread getOrCreateThreadWithContactId:envelope.source transaction:transaction];
+}
+
+#pragma mark - Activity Notice (Copy)
+
+- (void)handleIncomingEnvelope:(DSKProtoEnvelope *)envelope
+            withActivityNotice:(DSKProtoMessageActivityNotice *)activityNotice
+                   transaction:(SDSAnyWriteTransaction *)transaction
+{
+    OWSAssertDebug(envelope);
+    OWSAssertDebug(activityNotice);
+    OWSAssertDebug(transaction);
+
+    // §3.1-1/2  typeData must be set to a recognized case; drop otherwise
+    DSKProtoCopyData *copyData = activityNotice.copyData;
+    if (!copyData) {
+        OWSLogWarn(@"%@ ActivityNotice dropped: TYPEDATA_NOT_SET (no copyData), source=%@", self.logTag, envelope.source);
+        return;
+    }
+
+    // Validate envelope.source
+    if (!DTParamsUtils.validateString(envelope.source)) {
+        OWSLogWarn(@"%@ ActivityNotice dropped: envelope.source is empty or nil", self.logTag);
+        return;
+    }
+
+    // §3.2-5  timestamp must be valid (sendTs → envelope.timestamp)
+    if (envelope.timestamp == 0) {
+        OWSLogWarn(@"%@ ActivityNotice dropped: envelope.timestamp is 0, source=%@", self.logTag, envelope.source);
+        return;
+    }
+
+    // Validate copyData has meaningful content
+    if (copyData.sourceAuthorIds.count == 0) {
+        OWSLogWarn(@"%@ ActivityNotice dropped: copyData.sourceAuthorIds is empty, source=%@", self.logTag, envelope.source);
+        return;
+    }
+
+    NSString *localNumber = [TSAccountManager localNumber];
+    BOOL isSelfSync = DTParamsUtils.validateString(localNumber)
+        && [envelope.source isEqualToString:localNumber];
+    OWSLogInfo(@"%@ ActivityNotice(COPY) recv source=%@ count=%u authors=%lu isSelfSync=%d",
+               self.logTag,
+               envelope.source,
+               copyData.hasMessageCount ? copyData.messageCount : 0,
+               (unsigned long)copyData.sourceAuthorIds.count,
+               isSelfSync);
+
+    // §3.1-5/6/7  Resolve target thread with member & well-formed checks
+    TSThread *thread = [self threadForActivityNoticeEnvelope:envelope
+                                             activityNotice:activityNotice
+                                                transaction:transaction];
+    if (!thread) {
+        OWSLogWarn(@"%@ ActivityNotice dropped: thread not resolved, source=%@", self.logTag, envelope.source);
+        return;
+    }
+
+    // Dedup: same timestamp + same thread + same source → already inserted
+    NSError *findError;
+    NSArray<TSInteraction *> *existing = [InteractionFinder
+        interactionsWithTimestamp:envelope.timestamp
+                           filter:^BOOL(TSInteraction *interaction) {
+                               if (![interaction isKindOfClass:[TSInfoMessage class]]) {
+                                   return NO;
+                               }
+                               return ((TSInfoMessage *)interaction).messageType == TSInfoMessageCopyNotice;
+                           }
+                      transaction:transaction
+                            error:&findError];
+    if (findError) {
+        OWSLogError(@"%@ ActivityNotice dedup query error: %@", self.logTag, findError);
+    }
+    for (TSInteraction *interaction in existing) {
+        TSInfoMessage *info = (TSInfoMessage *)interaction;
+        if ([info.uniqueThreadId isEqualToString:thread.uniqueId]
+            && [(info.authorId ?: @"") isEqualToString:envelope.source]) {
+            OWSLogInfo(@"%@ ActivityNotice dedup: thread=%@ ts=%llu source=%@",
+                       self.logTag, thread.uniqueId, envelope.timestamp, envelope.source);
+            return;
+        }
+    }
+
+    uint32_t messageCount = copyData.hasMessageCount ? copyData.messageCount : 0;
+    if (messageCount == 0) {
+        messageCount = 1;
+    }
+
+    DTForwardNoticeCombinedForwardMode combinedForwardMode = copyData.hasCombinedForwardMode
+        ? (DTForwardNoticeCombinedForwardMode)copyData.unwrappedCombinedForwardMode
+        : DTForwardNoticeCombinedForwardModeUnknown;
+
+    NSString *noticeText = [DTCopyNoticeTextFormatter textWithOperatorId:envelope.source
+                                                            messageCount:messageCount
+                                                         sourceAuthorIds:copyData.sourceAuthorIds
+                                                     combinedForwardMode:combinedForwardMode
+                                                             transaction:transaction];
+
+    TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:envelope.timestamp
+                                                                 inThread:thread
+                                                              messageType:TSInfoMessageCopyNotice
+                                                            customMessage:noticeText];
+    infoMessage.serverTimestamp = envelope.systemShowTimestamp;
+    infoMessage.authorId = envelope.source;
+    infoMessage.sourceDeviceId = envelope.sourceDevice;
+    infoMessage.shouldAffectThreadSorting = YES;
+    [infoMessage anyInsertWithTransaction:transaction];
+    OWSLogInfo(@"%@ CopyNotice inserted thread=%@ ts=%llu", self.logTag, thread.uniqueId, infoMessage.timestamp);
+}
+
+- (nullable TSThread *)threadForActivityNoticeEnvelope:(DSKProtoEnvelope *)envelope
+                                        activityNotice:(DSKProtoMessageActivityNotice *)activityNotice
+                                           transaction:(SDSAnyWriteTransaction *)transaction
+{
+    DSKProtoConversationId *payloadConv = activityNotice.conversation;
+
+    // §3.1-5  Group: verify envelope.source is a member
+    NSData *groupID = payloadConv.groupID;
+    if (groupID.length > 0) {
+        TSGroupThread *groupThread = [TSGroupThread threadWithGroupId:groupID transaction:transaction];
+        if (!groupThread) {
+            OWSLogWarn(@"%@ ActivityNotice dropped: group thread not found for groupID.", self.logTag);
+            return nil;
+        }
+        if (![groupThread.groupModel.groupMemberIds containsObject:envelope.source]) {
+            OWSLogWarn(@"%@ ActivityNotice dropped: source=%@ is not a member of group=%@",
+                       self.logTag, envelope.source, groupThread.uniqueId);
+            return nil;
+        }
+        return groupThread;
+    }
+
+    NSString *localNumber = [TSAccountManager localNumber];
+    BOOL isSelfSync = DTParamsUtils.validateString(localNumber) && [envelope.source isEqualToString:localNumber];
+
+    // §3.1-7  Self-sync: conversation must be well-formed, drop if not
+    if (isSelfSync) {
+        NSString *number = payloadConv.number;
+        if (DTParamsUtils.validateString(number)) {
+            return [TSContactThread getOrCreateThreadWithContactId:number transaction:transaction];
+        }
+        OWSLogWarn(@"%@ ActivityNotice dropped: self-sync conversation missing valid number, refusing NTS fallback.", self.logTag);
+        return nil;
+    }
+
+    // §3.1-6  1v1: conversation field absent → fallback to envelope.source
     return [TSContactThread getOrCreateThreadWithContactId:envelope.source transaction:transaction];
 }
 

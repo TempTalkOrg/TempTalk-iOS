@@ -98,12 +98,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 // 通话状态（per-call）
 @property (nonatomic, assign) NSTimeInterval timing;
+// Consecutive nil check-call results; end the CallKit ring only after 2 in a row.
+@property (nonatomic, assign) NSInteger invalidCheckCount;
 @property (nonatomic, assign) BOOL answered;
 @property (nonatomic, assign) BOOL isAccepted;
 @property (nonatomic, assign) BOOL isEnded;
 @property (nonatomic, assign) BOOL hungup;
 @property (nonatomic, assign) BOOL isMuted;
 @property (nonatomic, assign) BOOL isMutedByApp;
+@property (nonatomic, assign) BOOL hasCallKitMuteIntent;
 @property (nonatomic, assign) CallStatus status;
 @property (nonatomic, assign) CKCallSystemState systemState;
 
@@ -112,6 +115,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 // Calling proto 缓存
 @property (nonatomic, strong, nullable) DSKProtoCallMessageCalling *calling;
+
+// Held answer action: stored (not fulfilled) while the room is still connecting,
+// so the system UI stays in "Connecting…" until LiveKit actually connects.
+@property (nonatomic, strong, nullable) CXAnswerCallAction *pendingAnswerAction;
 
 @end
 

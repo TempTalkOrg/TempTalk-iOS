@@ -100,6 +100,24 @@
         }
         [self.tableView reloadData];
     }];
+
+    [[NSNotificationCenter defaultCenter] addObserverForName:DTGroupCryptoConstants.groupCryptoKeyDidArriveNotification
+                                                      object:nil
+                                                       queue:[NSOperationQueue mainQueue]
+                                                  usingBlock:^(NSNotification * _Nonnull note) {
+        @strongify(self)
+        NSString *gid = note.userInfo[DTGroupCryptoConstants.groupCryptoKeyGidKey];
+        if (!gid.length) {
+            [self.tableView reloadData];
+            return;
+        }
+        NSUInteger idx = [self.groups indexOfObjectPassingTest:^BOOL(DTGroupBaseInfoEntity * _Nonnull obj, NSUInteger i, BOOL * _Nonnull stop) {
+            return [obj.gid isEqualToString:gid];
+        }];
+        if (idx == NSNotFound) return;
+        [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:(NSInteger)idx inSection:0]]
+                              withRowAnimation:UITableViewRowAnimationNone];
+    }];
 }
 
 - (void)dealloc {
@@ -146,18 +164,6 @@
     }];
 }
 
-- (TSGroupThread *)groupThreadWithGId:(NSString *)gId {
-
-    NSData *groupId = [TSGroupThread transformToLocalGroupIdWithServerGroupId:gId];
-
-    if(!groupId.length) return nil;
-
-    __block TSGroupThread *groupThread = nil;
-    [self.databaseStorage uiReadWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
-        groupThread = [TSGroupThread threadWithGroupId:groupId transaction:readTransaction];
-    }];
-    return groupThread;
-}
 
 - (TSGroupThread *)groupThreadWithBaseInfo:(DTGroupBaseInfoEntity *)baseInfo {
     
@@ -206,12 +212,30 @@
     if (row >= self.groups.count) return cell;
     
     DTGroupBaseInfoEntity *baseInfo = self.groups[row];
-    TSGroupThread *groupThread = nil;
     if(!baseInfo.gid.length) return cell;
-    groupThread = [self groupThreadWithGId:baseInfo.gid];
-    
+
+    __block TSGroupThread *groupThread = nil;
+    __block NSString *displayName = nil;
+    NSData *groupId = [TSGroupThread transformToLocalGroupIdWithServerGroupId:baseInfo.gid];
+    if (groupId.length) {
+        [self.databaseStorage uiReadWithBlock:^(SDSAnyReadTransaction *transaction) {
+            groupThread = [TSGroupThread threadWithGroupId:groupId transaction:transaction];
+            if (groupThread && groupThread.groupModel.isEncryptedGroup) {
+                displayName = [DTGroupCryptoDisplayHelper.shared
+                    displayGroupNameWithGid:baseInfo.gid
+                            groupCryptoMode:groupThread.groupModel.groupCryptoMode
+                              encryptedName:baseInfo.encryptedName
+                               originalName:groupThread.groupModel.groupName
+                                transaction:transaction];
+            }
+        }];
+    }
+    if (!displayName.length) {
+        NSString *threadName = groupThread.groupModel.groupName;
+        displayName = threadName.length ? threadName : (baseInfo.name.length ? baseInfo.name : @"group");
+    }
     SignalAccount *specialAccount = [[SignalAccount alloc] initWithRecipientId:@"GROUP_LIST"];
-    specialAccount.contact = [[Contact alloc] initWithFullName:baseInfo.name ? baseInfo.name : @"group" phoneNumber:@"GROUP_LIST"];
+    specialAccount.contact = [[Contact alloc] initWithFullName:displayName phoneNumber:@"GROUP_LIST"];
     [cell configureWithSpecialAccount:specialAccount thread:groupThread];
     ContactCellView *cellView = cell.cellView;
     if([cellView isKindOfClass:[ContactCellView class]]){

@@ -14,7 +14,11 @@
 #import "DTSelectedAccountToolView.h"
 #import <TTServiceKit/TSContactThread.h>
 
-static CGFloat const kBottomViewHeight = 70;
+// Selected-members row height.
+static CGFloat const kSelectedRowHeight = 100;
+// Divider under the selected-members row.
+static CGFloat const kHeaderDividerHeight = 1;
+static CGFloat const kHeaderDividerInset = 16;
 
 NS_ASSUME_NONNULL_BEGIN
 NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
@@ -28,8 +32,10 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
 @property(nonatomic,strong) NSMutableDictionary *indexPathMap;
 @property (nonatomic, strong) DTAddMembersToAGroupAPI *addMembersToAGroupAPI;
 @property(nonatomic,strong) UIButton *doneButton;
-@property(nonatomic,strong) UIView *bottomContainView;
+// Selected-members row + divider, installed in the base class's non-scrolling fixedHeaderContainer.
 @property(nonatomic,strong) DTSelectedAccountToolView *selectedAccountToolView;
+@property(nonatomic,strong) UIView *headerDivider;
+@property(nonatomic,assign) BOOL selectedRowVisible;
 
 @end
 
@@ -54,12 +60,15 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     self.tableViewController.view.backgroundColor = Theme.bgpageSecondaryColor;
     self.tableViewController.tableView.backgroundColor = Theme.bgpageSecondaryColor;
     
-    [self.doneButton setTitleColor:Theme.tinfoColor forState:UIControlStateSelected];
+    [self.doneButton setTitleColor:Theme.tthirdColor forState:UIControlStateNormal];
+    [self.doneButton setTitleColor:Theme.primaryColor forState:UIControlStateSelected];
     if (self.presentingViewController) {
-        [self.navigationItem.leftBarButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tinfoColor} forState:UIControlStateNormal];
-        [self.navigationItem.leftBarButtonItem setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tinfoColor} forState:UIControlStateHighlighted];
+        self.navigationItem.leftBarButtonItem.tintColor = Theme.tprimaryColor;
     }
-    
+    if (_headerDivider) {
+        _headerDivider.backgroundColor = Theme.dividerColor;
+    }
+
     if (self.view.window.windowLevel == UIWindowLevel_CallView()) {
         [self.navigationController.navigationBar setTitleTextAttributes:@{NSForegroundColorAttributeName : Theme.tprimaryColor}];
         self.navigationController.navigationBar.tintColor = Theme.tprimaryColor;
@@ -78,16 +87,14 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     self.doneButton.userInteractionEnabled = NO;
     self.doneButton.selected = NO;
     [self.doneButton setTitle:Localized(@"BUTTON_DONE", @"") forState:UIControlStateNormal];
-    [self.doneButton setTitleColor:[UIColor grayColor] forState:UIControlStateNormal];
-    [self.doneButton setTitleColor:Theme.tinfoColor forState:UIControlStateSelected];
+    [self.doneButton setTitleColor:Theme.tthirdColor forState:UIControlStateNormal];
+    [self.doneButton setTitleColor:Theme.primaryColor forState:UIControlStateSelected];
     [self.doneButton addTarget:self action:@selector(doneAction) forControlEvents:UIControlEventTouchUpInside];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:self.doneButton];
     self.tableViewController.tableView.allowsMultipleSelection = true;
     self.tableViewController.tableView.allowsMultipleSelectionDuringEditing = true;
     self.tableViewController.canEditRow = NO;
-    //处理底部的用户选择框
-    [self creatBottomContainView];
-    [self configBottomContainViewLayoput];
+    self.tableViewController.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     self.memberRecipientIds = [NSMutableSet new];
     self.virtualUserIdOrEmails = [NSMutableSet new];
     self.memberRecipientIdsArr = [NSMutableArray array];
@@ -97,10 +104,38 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     }
     
     if (self.presentingViewController) {
-        self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(cancelItemAction)];
+        UIImage *closeImage = [[UIImage systemImageNamed:@"xmark"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+        UIBarButtonItem *closeItem = [[UIBarButtonItem alloc] initWithImage:closeImage
+                                                                      style:UIBarButtonItemStylePlain
+                                                                     target:self
+                                                                     action:@selector(cancelItemAction)];
+        closeItem.accessibilityLabel = Localized(@"TXT_CANCEL_TITLE", @"");
+        closeItem.tintColor = Theme.tprimaryColor;
+        self.navigationItem.leftBarButtonItem = closeItem;
     }
-    
+
+    [self setupFixedHeaderRows];
+
     [self applyTheme];
+}
+
+// Installs the selected-members row + divider into the fixed header, below the search bar.
+- (void)setupFixedHeaderRows {
+    UIView *header = self.fixedHeaderContainer;
+
+    [header addSubview:self.selectedAccountToolView];
+    [self.selectedAccountToolView autoPinEdgeToSuperviewEdge:ALEdgeTop withInset:kSelectRecipientSearchBarHeight];
+    [self.selectedAccountToolView autoPinWidthToSuperviewWithMargin:kHeaderDividerInset];
+    [self.selectedAccountToolView autoSetDimension:ALDimensionHeight toSize:kSelectedRowHeight];
+
+    [header addSubview:self.headerDivider];
+    [self.headerDivider autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.selectedAccountToolView];
+    [self.headerDivider autoPinWidthToSuperviewWithMargin:kHeaderDividerInset];
+    [self.headerDivider autoSetDimension:ALDimensionHeight toSize:kHeaderDividerHeight];
+
+    self.selectedAccountToolView.hidden = YES;
+    self.headerDivider.hidden = YES;
+    self.selectedRowVisible = NO;
 }
 
 - (void)cancelItemAction {
@@ -115,28 +150,20 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     _viewDidAppear = true;
 }
 
-- (void)creatBottomContainView {
-    if (self.addToGroupStyle == DTAddToGroupStyleShowSelectedPerson) {
-        [self.view addSubview:self.bottomContainView];
-        self.bottomContainView.hidden = true;
-        [self.bottomContainView addSubview:self.selectedAccountToolView];
-        [self.selectedAccountToolView autoPinEdge:ALEdgeTop toEdge:ALEdgeTop ofView:self.bottomContainView withOffset:10];
-        [self.selectedAccountToolView autoPinEdge:ALEdgeLeft toEdge:ALEdgeLeft ofView:self.bottomContainView withOffset:10];
-        [self.selectedAccountToolView autoPinEdge:ALEdgeRight toEdge:ALEdgeRight ofView:self.bottomContainView withOffset:-10];
-        [self.selectedAccountToolView autoPinEdge:ALEdgeBottom toEdge:ALEdgeBottom ofView:self.bottomContainView withOffset:-15];
-    }else {
-#warning 待处理
+// Reloads the selected-members row; toggles its visibility and the header height on empty <-> non-empty.
+- (void)refreshSelectedRow {
+    [self.selectedAccountToolView reloadWithData:self.memberRecipientIdsArr];
+    BOOL hasSelection = self.memberRecipientIdsArr.count > 0;
+    if (hasSelection == self.selectedRowVisible) {
+        return;
     }
-}
-
-- (void)configBottomContainViewLayoput {
-    if (self.addToGroupStyle == DTAddToGroupStyleShowSelectedPerson) {
-        [self.bottomContainView autoPinEdgeToSuperviewSafeArea:ALEdgeBottom];
-        [self.bottomContainView autoPinEdge:ALEdgeLeft toEdge:ALEdgeLeft ofView:self.view];
-        [self.bottomContainView autoPinEdge:ALEdgeRight toEdge:ALEdgeRight ofView:self.view];
-        [self.bottomContainView autoSetDimension:ALDimensionHeight toSize:kBottomViewHeight];
-        [self.bottomContainView autoHCenterInSuperview];
-    }
+    self.selectedRowVisible = hasSelection;
+    self.selectedAccountToolView.hidden = !hasSelection;
+    self.headerDivider.hidden = !hasSelection;
+    CGFloat headerHeight = hasSelection
+        ? kSelectRecipientSearchBarHeight + kSelectedRowHeight + kHeaderDividerHeight
+        : kSelectRecipientSearchBarHeight;
+    [self setFixedHeaderHeight:headerHeight];
 }
 
 #pragma mark - action
@@ -180,8 +207,8 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
 
 - (NSString *)contactsSectionTitle
 {
-    return Localized(
-        @"ADD_GROUP_MEMBER_VIEW_CONTACT_TITLE", @"Title for the 'add contact' section of the 'add group member' view.");
+    // Empty title hides the contacts section header.
+    return @"";
 }
 
 - (void)phoneNumberWasSelected:(NSString *)phoneNumber
@@ -261,7 +288,7 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     [self.memberRecipientIdsArr removeObject:signalAccount.recipientId];
     [self.indexPathMap removeObjectForKey:signalAccount.recipientId];
     [self dealDoneButtonState];
-    [self.selectedAccountToolView reloadWithData:self.memberRecipientIdsArr];
+    [self refreshSelectedRow];
 
     // 更新cell的selectionStatus
     NSIndexPath *indexPath = [self.indexPathMap objectForKey:signalAccount.recipientId];
@@ -357,8 +384,9 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     [self.virtualUserIdOrEmails removeObject:userIdOrEmail];
     [self.memberRecipientIds removeObject:userIdOrEmail];
     [self.memberRecipientIdsArr removeObject:userIdOrEmail];
-    
+
     [self dealDoneButtonState];
+    [self refreshSelectedRow];
 }
 
 - (BOOL)canUserIdOrEmailBeSelected:(NSString *)userIdOrEmail {
@@ -408,22 +436,13 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     }
     self.doneButton.selected = true;
     self.doneButton.userInteractionEnabled = true;
-    if (self.addToGroupStyle == DTAddToGroupStyleShowSelectedPerson) {
-        [self showBottomSelectedPersonContainView];
-        [self.selectedAccountToolView reloadWithData:self.memberRecipientIdsArr];
-    }
+    [self refreshSelectedRow];
     //如果业务方实现了 recipientIdWasAdded 这个代理，表明业务方想要自己对数据进行处理，本VC就不再做处理
     if (self.addToGroupDelegate && [self.addToGroupDelegate respondsToSelector:@selector(recipientIdWasAdded:)]) {
         [self.addToGroupDelegate recipientIdWasAdded:recipientId];
         [self.navigationController popViewControllerAnimated:YES];
         return;
     }
-}
-
-//展示底部的选中展示人员的容器
-- (void)showBottomSelectedPersonContainView {
-    [self.tableViewController.tableView autoPinEdgeToSuperviewSafeArea:ALEdgeBottom withInset:kBottomViewHeight];
-    self.bottomContainView.hidden = false;
 }
 
 //更新组成员
@@ -494,6 +513,7 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
             }];
 
             if (!bindings) {
+                OWSLogError(@"[GroupCrypto] add-member ABORT: bindings nil (no/underivable key) gid: %@", serverGId);
                 [DTToastHelper hide];
                 [DTToastHelper toastWithText:Localized(@"GROUP_CRYPTO_NO_KEY_TOAST", @"") inView:self.view durationTime:3 afterDelay:0.2];
                 return;
@@ -506,6 +526,7 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
                                                 memberBindings:memberBindings
                                                        success:^(DTAPIMetaEntity * _Nonnull entity) {
             [DTToastHelper hide];
+            OWSLogInfo(@"[GroupCrypto] add-member SUCCESS gid: %@, joined: %lu", serverGId, (unsigned long)membersWhoJoined.count);
             __block NSString *updateGroupInfo = nil;
             [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
                 BOOL tmpShouldAffectSorting = NO;
@@ -535,6 +556,7 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
             if(error.code == DTAPIRequestResponseStatusGroupIsFull) {
                 logError = Localized(@"ENTER_GROUP_FAILURE_FULL", @"");
             }
+            OWSLogError(@"[GroupCrypto] add-member FAILED gid: %@, code: %ld, err: %@", serverGId, (long)error.code, error.localizedDescription);
             [DTToastHelper hide];
             [DTToastHelper toastWithText:logError inView:self.view durationTime:3 afterDelay:0.2];
         }];
@@ -565,12 +587,7 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
 {
     OWSAssertDebug(signalAccount);
 
-    if (self.addToGroupDelegate && [self.addToGroupDelegate respondsToSelector:@selector(isRecipientGroupMember:)]) {
-        if ([self.addToGroupDelegate isRecipientGroupMember:signalAccount.recipientId]) {
-            return Localized(@"NEW_GROUP_MEMBER_LABEL", @"An indicator that a user is a member of the new group.");
-        }
-    }
-
+    // Existing members are indicated by the gray DisabledSelected checkbox, not a text label.
     return nil;
 }
 
@@ -583,24 +600,30 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
 }
 
 #pragma mark DTSelectedAccountToolViewDelegate
+// Tapping a selected avatar's ✕ removes that member from the selection.
 - (void)dtSelectedAccountToolView:(DTSelectedAccountToolView *)toolView collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
-    
-    if (!indexPath) {
+
+    if (!indexPath || indexPath.row >= (NSInteger)self.memberRecipientIdsArr.count) {
         return;
     }
-    NSString *receptid;
-    if (indexPath.row <= (NSInteger)self.memberRecipientIdsArr.count) {
-        receptid = [self.memberRecipientIdsArr objectAtIndex:(NSUInteger)indexPath.row];
-    }
+    NSString *receptid = [self.memberRecipientIdsArr objectAtIndex:(NSUInteger)indexPath.row];
     if (!receptid) {
         return;
     }
+
+    // Deselect the list row so the table selection state stays in sync.
     NSIndexPath *unSelectedIndexPath = [self.indexPathMap objectForKey:receptid];
-    [self.tableViewController.tableView deselectRowAtIndexPath:unSelectedIndexPath animated:false];
-    [self.memberRecipientIdsArr removeObject:receptid];
-    [self.selectedAccountToolView reloadWithData:self.memberRecipientIdsArr];
-    if (self.memberRecipientIdsArr.count == 0) {
-        
+    if (unSelectedIndexPath) {
+        [self.tableViewController.tableView deselectRowAtIndexPath:unSelectedIndexPath animated:NO];
+    }
+
+    SignalAccount *account = [self.contactsViewHelper signalAccountForRecipientId:receptid];
+    if (account) {
+        [self signalAccountWasUnSelected:account];
+    } else {
+        // Virtual user / email entry.
+        [self userIdOrEmailWasUnselected:receptid];
+        [self refreshSelectedRow];
     }
 }
 
@@ -624,12 +647,12 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     return _addMembersToAGroupAPI;
 }
 
-- (UIView *)bottomContainView {
-    if (!_bottomContainView) {
-        _bottomContainView = [[UIView alloc] init];
-        _bottomContainView.backgroundColor = [UIColor clearColor];
+- (UIView *)headerDivider {
+    if (!_headerDivider) {
+        _headerDivider = [[UIView alloc] init];
+        _headerDivider.backgroundColor = Theme.dividerColor;
     }
-    return _bottomContainView;
+    return _headerDivider;
 }
 
 - (DTSelectedAccountToolView *)selectedAccountToolView {
@@ -658,10 +681,19 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     }
 
     ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
-    contactCell.selectionStatus = ContactCellSelectionStatusUnselected;
 
     SignalAccount *signalAccount = contactCell.signalAccount;
     NSString *virtualUserId = contactCell.cellView.virtualUserId;
+    NSString *recipientId = signalAccount.recipientId ?: virtualUserId;
+
+    // Existing members are not selectable: gray DisabledSelected checkbox, no table selection.
+    BOOL isExistingMember = DTParamsUtils.validateString(recipientId) && [self.previousMemberRecipientIds containsObject:recipientId];
+    if (isExistingMember) {
+        contactCell.selectionStatus = ContactCellSelectionStatusDisabledSelected;
+        return;
+    }
+
+    contactCell.selectionStatus = ContactCellSelectionStatusUnselected;
 
     BOOL isSelected = NO;
     if (signalAccount.recipientId) {
@@ -681,6 +713,11 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
     if ([cell isKindOfClass:ContactTableViewCell.class]) {
         ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
+        // Never flip Disabled / DisabledSelected rows to Selected.
+        if (contactCell.selectionStatus == ContactCellSelectionStatusDisabledSelected ||
+            contactCell.selectionStatus == ContactCellSelectionStatusDisabled) {
+            return;
+        }
         contactCell.selectionStatus = ContactCellSelectionStatusSelected;
     }
 }

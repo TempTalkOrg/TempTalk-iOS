@@ -11,11 +11,15 @@ class ScrubbingLogFormatter: NSObject, DDLogFormatter {
     private struct Replacement {
         let regex: NSRegularExpression
         let replacementTemplate: String
+        /// Cheap precondition: skip this regex when the input doesn't contain
+        /// this character. Lets us skip the costly IPv6 scan on most lines.
+        let requiresCharacter: Character?
 
         init(
             pattern: String,
             options: NSRegularExpression.Options = [],
-            replacementTemplate: String
+            replacementTemplate: String,
+            requiresCharacter: Character? = nil
         ) {
             do {
                 self.regex = try .init(pattern: pattern, options: options)
@@ -24,6 +28,7 @@ class ScrubbingLogFormatter: NSObject, DDLogFormatter {
             }
 
             self.replacementTemplate = replacementTemplate
+            self.requiresCharacter = requiresCharacter
         }
 
 //        static func groupId(length: Int) -> Replacement {
@@ -98,7 +103,10 @@ class ScrubbingLogFormatter: NSObject, DDLogFormatter {
                + "::([fF]{4}(:0{1,4}){0,1}:){0,1}([0-9]{1,3}\\.){3,3}[0-9]{1,3}|"
                + ":((:[0-9a-fA-F]{1,4}){1,7}|:)"
             ),
-            replacementTemplate: "[IPV6]"
+            replacementTemplate: "[IPV6]",
+            // Every IPv6 representation contains a colon; skipping colon-free
+            // lines avoids the most expensive scan without missing any match.
+            requiresCharacter: ":"
         )
 
         static let ipv4Address: Replacement = Replacement(
@@ -156,14 +164,24 @@ class ScrubbingLogFormatter: NSObject, DDLogFormatter {
         return LogFormatter.formatLogMessage(logMessage, modifiedMessage: redactMessage(logMessage.message))
     }
 
-    func redactMessage(_ logString: String) -> String {
-        var logString = logString
+    /// Defensive cap on redaction input. Per-line cost scales with length; this
+    /// bounds the worst case for a pathological multi-MB line. Set high (64KB) so
+    /// real logs (incl. large request/response dumps) are never truncated.
+    private static let maxRedactionLength = 65536
 
+    func redactMessage(_ logString: String) -> String {
         if logString.contains("/Attachments/") {
             return "[USER_PATH]"
         }
 
+        var logString = logString.count > Self.maxRedactionLength
+            ? String(logString.prefix(Self.maxRedactionLength)) + "…[truncated]"
+            : logString
+
         for replacement in replacements {
+            if let required = replacement.requiresCharacter, !logString.contains(required) {
+                continue
+            }
             logString = replacement.regex.stringByReplacingMatches(
                 in: logString,
                 range: logString.entireRange,

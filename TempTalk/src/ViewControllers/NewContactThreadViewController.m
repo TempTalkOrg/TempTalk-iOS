@@ -19,6 +19,7 @@
 #import <TTServiceKit/AppVersion.h>
 #import <TTServiceKit/SignalAccount.h>
 #import <TTServiceKit/TSAccountManager.h>
+#import <TTServiceKit/TTServiceKit-Swift.h>
 
 #import "ConversationItemMacro.h"
 
@@ -76,6 +77,8 @@ static BOOL isLoadInternalContactsOver = NO;
 
 @property (nonatomic, strong) NSMutableArray <NSMutableArray<SignalAccount *> *> *collatedSignalAccounts;
 @property (nonatomic, strong) NSArray <NSString *> *sectionTitles;
+// YES when pending-removal (weak) contacts are pinned as section 0.
+@property (nonatomic, assign) BOOL hasPinnedWeakSection;
 
 @end
 
@@ -168,6 +171,8 @@ static BOOL isLoadInternalContactsOver = NO;
             isLoadInternalContactsOver = YES;
             [self updateTableContents];
         }
+        // Friend store refreshed — reconcile weak contacts (catch missed removals / restores).
+        [[DTWeakContactManager shared] reconcileFromServer];
     }];
 }
 
@@ -260,6 +265,16 @@ static BOOL isLoadInternalContactsOver = NO;
                                              selector:@selector(textSizeDidChange)
                                                  name:NSNotification.TextSizeDidChange
                                                object:nil];
+    // Weak contacts enter/leave the pending-removal set — merge/refresh the list.
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(weakContactsDidChange)
+                                                 name:DTWeakContactManager.weakContactsDidChangeNotificationName
+                                               object:nil];
+}
+
+- (void)weakContactsDidChange {
+    OWSAssertIsOnMainThread();
+    [self updateTableContents];
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -356,36 +371,76 @@ static BOOL isLoadInternalContactsOver = NO;
 
 - (void)updateTableContents {
 
-    [self.collatedSignalAccounts removeAllObjects];
+    // Build the A-Z sections for friends; collect pending-removal (weak) contacts separately.
+    NSMutableArray <NSMutableArray<SignalAccount *> *> *azSections = [NSMutableArray new];
     for (NSUInteger i = 0; i < self.collation.sectionTitles.count; i++) {
-        self.collatedSignalAccounts[i] = [NSMutableArray new];
+        [azSections addObject:[NSMutableArray new]];
     }
-    
+
+    NSMutableArray<SignalAccount *> *weakAccounts = [NSMutableArray new];
+    NSMutableSet<NSString *> *shownWeakIds = [NSMutableSet set];
     for (SignalAccount *signalAccount in self.contactsViewHelper.signalAccounts) {
-        if (!signalAccount.isFriend) {
+        // Pin pending-removal contacts to the top; friends go into A-Z; skip strangers.
+        DTContactRelationState relationState = [DTWeakContactManager.shared relationStateFor:signalAccount];
+        if (relationState == DTContactRelationStateStranger) {
+            continue;
+        }
+        if (relationState == DTContactRelationStatePendingRemoval) {
+            [weakAccounts addObject:signalAccount];
+            [shownWeakIds addObject:signalAccount.recipientId];
             continue;
         }
         NSInteger section =
         [self.collation sectionForObject:signalAccount collationStringSelector:@selector(stringForCollation)];
-
         if (section < 0) {
             OWSFailDebug(@"Unexpected collation for name:%@", signalAccount.stringForCollation);
             continue;
         }
-        NSUInteger sectionIndex = (NSUInteger)section;
-
-        [self.collatedSignalAccounts[sectionIndex] addObject:signalAccount];
+        [azSections[(NSUInteger)section] addObject:signalAccount];
     }
-    
-    NSMutableArray *tmpSectionTitles = [self.collation.sectionTitles mutableCopy];
-    NSMutableArray <NSMutableArray<SignalAccount *> *> *tmpCollatedSignalAccounts = [self.collatedSignalAccounts mutableCopy];
-    [tmpCollatedSignalAccounts enumerateObjectsUsingBlock:^(NSMutableArray<SignalAccount *> * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-        if (obj.count == 0) {
-            [self.collatedSignalAccounts removeObject:obj];
-            [tmpSectionTitles removeObject:self.collation.sectionTitles[idx]];
+
+    // Weak set is authoritative for display: render pending-removal contacts the friend store
+    // dropped (contacts sync rebuilds it) from the server snapshot, so they never vanish.
+    for (NSString *weakUid in [DTWeakContactManager.shared weakContactRecipientIds]) {
+        if ([shownWeakIds containsObject:weakUid]) {
+            continue;
+        }
+        SignalAccount *weakAccount = [DTWeakContactManager.shared displayAccountForWeakUid:weakUid];
+        if (weakAccount) {
+            [weakAccounts addObject:weakAccount];
+        }
+    }
+
+    // Order: soonest removal first; ties break by most-recently entered weak state, then by name.
+    [weakAccounts sortUsingComparator:^NSComparisonResult(SignalAccount *a, SignalAccount *b) {
+        NSInteger da = [DTWeakContactManager.shared daysLeftWithRecipientId:a.recipientId];
+        NSInteger db = [DTWeakContactManager.shared daysLeftWithRecipientId:b.recipientId];
+        if (da != db) return da < db ? NSOrderedAscending : NSOrderedDescending;
+        int64_t ta = [DTWeakContactManager.shared weakEnterTimeWithRecipientId:a.recipientId];
+        int64_t tb = [DTWeakContactManager.shared weakEnterTimeWithRecipientId:b.recipientId];
+        if (ta != tb) return ta > tb ? NSOrderedAscending : NSOrderedDescending;
+        return [a.stringForCollation compare:b.stringForCollation];
+    }];
+
+    // Assemble final sections: pinned weak section 0 (if any) + non-empty A-Z sections.
+    NSMutableArray <NSMutableArray<SignalAccount *> *> *sections = [NSMutableArray new];
+    NSMutableArray<NSString *> *titles = [NSMutableArray new];
+
+    self.hasPinnedWeakSection = weakAccounts.count > 0;
+    if (self.hasPinnedWeakSection) {
+        [sections addObject:weakAccounts];
+        [titles addObject:Localized(@"WEAK_CONTACT_PENDING_SECTION_TITLE", @"")];
+    }
+    [azSections enumerateObjectsUsingBlock:^(NSMutableArray<SignalAccount *> * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        if (obj.count > 0) {
+            [sections addObject:obj];
+            [titles addObject:self.collation.sectionTitles[idx]];
         }
     }];
-    self.sectionTitles = [tmpSectionTitles copy];
+
+    [self.collatedSignalAccounts removeAllObjects];
+    [self.collatedSignalAccounts addObjectsFromArray:sections];
+    self.sectionTitles = [titles copy];
     [self.tableView reloadData];
 }
 
@@ -452,6 +507,10 @@ static BOOL isLoadInternalContactsOver = NO;
     [cell configureWithSignalAccount:signalAccount
                      contactsManager:self.contactsViewHelper.contactsManager];
 
+    NSString *weakRecipientId = signalAccount.recipientId;
+    [cell.cellView applyWeakRemovalDays:[DTWeakContactManager.shared daysLeftWithRecipientId:weakRecipientId]
+                          removingToday:[DTWeakContactManager.shared isRemovingTodayWithRecipientId:weakRecipientId]];
+
     return cell;
 }
 
@@ -462,12 +521,16 @@ static BOOL isLoadInternalContactsOver = NO;
     }
 
     NSUInteger sectionSignalAccountCount = self.collatedSignalAccounts[(NSUInteger)section].count;
-    if (sectionSignalAccountCount > 0) {
-        NSString *sectionTitle = self.sectionTitles[(NSUInteger)section];
-        UIView *sectionHeader = [self headerWithTitle:sectionTitle];
-        return sectionHeader;
+    if (sectionSignalAccountCount == 0) {
+        return nil;
     }
-    return nil;
+    if (self.hasPinnedWeakSection && section == 0) {
+        // Resolve live so it follows the current language; the cached title in
+        // sectionTitles is only rebuilt on reload, not on language change.
+        return [self weakSectionHeaderWithTitle:Localized(@"WEAK_CONTACT_PENDING_SECTION_TITLE", @"")];
+    }
+    NSString *sectionTitle = self.sectionTitles[(NSUInteger)section];
+    return [self headerWithTitle:sectionTitle];
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
@@ -475,7 +538,10 @@ static BOOL isLoadInternalContactsOver = NO;
         return CGFLOAT_MIN;
     }
     NSUInteger sectionSignalAccountCount = self.collatedSignalAccounts[(NSUInteger)section].count;
-    return sectionSignalAccountCount > 0 ? 30 : CGFLOAT_MIN;
+    if (sectionSignalAccountCount == 0) {
+        return CGFLOAT_MIN;
+    }
+    return (self.hasPinnedWeakSection && section == 0) ? 38 : 30;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -488,7 +554,19 @@ static BOOL isLoadInternalContactsOver = NO;
 }
 
 - (nullable NSArray<NSString *> *)sectionIndexTitlesForTableView:(UITableView *)tableView {
-    return self.sectionTitles;
+    // The A-Z rail excludes the pinned weak section title.
+    if (!self.hasPinnedWeakSection) {
+        return self.sectionTitles;
+    }
+    if (self.sectionTitles.count <= 1) {
+        return @[];
+    }
+    return [self.sectionTitles subarrayWithRange:NSMakeRange(1, self.sectionTitles.count - 1)];
+}
+
+- (NSInteger)tableView:(UITableView *)tableView sectionForSectionIndexTitle:(NSString *)title atIndex:(NSInteger)index {
+    // Rail titles are offset by the pinned section, so map back to the real section.
+    return self.hasPinnedWeakSection ? index + 1 : index;
 }
 
 - (UIView *)headerWithTitle:(NSString *)title {
@@ -503,7 +581,32 @@ static BOOL isLoadInternalContactsOver = NO;
     [headerView addSubview:lbTitle];
     [lbTitle autoPinEdgeToSuperviewEdge:ALEdgeLeading withInset:16];
     [lbTitle autoVCenterInSuperview];
-    
+
+    return headerView;
+}
+
+- (UIView *)weakSectionHeaderWithTitle:(NSString *)title {
+
+    UIView *headerView = [UIView new];
+    headerView.backgroundColor = Theme.bgpagePrimaryColor;
+
+    UIImageView *iconView = [UIImageView new];
+    iconView.image = [[UIImage systemImageNamed:@"exclamationmark.circle"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    iconView.tintColor = Theme.tthirdColor;
+    iconView.contentMode = UIViewContentModeScaleAspectFit;
+    [headerView addSubview:iconView];
+    [iconView autoPinEdgeToSuperviewEdge:ALEdgeLeading withInset:16];
+    [iconView autoVCenterInSuperview];
+    [iconView autoSetDimensionsToSize:CGSizeMake(15, 15)];
+
+    UILabel *lbTitle = [UILabel new];
+    lbTitle.font = [UIFont systemFontOfSize:14];
+    lbTitle.textColor = Theme.tthirdColor;
+    lbTitle.text = title;
+    [headerView addSubview:lbTitle];
+    [lbTitle autoPinEdge:ALEdgeLeading toEdge:ALEdgeTrailing ofView:iconView withOffset:6];
+    [lbTitle autoVCenterInSuperview];
+
     return headerView;
 }
 

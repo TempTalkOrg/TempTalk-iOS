@@ -49,6 +49,9 @@ extern NSString *const kLoadedContactsKey;
 - (nullable SignalAccount *)signalAccountForRecipientId:(NSString *)recipientId transaction:(SDSAnyReadTransaction *)transaction;
 - (BOOL)hasSignalAccountForRecipientId:(NSString *)recipientId;
 
+/// Cache miss 时把已在手的 SignalAccount 喂回 signalAccountMap（用于 Extension 等异步加载场景）。
+- (void)warmCacheWithSignalAccount:(SignalAccount *)signalAccount;
+
 - (void)loadSignalAccountsFromCache;
 
 #pragma mark - System Contact Fetching

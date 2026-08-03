@@ -17,11 +17,16 @@ extension DTGroupBaseInfoEntity {
                                   encryptedAvatar: String? = nil,
                                   transaction: SDSAnyWriteTransaction) {
         guard let baseInfo = Self.anyFetch(uniqueId: gid, transaction: transaction) else { return }
+        let beforeEncryptedName = baseInfo.encryptedName
         baseInfo.anyUpdate(transaction: transaction) { entity in
             if let name, !name.isEmpty { entity.name = name }
             if let plainAvatar, !plainAvatar.isEmpty { entity.avatar = plainAvatar }
             if let encryptedName, !encryptedName.isEmpty { entity.encryptedName = encryptedName }
             if let encryptedAvatar, !encryptedAvatar.isEmpty { entity.encryptedAvatar = encryptedAvatar }
+        }
+        let afterEncryptedName = Self.anyFetch(uniqueId: gid, transaction: transaction)?.encryptedName
+        if beforeEncryptedName != afterEncryptedName {
+            Logger.info("[GroupCrypto] syncFields gid=\(gid) encryptedName changed: \(beforeEncryptedName ?? "nil") → \(afterEncryptedName ?? "nil")")
         }
     }
 }
@@ -53,9 +58,7 @@ extension DTGroupUpdateMessageProcessor {
                                                             transaction: SDSAnyWriteTransaction) {
         
         let handler = self.getHandler(for: groupNotifyEntity.groupNotifyDetailedType)
-        guard let handler  else {
-            return
-        }
+        guard let handler else { return }
         
         let context = GroupNotifyContext(handler: handler)
         context.executeStrategy(envelope: envelope,
@@ -160,7 +163,8 @@ extension DTGroupUpdateMessageProcessor {
                 .privilegeConfidential,
                 .groupRapidRoleChange,
                 .criticalAlertChange,
-                .upgradeGroupCrypto :
+                .upgradeGroupCrypto,
+                .rotateGroupCrypto :
             return GroupNotifyGroupInfoHandler()
           
         case .groupSelfInfoChange:

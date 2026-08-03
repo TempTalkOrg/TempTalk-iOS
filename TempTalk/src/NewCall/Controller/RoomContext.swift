@@ -22,11 +22,6 @@ import LiveKit
 import SwiftUI
 import UIKit
 
-enum ErrorCategory {
-    case networkIssue // 可以切换域名重试
-    case fatal // 不要重试
-}
-
 /// 错误处理状态，用于协调 connect() 和 delegate 回调之间的错误处理
 enum ErrorHandlingState {
     case idle // 空闲，可以处理新错误
@@ -63,13 +58,14 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
     let room = Room()
 
-    private let audioProcessor = AudioPipelineProcessor()
+    private let audioProcessor = CallAudioDiagnosticsProcessor()
     private var _denoiseEnabled: Bool = true
 
-    var serviceUrlManager: TTCallServiceUrlManager?
+    @Published var currentAttempt: ConnectionAttempt?
 
-    // Published connection / config state
-    @Published var url: String = ""
+    /// 仅日志/调试用；TLS 校验请用 `currentAttempt?.serverHost`。
+    var url: String { currentAttempt?.connectUrl ?? "" }
+
     @Published var token: String = ""
     @Published var e2eeKey: Data?
 
@@ -100,9 +96,6 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     var inviteVC: UIViewController?
     var noiseVC: UIViewController?
 
-    private var connectRetryCount: Int = 0
-    private let maxConnectRetry: Int = 5
-    private var tokenGeneratedAt: TimeInterval = 0
     private var lkContext: LiveKitContext?
 
     var lastPortName: String?
@@ -121,13 +114,25 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     var isPresentingShareView = false
     // 是否存在待展示的UI
     var pendingShowUI = false
-    // 重连后递增，用于强制 SwiftUI 重建视频视图树以恢复 adaptive stream 订阅
-    @Published var videoRefreshToken: UInt64 = 0
+    var didHandleInitialRoomDidConnect = false
+    var didHandleInitialRoomAudioSetup = false
+    var didCompleteInitialRoomAudioSetup = false
+    var isApplyingInitialRoomAudioSetup = false
+    var deferredInitialRoomAudioSetupForCallKit = false
     @Published var isRoomReconnecting: Bool = false
+
+    /// Remote identities we've already surfaced a "mic on" bullet for, until they mute
+    /// or genuinely leave. Deduplicates the mic-on bullet across its two triggers
+    /// (first subscribe of an already-unmuted track, and the mute→unmute transition)
+    /// and — crucially — across every reconnect variant: a `isRoomReconnecting` guard is
+    /// unreliable (a full reconnect clears it before staggered re-subscribes land, and a
+    /// server switch re-subscribes existing unmuted tracks with no mute transition), which
+    /// would otherwise re-bullet every remote. Only mutated on the MainActor.
+    var micOnBulletedRemoteIdentities: Set<String> = []
 
     // MARK: - Init / Deinit
 
-    init(url: String, token: String, lkContext: LiveKitContext?) {
+    init(token: String, lkContext: LiveKitContext?) {
         AudioManager.shared.capturePostProcessingDelegate = audioProcessor
 
         if let cachedMode = CallSettingsManager.shared.getDenoiseMode() {
@@ -141,11 +146,9 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
         room.add(delegate: self)
 
-        self.url = url
         self.token = token
         e2eeKey = e2eeKey
         self.lkContext = lkContext
-        tokenGeneratedAt = Date().timeIntervalSince1970
         // callManager 不需要在 init 中赋 weak；使用计算属性访问单例
 
         #if os(iOS)
@@ -161,12 +164,26 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+
+                // Cancel any pending delayed dismiss so it won't race with the
+                // present logic below and cause a flash (present → delayed dismiss).
+                self.unpublishScreenShareTask?.cancel()
+                self.unpublishScreenShareTask = nil
+
                 let hadPendingShareUI = self.pendingShowUI
                 self.pendingShowUI = false
 
-                if hadPendingShareUI {
+                // Use room's actual state as the single source of truth to avoid
+                // acting on stale pendingShowUI / screenSharePublication references.
+                let roomHasActiveShare = self.room.isScreenShareActive()
+
+                if hadPendingShareUI, roomHasActiveShare {
                     Logger.info("\(self.logTag) RoomContext become active retry show share view")
                     self.tryPresentShareView(maxRetryCount: 0)
+                } else if hadPendingShareUI, !roomHasActiveShare {
+                    Logger.info("\(self.logTag) RoomContext become active but screen share already ended, skip present")
+                    self.screenSharePublication = nil
+                    self.screenShareParticipant = nil
                 }
 
                 self.checkAndPresentScreenShareIfNeeded()
@@ -271,8 +288,11 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         errorHandlingState = .retrying
     }
 
+    /// 单次建链。多 attempt 切换 / 重试由 `CallConnectionCoordinator` 接管。
     @MainActor
-    func connect(fromCallKit: Bool, connectOptions: ConnectOptions) async throws -> Room {
+    func connect(fromCallKit: Bool,
+                 attempt: ConnectionAttempt,
+                 baseConnectOptions: ConnectOptions) async throws -> Room {
         guard !shouldAbortConnect else {
             Logger.info("\(logTag) room.connect aborted because disconnect was requested")
             throw CancellationError()
@@ -281,8 +301,14 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             Logger.info("\(logTag) room.connect already in progress, skipping duplicate call")
             return room
         }
-        Logger.info("\(logTag) room.connect fromCallKit: \(fromCallKit)")
+        Logger.info("\(logTag) room.connect fromCallKit: \(fromCallKit) url=\(attempt.connectUrl) serverHost=\(attempt.serverHost) quic=\(attempt.useQuic)")
+        // Build connect options before mutating any state: withConnectionAttempt can throw (proxy
+        // tunnel unavailable → fail closed). Doing it here means a throw exits with the room
+        // untouched — no stuck isConnecting, no leaked audio-session observers.
+        let cidTag = DTMeetingManager.quicCidTag(for: TSAccountManager.localNumber())
+        let connectOptions = try baseConnectOptions.withConnectionAttempt(attempt, quicCidTag: cidTag)
         isConnecting = true
+        currentAttempt = attempt
         // 开始新连接时重置错误处理状态
         resetErrorHandlingState()
         // Ensure audio session observations and config are active
@@ -298,16 +324,14 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             defaultVideoPublishOptions: .init(
                 encoding: VideoParameters.presetH1080_169.encoding,
                 simulcast: true,
-                preferredCodec: VideoCodec.vp8,
-                
+                preferredCodec: VideoCodec.vp8
             ),
             adaptiveStream: true,
             dynacast: true,
-            e2eeOptions: e2eeOptions,
-            reportRemoteTrackStatistics: true
+            stopLocalTrackOnUnpublish: false,
+            e2eeOptions: e2eeOptions
         )
 
-        // Use Task (not detached) so we stay in MainActor context for UI/livekit interactions
         let connectTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -316,132 +340,37 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
                     isConnecting = false
                     throw CancellationError()
                 }
-                let elapsed = Date().timeIntervalSince1970 - tokenGeneratedAt
-                guard elapsed <= 30 else {
-                    Logger.error("\(logTag) token expired after \(Int(elapsed))s, aborting connect")
-                    isConnecting = false
-                    markHandled()
-                    throw DTMeetingManager.CallError.tokenExpired
-                }
-                Logger.info("\(logTag): room connect currentURL=\(url)")
 
                 try await room.connect(
-                    url: url,
+                    url: attempt.connectUrl,
                     token: "",
                     connectOptions: connectOptions,
                     roomOptions: roomOptions
                 )
-                // 挂断请求发生在连接成功后，立即断开并抛出取消
                 if shouldAbortConnect || Task.isCancelled {
                     isConnecting = false
                     await room.disconnect()
                     throw CancellationError()
                 }
-                // 连接成功后重置标志
                 isConnecting = false
             } catch is CancellationError {
                 isConnecting = false
                 throw CancellationError()
             } catch {
+                isConnecting = false
                 guard !shouldAbortConnect, !Task.isCancelled else {
-                    isConnecting = false
                     throw CancellationError()
                 }
-                // handleConnectError 在 MainActor 中执行
-                try await handleConnectError(error, connectOptions: connectOptions, fromCallKit: fromCallKit)
+                // 错误分类 / 切下一个 attempt 由 coordinator 处理
+                throw error
             }
         }
 
         _connectTask = connectTask
         defer { _connectTask = nil }
         try await connectTask.value
+        await handleInitialRoomDidConnect(source: "connectTask.value")
         return room
-    }
-
-    @MainActor
-    private func handleConnectError(
-        _ error: Error,
-        connectOptions: ConnectOptions,
-        fromCallKit: Bool
-    ) async throws {
-        if shouldAbortConnect || Task.isCancelled {
-            Logger.info("\(logTag): aborting connect retry due to disconnect request")
-            isConnecting = false
-            markHandled()
-            throw CancellationError()
-        }
-        // 连接失败就切换下一个url
-        if needHangupError(error: error) {
-            Logger.error("\(logTag): connect failed with \(error.localizedDescription)")
-            isConnecting = false
-            // 标记为已处理，防止 delegate 重复处理
-            markHandled()
-            DTMeetingManager.shared.showErrorToast = true
-            await DTMeetingManager.shared.clearDisconnectErrorData()
-            throw error
-        } else {
-            if let serviceUrlManager,
-               serviceUrlManager.switchToNextUrl(),
-               let nextUrl = await serviceUrlManager.getCurrentUrl()
-            {
-                url = nextUrl
-                tokenGeneratedAt = Date().timeIntervalSince1970
-                connectRetryCount += 1
-                guard connectRetryCount <= maxConnectRetry else {
-                    Logger.error("\(logTag): retry count \(connectRetryCount) exceeded limit \(maxConnectRetry), aborting")
-                    isConnecting = false
-                    markHandled()
-                    throw error
-                }
-                Logger.info("\(logTag): switched to next URL=\(nextUrl), refreshed token window")
-                markRetrying()
-                isConnecting = false
-                guard !shouldAbortConnect, !Task.isCancelled else {
-                    Logger.info("\(logTag): aborting after URL switch due to disconnect request")
-                    markHandled()
-                    throw CancellationError()
-                }
-                _ = try await connect(fromCallKit: fromCallKit, connectOptions: connectOptions)
-            } else {
-                Logger.error("\(logTag): no more URLs to try")
-                isConnecting = false
-                markHandled()
-                await DTMeetingManager.shared.clearDisconnectErrorData()
-                DTToastHelper.toast(withText: Localized("METTING_CONNECT_EXCEPTION_TIPS"))
-                throw error
-            }
-        }
-    }
-
-    private func needHangupError(error: Error) -> Bool {
-        let category = classifyLiveKitError(error)
-        if category == .fatal {
-            return true
-        }
-        return false
-    }
-
-    func classifyLiveKitError(_ error: Error) -> ErrorCategory {
-        if let lkError = error as? LiveKitError {
-            switch lkError.type {
-            case .network,
-                 .timedOut,
-                 .serverPingTimedOut,
-                 .reconnectFailure,
-                 .validation,
-                 .unknown:
-                return .networkIssue
-
-            default:
-                return .fatal
-            }
-        }
-
-        if (error as NSError).domain == NSURLErrorDomain { return .networkIssue }
-        if (error as NSError).domain == NSPOSIXErrorDomain { return .networkIssue }
-        if (error as NSError).domain == kCFErrorDomainCFNetwork as String { return .networkIssue }
-
-        return .networkIssue
     }
 
     func disconnect(_ reason: String = #function) async {
@@ -482,11 +411,6 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
     func syncLocalMicrophoneStateToCallKit(muted: Bool) {
         callManager.syncLocalMicrophoneStateToCallKit(muted)
-    }
-
-    func bumpVideoRefreshToken() {
-        videoRefreshToken &+= 1
-        Logger.info("\(logTag) videoRefreshToken bumped to \(videoRefreshToken)")
     }
 
     func sendMessage() {
@@ -558,15 +482,16 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
     @MainActor
     func hasActiveScreenShareToPresent() -> Bool {
-        if let publication = screenSharePublication, publication.source == .screenShareVideo {
-            return true
-        }
-
         let roomActive = room.isScreenShareActive()
         if !roomActive {
-            Logger.info("\(logTag) hasActiveScreenShareToPresent: false (publication: \(screenSharePublication != nil), roomActive: \(roomActive))")
+            if screenSharePublication != nil {
+                Logger.info("\(logTag) hasActiveScreenShareToPresent: false (stale publication cleared, roomActive: false)")
+                screenSharePublication = nil
+                screenShareParticipant = nil
+            }
+            return false
         }
-        return roomActive
+        return true
     }
 
     @MainActor
@@ -633,8 +558,8 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
         // 防御性检查：恢复后仍判断屏幕共享已结束但视图仍存在，则 dismiss
         if !hasActiveScreenShareToPresent(), isShareViewPresented {
-            if callManager.currentCall.isPresentedShare {
-                Logger.info("\(logTag) No active tracks but isPresentedShare=true, room may be reconnecting - skipping premature dismiss")
+            if isRoomReconnecting {
+                Logger.info("\(logTag) No active tracks but room is reconnecting - skipping premature dismiss")
             } else {
                 Logger.info("\(logTag) Screen share ended but view still exists, dismissing")
                 dismissShareViewIfNeeded()
@@ -784,7 +709,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
             let actionSheet = ActionSheetController()
             actionSheet.isDarkThemeOnly = true
 
-            let endMeetingAction = ActionSheetAction(title: Localized("HANGUP_END_MEETING"), style: .destructive) { [weak self] _ in
+            let endMeetingAction = ActionSheetAction(title: Localized("HANGUP_END_MEETING"), accessibilityIdentifier: DTCallAccessibilityID.endForAll, style: .destructive) { [weak self] _ in
                 Task { @MainActor in
                     await self?.toolbarEndCallTaped(forceEndGroupMeeting: true)
                 }
@@ -820,6 +745,19 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
     func currentAudioModule() -> AudioModule {
         audioProcessor.activeModule
+    }
+
+    func beginLocalAudioDiagnostics(reason: String) {
+        audioProcessor.beginLoggingWindow(reason: reason)
+    }
+
+    func endLocalAudioDiagnostics(reason: String) {
+        audioProcessor.endLoggingWindow(reason: reason)
+    }
+
+    func restartLocalAudioDiagnostics(reason: String) {
+        audioProcessor.endLoggingWindow(reason: reason)
+        audioProcessor.beginLoggingWindow(reason: reason)
     }
 
     // MARK: - Voice Changer
@@ -945,5 +883,279 @@ extension Room {
             }
         }
         return false
+    }
+}
+
+private final class CallAudioDiagnosticsProcessor: AudioCustomProcessingDelegate, @unchecked Sendable {
+    private static let logWindowNanoseconds: UInt64 = 30_000_000_000
+    private static let logIntervalNanoseconds: UInt64 = 1_000_000_000
+    private static let int16Scale = Double(Int16.max) + 1
+    private static let suspiciousInputDbFS = -45.0
+    private static let suspiciousOutputDbFS = -75.0
+
+    private struct LevelAccumulator {
+        var sumSquares: Double = 0
+        var peak: Double = 0
+        var sampleCount = 0
+
+        mutating func append(_ stats: FrameLevelStats) {
+            sumSquares += stats.sumSquares
+            peak = max(peak, stats.peak)
+            sampleCount += stats.sampleCount
+        }
+
+        mutating func take() -> LevelAccumulator {
+            let snapshot = self
+            self = LevelAccumulator()
+            return snapshot
+        }
+
+        var rms: Double {
+            sampleCount > 0 ? sqrt(sumSquares / Double(sampleCount)) : 0
+        }
+
+        var dbFS: Double {
+            rms > 0 ? 20 * log10(rms) : -160
+        }
+    }
+
+    private struct FrameLevelStats {
+        let sumSquares: Double
+        let peak: Double
+        let sampleCount: Int
+    }
+
+    private struct State {
+        var generation = 0
+        var isWindowActive = false
+        var windowStart: UInt64 = 0
+        var deadline: UInt64 = 0
+        var nextLogTime: UInt64 = 0
+        var pre = LevelAccumulator()
+        var post = LevelAccumulator()
+        var didLogSuppressionAlert = false
+        var denoiseEnabled = true
+        var voicePreset = "original"
+    }
+
+    private struct LogSnapshot: Sendable {
+        let elapsedSeconds: Double
+        let pre: LevelAccumulator
+        let post: LevelAccumulator
+        let shouldLogSuppressionAlert: Bool
+        let denoiseEnabled: Bool
+        let module: String
+        let voicePreset: String
+        let isWindowComplete: Bool
+    }
+
+    private let processor = AudioPipelineProcessor()
+    private let lock = NSLock()
+    private let logQueue = DispatchQueue(label: "org.difft.chative.call-audio-diagnostics")
+    private var state = State()
+
+    var audioProcessingName: String { processor.audioProcessingName }
+
+    var activeModule: AudioModule {
+        get { processor.activeModule }
+        set { processor.activeModule = newValue }
+    }
+
+    func setDenoiseEnabled(_ enabled: Bool) {
+        withLock { state.denoiseEnabled = enabled }
+        processor.setDenoiseEnabled(enabled)
+    }
+
+    func setSoundTouchPreset(_ preset: String) {
+        withLock { state.voicePreset = preset }
+        processor.setSoundTouchPreset(preset)
+    }
+
+    func beginLoggingWindow(reason: String) {
+        let now = DispatchTime.now().uptimeNanoseconds
+        let generation = withLock { () -> Int? in
+            guard !state.isWindowActive else { return nil }
+            state.generation += 1
+            state.isWindowActive = true
+            state.windowStart = now
+            state.deadline = now + Self.logWindowNanoseconds
+            state.nextLogTime = now + Self.logIntervalNanoseconds
+            state.pre = LevelAccumulator()
+            state.post = LevelAccumulator()
+            state.didLogSuppressionAlert = false
+            return state.generation
+        }
+        guard let generation else { return }
+        Logger.info(
+            "[AudioDenoiseLevel] window begin generation=\(generation) duration=30s module=\(activeModule.rawValue) reason=\(reason)"
+        )
+    }
+
+    func endLoggingWindow(reason: String) {
+        let didEnd = withLock { () -> Bool in
+            guard state.isWindowActive else { return false }
+            state.generation += 1
+            state.isWindowActive = false
+            state.pre = LevelAccumulator()
+            state.post = LevelAccumulator()
+            return true
+        }
+        if didEnd {
+            Logger.info("[AudioDenoiseLevel] window end reason=\(reason)")
+        }
+    }
+
+    func audioProcessingInitialize(sampleRate sampleRateHz: Int, channels: Int) {
+        processor.audioProcessingInitialize(sampleRate: sampleRateHz, channels: channels)
+    }
+
+    func audioProcessingProcess(audioBuffer: LKAudioBuffer) {
+        let now = DispatchTime.now().uptimeNanoseconds
+        let windowState = withLock { () -> (generation: Int?, expiredSnapshot: LogSnapshot?, didExpire: Bool) in
+            guard state.isWindowActive else { return (nil, nil, false) }
+            guard now <= state.deadline else {
+                let snapshot = makeSnapshotLocked(
+                    elapsedTime: state.deadline,
+                    isWindowComplete: true
+                )
+                state.isWindowActive = false
+                return (nil, snapshot, true)
+            }
+            return (state.generation, nil, false)
+        }
+
+        if let snapshot = windowState.expiredSnapshot {
+            logQueue.async { Self.log(snapshot) }
+        } else if windowState.didExpire {
+            logQueue.async {
+                Logger.info("[AudioDenoiseLevel] window complete duration=30s samples=0")
+            }
+        }
+
+        guard let generation = windowState.generation else {
+            processor.audioProcessingProcess(audioBuffer: audioBuffer)
+            return
+        }
+
+        let pre = Self.measure(audioBuffer)
+        processor.audioProcessingProcess(audioBuffer: audioBuffer)
+        let post = Self.measure(audioBuffer)
+
+        let snapshot = withLock { () -> LogSnapshot? in
+            guard state.isWindowActive, state.generation == generation else { return nil }
+            state.pre.append(pre)
+            state.post.append(post)
+            guard now >= state.nextLogTime else { return nil }
+
+            repeat {
+                state.nextLogTime += Self.logIntervalNanoseconds
+            } while state.nextLogTime <= now
+
+            let isWindowComplete = now >= state.deadline
+            let result = makeSnapshotLocked(
+                elapsedTime: min(now, state.deadline),
+                isWindowComplete: isWindowComplete
+            )
+            if isWindowComplete {
+                state.isWindowActive = false
+            }
+            return result
+        }
+
+        if let snapshot {
+            logQueue.async { Self.log(snapshot) }
+        }
+    }
+
+    func audioProcessingRelease() {
+        endLoggingWindow(reason: "audio processing released")
+        processor.audioProcessingRelease()
+    }
+
+    private static func measure(_ audioBuffer: LKAudioBuffer) -> FrameLevelStats {
+        var sumSquares: Double = 0
+        var peak: Double = 0
+        let sampleCount = audioBuffer.channels * audioBuffer.frames
+        guard sampleCount > 0 else {
+            return FrameLevelStats(sumSquares: 0, peak: 0, sampleCount: 0)
+        }
+
+        for channel in 0 ..< audioBuffer.channels {
+            let samples = audioBuffer.rawBuffer(forChannel: channel)
+            for frame in 0 ..< audioBuffer.frames {
+                let sample = Double(samples[frame]) / int16Scale
+                sumSquares += sample * sample
+                peak = max(peak, abs(sample))
+            }
+        }
+
+        return FrameLevelStats(
+            sumSquares: sumSquares,
+            peak: peak,
+            sampleCount: sampleCount
+        )
+    }
+
+    private func makeSnapshotLocked(
+        elapsedTime: UInt64,
+        isWindowComplete: Bool
+    ) -> LogSnapshot? {
+        guard state.pre.sampleCount > 0, state.post.sampleCount > 0 else { return nil }
+        let preSnapshot = state.pre.take()
+        let postSnapshot = state.post.take()
+        let isSuppressed = state.denoiseEnabled
+            && state.voicePreset == "original"
+            && preSnapshot.dbFS >= Self.suspiciousInputDbFS
+            && postSnapshot.dbFS <= Self.suspiciousOutputDbFS
+        let shouldAlert = isSuppressed && !state.didLogSuppressionAlert
+        if shouldAlert {
+            state.didLogSuppressionAlert = true
+        }
+
+        return LogSnapshot(
+            elapsedSeconds: Double(elapsedTime - state.windowStart) / 1_000_000_000,
+            pre: preSnapshot,
+            post: postSnapshot,
+            shouldLogSuppressionAlert: shouldAlert,
+            denoiseEnabled: state.denoiseEnabled,
+            module: activeModule.rawValue,
+            voicePreset: state.voicePreset,
+            isWindowComplete: isWindowComplete
+        )
+    }
+
+    private static func log(_ snapshot: LogSnapshot) {
+        let session = AVAudioSession.sharedInstance()
+        let inputs = session.currentRoute.inputs.map(\.portType.rawValue).joined(separator: ",")
+        let outputs = session.currentRoute.outputs.map(\.portType.rawValue).joined(separator: ",")
+        let deltaDb = snapshot.post.dbFS - snapshot.pre.dbFS
+        let values = String(
+            format: "elapsed=%.1fs prePipelineRms=%.6f prePipelinePeak=%.6f prePipelineDbFS=%.1f postPipelineRms=%.6f postPipelinePeak=%.6f postPipelineDbFS=%.1f deltaDb=%.1f",
+            snapshot.elapsedSeconds,
+            snapshot.pre.rms,
+            snapshot.pre.peak,
+            snapshot.pre.dbFS,
+            snapshot.post.rms,
+            snapshot.post.peak,
+            snapshot.post.dbFS,
+            deltaDb
+        )
+        Logger.info(
+            "[AudioDenoiseLevel] \(values) samples=\(snapshot.pre.sampleCount) module=\(snapshot.module) denoiseEnabled=\(snapshot.denoiseEnabled) voicePreset=\(snapshot.voicePreset) admMuted=\(AudioManager.shared.isMicrophoneMuted) engineRunning=\(AudioManager.shared.isEngineRunning) route=in:[\(inputs)] out:[\(outputs)]"
+        )
+        if snapshot.shouldLogSuppressionAlert {
+            Logger.warn(
+                "[AudioDenoiseLevel] POSSIBLE_DENOISE_SUPPRESSION prePipelineDbFS=\(snapshot.pre.dbFS) postPipelineDbFS=\(snapshot.post.dbFS) module=\(snapshot.module)"
+            )
+        }
+        if snapshot.isWindowComplete {
+            Logger.info("[AudioDenoiseLevel] window complete duration=30s")
+        }
+    }
+
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
     }
 }

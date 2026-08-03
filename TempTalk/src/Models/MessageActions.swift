@@ -17,10 +17,30 @@ protocol MessageActionsDelegate: AnyObject {
     func messageActionsOriginalTranslateForItem(_ conversationViewItem: ConversationViewItem)
     func messageActionDeleteItem(_ conversationViewItem: ConversationViewItem)
     func messageEmojiReactionItem(_ conversationViewItem: ConversationViewItem, emoji: String)
+    @objc optional func messageActionsAddToFavorite(_ conversationViewItem: ConversationViewItem)
 }
 
 struct MenuActionBuilder {
-    
+
+    private static func insertCopyNoticeIfNeeded(for viewItem: ConversationViewItem) {
+        guard let message = viewItem.interaction as? TSMessage else { return }
+        // "from" display uses the bubble senders; the trace decision may differ — a single
+        // forwarded message gates on its original content author, not the bubble sender (PRD).
+        let displayAuthorIds = CopyNoticeDispatcher.sourceAuthorIds(for: [message])
+        let triggerAuthorIds = CopyNoticeDispatcher.triggerAuthorIds(for: [message])
+        guard DTNoticeTraceEvaluator.shouldLeaveTrace(
+            sourceThread: viewItem.thread,
+            targetThreads: nil,
+            contentAuthorIds: triggerAuthorIds
+        ) else { return }
+        let fromAuthorIds = DTNoticeTraceEvaluator.orderForDisplay(displayAuthorIds)
+        CopyNoticeDispatcher.sendNotice(
+            sourceConversation: viewItem.thread,
+            sourceAuthorIds: fromAuthorIds,
+            messageCount: 1
+        )
+    }
+
     static func quote(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
         return MenuAction(image: #imageLiteral(resourceName: "ic_quote"),
                           title: Localized("MESSAGE_ACTION_QUOTE", comment: "Action sheet button title"),
@@ -37,6 +57,8 @@ struct MenuActionBuilder {
                           subtitle: nil,
                           block: { (_) in
             conversationViewItem.copyTextAction()
+            DTToastHelper.toast(withText: Localized("COPY_SUCCESS_TOAST"), durationTime: 1)
+            insertCopyNoticeIfNeeded(for: conversationViewItem)
         })
     }
     
@@ -100,6 +122,8 @@ struct MenuActionBuilder {
                           subtitle: nil,
                           block: { (_) in
             conversationViewItem.copyMediaAction()
+            DTToastHelper.toast(withText: Localized("COPY_SUCCESS_TOAST"), durationTime: 1)
+            insertCopyNoticeIfNeeded(for: conversationViewItem)
         })
     }
     
@@ -153,6 +177,17 @@ struct MenuActionBuilder {
         })
     }
     
+    static func addToFavorite(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
+        // Five-pointed star; MenuAction renders it as a template and MenuActionView tints it,
+        // same as the other menu icons — no per-mode asset needed.
+        return MenuAction(image: #imageLiteral(resourceName: "gif_fav_star_solid"),
+                          title: Localized("MESSAGE_ACTION_ADD_TO_FAVORITE", comment: "Action sheet button: add GIF to favorites"),
+                          subtitle: nil,
+                          block: { [weak delegate] (_) in
+            delegate?.messageActionsAddToFavorite?(conversationViewItem)
+        })
+    }
+
     static func multiSelect(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
         return MenuAction(image: #imageLiteral(resourceName: "ic_multi_select"),
                           title: Localized("MESSAGE_ACTION_MULTI_SELECT", comment: "Action sheet button title"),
@@ -351,6 +386,7 @@ class ConversationViewItemActions: NSObject {
         var multiSelectAction: MenuAction?
         var forwardAction: MenuAction?
         var forwardToNoteAction: MenuAction?
+        var addToFavoriteAction: MenuAction?
 
         if conversationViewItem.hasMediaActionContent {
             var isAudio = false
@@ -379,6 +415,10 @@ class ConversationViewItemActions: NSObject {
                 saveMediaAction = MenuActionBuilder.saveMedia(conversationViewItem: conversationViewItem, delegate: delegate, isImage: isImage)
             }
 
+            if let stream = conversationViewItem.attachmentStream(), stream.isAnimatedImageAttachment {
+                addToFavoriteAction = MenuActionBuilder.addToFavorite(conversationViewItem: conversationViewItem, delegate: delegate)
+            }
+
             if !isAudio {
                 multiSelectAction = MenuActionBuilder.multiSelect(conversationViewItem: conversationViewItem, delegate: delegate)
                 forwardAction = MenuActionBuilder.forward(conversationViewItem: conversationViewItem, delegate: delegate)
@@ -402,6 +442,7 @@ class ConversationViewItemActions: NSObject {
         let actions: [MenuAction] = [
             quoteAction,
             copyMediaAction,
+            addToFavoriteAction,   // 3rd slot for gif/webp; nil (dropped) for others
             forwardAction,
             saveMediaAction,
             speechToTextAction,
@@ -414,7 +455,7 @@ class ConversationViewItemActions: NSObject {
 
         return actions
     }
-    
+
     @objc class func quotedMessageActions(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> [MenuAction] {
         
         let quoteAction = MenuActionBuilder.quote(conversationViewItem: conversationViewItem, delegate: delegate)

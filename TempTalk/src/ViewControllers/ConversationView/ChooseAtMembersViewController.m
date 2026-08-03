@@ -47,6 +47,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, strong) NSMutableArray *operationsArr;
 
+/// Mention ranking context, built once when the picker opens (mention + group only).
+@property (nonatomic, strong, nullable) DTMentionRankContext *mentionRankContext;
+/// Group-member recipientIds that share a display name; shown with an ID suffix.
+@property (nonatomic, strong, nullable) NSSet<NSString *> *duplicateNameRecipientIds;
+
 @end
 
 @implementation ChooseAtMembersViewController
@@ -143,6 +148,15 @@ NS_ASSUME_NONNULL_BEGIN
     }
     
     self.otherSignalAccounts = [tmpSignalAccounts copy];
+
+    if (self.thread.isGroupThread &&
+        ChooseMemberPageTypeMention == self.pageType) {
+        NSString *threadId = self.thread.uniqueId;
+        [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
+            self.mentionRankContext = [DTMentionRankProvider buildContextWithThreadId:threadId transaction:transaction];
+        }];
+    }
+
     [self refreshUIData];
 }
 
@@ -372,6 +386,13 @@ NS_ASSUME_NONNULL_BEGIN
                 cell.cellView.isMentionOtherContacts = self.thread.isGroupThread ? !internal : (![signalAccount.recipientId isEqualToString:TSAccountManager.localNumber] && ![signalAccount.recipientId isEqualToString:self.thread.contactIdentifier]);
                 [cell configureWithThread:self.thread signalAccount:signalAccount
                           contactsManager:self.contactsViewHelper.contactsManager];
+                // Disambiguate same-named group members with a base58 ID suffix.
+                if (internal && signalAccount.recipientId.length > 0 &&
+                    [self.duplicateNameRecipientIds containsObject:signalAccount.recipientId]) {
+                    NSString *rid = signalAccount.recipientId;
+                    NSString *suffix = rid.length > 6 ? [rid substringFromIndex:rid.length - 6] : rid;
+                    [cell.cellView applyIdSuffix:suffix];
+                }
             }
             if (needForwardTopic) {
                 if (signalAccount.recipientId.length <= 6) {
@@ -563,18 +584,22 @@ NS_ASSUME_NONNULL_BEGIN
                     }
                     [memberAccounts addObject:account];
                 }
-                if (memberAccounts.count > 0) {
-                    [self.fullTextSearcher filterAtSignalAccounts:memberAccounts withSearchText:searchText searchResultClosure:^(NSString * _Nonnull searchKeyWord, NSArray<SignalAccount *> * _Nonnull filterResultAccounts) {
-                        if(self.searchText.ows_stripped.lowercaseString != searchKeyWord.ows_stripped.lowercaseString) return;
-                        
+                if (memberAccounts.count > 0 && self.mentionRankContext) {
+                    NSArray<SignalAccount *> *sorted = [DTMentionRankProvider sortMentionCandidates:memberAccounts
+                                                                                         searchText:searchText
+                                                                                            context:self.mentionRankContext
+                                                                                        transaction:transaction];
+                    NSSet<NSString *> *dupIds = [DTMentionRankProvider duplicateDisplayNameRecipientIdsIn:sorted transaction:transaction];
+                    // Discard stale results if the search text changed while this async read ran.
+                    if ([self.searchText isEqualToString:searchText]) {
                         @synchronized(self.searchedGroupMemberArr) {
-                            self.searchedGroupMemberArr = filterResultAccounts;
+                            self.searchedGroupMemberArr = sorted;
+                            self.duplicateNameRecipientIds = dupIds;
                         }
-                        
-                    } transaction:transaction];
+                    }
                 }
             }
-            
+
             ///other
             [self filteredSignalAccountsWithSearchString:searchText sortResultHandler:^(NSString * _Nonnull searchKeyWord, NSArray<SignalAccount *> * _Nonnull defaultSortOtherAccounts) {
                 if(self.searchText.ows_stripped.ows_stripped.lowercaseString != searchKeyWord.ows_stripped.lowercaseString) return;
@@ -605,12 +630,19 @@ NS_ASSUME_NONNULL_BEGIN
                 [memberAccounts addObject:account];
             }
             
-            [self.contactsViewHelper getGroupAccountsByDefaultSortMethod:memberAccounts withSearchText:searchText sortResultHandler:^(NSString * _Nonnull searchKeyWord, NSArray<SignalAccount *> * _Nonnull defaultSortResultAccounts) {
-                if(self.searchText.ows_stripped.ows_stripped.lowercaseString != searchKeyWord.ows_stripped.lowercaseString) return;
-                @synchronized(self.defaultGroupMemberArr) {
-                    self.defaultGroupMemberArr = defaultSortResultAccounts;
-                }
-            }];
+            if (self.mentionRankContext) {
+                [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
+                    NSArray<SignalAccount *> *sorted = [DTMentionRankProvider sortMentionCandidates:memberAccounts
+                                                                                         searchText:@""
+                                                                                            context:self.mentionRankContext
+                                                                                        transaction:transaction];
+                    NSSet<NSString *> *dupIds = [DTMentionRankProvider duplicateDisplayNameRecipientIdsIn:sorted transaction:transaction];
+                    @synchronized(self.defaultGroupMemberArr) {
+                        self.defaultGroupMemberArr = sorted;
+                        self.duplicateNameRecipientIds = dupIds;
+                    }
+                }];
+            }
         }
         
         ///other

@@ -196,3 +196,43 @@ final class CallStateMachineTests: XCTestCase {
                       "Final state \(finalState) must be a valid CallLifecycleState")
     }
 }
+
+final class InCallVoiceMemoAudioOwnershipTests: XCTestCase {
+
+    func test_finishPreservesRecordingWhenLiveKitOwnsPublicationThroughout() {
+        var sut = InCallVoiceMemoAudioOwnership()
+        sut.begin(hasMicrophonePublication: true)
+
+        let action = sut.finish(hasCurrentMicrophonePublication: true)
+
+        XCTAssertEqual(action, .preserveRecording)
+    }
+
+    func test_finishStopsRecordingWhenNoPublicationExistedAtStart() {
+        var sut = InCallVoiceMemoAudioOwnership()
+        sut.begin(hasMicrophonePublication: false)
+
+        let action = sut.finish(hasCurrentMicrophonePublication: true)
+
+        XCTAssertEqual(action, .stopRecording)
+    }
+
+    func test_finishStopsRecordingWhenPublicationDisappeared() {
+        var sut = InCallVoiceMemoAudioOwnership()
+        sut.begin(hasMicrophonePublication: true)
+
+        let action = sut.finish(hasCurrentMicrophonePublication: false)
+
+        XCTAssertEqual(action, .stopRecording)
+    }
+
+    func test_finishResetsOwnershipState() {
+        var sut = InCallVoiceMemoAudioOwnership()
+        sut.begin(hasMicrophonePublication: true)
+        _ = sut.finish(hasCurrentMicrophonePublication: true)
+
+        let nextAction = sut.finish(hasCurrentMicrophonePublication: true)
+
+        XCTAssertEqual(nextAction, .stopRecording)
+    }
+}

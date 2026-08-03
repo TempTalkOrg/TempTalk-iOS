@@ -76,9 +76,13 @@ extension CIImage {
 #endif
 
 struct RoomView: View {
-    
+
     let logTag: String = "[newcall]"
-    
+    /// Stable full-screen size from RoomContextView.callContainerSize(); threaded into the grid.
+    let containerSize: CGSize
+    let contentTopInset: CGFloat
+    let contentBottomInset: CGFloat
+
     @EnvironmentObject var liveKitCtx: LiveKitContext
     @EnvironmentObject var roomCtx: RoomContext
     @EnvironmentObject var room: Room
@@ -95,13 +99,6 @@ struct RoomView: View {
 
     @State private var showConnectionTime = true
     @State private var canSwitchCameraPosition = false
-    
-    @State private var cachedSnapshots: [ParticipantSnapshot] = []
-
-    private var reconnectingSnapshots: [ParticipantSnapshot] {
-        let currentSnapshots = DTMeetingManager.shared.sortedReconnectingParticipants()
-        return currentSnapshots.isEmpty ? cachedSnapshots : currentSnapshots
-    }
 
     var body: some View {
         ZStack {
@@ -111,56 +108,55 @@ struct RoomView: View {
                     .foregroundColor(.white)
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if case .connected = room.connectionState {
+            } else {
+                // Render live participants for connected AND reconnecting states. The SDK keeps the
+                // roster across reconnect (Route B); VideoView freezes the last frame. No snapshot /
+                // avatar-only reconnect grid.
                 let participants = DTMeetingManager.shared.sortedMeetingParticipants()
-                ParticipantLayout(participants, spacing: 8, id: { participant in
-                    participant.sid?.stringValue ?? participant.identity?.stringValue ?? participant.id
-                }) { participant in
+                ParticipantLayout(
+                    participants,
+                    spacing: 8,
+                    stableWidth: containerSize.width,
+                    topPadding: contentTopInset + 8,
+                    bottomPadding: contentBottomInset,
+                    id: { participant in
+                        participant.sid?.stringValue ?? participant.identity?.stringValue ?? participant.id
+                    }
+                ) { participant in
                     ParticipantView(participant: participant, videoViewMode: .fill)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .id(roomCtx.videoRefreshToken)
-            } else if case .reconnecting = room.connectionState {
-                let displayedSnapshots = reconnectingSnapshots
-                if !displayedSnapshots.isEmpty {
-                    ParticipantLayout(displayedSnapshots, spacing: 8, id: { shot in
-                        shot.id
-                    }) { shot in
-                        ReconnectingParticipantView(snapshot: shot, videoViewMode: .fill)
-                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
             }
         }
-        .onChange(of: isReconnecting) { reconnecting in
-            if reconnecting {
-                let snapshots = DTMeetingManager.shared.sortedReconnectingParticipants()
-                if !snapshots.isEmpty {
-                    cachedSnapshots = snapshots
-                }
-            }
-        }
-    }
-
-    private var isReconnecting: Bool {
-        if case .reconnecting = room.connectionState { return true }
-        return false
+        .accessibilityIdentifier(DTCallAccessibilityID.root)
     }
 }
 
 struct ParticipantLayout<Data: RandomAccessCollection, Content: View>: View {
     private let items: [(id: String, view: AnyView)]
     let spacing: CGFloat
-    
+    /// Stable container width provided by the caller (RoomContextView.callContainerSize()).
+    /// Used as a floor so a transient/stale inner GeometryReader width at call setup can't
+    /// collapse tiles into a tiny top-left square. Single source of truth stays in the caller.
+    let stableWidth: CGFloat
+
     let edgeSpacing: CGFloat = 20.0
-    let bottomPadding: CGFloat = 64.0
-    
+    let topPadding: CGFloat
+    let bottomPadding: CGFloat
+
     init(
         _ data: Data,
         spacing: CGFloat,
+        stableWidth: CGFloat,
+        topPadding: CGFloat = 8.0,
+        bottomPadding: CGFloat = 64.0,
         id idProvider: (Data.Element) -> String,
         @ViewBuilder content: @escaping (Data.Element) -> Content
     ) {
         self.spacing = spacing
+        self.stableWidth = stableWidth
+        self.topPadding = topPadding
+        self.bottomPadding = bottomPadding
         self.items = data.map { element in
             (id: idProvider(element), view: AnyView(content(element)))
         }
@@ -168,7 +164,13 @@ struct ParticipantLayout<Data: RandomAccessCollection, Content: View>: View {
     
     func grid(axis: Axis) -> some View {
         GeometryReader { proxy in
-            let availableWidth = max(0, proxy.size.width - edgeSpacing * 2)
+            // Normally trust the live layout width so tile sizing/margins are unchanged. The
+            // inner GeometryReader can transiently report a small/stale width while the call
+            // window frame is still settling at call setup, which would collapse every tile into
+            // a tiny square pinned top-left; floor it by the caller-provided stable width so only
+            // the degenerate case is corrected.
+            let width = max(proxy.size.width, stableWidth)
+            let availableWidth = max(0, width - edgeSpacing * 2)
             let extraMargin: CGFloat = 12
             let itemSize = floor((availableWidth - spacing - extraMargin) / 2)
             ScrollView([axis == .vertical ? .vertical : .horizontal]) {
@@ -188,7 +190,7 @@ struct ParticipantLayout<Data: RandomAccessCollection, Content: View>: View {
                     }
                 }
                 .padding(.horizontal, edgeSpacing)
-                .padding(.top, spacing)
+                .padding(.top, topPadding)
                 .padding(.bottom, bottomPadding)
             }
         }

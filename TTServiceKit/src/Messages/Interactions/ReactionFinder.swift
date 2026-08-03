@@ -36,6 +36,7 @@ public class ReactionFinder: NSObject, ReactionFinderAdapter {
     public class func findReactions(originalUniqueId: String, transaction: SDSAnyReadTransaction) throws -> [DTReactionMessage] {
         return try GRDBReactionFinderAdapter.findReactions(originalUniqueId: originalUniqueId, transaction: transaction.unwrapGrdbRead)
     }
+
     
 }
 
@@ -92,8 +93,6 @@ struct GRDBReactionFinderAdapter: ReactionFinderAdapter {
         let arguments: StatementArguments = [originalUniqueId]
         
         return try DTReactionMessage.grdbFetchCursor(sql: sql, arguments: arguments, transaction: transaction).all()
-        
-        
     }
     
 }

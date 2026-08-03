@@ -16,6 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *authorizeId;
 @property (nonatomic, assign) UInt64 authorizeIdToInt;
 @property (nonatomic, copy) NSString *url;
+@property (nonatomic, copy, nullable) NSArray<NSString *> *urls; // Multiple URLs sorted by best for client IP
 @property (nonatomic, copy) NSString *fileHash;
 @property (nonatomic, assign) long long fileSize;
 @property (nonatomic, copy) NSString *hashAlg;

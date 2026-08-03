@@ -27,6 +27,9 @@
 #import <TTServiceKit/TSOutgoingMessage.h>
 #import "DTUpdateGroupInfoAPI.h"
 #import "DTAddMembersToAGroupAPI.h"
+#import "DTSelectedAccountToolView.h"
+#import <TTMessaging/OWSSearchBar.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import "SVProgressHUD.h"
 #import <TTServiceKit/DTGroupUtils.h>
 #import <TTServiceKit/DTGroupAvatarUpdateProcessor.h>
@@ -35,6 +38,13 @@
 
 NS_ASSUME_NONNULL_BEGIN
 extern  CGFloat const kAvatarSize;
+
+// Selected-members row height (mirrors AddToGroupViewController).
+static CGFloat const kSelectedRowHeight = 100;
+// Divider under the selected-members row.
+static CGFloat const kHeaderDividerHeight = 1;
+static CGFloat const kHeaderDividerInset = 16;
+
 @interface UpdateGroupViewController () <UIImagePickerControllerDelegate,
     UITextFieldDelegate,
     ContactsViewHelperDelegate,
@@ -43,6 +53,8 @@ extern  CGFloat const kAvatarSize;
     OWSTableViewControllerDelegate,
     UINavigationControllerDelegate,
     OWSNavigationChildController,
+    DTSelectedAccountToolViewDelegate,
+    UISearchBarDelegate,
     OWSTableViewControllerDelegate>
 
 @property (nonatomic, readonly) OWSMessageSender *messageSender;
@@ -56,6 +68,20 @@ extern  CGFloat const kAvatarSize;
 @property (nonatomic, nullable) UIImage *groupAvatar;
 @property (nonatomic, strong) NSArray <NSString *> *sortedMemberRecipientIds;
 @property (nonatomic, strong) NSMutableSet <NSString *> *handledMemberRecipientIds;
+// Members currently shown in the list, in row order (maps recipientId -> table row).
+@property (nonatomic, strong) NSArray <NSString *> *displayMemberIds;
+// Ordered selection driving the selected-members row.
+@property (nonatomic, strong) NSMutableArray <NSString *> *selectedMemberOrder;
+
+// Remove-members mode UI (mirrors AddToGroupViewController). The fixed header
+// (search bar + selected-members row + divider) does not scroll with the list.
+@property (nonatomic, strong) UIButton *doneButton;
+@property (nonatomic, strong) OWSSearchBar *memberSearchBar;
+@property (nonatomic, strong) DTSelectedAccountToolView *selectedAccountToolView;
+@property (nonatomic, strong) UIView *fixedHeaderContainer;
+@property (nonatomic, strong) NSLayoutConstraint *fixedHeaderHeightConstraint;
+@property (nonatomic, strong) UIView *headerDivider;
+@property (nonatomic, assign) BOOL selectedRowVisible;
 
 
 @property (nonatomic) BOOL hasUnsavedChanges;
@@ -110,6 +136,7 @@ extern  CGFloat const kAvatarSize;
     _contactsViewHelper = [[ContactsViewHelper alloc] initWithDelegate:self];
     _avatarViewHelper = [AvatarViewHelper new];
     _avatarViewHelper.delegate = self;
+    _selectedMemberOrder = [NSMutableArray array];
 }
 
 #pragma mark - View Lifecycle
@@ -151,8 +178,11 @@ extern  CGFloat const kAvatarSize;
     self.tableViewController.tableView.allowsMultipleSelection = YES;
     self.tableViewController.tableView.allowsMultipleSelectionDuringEditing = YES;
     if(self.mode == UpdateGroupMode_EditGroupName){
-        
+
         [_tableViewController.view autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:firstSection];
+    } else if (self.mode == UpdateGroupMode_RemoveGroupMembers) {
+        [self setupFixedHeader];
+        [_tableViewController.view autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.fixedHeaderContainer];
     } else {
         [_tableViewController.view autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
         if (@available(iOS 11.0, *)) {
@@ -166,7 +196,11 @@ extern  CGFloat const kAvatarSize;
         firstSection.hidden = YES;
         self.tableViewController.tableView.rowHeight = 70;
         self.tableViewController.canEditRow = NO;
-        self.tableViewController.tableView.editing = YES;
+        // No editing mode: the trailing square checkbox replaces UIKit's left selection circles.
+        self.tableViewController.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+        self.tableViewController.view.backgroundColor = Theme.bgpagePrimaryColor;
+        self.tableViewController.tableView.backgroundColor = Theme.bgpagePrimaryColor;
+        [self setupDoneButton];
         [self sortGroupMemberByLastMessageTimestamp];
     } else {
         self.tableViewController.view.hidden = YES;
@@ -181,6 +215,13 @@ extern  CGFloat const kAvatarSize;
 }
 
 - (void)updateNavigationBar {
+    if (self.mode == UpdateGroupMode_RemoveGroupMembers) {
+        // Remove mode uses a persistent Done button instead of the conditional Update button.
+        BOOL hasSelection = self.handledMemberRecipientIds.count > 0;
+        self.doneButton.selected = hasSelection;
+        self.doneButton.userInteractionEnabled = hasSelection;
+        return;
+    }
     self.navigationItem.rightBarButtonItem = (self.hasUnsavedChanges
             ? [[UIBarButtonItem alloc] initWithTitle:Localized(@"EDIT_GROUP_UPDATE_BUTTON",
                                                          @"The title for the 'update group' button.")
@@ -188,6 +229,19 @@ extern  CGFloat const kAvatarSize;
                                               target:self
                                               action:@selector(updateGroupPressed)]
             : nil);
+}
+
+// Top-right Done button (same as AddToGroup): gray when empty, primary blue with a selection.
+- (void)setupDoneButton {
+    self.doneButton = [[UIButton alloc] init];
+    self.doneButton.titleLabel.font = [UIFont ows_regularFontWithSize:17];
+    self.doneButton.userInteractionEnabled = NO;
+    self.doneButton.selected = NO;
+    [self.doneButton setTitle:Localized(@"BUTTON_DONE", @"") forState:UIControlStateNormal];
+    [self.doneButton setTitleColor:Theme.tthirdColor forState:UIControlStateNormal];
+    [self.doneButton setTitleColor:Theme.primaryColor forState:UIControlStateSelected];
+    [self.doneButton addTarget:self action:@selector(updateGroupPressed) forControlEvents:UIControlEventTouchUpInside];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:self.doneButton];
 }
 
 - (void)showEditView {
@@ -202,10 +256,66 @@ extern  CGFloat const kAvatarSize;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    
+
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(groupCryptoKeyDidArrive:)
+                                                 name:DTGroupCryptoConstants.groupCryptoKeyDidArriveNotification
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(groupAvatarDidChange:)
+                                                 name:TSGroupThreadAvatarChangedNotification
+                                               object:nil];
+
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self showEditView];
     });
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)groupCryptoKeyDidArrive:(NSNotification *)notify {
+    OWSAssertIsOnMainThread();
+    NSString *gid = notify.userInfo[DTGroupCryptoConstants.groupCryptoKeyGidKey];
+    if (!gid.length) { return; }
+    if (![gid isEqualToString:self.thread.serverThreadId]) { return; }
+    if (self.hasUnsavedChanges) { return; }
+
+    [self refreshHeaderForEncryptedGroup];
+}
+
+- (void)groupAvatarDidChange:(NSNotification *)notify {
+    OWSAssertIsOnMainThread();
+    NSString *threadId = notify.userInfo[TSGroupThread_NotificationKey_UniqueId];
+    if (![threadId isEqualToString:self.thread.uniqueId]) { return; }
+    if (self.hasUnsavedChanges) { return; }
+
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull tx) {
+        [self.thread anyReloadWithTransaction:tx];
+    }];
+    _groupAvatar = self.thread.groupModel.groupImage;
+    [self updateAvatarView];
+}
+
+- (void)refreshHeaderForEncryptedGroup {
+    if (!self.thread.groupModel.isEncryptedGroup) { return; }
+
+    __block NSString *decryptedName = nil;
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull tx) {
+        [self.thread anyReloadWithTransaction:tx];
+        NSString *cachedEncryptedName = [DTGroupBaseInfoEntity anyFetchWithUniqueId:self.thread.serverThreadId transaction:tx].encryptedName;
+        decryptedName = [DTGroupCryptoDisplayHelper.shared displayGroupNameWithGid:self.thread.serverThreadId
+                                                                    groupCryptoMode:self.thread.groupModel.groupCryptoMode
+                                                                      encryptedName:cachedEncryptedName
+                                                                       originalName:self.thread.groupModel.groupName
+                                                                        transaction:tx];
+    }];
+    if (decryptedName.length > 0) {
+        self.groupNameTextField.text = [decryptedName ows_stripped];
+    }
+    _groupAvatar = self.thread.groupModel.groupImage;
+    [self updateAvatarView];
 }
 
 - (UIView *)firstSectionHeader
@@ -244,10 +354,11 @@ extern  CGFloat const kAvatarSize;
     if (isEncryptedGroup) {
         __block NSString *decryptedName = nil;
         [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+            NSString *cachedEncryptedName = [DTGroupBaseInfoEntity anyFetchWithUniqueId:self.thread.serverThreadId transaction:transaction].encryptedName;
             decryptedName = [DTGroupCryptoDisplayHelper.shared
                 displayGroupNameWithGid:self.thread.serverThreadId
                         groupCryptoMode:self.thread.groupModel.groupCryptoMode
-                          encryptedName:nil
+                          encryptedName:cachedEncryptedName
                            originalName:self.thread.groupModel.groupName
                             transaction:transaction];
         }];
@@ -308,8 +419,7 @@ extern  CGFloat const kAvatarSize;
     ContactsViewHelper *contactsViewHelper = self.contactsViewHelper;
 
     OWSTableSection *section = [OWSTableSection new];
-    section.headerTitle = Localized(
-        @"EDIT_GROUP_MEMBERS_SECTION_TITLE", @"a title for the members section of the 'new/update group' view.");
+    // No section title, matching the add-members page.
     section.customFooterHeight = @20;
 
     NSMutableArray <NSString *> *memberRecipientIds = [self.sortedMemberRecipientIds mutableCopy];
@@ -325,6 +435,45 @@ extern  CGFloat const kAvatarSize;
             }
         }
     }
+
+    // Filter members by the search text.
+    NSString *searchText = [self.memberSearchBar.text ows_stripped];
+    if (searchText.length > 0) {
+        NSMutableArray <SignalAccount *> *accounts = [NSMutableArray array];
+        NSMutableSet <NSString *> *matchedIds = [NSMutableSet set];
+        for (NSString *memberId in memberRecipientIds) {
+            SignalAccount *account = [contactsViewHelper signalAccountForRecipientId:memberId];
+            if (account) {
+                [accounts addObject:account];
+            } else if ([memberId localizedCaseInsensitiveContainsString:searchText]) {
+                // No account info: match the raw id.
+                [matchedIds addObject:memberId];
+            }
+        }
+        if (accounts.count > 0) {
+            __block NSArray <SignalAccount *> *filteredAccounts = nil;
+            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                filteredAccounts = [ConversationSearcher.shared filterSignalAccounts:accounts
+                                                                      withSearchText:searchText
+                                                                         transaction:transaction];
+            }];
+            for (SignalAccount *account in filteredAccounts) {
+                if (account.recipientId) {
+                    [matchedIds addObject:account.recipientId];
+                }
+            }
+        }
+        // Preserve the original member ordering.
+        NSMutableArray <NSString *> *filteredMemberIds = [NSMutableArray array];
+        for (NSString *memberId in memberRecipientIds) {
+            if ([matchedIds containsObject:memberId]) {
+                [filteredMemberIds addObject:memberId];
+            }
+        }
+        memberRecipientIds = filteredMemberIds;
+    }
+
+    self.displayMemberIds = [memberRecipientIds copy];
 
     @weakify(self)
     self.hasUnsavedChanges = (self.handledMemberRecipientIds.count > 0);
@@ -398,15 +547,15 @@ extern  CGFloat const kAvatarSize;
                                     [self removeRecipientId:recipientId];
 
                                     dispatch_async(dispatch_get_main_queue(), ^{
-                                        NSArray *visibleCells = self.tableViewController.tableView.visibleCells;
-                                        for (UITableViewCell *cell in visibleCells) {
-                                            if ([cell isKindOfClass:ContactTableViewCell.class]) {
-                                                ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
-                                                if ([contactCell.signalAccount.recipientId isEqualToString:recipientId]) {
-                                                    contactCell.selectionStatus = ContactCellSelectionStatusUnselected;
-                                                    break;
-                                                }
-                                            }
+                                        // Re-assert via the row mapping (cells of non-contact members have no signalAccount).
+                                        NSUInteger row = [self.displayMemberIds indexOfObject:recipientId];
+                                        if (row == NSNotFound) {
+                                            return;
+                                        }
+                                        UITableViewCell *cell = [self.tableViewController.tableView
+                                            cellForRowAtIndexPath:[NSIndexPath indexPathForRow:(NSInteger)row inSection:0]];
+                                        if ([cell isKindOfClass:ContactTableViewCell.class]) {
+                                            ((ContactTableViewCell *)cell).selectionStatus = ContactCellSelectionStatusUnselected;
                                         }
                                     });
                                 }
@@ -455,7 +604,9 @@ extern  CGFloat const kAvatarSize;
     OWSAssertDebug(recipientId.length > 0);
 
     [self.handledMemberRecipientIds removeObject:recipientId];
+    [self.selectedMemberOrder removeObject:recipientId];
     self.hasUnsavedChanges = (self.handledMemberRecipientIds.count > 0);
+    [self refreshSelectedRow];
 }
 
 - (void)addRecipientId:(NSString *)recipientId
@@ -463,7 +614,112 @@ extern  CGFloat const kAvatarSize;
     OWSAssertDebug(recipientId.length > 0);
 
     [self.handledMemberRecipientIds addObject:recipientId];
+    if (![self.selectedMemberOrder containsObject:recipientId]) {
+        [self.selectedMemberOrder addObject:recipientId];
+    }
     self.hasUnsavedChanges = (self.handledMemberRecipientIds.count > 0);
+    [self refreshSelectedRow];
+}
+
+#pragma mark - Selected-members header (remove mode, mirrors AddToGroupViewController)
+
+// Non-scrolling header above the table: search bar + selected-members row + divider.
+- (void)setupFixedHeader {
+    UIView *fixedHeader = [UIView new];
+    _fixedHeaderContainer = fixedHeader;
+    fixedHeader.backgroundColor = Theme.bgpagePrimaryColor;
+    fixedHeader.clipsToBounds = YES;
+    [self.view addSubview:fixedHeader];
+    [fixedHeader autoPinWidthToSuperview];
+    [fixedHeader autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
+    _fixedHeaderHeightConstraint = [fixedHeader autoSetDimension:ALDimensionHeight
+                                                          toSize:kSelectRecipientSearchBarHeight];
+
+    OWSSearchBar *searchBar = [OWSSearchBar new];
+    _memberSearchBar = searchBar;
+    searchBar.customPlaceholder = Localized(@"SEARCH_BYNAMEORNUMBER_PLACEHOLDER_TEXT",
+        @"Placeholder text indicating the user can search for contacts by name or phone number.");
+    searchBar.delegate = self;
+    [fixedHeader addSubview:searchBar];
+    [searchBar autoPinWidthToSuperview];
+    [searchBar autoPinEdgeToSuperviewEdge:ALEdgeTop];
+    [searchBar autoSetDimension:ALDimensionHeight toSize:kSelectRecipientSearchBarHeight];
+
+    [fixedHeader addSubview:self.selectedAccountToolView];
+    [self.selectedAccountToolView autoPinEdgeToSuperviewEdge:ALEdgeTop withInset:kSelectRecipientSearchBarHeight];
+    [self.selectedAccountToolView autoPinWidthToSuperviewWithMargin:kHeaderDividerInset];
+    [self.selectedAccountToolView autoSetDimension:ALDimensionHeight toSize:kSelectedRowHeight];
+
+    [fixedHeader addSubview:self.headerDivider];
+    [self.headerDivider autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.selectedAccountToolView];
+    [self.headerDivider autoPinWidthToSuperviewWithMargin:kHeaderDividerInset];
+    [self.headerDivider autoSetDimension:ALDimensionHeight toSize:kHeaderDividerHeight];
+
+    self.selectedAccountToolView.hidden = YES;
+    self.headerDivider.hidden = YES;
+    self.selectedRowVisible = NO;
+}
+
+// Reloads the selected-members row; toggles its visibility and the header height on empty <-> non-empty.
+- (void)refreshSelectedRow {
+    if (self.mode != UpdateGroupMode_RemoveGroupMembers) {
+        return;
+    }
+    [self.selectedAccountToolView reloadWithData:self.selectedMemberOrder];
+    BOOL hasSelection = self.selectedMemberOrder.count > 0;
+    if (hasSelection == self.selectedRowVisible) {
+        return;
+    }
+    self.selectedRowVisible = hasSelection;
+    self.selectedAccountToolView.hidden = !hasSelection;
+    self.headerDivider.hidden = !hasSelection;
+    self.fixedHeaderHeightConstraint.constant = hasSelection
+        ? kSelectRecipientSearchBarHeight + kSelectedRowHeight + kHeaderDividerHeight
+        : kSelectRecipientSearchBarHeight;
+}
+
+- (UIView *)headerDivider {
+    if (!_headerDivider) {
+        _headerDivider = [[UIView alloc] init];
+        _headerDivider.backgroundColor = Theme.dividerColor;
+    }
+    return _headerDivider;
+}
+
+- (DTSelectedAccountToolView *)selectedAccountToolView {
+    if (!_selectedAccountToolView) {
+        _selectedAccountToolView = [[DTSelectedAccountToolView alloc] initWithDataSource:@[]];
+        _selectedAccountToolView.toolViewDelegate = self;
+    }
+    return _selectedAccountToolView;
+}
+
+#pragma mark - DTSelectedAccountToolViewDelegate
+
+// Tapping a selected avatar's ✕ removes that member from the selection.
+- (void)dtSelectedAccountToolView:(DTSelectedAccountToolView *)toolView collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
+    if (!indexPath || indexPath.row >= (NSInteger)self.selectedMemberOrder.count) {
+        return;
+    }
+    NSString *recipientId = [self.selectedMemberOrder objectAtIndex:(NSUInteger)indexPath.row];
+    if (!recipientId.length) {
+        return;
+    }
+
+    NSUInteger row = [self.displayMemberIds indexOfObject:recipientId];
+    [self removeRecipientId:recipientId];
+    if (row == NSNotFound) {
+        return;
+    }
+
+    // Deselect the row and re-assert its checkbox via the row mapping (works for
+    // non-contact members whose cell has no signalAccount).
+    NSIndexPath *rowIndexPath = [NSIndexPath indexPathForRow:(NSInteger)row inSection:0];
+    [self.tableViewController.tableView deselectRowAtIndexPath:rowIndexPath animated:NO];
+    UITableViewCell *cell = [self.tableViewController.tableView cellForRowAtIndexPath:rowIndexPath];
+    if ([cell isKindOfClass:ContactTableViewCell.class]) {
+        ((ContactTableViewCell *)cell).selectionStatus = ContactCellSelectionStatusUnselected;
+    }
 }
 
 #pragma mark - Methods
@@ -536,6 +792,8 @@ extern  CGFloat const kAvatarSize;
                 if (!encryptedName) {
                     [SVProgressHUD dismiss];
                     [DTToastHelper toastWithText:Localized(@"GROUP_CRYPTO_NO_KEY_TOAST", @"") inView:self.view durationTime:3 afterDelay:0.2];
+                    // 缺 R_group，input 还原成当前群名
+                    self.groupNameTextField.text = [self.thread.groupModel.groupName ows_stripped];
                     return;
                 }
                 updateInfo = @{@"encryptedName": encryptedName};
@@ -549,14 +807,20 @@ extern  CGFloat const kAvatarSize;
                 [SVProgressHUD dismiss];
                 TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:groupModel];
                 newGroupModel.groupName = newGroupName;
-                NSString *updateGroupInfo = [DTGroupUtils getBaseInfoStringWithOldGroupModel:self.thread.groupModel
-                                                                                    newModel:newGroupModel
-                                                                                      source:self.contactsViewHelper.localNumber
-                                                                   shouldAffectThreadSorting:&tmpShouldAffectSorting];
+                __block NSString *updateGroupInfo = nil;
+                [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                    updateGroupInfo = [DTGroupUtils getBaseInfoStringWithOldGroupModel:self.thread.groupModel
+                                                                              newModel:newGroupModel
+                                                                                source:self.contactsViewHelper.localNumber
+                                                             shouldAffectThreadSorting:&tmpShouldAffectSorting
+                                                                           transaction:transaction];
+                }];
                 nextBlock(newGroupModel, updateGroupInfo, YES);
             } failure:^(NSError * _Nonnull error) {
                 [SVProgressHUD dismiss];
                 [SVProgressHUD showErrorWithStatus:error.localizedDescription];
+                // 服务端拒绝，input 还原成当前群名
+                self.groupNameTextField.text = [self.thread.groupModel.groupName ows_stripped];
             }];
         }
     } else if (self.mode == UpdateGroupMode_RemoveGroupMembers){
@@ -687,13 +951,17 @@ extern  CGFloat const kAvatarSize;
 
         TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:self.thread.groupModel];
         newGroupModel.groupImage = newAvatar;
-        BOOL shouldAffectSorting = NO;
-        NSString *updateGroupInfo = [DTGroupUtils getBaseInfoStringWithOldGroupModel:self.thread.groupModel
-                                                                            newModel:newGroupModel
-                                                                              source:self.contactsViewHelper.localNumber
-                                                           shouldAffectThreadSorting:&shouldAffectSorting];
         uint64_t now = [NSDate ows_millisecondTimeStamp];
         DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
+            // Compute the update string before mutating the thread, so it still
+            // diffs the old model against the new one. Reuse writeTransaction for
+            // the display-name lookup to avoid opening a nested read transaction.
+            BOOL shouldAffectSorting = NO;
+            NSString *updateGroupInfo = [DTGroupUtils getBaseInfoStringWithOldGroupModel:self.thread.groupModel
+                                                                                newModel:newGroupModel
+                                                                                  source:self.contactsViewHelper.localNumber
+                                                               shouldAffectThreadSorting:&shouldAffectSorting
+                                                                             transaction:writeTransaction];
             [self.thread anyUpdateGroupThreadWithTransaction:writeTransaction
                                                        block:^(TSGroupThread *instance) {
                 instance.groupModel = newGroupModel;
@@ -781,11 +1049,31 @@ extern  CGFloat const kAvatarSize;
     return NO;
 }
 
+#pragma mark - UISearchBarDelegate
+
+- (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText
+{
+    [self updateTableContents];
+}
+
+- (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar
+{
+    [searchBar resignFirstResponder];
+    [self updateTableContents];
+}
+
+- (void)searchBarCancelButtonClicked:(UISearchBar *)searchBar
+{
+    [searchBar resignFirstResponder];
+    [self updateTableContents];
+}
+
 #pragma mark - OWSTableViewControllerDelegate
 
 - (void)tableViewWillBeginDragging
 {
     [self.groupNameTextField resignFirstResponder];
+    [self.memberSearchBar resignFirstResponder];
 }
 
 #pragma mark - ContactsViewHelperDelegate
@@ -843,6 +1131,10 @@ extern  CGFloat const kAvatarSize;
 
 - (BOOL)shouldCancelNavigationBack
 {
+    // Remove mode: back simply discards the selection (same as the add-members page).
+    if (self.mode == UpdateGroupMode_RemoveGroupMembers) {
+        return NO;
+    }
     BOOL result = self.hasUnsavedChanges;
     if (result) {
         [self backButtonPressed];
@@ -850,8 +1142,30 @@ extern  CGFloat const kAvatarSize;
     return result;
 }
 
+- (void)applyTheme {
+    [super applyTheme];
+    if (_doneButton) {
+        [_doneButton setTitleColor:Theme.tthirdColor forState:UIControlStateNormal];
+        [_doneButton setTitleColor:Theme.primaryColor forState:UIControlStateSelected];
+    }
+    if (_headerDivider) {
+        _headerDivider.backgroundColor = Theme.dividerColor;
+    }
+    if (_fixedHeaderContainer) {
+        _fixedHeaderContainer.backgroundColor = Theme.bgpagePrimaryColor;
+    }
+    if (self.mode == UpdateGroupMode_RemoveGroupMembers) {
+        self.tableViewController.view.backgroundColor = Theme.bgpagePrimaryColor;
+        self.tableViewController.tableView.backgroundColor = Theme.bgpagePrimaryColor;
+    }
+}
+
 - (UIColor * _Nullable)navbarBackgroundColorOverride {
-    return Theme.bgpageSecondaryColor;;
+    // Remove mode uses the default navbar color, same as the add-members page.
+    if (self.mode == UpdateGroupMode_RemoveGroupMembers) {
+        return nil;
+    }
+    return Theme.bgpageSecondaryColor;
 }
 
 - (BOOL)prefersNavigationBarHidden {
@@ -943,12 +1257,37 @@ extern  CGFloat const kAvatarSize;
         [tmpSortedMemberRecipientIds addObjectsFromArray:messageMemberIds];
         self.sortedMemberRecipientIds = tmpSortedMemberRecipientIds.copy;
         self.handledMemberRecipientIds = [NSMutableSet set];
+        [self.selectedMemberOrder removeAllObjects];
 
         [self updateTableContents];
     }];
 }
 
 #pragma mark - OWSTableViewControllerDelegate
+
+// Re-assert the checkbox after UITableView's setSelected: flips it on display.
+- (void)originalTableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (self.mode != UpdateGroupMode_RemoveGroupMembers) {
+        return;
+    }
+    if (![cell isKindOfClass:ContactTableViewCell.class]) {
+        return;
+    }
+    ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
+    // signalAccount is nil for non-contact members; fall back to the row mapping.
+    NSString *recipientId = contactCell.signalAccount.recipientId
+        ?: (indexPath.row < (NSInteger)self.displayMemberIds.count ? self.displayMemberIds[(NSUInteger)indexPath.row] : nil);
+    if (!recipientId.length) {
+        return;
+    }
+    if ([self.handledMemberRecipientIds containsObject:recipientId]) {
+        contactCell.selectionStatus = ContactCellSelectionStatusSelected;
+        // Re-establish the table selection state lost on reload, so a tap deselects.
+        [tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionNone];
+    } else {
+        contactCell.selectionStatus = ContactCellSelectionStatusUnselected;
+    }
+}
 
 - (void)originalTableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {

@@ -7,8 +7,7 @@
 //
 
 import Foundation
-
-import Foundation
+import TTMessaging
 
 enum AppLinkType {
     case invite(referralCode: String)
@@ -57,8 +56,12 @@ struct AppLinkManager {
             let scheme = url.scheme?.lowercased()
             if scheme == "https" ||
                 scheme == "http" {
-                // iOS 外部链接直接打开，不显示安全提示
-                handleUnknowURL(url, sourceVC: sourceVC, showWarning: false)
+                // Only prompt for confirmation when the link looks deceptive (homograph / spoofing).
+                let suspicious = DTLinkSafetyChecker.isSuspicious(url)
+                if suspicious {
+                    Logger.info("suspicious link detected, host: \(url.host ?? "nil")")
+                }
+                handleUnknowURL(url, sourceVC: sourceVC, showWarning: suspicious)
             } else {
                 handleUnsupportPlatformURL(url)
             }

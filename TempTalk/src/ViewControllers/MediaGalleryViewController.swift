@@ -694,8 +694,9 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
 
                 // For perf we only want to fetch a substantially full batch...
                 let isSubstantialRequest = unfetchedSet.count > (requestSet.count / 2)
-                // ...but we always fulfill even small requests if we're getting just the tail end of a gallery.
-                let isFetchingEdgeOfGallery = (self.fetchedIndexSet.count - unfetchedSet.count) < requestSet.count
+                // ...but we always fulfill even small requests if they reach either edge of the gallery,
+                // otherwise the very first/last item never loads (small tail fetch gets skipped).
+                let isFetchingEdgeOfGallery = requestRange.lowerBound == 0 || requestRange.upperBound == mediaCount
 
                 guard isSubstantialRequest || isFetchingEdgeOfGallery else {
                     Logger.debug("\(self.logTag) in \(#function) ignoring small fetch request: \(unfetchedSet.count)")

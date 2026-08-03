@@ -38,10 +38,10 @@ extension ConversationViewController: ConversationViewModelDelegate {
     
     func conversationViewModelDidLoadInitialMessages(completion: @escaping ((Bool) -> Void)) {
         Logger.info("[Conversation] handle initial messages, threadId:\(thread.uniqueId)")
-        
+
         guard isViewVisible else {
-            Logger.info("[Conversation] cancel refresh ui for initial messages, isViewVisible = false, threadId:\(thread.uniqueId)")
-            completion(false)
+            Logger.info("[Conversation] queue refresh ui for initial messages until view visible, threadId:\(thread.uniqueId)")
+            storePendingInitialLoadCompletion(completion)
             return
         }
         performInitialMessagesRefresh(completion: completion)
@@ -122,11 +122,15 @@ extension ConversationViewController: ConversationViewModelDelegate {
                 if isFinished {
                     self.updateLastVisibleSortId()
                 }
+                self.pruneSelectedMessagesIfNeeded()
                 completion?(isFinished)
             }
         case .diff:
             Logger.info("[Conversation] diff update, items before=\(viewItems.count) threadId:\(thread.uniqueId)")
-            updateWithDiff(conversationUpdate, completion: completion)
+            updateWithDiff(conversationUpdate) { [weak self] isFinished in
+                self?.pruneSelectedMessagesIfNeeded()
+                completion?(isFinished)
+            }
         default:
             Logger.info("[Conversation] default update threadId:\(thread.uniqueId)")
             completion?(true)
@@ -292,6 +296,36 @@ extension ConversationViewController: ConversationViewModelDelegate {
 // MARK: - Initial Load Coordination
 
 extension ConversationViewController {
+    private func storePendingInitialLoadCompletion(_ completion: @escaping (Bool) -> Void) {
+        if let staleCompletion = consumePendingInitialLoadCompletion() {
+            staleCompletion(false)
+        }
+        Logger.info("[Conversation] storePendingInitialLoadCompletion, threadId:\(thread.uniqueId)")
+        viewState.pendingInitialLoadCompletion = completion
+    }
+
+    private func consumePendingInitialLoadCompletion() -> ((Bool) -> Void)? {
+        let completion = viewState.pendingInitialLoadCompletion
+        viewState.pendingInitialLoadCompletion = nil
+        return completion
+    }
+
+    @discardableResult
+    func processPendingInitialMessagesIfNeeded() -> Bool {
+        guard isViewVisible, let completion = consumePendingInitialLoadCompletion() else {
+            return false
+        }
+        Logger.info("[Conversation] resume pending initial messages refresh, threadId:\(thread.uniqueId)")
+        performInitialMessagesRefresh(completion: completion)
+        return true
+    }
+
+    func cancelPendingInitialMessagesIfNeeded() {
+        guard let completion = consumePendingInitialLoadCompletion() else { return }
+        Logger.info("[Conversation] cancel pending initial messages refresh, threadId:\(thread.uniqueId)")
+        completion(false)
+    }
+
     private func performInitialMessagesRefresh(completion: @escaping ((Bool) -> Void)) {
         Logger.info("[Conversation] refresh ui for initial messages, threadId:\(thread.uniqueId)")
         updateShowLoadMoreHeaders()

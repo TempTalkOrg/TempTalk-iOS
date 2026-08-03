@@ -416,6 +416,10 @@ public class CaptioningToolbar: UIView, UITextViewDelegate {
         sendButton.tintColor = UIColor.white
         sendButton.backgroundColor = UIColor.clear
         sendButton.setBackgroundImage(UIImage(named: "ic_inputbar_send"), for: .normal)
+        // UI automation: icon-only button — without an id it is unaddressable from
+        // XCUITest/Maestro. Literal (not DTConversationAccessibilityID) because that enum
+        // lives in the app target and TTMessaging cannot import it.
+        sendButton.accessibilityIdentifier = "approval.btn.send"
         sendButton.layer.cornerRadius = 4
         sendButton.layer.masksToBounds = true
 

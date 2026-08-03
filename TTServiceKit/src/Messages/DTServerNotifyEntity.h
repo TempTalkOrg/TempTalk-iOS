@@ -28,7 +28,8 @@ typedef NS_ENUM(NSUInteger, DTServerNotifyType) {
     DTServerNotifyTypeCallEnd                           = 17, // call
     DTServerNotifyTypeUnknown                           = 18,
     DTServerNotifyTypeResetIdentityKey                  = 19,  // 重新生成密钥
-    DTServerNotifyTypeCriticalAlert                     = 22   // 触发CriticalAlert
+    DTServerNotifyTypeCriticalAlert                     = 22,  // 触发CriticalAlert
+    DTServerNotifyTypeFriendWeakRelation                = 25   // 弱联系人(待移除)变更
 };
 
 @interface DTServerNotifyEntity : MTLModel<MTLJSONSerializing>

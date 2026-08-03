@@ -123,6 +123,9 @@ public class GRDBSchemaMigrator: NSObject {
         case addMigrationOutgoingIndex  // Add index for TSMessageReadPositionMigrator query optimization
         case addGroupCryptoKeyRecord   // New table for group encryption root keys
         case addGroupCryptoFields      // Add groupCryptoMode/encryptedName/encryptedAvatar to DTGroupBaseInfoEntity
+        case createSSKJobRecordV2       // Persistent JobRecord table with payload-based design
+        case addGroupCryptoKeyVersion   // Add keyVersion column to model_DTGroupCryptoKeyRecord
+        case addIncomingCallMessageFields   // Add callState/roomId to model_TSInteraction
 
         //MARK GRDB need to focus on
 
@@ -158,7 +161,7 @@ public class GRDBSchemaMigrator: NSObject {
 
     /// Attention: matters
     ///model_TSMessageSecondary_virtual 虚表，集成自定义 FTS5 分词器 simple
-    public static let grdbSchemaVersionLatest: UInt = 8
+    public static let grdbSchemaVersionLatest: UInt = 9
 
     // An optimization for new users, we have the first migration import the latest schema
     // and mark any other migrations as "already run".
@@ -207,10 +210,10 @@ public class GRDBSchemaMigrator: NSObject {
     }
 
     private func registerSchemaMigrations(migrator: DatabaseMigratorWrapper) {
-        
+
         // The migration blocks should never throw. If we introduce a crashing
         // migration, we want the crash logs reflect where it occurred.
-        
+
         //        migrator.registerMigration(.createInitialSchema) { _ in
         //            owsFail("This migration should have already been run by the last YapDB migration.")
         //        }
@@ -434,6 +437,69 @@ public class GRDBSchemaMigrator: NSObject {
                 }
             } catch {
                 owsFail("Error adding group crypto fields: \(error)")
+            }
+        }
+
+        // MARK: Job framework
+        //
+        // Persistent backing store for the V2 ``JobRecord`` family. Multiple ``JobRecord``
+        // Persistent JobRecord table for the V2 job queue framework.
+        migrator.registerMigration(.createSSKJobRecordV2) { db in
+            do {
+                try db.create(table: "model_SSKJobRecord") { table in
+                    table.autoIncrementedPrimaryKey("id").notNull()
+                    table.column("recordType", .integer).notNull()
+                    table.column("uniqueId", .text).notNull().unique(onConflict: .fail)
+                    table.column("failureCount", .integer).notNull()
+                    table.column("label", .text).notNull()
+                    table.column("status", .integer).notNull()
+                    table.column("attachmentIdMap", .blob)
+                    table.column("contactThreadId", .text)
+                    table.column("envelopeData", .blob)
+                    table.column("invisibleMessage", .blob)
+                    table.column("messageId", .text)
+                    table.column("removeMessageAfterSending", .integer)
+                    table.column("threadId", .text)
+                    table.column("exclusiveProcessIdentifier", .text)
+                    table.column("isHighPriority", .integer).notNull().defaults(to: false)
+                    table.column("isMediaMessage", .integer).notNull().defaults(to: false)
+                }
+                try db.create(
+                    index: "index_model_SSKJobRecord_on_label_and_status",
+                    on: "model_SSKJobRecord",
+                    columns: ["label", "status"]
+                )
+                try db.create(
+                    index: "index_model_SSKJobRecord_on_exclusiveProcessIdentifier",
+                    on: "model_SSKJobRecord",
+                    columns: ["exclusiveProcessIdentifier"]
+                )
+            } catch {
+                owsFail("Error creating SSKJobRecord table: \(error)")
+            }
+        }
+
+        migrator.registerMigration(.addGroupCryptoKeyVersion) { db in
+            do {
+                try db.alter(table: "model_DTGroupCryptoKeyRecord") { (table: TableAlteration) -> Void in
+                    table.add(column: "keyVersion", .integer).notNull().defaults(to: 0)
+                }
+            } catch {
+                owsFail("Error adding group crypto keyVersion column: \(error)")
+            }
+        }
+
+        // Incoming call message (recordType 64) compatibility fields.
+        // Nullable additive columns with defaults so backfilled existing rows
+        // read a stable value instead of NULL.
+        migrator.registerMigration(.addIncomingCallMessageFields) { db in
+            do {
+                try db.alter(table: "model_TSInteraction") { (table: TableAlteration) -> Void in
+                    table.add(column: "callState", .integer).defaults(to: 0)
+                    table.add(column: "roomId", .text).defaults(to: "")
+                }
+            } catch {
+                owsFail("Error adding incoming call message fields: \(error)")
             }
         }
     }

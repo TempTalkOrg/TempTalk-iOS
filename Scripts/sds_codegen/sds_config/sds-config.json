@@ -35,6 +35,7 @@
 		"DTGroupBaseInfoEntity.autoClear",
 		"DTGroupBaseInfoEntity.privateChat",
 		"DTGroupBaseInfoEntity.privilegeConfidential",
+		"DTGroupBaseInfoEntity.groupCryptoKeyVersion",
         "DTCardMessageEntity.attributeContent",
         "DTCardMessageEntity.markdownVersion",
         "DTCardMessageEntity.cardType",

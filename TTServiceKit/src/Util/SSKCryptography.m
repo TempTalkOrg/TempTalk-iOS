@@ -334,7 +334,9 @@ static const NSUInteger kAESGCM256_TagLength = 16;
                                           bufferSize,
                                           &bytesDecrypted);
     if (cryptStatus == kCCSuccess) {
-        return [NSData dataWithBytesNoCopy:buffer length:bytesDecrypted freeWhenDone:YES];
+        NSData *result = [NSData dataWithBytes:buffer length:bytesDecrypted];
+        free(buffer);
+        return result;
     } else {
         DDLogError(@"%@ Failed CBC decryption", self.logTag);
         free(buffer);
@@ -350,21 +352,40 @@ static const NSUInteger kAESGCM256_TagLength = 16;
     OWSAssertDebug(payload);
     OWSAssertDebug(signalingKeyString);
 
+    static const NSUInteger kVersionLength = 1;
+    static const NSUInteger kIVLength = 16;
+    static const NSUInteger kMACLength = 10;
+    static const NSUInteger kMinPayloadLength = kVersionLength + kIVLength + kMACLength;
+    if (payload.length < kMinPayloadLength) {
+        DDLogError(@"%@ Payload too short to decrypt: %lu", self.logTag, (unsigned long)payload.length);
+        return nil;
+    }
+
     unsigned char version[1];
     unsigned char iv[16];
-    NSUInteger ciphertext_length = ([payload length] - 10 - 17) * sizeof(char);
-    unsigned char *ciphertext    = (unsigned char *)malloc(ciphertext_length);
+    NSUInteger ciphertext_length = (payload.length - kMACLength - kVersionLength - kIVLength) * sizeof(char);
+    if (ciphertext_length == 0) {
+        DDLogError(@"%@ Empty ciphertext in payload", self.logTag);
+        return nil;
+    }
+    unsigned char *ciphertext = (unsigned char *)malloc(ciphertext_length);
+    if (ciphertext == NULL) {
+        DDLogError(@"%@ Failed to allocate ciphertext buffer", self.logTag);
+        return nil;
+    }
     unsigned char mac[10];
-    [payload getBytes:version range:NSMakeRange(0, 1)];
-    [payload getBytes:iv range:NSMakeRange(1, 16)];
-    [payload getBytes:ciphertext range:NSMakeRange(17, [payload length] - 10 - 17)];
-    [payload getBytes:mac range:NSMakeRange([payload length] - 10, 10)];
+    [payload getBytes:version range:NSMakeRange(0, kVersionLength)];
+    [payload getBytes:iv range:NSMakeRange(kVersionLength, kIVLength)];
+    [payload getBytes:ciphertext range:NSMakeRange(kVersionLength + kIVLength, ciphertext_length)];
+    [payload getBytes:mac range:NSMakeRange(payload.length - kMACLength, kMACLength)];
 
     NSData *signalingKey                = [NSData dataFromBase64String:signalingKeyString];
     NSData *signalingKeyAESKeyMaterial  = [signalingKey subdataWithRange:NSMakeRange(0, 32)];
     NSData *signalingKeyHMACKeyMaterial = [signalingKey subdataWithRange:NSMakeRange(32, 20)];
+    NSData *ciphertextData = [NSData dataWithBytes:ciphertext length:ciphertext_length];
+    free(ciphertext);
     return
-        [SSKCryptography decryptCBCMode:[NSData dataWithBytesNoCopy:ciphertext length:ciphertext_length freeWhenDone:YES]
+        [SSKCryptography decryptCBCMode:ciphertextData
                                  key:signalingKeyAESKeyMaterial
                                   IV:[NSData dataWithBytes:iv length:16]
                              version:[NSData dataWithBytes:version length:1]

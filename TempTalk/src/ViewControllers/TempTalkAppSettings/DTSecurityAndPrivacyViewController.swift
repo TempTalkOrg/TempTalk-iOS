@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import TTServiceKit
 
 class DTSecurityAndPrivacyViewController : SettingBaseViewController {
     fileprivate let reuse_identifier_style_blank = "DTDefaultStyleCell_SecurityAndPrivacy_style_blank"
@@ -62,6 +63,8 @@ class DTSecurityAndPrivacyViewController : SettingBaseViewController {
         super.viewWillAppear(animated)
         getProfileInfo()
         self.navigationController?.setNavigationBarHidden(false, animated: true)
+        // Refresh the proxy On/Off status when returning from the proxy settings page.
+        self.reloadPage()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -198,6 +201,9 @@ extension DTSecurityAndPrivacyViewController : UITableViewDelegate, UITableViewD
         } else if settingItem.tag == SecurityAndPrivacyItemType.screenLockEnable.rawValue {
             let screenLockSelectedVC = ScreenLockSelectedViewController()
             self.navigationController?.pushViewController(screenLockSelectedVC, animated: true)
+        } else if settingItem.tag == SecurityAndPrivacyItemType.proxy.rawValue {
+            let proxyVC = DTProxySettingsViewController()
+            self.navigationController?.pushViewController(proxyVC, animated: true)
         }
     }
     
@@ -249,6 +255,7 @@ extension DTSecurityAndPrivacyViewController {
         case timeout = 2
         case renewKey = 3
         case deleteAccount = 4
+        case proxy = 5
     }
  
     func getDataSource() -> [[DTSettingItem]] {
@@ -284,30 +291,54 @@ extension DTSecurityAndPrivacyViewController {
         let renewKeyTipsItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.plainTextType.rawValue, plainText:  renewKeyTips)
         
         let blanckItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.blank.rawValue)
-        
+
+        // Entry status is three-state: Off when the switch is off; Unavailable when
+        // on but the last probe failed; On otherwise.
+        let proxyStatus: String
+        if !ProxyManager.shared.isEnabledByUser {
+            proxyStatus = Localized("PROXY_STATUS_OFF")
+        } else if ProxyManager.shared.lastProbeStatus == .unavailable {
+            proxyStatus = Localized("PROXY_ENTRY_UNAVAILABLE")
+        } else {
+            proxyStatus = Localized("PROXY_STATUS_ON")
+        }
+        let proxyItem = DTSettingItem(icon: "", title: Localized("PROXY_USE_PROXY"), description: proxyStatus, cellStyle: SettingCellStyle.accessoryAndDescription.rawValue)
+        proxyItem.tag = SecurityAndPrivacyItemType.proxy.rawValue
+        let proxyTipsItem = DTSettingItem(icon: "", title: "", description: "", cellStyle: SettingCellStyle.plainTextType.rawValue, plainText: Localized("PROXY_USE_PROXY_DESC"))
+        // The self-hosted proxy is gated to iOS 17+ (see ProxyManager.isEnabled); hide its entry row
+        // entirely below 17, its footer included, so the section layout stays clean.
+        let proxyRows: [[DTSettingItem]]
+        if #available(iOS 17, *) {
+            proxyRows = [[proxyItem], [proxyTipsItem], [blanckItem]]
+        } else {
+            proxyRows = []
+        }
+
         let deleteAccountItem = DTSettingItem(icon: "", title: Localized("SETTINGS_ITEM_DELETE"), description:"" , cellStyle: SettingCellStyle.accessoryAndDescription.rawValue)
         deleteAccountItem.tag = SecurityAndPrivacyItemType.deleteAccount.rawValue
-        
+
         if TSAccountManager.sharedInstance().passKeyManager.isPasskeySupported() {
             return [[blanckItem],
                     [passkeyItem, passkeyTipsItem],
                     [blanckItem],
                     [screenLockEnableItem],
                     [screenLockTipsItem],
-                    [blanckItem],
-                    [renewKeyItem],
-                    [renewKeyTipsItem],
-                    [blanckItem],
-                    [deleteAccountItem]]
+                    [blanckItem]]
+                + proxyRows
+                + [[renewKeyItem],
+                   [renewKeyTipsItem],
+                   [blanckItem],
+                   [deleteAccountItem]]
         } else {
             return [[blanckItem],
                     [screenLockEnableItem],
                     [screenLockTipsItem],
-                    [blanckItem],
-                    [renewKeyItem],
-                    [renewKeyTipsItem],
-                    [blanckItem],
-                    [deleteAccountItem]]
+                    [blanckItem]]
+                + proxyRows
+                + [[renewKeyItem],
+                   [renewKeyTipsItem],
+                   [blanckItem],
+                   [deleteAccountItem]]
         }
     }
     

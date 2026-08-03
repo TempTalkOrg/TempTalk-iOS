@@ -315,6 +315,11 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
                                forwardingMessage:(nullable DTCombinedForwardingMessage *)forwardingMessage
                                     contactShare:(nullable OWSContact *)contactShare
 {
+    // Canonicalize newlines on the single outbound chokepoint (all convenience
+    // factories funnel here). Mentions are computed on already-normalized text at
+    // the input layer, so no offset remap is needed here.
+    NSString *normalizedBody = [body dt_normalizedNewlines];
+
     self = [super initMessageWithTimestamp:timestamp
                            serverTimestamp:timestamp // outgoingmessage 默认 serverTimestamp 为当前时间，发送成功时会做修正
                                 sequenceId:0
@@ -322,7 +327,7 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
                                   inThread:thread
                                   authorId:[TSAccountManager localNumber]
                                   deviceId:[OWSDevice currentDeviceId]
-                               messageBody:body
+                               messageBody:normalizedBody
                                  atPersons:atPersons
                                   mentions:mentions
                              attachmentIds:attachmentIds
@@ -600,20 +605,22 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
 {
     OWSAssertDebug(transaction);
 
+    // For a note-to-self message, `self` is an unsaved OWSOutgoingSentMessageTranscript that
+    // wraps the real outgoing message. The transcript owns no DB row (shouldBeSaved == NO), so
+    // anyUpdate no-ops on it (see the shouldBeSaved guard in TSInteraction+SDS.anyUpdate). Persist
+    // the sent state onto the wrapped original message instead — otherwise it stays "Sending".
+    TSOutgoingMessage *targetMessage = self;
     if ([self isKindOfClass:[OWSOutgoingSentMessageTranscript class]]) {
         OWSOutgoingSentMessageTranscript *syncMsg = (OWSOutgoingSentMessageTranscript *)self;
         if (!syncMsg.toNote) {
             // 非note消息不需要更新状态；
             return;
         }
+        targetMessage = syncMsg.message;
     }
 
-    [self anyUpdateOutgoingMessageWithTransaction:transaction
-                                            block:^(TSOutgoingMessage *message) {
-        if (![message isKindOfClass:[TSOutgoingMessage class]]) {
-            return;
-        }
-
+    [targetMessage anyUpdateOutgoingMessageWithTransaction:transaction
+                                                     block:^(TSOutgoingMessage *message) {
         message.serverTimestamp = serverReceipts.systemShowTimestamp;
         message.sequenceId = serverReceipts.sequenceId;
         message.notifySequenceId = serverReceipts.notifySequenceId;
@@ -621,15 +628,6 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
         for (TSOutgoingMessageRecipientState *recipientState in message.recipientStateMap.allValues) {
             recipientState.state = OWSOutgoingMessageRecipientStateSent;
         }
-
-        //send to note need update origin outgoing message state
-        if ([self isKindOfClass:[OWSOutgoingSentMessageTranscript class]]) {
-            OWSOutgoingSentMessageTranscript *syncMsg = (OWSOutgoingSentMessageTranscript *)self;
-            for (TSOutgoingMessageRecipientState *recipientState in syncMsg.message.recipientStateMap.allValues) {
-                recipientState.state = OWSOutgoingMessageRecipientStateSent;
-            }
-        }
-
     }];
 }
 
@@ -969,6 +967,12 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
             
             quotedAttachmentBuilder.contentType = attachment.contentType;
             quotedAttachmentBuilder.fileName = attachment.sourceFilename;
+            // Carry the animated (GIF) marker cross-client — the thumbnail is a static JPEG and the
+            // contentType can't disambiguate animated WebP, so the receiver reads this flag bit.
+            if (attachment.isAnimated) {
+                // Builder flags is write-only and a quoted attachment carries no other flag, so set directly.
+                quotedAttachmentBuilder.flags = (UInt32)DSKProtoAttachmentPointerFlagsGif;
+            }
             if (attachment.thumbnailAttachmentStreamId) {
                 quotedAttachmentBuilder.thumbnail =
                 [TSAttachmentStream buildProtoForAttachmentId:attachment.thumbnailAttachmentStreamId];

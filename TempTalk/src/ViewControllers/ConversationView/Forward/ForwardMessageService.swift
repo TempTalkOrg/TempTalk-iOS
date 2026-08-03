@@ -20,19 +20,22 @@ public actor ForwardMessageService {
         public let type: DTForwardMessageType
         public let sourceConversation: TSThread
         public let leaveMessage: String?
+        public let combinedForwardMode: DTForwardNoticeCombinedForwardMode
 
         public init(
             messages: [TSMessage],
             targets: [TSThread],
             type: DTForwardMessageType,
             sourceConversation: TSThread,
-            leaveMessage: String?
+            leaveMessage: String?,
+            combinedForwardMode: DTForwardNoticeCombinedForwardMode = .unknown
         ) {
             self.messages = messages
             self.targets = targets
             self.type = type
             self.sourceConversation = sourceConversation
             self.leaveMessage = leaveMessage
+            self.combinedForwardMode = combinedForwardMode
         }
     }
 
@@ -91,15 +94,32 @@ public actor ForwardMessageService {
     }
 
     private func sendAggregateNotice(request: Request) async {
-        let sourceAuthorIds = ForwardNoticeBuilder.sourceAuthorIds(for: request.messages)
+        // "from" display uses the bubble senders (unchanged).
+        let displayAuthorIds = ForwardNoticeBuilder.sourceAuthorIds(for: request.messages)
+        // Trace DECISION may differ: a single forwarded message gates on its original content
+        // author, not the bubble sender (PRD). Other cases keep trigger == display.
+        let triggerAuthorIds = ForwardNoticeBuilder.triggerAuthorIds(for: request.messages)
+        guard DTNoticeTraceEvaluator.shouldLeaveTrace(
+            sourceThread: request.sourceConversation,
+            targetThreads: request.targets,
+            contentAuthorIds: triggerAuthorIds
+        ) else {
+            Logger.info("[Forward] notice skipped (own content / saved / same-thread) source=\(request.sourceConversation.uniqueId)")
+            return
+        }
+
+        // Keep "from" on the bubble senders, ordered foreign-first / self-last (§6).
+        let fromAuthorIds = DTNoticeTraceEvaluator.orderForDisplay(displayAuthorIds)
+
         let scene = ForwardNoticeBuilder.scene(for: request.type, messageCount: request.messages.count)
         do {
             try await ForwardNoticeDispatcher.sendNotice(
                 sourceConversation: request.sourceConversation,
                 scene: scene,
-                sourceAuthorIds: sourceAuthorIds,
+                sourceAuthorIds: fromAuthorIds,
                 messageCount: UInt32(request.messages.count),
-                messageSender: Self.messageSender
+                messageSender: Self.messageSender,
+                combinedForwardMode: request.combinedForwardMode
             )
         } catch {
             Logger.error("[Forward] notice failed (best-effort) source=\(request.sourceConversation.uniqueId): \(error)")

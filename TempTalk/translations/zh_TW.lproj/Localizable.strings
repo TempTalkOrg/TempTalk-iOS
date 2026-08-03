@@ -81,7 +81,7 @@
 "APP_UPDATE_NAG_ALERT_MESSAGE_FORMAT" = "%@ 版已在 App Store 上线。";
 
 /* Title for the 'new app version available' alert. */
-"APP_UPDATE_NAG_ALERT_TITLE" = "新版本Yelling发布了";
+"APP_UPDATE_NAG_ALERT_TITLE" = "新版本Quicall发布了";
 
 /* Label for the 'update' button in the 'new app version available' alert. */
 "APP_UPDATE_NAG_ALERT_UPDATE_BUTTON" = "更新";
@@ -2119,7 +2119,7 @@
 "INVITE_SCAN" = "扫一扫";
 "INVITE_SHARE" = "分享";
 "INVITE_ENTER_CODE" = "添加联系人";
-"INVITE_DESC" = "在 Yelling 上跟我聊天";
+"INVITE_DESC" = "在 Quicall 上跟我聊天";
 "INVITE_CANCEL" = "取消";
 "INVITE_REGENERATE_ACTION" = "重新生成";
 "INVITE_LINK_TITLE" = "邀请链接";
@@ -2178,7 +2178,7 @@
 "SCREEN_LOCK_UNLOCK_FAILED" = "认证失败";
 
 /* Label for button on lock screen that lets users unlock Chative. */
-"SCREEN_LOCK_UNLOCK_SIGNAL" = "解锁 Yelling";
+"SCREEN_LOCK_UNLOCK_SIGNAL" = "解锁 Quicall";
 
 /* No comment provided by engineer. */
 "SEARCH_BYNAMEORNUMBER_PLACEHOLDER_TEXT" = "搜索姓名或号码";
@@ -2469,11 +2469,11 @@
 "SETTINGS_SCREEN_LOCK_ACTIVITY_TIMEOUT" = "屏幕锁超时";
 
 /* Footer for the 'screen lock' section of the privacy settings. */
-"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "使用密码或手势解锁屏幕。密码可以不同于系统密码，因此如果有人设法得到了系统密码，但他仍然无法访问Yelling。此外，内容预览也会在app切换时被遮盖。";
+"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "使用密码或手势解锁屏幕。密码可以不同于系统密码，因此如果有人设法得到了系统密码，但他仍然无法访问Quicall。此外，内容预览也会在app切换时被遮盖。";
 
 "UNLOCKSCREEN_TITLE" = "数字密码";
 "UNLOCKSCREEN_DONE" = "确认";
-"SCREENLOCK_SETPASSCODE_TIPS" = "请输入 4–10 位数字的密码。下次解锁 Yelling 时会要求您输入此密码。";
+"SCREENLOCK_SETPASSCODE_TIPS" = "请输入 4–10 位数字的密码。下次解锁 Quicall 时会要求您输入此密码。";
 "SCREENLOCK_SETPASSCODE_EXCLAMATION" = "若遗失解锁码，必须退出账户或重新安装应用。";
 "SCREENLOCK_SETPASSCODE_FORGOT_TIPS" = "忘记数字密码？";
 "SCREENLOCK_SETPASSCODE_FORGOT_Alert_CONTENT" = "请删除并重装应用。";
@@ -2487,7 +2487,7 @@
 "SCREENLOCK_PASSCODESUCCESS_TITLE" = "成功！";
 "SCREENLOCK_PASSCODESUCCESS_TIPS" = "请妥善保存此代码。若遗失解锁码，必须退出账户或重新安装应用。";
 "SCREENLOCK_PASSCODESUCCESS_CONFIRM" = "我明白了";
-"SCREENLOCK_PASSCODESUCCESS_ATTEMPTS" = "Yelling功能不可用，请在%d秒后重试。";
+"SCREENLOCK_PASSCODESUCCESS_ATTEMPTS" = "Quicall功能不可用，请在%d秒后重试。";
 "LOGIN_SUBIT_TOO_MANY_ATTEMPTS" = "尝试次数过多，请稍后再试。";
 
 "SCREENLOCK_UPGRADE_TITLE" = "功能更新";
@@ -2868,6 +2868,9 @@
 /* Title for the alert indicating the 'voice message' needs to be held to be held down to record. */
 "VOICE_MESSAGE_TOO_SHORT_ALERT_TITLE" = "语音消息";
 
+/* Toast shown when user tries to record a voice message during an active call */
+"VOICE_MESSAGE_IN_CALL_TOAST" = "語音通話中，可稍後再試";
+
 /* Activity indicator title, shown upon returning to the device manager, until you complete the provisioning process on desktop */
 "WAITING_TO_COMPLETE_DEVICE_LINK_TEXT" = "请完成 Chative 桌面版设置。";
 
@@ -3145,7 +3148,27 @@
 "FORWARD_NOTICE_PLURAL" = "%1$@ 轉發了 %2$u 條來自 %3$@ 的訊息";
 "FORWARD_NOTICE_SINGLE_NO_FROM" = "%1$@ 轉發了一條訊息";
 "FORWARD_NOTICE_PLURAL_NO_FROM" = "%1$@ 轉發了 %2$u 條訊息";
+"FORWARD_NOTICE_CHAT_HISTORY_SINGLE" = "%1$@ 轉發了一條來自 %2$@ 的聊天記錄";
+"FORWARD_NOTICE_CHAT_HISTORY_SINGLE_NO_FROM" = "%1$@ 轉發了一條聊天記錄";
+"FORWARD_NOTICE_CHAT_HISTORY_PLURAL" = "%1$@ 轉發了 %2$u 條來自 %3$@ 的聊天記錄";
+"FORWARD_NOTICE_CHAT_HISTORY_PLURAL_NO_FROM" = "%1$@ 轉發了 %2$u 條聊天記錄";
+"FORWARD_NOTICE_PLURAL_MIXED" = "%1$@ 轉發了 %2$u 條來自 %3$@ 的訊息（含聊天記錄）";
+"FORWARD_NOTICE_PLURAL_MIXED_NO_FROM" = "%1$@ 轉發了 %2$u 條訊息（含聊天記錄）";
+"FORWARD_NOTICE_FROM_CHAT_HISTORY_SINGLE" = "%1$@ 轉發了一條來自 %2$@ 聊天記錄中的訊息";
+"FORWARD_NOTICE_FROM_CHAT_HISTORY_SINGLE_NO_FROM" = "%1$@ 轉發了一條來自聊天記錄中的訊息";
 "FORWARD_NOTICE_YOU" = "您";
+"FORWARD_NOTICE_AND_N_OTHERS" = "等 %u 人";
+
+"COPY_NOTICE_SINGLE" = "%1$@ 複製了一條來自 %2$@ 的訊息";
+"COPY_NOTICE_PLURAL" = "%1$@ 複製了 %2$u 條來自 %3$@ 的訊息";
+"COPY_NOTICE_SINGLE_NO_FROM" = "%1$@ 複製了一條訊息";
+"COPY_NOTICE_PLURAL_NO_FROM" = "%1$@ 複製了 %2$u 條訊息";
+"COPY_NOTICE_FROM_CHAT_HISTORY_SINGLE" = "%1$@ 複製了一條來自 %2$@ 聊天記錄中的訊息";
+"COPY_NOTICE_FROM_CHAT_HISTORY_SINGLE_NO_FROM" = "%1$@ 複製了一條來自聊天記錄中的訊息";
+"COPY_NOTICE_FROM_CHAT_HISTORY_PLURAL" = "%1$@ 複製了 %3$u 條來自 %2$@ 聊天記錄中的訊息";
+"COPY_NOTICE_FROM_CHAT_HISTORY_PLURAL_NO_FROM" = "%1$@ 複製了 %2$u 條來自聊天記錄中的訊息";
+"MESSAGE_ACTION_COPY" = "複製";
+"COPY_SUCCESS_TOAST" = "已複製";
 
 /* The title for the theme section in the appearance settings. */
 "SETTINGS_APPEARANCE_THEME_TITLE" = "主题";
@@ -3728,9 +3751,9 @@
 
 "INPUTTOOL_VOICE_HOLD_TO_TALK" = "按住 说话";
 
-"INPUTTOOL_VOICE_RELEASE_TO_SEND" = "松开 发送";
+"INPUTTOOL_VOICE_RELEASE_TO_SEND" = "松开发送";
 
-"INPUTTOOL_VOICE_RELEASE_TO_CANCEL" = "松开 取消";
+"INPUTTOOL_VOICE_RELEASE_TO_CANCEL" = "松开取消";
 
 /* input bar action button title when choosing Photos */
 "INPUTTOOL_ATTACHMENT_PHOTO_BUTTON" = "相册";
@@ -3761,6 +3784,12 @@
 "INPUTTOOL_VOICE_RELEASE_TO_SEND" = "松开发送";
 
 "INPUTTOOL_VOICE_RELEASE_TO_CANCEL" = "松开取消";
+
+"INPUTTOOL_VOICE_RELEASE_TO_SEND_WITH_EFFECT" = "松开发送";
+
+"INPUTTOOL_VOICE_CANCEL_BUTTON" = "取消";
+
+"INPUTTOOL_VOICE_EFFECT_BUTTON" = "變聲";
 
 "MENU_ACTION_MORE_ACTION" = "更多";
 
@@ -3828,7 +3857,7 @@
 "SPEECHTOTEXT_CONVERT_TIP_MESSAGE" = "转换中...";
 "SPEECHTOTEXT_CONVERT_TIP_MESSAGE_FAILED" = "转文字失败";
 
-"CONVERT_SOURCE_TEXT" = "语音转文字由 Yelling 服务器提供";
+"CONVERT_SOURCE_TEXT" = "语音转文字由 Quicall 服务器提供";
 
 "SPEECHTOTEXT_NO_TEXT_RECOGNIZE" = "未识别到文字";
 
@@ -3870,7 +3899,7 @@
 "CALLING_VOICE_PRESET_DEEPER" = "低沉";
 
 "BLOCK_USER_TITLE" = "屏蔽用户";
-"BLOCK_USER_DESCRIPTION" = "是否屏蔽该用户，禁止其在 Yelling 上向你发送消息或发起通话？";
+"BLOCK_USER_DESCRIPTION" = "是否屏蔽该用户，禁止其在 Quicall 上向你发送消息或发起通话？";
 "BLOCK_USER_CONFIRM" = "屏蔽";
 "BLOCK_USER_CANCEL" = "取消";
 "BLOCK_USER_UNBLOCK" = "取消屏蔽";
@@ -3978,11 +4007,11 @@
 "NOTIFICATIONS_CRITICAL_ALERT" = "紧急联络";
 "NOTIFICATIONS_CRITICAL_SWITCH_ON" = "开启";
 "NOTIFICATIONS_CRITICAL_SWITCH_OFF" = "关闭";
-"NOTIFICATIONS_CRITICAL_DESCRIPTION" = "前往「设置」→「通知」→「Yelling」→「重要提醒」，并将其开启。开启后，紧急联络可突破静音和勿扰模式。";
+"NOTIFICATIONS_CRITICAL_DESCRIPTION" = "前往「设置」→「通知」→「Quicall」→「重要提醒」，并将其开启。开启后，紧急联络可突破静音和勿扰模式。";
 "NOTIFICATIONS_CRITICAL_ALERT_TITLE_ON" = "开启紧急联络";
 "NOTIFICATIONS_CRITICAL_ALERT_TITLE_OFF" = "关闭紧急联络";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "前往「设置」→「通知」→「Yelling」→「重要提醒」，并将其开启。";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "前往「设置」→「通知」→「Yelling」→「重要提醒」，并将其关闭。";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "前往「设置」→「通知」→「Quicall」→「重要提醒」，并将其开启。";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "前往「设置」→「通知」→「Quicall」→「重要提醒」，并将其关闭。";
 "NOTIFICATIONS_CRITICAL_ALERT_CANCEL" = "取消";
 "NOTIFICATIONS_CRITICAL_ALERT_SETTING" = "设置";
 "NOTIFICATIONS_CRITICAL_EXTENSION_TITLE" = "%@的未接呼叫";
@@ -4037,3 +4066,33 @@
 "DISBAND_GROUP_ACTION" = "解散群组";
 
 "CALL_MIC_QUEUE_TITLE" = "等待發言";
+
+"SHORT_FOR_IMAGE" = "圖片";
+"SHORT_FOR_VIDEO" = "影片";
+"SHORT_FOR_ATTACHMENT" = "附件";
+"SHORT_FOR_CONTACT_MESSAGE" = "個人名片";
+"PLACEHOLDER_WRAPPER_FOR_CHAT_HISTORY" = "聊天記錄";
+"SHORT_FOR_MESSAGE" = "訊息";
+"WEAK_CONTACT_PENDING_SECTION_TITLE" = "即將移除";
+"WEAK_CONTACT_REMOVE_IN_DAYS" = "%ld天後移除";
+"WEAK_CONTACT_REMOVE_TODAY" = "今天移除";
+"WEAK_CONTACT_REMOVE_NOW" = "刪除聯絡人";
+"WEAK_CONTACT_REMOVE_NOW_CONFIRM" = "確定刪除該聯絡人？此操作無法復原。";
+"PERSONAL_CARD_ACCOUNT_UNAVAILABLE_TITLE" = "帳號不可用";
+"PERSONAL_CARD_ACCOUNT_UNAVAILABLE_MESSAGE" = "該帳號不存在或暫不可存取。";
+"PERSONAL_CARD_ACCOUNT_UNAVAILABLE_DELETE" = "刪除聯絡人";
+
+"GIF_SEARCH_PLACEHOLDER" = "搜尋 GIF";
+"GIF_SEARCH_NO_RESULTS" = "找不到相關 GIF";
+"GIF_SEARCH_ERROR" = "無法載入 GIF，請稍後重試";
+"GIF_FAVORITES_EMPTY" = "暫無 GIF 收藏";
+"GIF_SEARCH_FAILURE_ALERT_TITLE" = "傳送失敗，請稍後重試";
+"GIF_FAVORITE_ADDED" = "已加入 GIF 收藏";
+"GIF_FAVORITE_FAILED" = "無法加入 GIF 收藏，請稍後重試";
+"GIF_FAVORITE_REMOVE" = "從 GIF 收藏移除";
+"MESSAGE_ACTION_ADD_TO_FAVORITE" = "加入 GIF 收藏";
+"gif_favorites_cap_title" = "GIF 收藏已達上限";
+"gif_favorites_cap_message" = "GIF 收藏最多 200 個。你可以替換最早新增的一個，或先移除部分。";
+"gif_favorites_cap_confirm" = "替換最早的";
+"gif_favorites_cap_cancel" = "取消";
+"gif_favorites_add_size_limit" = "此 GIF 過大，無法加入 GIF 收藏";

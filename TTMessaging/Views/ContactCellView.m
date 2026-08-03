@@ -27,7 +27,7 @@ const CGFloat kContactCellAvatarTextMargin = 12;
 @property (nonatomic) DTConversationNameView *nameView;
 @property (nonatomic) DTAvatarImageView *avatarView;
 //@property (nonatomic) UIView *avatarContentView;
-//@property (nonatomic) UILabel *subtitleLabel;
+@property (nonatomic) UILabel *subtitleLabel;
 @property (nonatomic) UILabel *accessoryLabel;
 @property (nonatomic) UIStackView *nameContainerView;
 @property (nonatomic) UIView *accessoryViewContainer;
@@ -65,28 +65,40 @@ const CGFloat kContactCellAvatarTextMargin = 12;
 
 - (void)setSelectionStatus:(ContactCellSelectionStatus)selectionStatus{
     _selectionStatus = selectionStatus;
+    self.selectionImageView.hidden = (_selectionStatus == ContactCellSelectionStatusNone);
+    // Reset tint before each case so the imageView re-tints correctly on cell reuse.
+    self.selectionImageView.tintColor = nil;
     switch (_selectionStatus) {
         case ContactCellSelectionStatusNone:
-        {
-            self.selectionImageView.hidden = YES;
-        }
             break;
         case ContactCellSelectionStatusSelected:
-        {
-            self.selectionImageView.hidden = NO;
-            self.selectionImageView.image = [UIImage imageNamed:@"icon_selected"];
-        }
+            // Blue rounded square + white check.
+            self.selectionImageView.tintColor = Theme.primaryColor;
+            self.selectionImageView.image = [self checkboxSymbolNamed:@"checkmark.square.fill"];
             break;
         case ContactCellSelectionStatusUnselected:
-        {
-            self.selectionImageView.hidden = NO;
-            self.selectionImageView.image = [UIImage imageNamed:@"icon_unselected"];
-        }
+            // Empty light-gray rounded square.
+            self.selectionImageView.tintColor = Theme.tthirdColor;
+            self.selectionImageView.image = [self checkboxSymbolNamed:@"square"];
             break;
-            
-        default:
+        case ContactCellSelectionStatusDisabled:
+            // Not selectable: dimmer empty rounded square.
+            self.selectionImageView.tintColor = Theme.tdisableColor;
+            self.selectionImageView.image = [self checkboxSymbolNamed:@"square"];
+            break;
+        case ContactCellSelectionStatusDisabledSelected:
+            // Already a member: gray filled rounded square + check.
+            self.selectionImageView.tintColor = Theme.bgdisableColor;
+            self.selectionImageView.image = [self checkboxSymbolNamed:@"checkmark.square.fill"];
             break;
     }
+}
+
+/// SF Symbol checkbox as a template image, tinted via `tintColor`.
+- (UIImage *)checkboxSymbolNamed:(NSString *)name {
+    UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:22 weight:UIImageSymbolWeightRegular];
+    UIImage *img = [[UIImage systemImageNamed:name withConfiguration:cfg] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+    return img;
 }
 
 - (void)configure
@@ -95,8 +107,12 @@ const CGFloat kContactCellAvatarTextMargin = 12;
     
     self.layoutMargins = UIEdgeInsetsZero;
     
-    self.selectionImageView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"icon_unselected"]];
-    
+    self.selectionImageView = [[UIImageView alloc] init];
+    self.selectionImageView.contentMode = UIViewContentModeScaleAspectFit;
+    [self.selectionImageView autoSetDimensionsToSize:CGSizeMake(24, 24)];
+    [self.selectionImageView setContentHuggingHigh];
+    [self.selectionImageView setCompressionResistanceHigh];
+
     _avatarView = [DTAvatarImageView new];
     _avatarView.avatarImageView.backgroundColor = [UIColor colorWithRGBHex:0x3784f7];
     
@@ -110,8 +126,14 @@ const CGFloat kContactCellAvatarTextMargin = 12;
 
     self.accessoryViewContainer = [UIView containerView];
 
+    self.subtitleLabel = [[UILabel alloc] init];
+    self.subtitleLabel.textColor = Theme.tsecondaryColor;
+    self.subtitleLabel.hidden = YES;
+    [self.subtitleLabel setContentHuggingHigh];
+
     self.nameContainerView = [[UIStackView alloc] initWithArrangedSubviews:@[
-        self.nameView
+        self.nameView,
+        self.subtitleLabel
     ]];
     self.nameContainerView.axis = UILayoutConstraintAxisVertical;
     self.nameContainerView.spacing = 3;
@@ -123,10 +145,10 @@ const CGFloat kContactCellAvatarTextMargin = 12;
     self.axis = UILayoutConstraintAxisHorizontal;
     self.spacing = kContactCellAvatarTextMargin;
     self.alignment = UIStackViewAlignmentCenter;
-    [self addArrangedSubview:self.selectionImageView];
     [self addArrangedSubview:self.avatarView];
     [self addArrangedSubview:self.nameContainerView];
     [self addArrangedSubview:self.accessoryViewContainer];
+    [self addArrangedSubview:self.selectionImageView];
     [_avatarView autoSetDimensionsToSize:CGSizeMake(kContactCellAvatarSize, kContactCellAvatarSize)];
 
     [self configureFonts];
@@ -179,6 +201,34 @@ const CGFloat kContactCellAvatarTextMargin = 12;
 {
     self.nameView.nameFont = [UIFont ows_dynamicTypeBodyFont];
     self.accessoryLabel.font = [[UIFont ows_dynamicTypeFootnoteFont] ows_semibold];  // 13pt 使用 footnote + semibold
+    self.subtitleLabel.font = [UIFont ows_dynamicTypeCaption1Font];
+}
+
+- (void)applyWeakRemovalDays:(NSInteger)days removingToday:(BOOL)removingToday
+{
+    if (removingToday) {
+        // Final day (≤ 24h left): show "Removed today" rather than a day countdown.
+        self.subtitleLabel.text = Localized(@"WEAK_CONTACT_REMOVE_TODAY", @"");
+        self.subtitleLabel.hidden = NO;
+    } else if (days > 0) {
+        self.subtitleLabel.text = [NSString stringWithFormat:Localized(@"WEAK_CONTACT_REMOVE_IN_DAYS", @""), (long)days];
+        self.subtitleLabel.hidden = NO;
+    } else {
+        // Not a weak contact (days == 0, not removing today): no hint.
+        self.subtitleLabel.text = nil;
+        self.subtitleLabel.hidden = YES;
+    }
+}
+
+- (void)applyIdSuffix:(nullable NSString *)suffix
+{
+    if (suffix.length > 0) {
+        self.subtitleLabel.text = suffix;
+        self.subtitleLabel.hidden = NO;
+    } else {
+        self.subtitleLabel.text = nil;
+        self.subtitleLabel.hidden = YES;
+    }
 }
 
 - (void)textSizeDidChange
@@ -440,6 +490,8 @@ const CGFloat kContactCellAvatarTextMargin = 12;
     self.avatarView.recipientId = nil;
     [self.nameView prepareForReuse];
     self.nameView.nameColor = Theme.tprimaryColor;
+    self.subtitleLabel.text = nil;
+    self.subtitleLabel.hidden = YES;
     for (UIView *subview in self.accessoryViewContainer.subviews) {
         [subview removeFromSuperview];
     }

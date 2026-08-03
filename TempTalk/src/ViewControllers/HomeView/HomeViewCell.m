@@ -117,6 +117,8 @@ NS_ASSUME_NONNULL_BEGIN
 
     self.nameView = [DTConversationNameView new];
     self.nameView.nameFont = self.nameFont;
+    // Middle truncation to match the chat screen nav title (ConversationHeaderView)
+    self.nameView.lineBreakMode = NSLineBreakByTruncatingMiddle;
     [self.nameView setContentHuggingLow];
     [self.nameView setCompressionResistanceHorizontalLow];
     [self.nameView setCompressionResistanceVerticalHigh];
@@ -599,7 +601,8 @@ NS_ASSUME_NONNULL_BEGIN
     [self updateAvatarView];
     
     if (self.isShowSticked) {
-        self.contentView.backgroundColor = thread.isSticked || thread.isCallingSticked ? Theme.bg5Color : Theme.bgpagePrimaryColor;
+        BOOL useElevatedBackground = thread.isSticked || thread.isCallingSticked || thread.threadRecord.isNoteToSelf;
+        self.contentView.backgroundColor = useElevatedBackground ? Theme.bg5Color : Theme.bgpagePrimaryColor;
     } else {
         self.contentView.backgroundColor = Theme.bgpagePrimaryColor;
     }

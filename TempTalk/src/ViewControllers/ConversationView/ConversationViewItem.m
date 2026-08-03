@@ -79,22 +79,26 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
 
 #pragma mark - View State
 
+// MUST stay atomic: background render reads these while the main thread
+// replaces them via replaceInteraction:, else mid-read dealloc crashes.
+@property (atomic, strong) TSInteraction *interaction;
+
 @property (nonatomic) BOOL hasViewState;
 @property (nonatomic) OWSMessageCellType messageCellType;
-@property (nonatomic, nullable) DisplayableText *displayableBodyText;
-@property (nonatomic, nullable) DisplayableText *displayableQuotedText;
-@property (nonatomic, nullable) OWSQuotedReplyModel *quotedReply;
+@property (atomic, nullable) DisplayableText *displayableBodyText;
+@property (atomic, nullable) DisplayableText *displayableQuotedText;
+@property (atomic, nullable) OWSQuotedReplyModel *quotedReply;
 @property (nonatomic, readonly, nullable) NSString *quotedAttachmentMimetype;
 @property (nonatomic, readonly, nullable) NSString *quotedRecipientId;
-@property (nonatomic, nullable) TSAttachmentStream *attachmentStream;
-@property (nonatomic, nullable) TSAttachmentPointer *attachmentPointer;
-@property (nonatomic, nullable) ContactShareViewModel *contactShare;
-@property (nonatomic, nullable) NSArray <DTMention *> *mentions;
+@property (atomic, nullable) TSAttachmentStream *attachmentStream;
+@property (atomic, nullable) TSAttachmentPointer *attachmentPointer;
+@property (atomic, nullable) ContactShareViewModel *contactShare;
+@property (atomic, nullable) NSArray <DTMention *> *mentions;
 @property (nonatomic) CGSize mediaSize;
-@property (nonatomic, nullable) DTCombinedForwardingMessage *combinedForwardingMessage;
-@property (nonatomic, nullable) DTCombinedForwardingMessage *combinedSubMessage;
+@property (atomic, nullable) DTCombinedForwardingMessage *combinedForwardingMessage;
+@property (atomic, nullable) DTCombinedForwardingMessage *combinedSubMessage;
 
-@property (nonatomic, nullable) NSString *systemMessageText;
+@property (atomic, nullable) NSString *systemMessageText;
 // 长文本（转附件文本）长度
 @property (nonatomic, assign) NSUInteger oversizeTextLength;
 
@@ -164,7 +168,8 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
 {
     OWSAssertDebug(interaction);
 
-    _interaction = interaction;
+    // Atomic setter: background render may be reading interaction concurrently.
+    self.interaction = interaction;
 
     self.hasViewState = NO;
     self.messageCellType = OWSMessageCellType_Unknown;
@@ -192,7 +197,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
 
 - (BOOL)hasBodyText
 {
-    return _displayableBodyText != nil;
+    return self.displayableBodyText != nil;
 }
 
 //是否展示翻译的结果
@@ -218,7 +223,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
 
 - (BOOL)hasQuotedText
 {
-    return _displayableQuotedText != nil;
+    return self.displayableQuotedText != nil;
 }
 
 - (BOOL)hasQuotedAttachment
@@ -714,9 +719,9 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
                 self.displayableBodyText = [self displayableBodyTextForOversizeTextAttachment:self.attachmentStream
                                                                                 interactionId:message.uniqueId];
                 
-            } else if ([self.attachmentStream isAnimated] || [self.attachmentStream isImage] ||
+            } else if ([self.attachmentStream isAnimatedImageAttachment] || [self.attachmentStream isImage] ||
                 [self.attachmentStream isVideo]) {
-                if ([self.attachmentStream isAnimated]) {
+                if ([self.attachmentStream isAnimatedImageAttachment]) {
                     self.messageCellType = OWSMessageCellType_AnimatedImage;
                 } else if ([self.attachmentStream isImage]) {
                     self.messageCellType = OWSMessageCellType_StillImage;
@@ -747,13 +752,8 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
             }
         } else if ([attachment isKindOfClass:[TSAttachmentPointer class]]) {
             TSAttachmentPointer *pointer = (TSAttachmentPointer *)attachment;
-            BOOL isOutgoingMessage = [self.interaction isKindOfClass:[TSOutgoingMessage class]];
-            if (isOutgoingMessage && self.isCombindedForwardMessage) {
-                self.messageCellType = OWSMessageCellType_GenericAttachment;
-            } else {
-                self.messageCellType = OWSMessageCellType_DownloadingAttachment;
-                self.attachmentPointer = pointer;
-            }
+            self.messageCellType = OWSMessageCellType_DownloadingAttachment;
+            self.attachmentPointer = pointer;
         } else {
             OWSFailDebug(@"%@ Unknown attachment type", self.logTag);
         }
@@ -790,6 +790,12 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
         // are rendered like empty text messages, but without any interactivity.
         DDLogWarn(@"%@ Treating unknown message as empty text message: %@ %llu", self.logTag, message.class, message.timestamp);
         self.messageCellType = OWSMessageCellType_TextMessage;
+        self.displayableBodyText = [[DisplayableText alloc] initWithFullText:@"" displayText:@"" isTextTruncated:NO];
+    }
+
+    // Final safety net: every assigned messageCellType must come with a non-nil displayableBodyText.
+    // Branches like outgoing combined-forwarding attachment pointers set cellType only.
+    if (!self.displayableBodyText) {
         self.displayableBodyText = [[DisplayableText alloc] initWithFullText:@"" displayText:@"" isTextTruncated:NO];
     }
 
@@ -943,52 +949,12 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
     return _messageCellType;
 }
 
-- (nullable DisplayableText *)displayableBodyText
-{
-//    OWSAssertIsOnMainThread();
-    OWSAssertDebug(self.hasViewState);
-
-    OWSAssertDebug(_displayableBodyText);
-    OWSAssertDebug(_displayableBodyText.displayText);
-    OWSAssertDebug(_displayableBodyText.fullText);
-
-    return _displayableBodyText;
-}
-
-- (nullable TSAttachmentStream *)attachmentStream
-{
-//    OWSAssertIsOnMainThread();
-    OWSAssertDebug(self.hasViewState);
-
-    return _attachmentStream;
-}
-
-- (nullable TSAttachmentPointer *)attachmentPointer
-{
-//    OWSAssertIsOnMainThread();
-    OWSAssertDebug(self.hasViewState);
-
-    return _attachmentPointer;
-}
-
 - (CGSize)mediaSize
 {
 //    OWSAssertIsOnMainThread();
     OWSAssertDebug(self.hasViewState);
 
     return _mediaSize;
-}
-
-- (nullable DisplayableText *)displayableQuotedText
-{
-//    OWSAssertIsOnMainThread();
-    OWSAssertDebug(self.hasViewState);
-
-    OWSAssertDebug(_displayableQuotedText);
-    OWSAssertDebug(_displayableQuotedText.displayText);
-    OWSAssertDebug(_displayableQuotedText.fullText);
-
-    return _displayableQuotedText;
 }
 
 - (void)copyTextAction

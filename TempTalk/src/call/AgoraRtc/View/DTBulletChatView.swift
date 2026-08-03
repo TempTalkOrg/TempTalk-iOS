@@ -202,22 +202,17 @@ class DTBulletChatCell: UITableViewCell {
             if (messageType == .local_tips) {
                 lbPrimary.attributedText = attributeMessage
             } else {
+                // Always show the participant's real name (no "You" special-case for the local user)
                 var displayName: String? = newValue.name
-                if let localNumber = TSAccountManager.localNumber(), newValue.id == localNumber {
-                    displayName = "You"
+                if newValue.id.hasPrefix(MeetingAccoutPrefix_Web) {
+                    displayName = newValue.id.getWebUserName()
                 } else {
-                    if newValue.id.hasPrefix(MeetingAccoutPrefix_Web) {
-                        displayName = newValue.id.getWebUserName()
-                    } else {
-                        displayName = Environment.shared.contactsManager.displayName(forPhoneIdentifier: newValue.id).removeBUMessage()
-                    }
-                    
-                    if let name = displayName {
-                        if name.count > 11 {
-                            let index = name.index(name.startIndex, offsetBy: 11)
-                            displayName = String(name[..<index]) + "..."
-                        }
-                    }
+                    displayName = Environment.shared.contactsManager.displayName(forPhoneIdentifier: newValue.id).removeBUMessage()
+                }
+
+                if let name = displayName, name.count > 11 {
+                    let index = name.index(name.startIndex, offsetBy: 11)
+                    displayName = String(name[..<index]) + "..."
                 }
 
                 let jointMark = messageType == .text ? ": " : " "

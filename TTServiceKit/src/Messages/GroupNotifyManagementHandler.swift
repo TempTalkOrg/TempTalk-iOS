@@ -24,7 +24,9 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
                 newGroupThread: TSGroupThread,
                 timeStamp: UInt64,
                 transaction: SDSAnyWriteTransaction) {
+
         
+
         if groupNotifyEntity.groupNotifyDetailedType == .createGroup {
             
             createGroup(envelope: envelope,
@@ -194,6 +196,7 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
         
         newGroupModel.groupMemberIds.removeAll { leftUids.contains($0) }
         newGroupModel.groupAdmin.removeAll { leftUids.contains($0) }
+        newGroupModel.intersectVerifiedMembersWithCurrentGroupMembers()
         newGroupThread.anyUpdateGroupThread(transaction: transaction) { gthread in
             gthread.groupModel = newGroupModel
         }
@@ -276,7 +279,7 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
                    newGroupThread: TSGroupThread,
                    timeStamp: UInt64,
                    transaction: SDSAnyWriteTransaction) {
-        
+
         var updatedGroupInfoString = ""
         let shouldAffectThreadSorting = false
         let localNumber = TSAccountManager.sharedInstance().localNumber(with: transaction)
@@ -299,17 +302,16 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
         // 合并两个集合并转换为数组
         let mergedGroupMembers = Array(groupMemberIdsSet.union(filteredUidsSet))
         newGroupModel.groupMemberIds = mergedGroupMembers
+        // 提到外层 scope，下面 baseInfo.anyInsert 复用，避免二次 AES + raw server name 回退。
+        var resolvedName = ""
         if let group = groupNotifyEntity.group {
-            var resolvedName = group.name
-            if group.groupCryptoMode > 0,
-               let encryptedName = group.encryptedName, !encryptedName.isEmpty,
-               let decrypted = DTGroupCryptoManager.shared.decryptedGroupName(
-                   gid: groupNotifyEntity.gid,
-                   encryptedName: encryptedName,
-                   transaction: transaction),
-               !decrypted.isEmpty {
-                resolvedName = decrypted
-            }
+            resolvedName = DTGroupCryptoManager.shared.resolveGroupName(
+                gid: groupNotifyEntity.gid,
+                cryptoMode: group.groupCryptoMode,
+                encryptedName: group.encryptedName,
+                oldName: oldGroupModel.groupName,
+                serverName: group.name,
+                transaction: transaction)
             if !resolvedName.isEmpty {
                 newGroupModel.groupName = resolvedName
             }
@@ -317,6 +319,46 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
                 newGroupModel.groupCryptoMode = group.groupCryptoMode
             }
         }
+
+        if newGroupModel.isEncryptedGroup {
+            let serverGid = groupNotifyEntity.gid
+            let allNotifyMembers = groupNotifyEntity.members
+            let alreadyVerified = newGroupModel.verifiedMemberUids ?? []
+            let addMembers = allNotifyMembers.filter {
+                $0.action == .add && !alreadyVerified.contains($0.uid)
+            }
+            let gidTail = String(serverGid.suffix(6))
+            if !addMembers.isEmpty {
+                let (passed, failed) = DTGroupCryptoManager.sharedManager.verifyMembersClassified(
+                    gid: serverGid,
+                    members: addMembers,
+                    transaction: transaction
+                )
+                if !passed.isEmpty {
+                    var merged = newGroupModel.verifiedMemberUids ?? Set<String>()
+                    merged.formUnion(passed)
+                    let memberIdSet = Set(newGroupModel.groupMemberIds)
+                    newGroupModel.verifiedMemberUids = merged.intersection(memberIdSet)
+                }
+                if !failed.isEmpty {
+                    Task {
+                        do {
+                            let response = try await DTGroupCryptoAPIImpl().cryptoDispose(
+                                groupId: serverGid,
+                                request: CryptoDisposeRequest(members: failed)
+                            )
+                            Logger.info("[GroupCrypto] dispose ok gid=...\(gidTail) removed=\(response.removed.count) rejected=\(response.rejected.count)")
+                            if !response.removed.isEmpty {
+                                DTGroupCryptoManager.removeMembers(response.removed, fromGroupWithServerGid: serverGid)
+                            }
+                        } catch {
+                            Logger.error("[GroupCrypto] dispose failed gid=...\(gidTail) error=\(error)")
+                        }
+                    }
+                }
+            }
+        }
+
         newGroupThread.anyUpdateGroupThread(transaction: transaction) { gThread in
             gThread.groupModel = newGroupModel
         }
@@ -349,54 +391,13 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
         }
         
         if let baseInfo = groupNotifyEntity.group {
-          
-            baseInfo.gid = groupNotifyEntity.gid;
-            
-            if baseInfo.groupCryptoMode > 0,
-               let encryptedName = baseInfo.encryptedName, !encryptedName.isEmpty,
-               let decrypted = DTGroupCryptoManager.shared.decryptedGroupName(
-                   gid: groupNotifyEntity.gid,
-                   encryptedName: encryptedName,
-                   transaction: transaction),
-               !decrypted.isEmpty {
-                baseInfo.name = decrypted
-            } else if let groupName = groupNotifyEntity.group?.name {
-                baseInfo.name = groupName
+            baseInfo.gid = groupNotifyEntity.gid
+            // 复用上面算好的三层 fallback，防止 newGroupModel.groupName 与 baseInfo.name 不一致
+            if !resolvedName.isEmpty {
+                baseInfo.name = resolvedName
             }
             baseInfo.anyInsert(transaction: transaction)
             DTGroupUtils.postGroupBaseInfoChange(with: baseInfo, remove: false)
-            
-        }
-        
-        // Verify new member signatures for encrypted groups.
-        // 聚合所有签名不通过的成员，一次性调用 cryptoDispose，避免对单次 notify 产生 N 次并发请求。
-        if newGroupModel.isEncryptedGroup {
-            let gid = groupNotifyEntity.gid
-            let cryptoManager = DTGroupCryptoManager.shared
-            var disposeUids: [String] = []
-            for member in groupNotifyEntity.members where member.action == .add {
-                guard let uidSig = member.uidSignature, !uidSig.isEmpty else { continue }
-                if let verified = cryptoManager.verifyMember(gid: gid,
-                                                              uid: member.uid,
-                                                              uidSignature: uidSig,
-                                                              transaction: transaction),
-                   !verified {
-                    Logger.error("[GroupCrypto] Member verification failed for uid: \(member.uid) in gid: \(gid)")
-                    disposeUids.append(member.uid)
-                }
-            }
-            if !disposeUids.isEmpty {
-                Task {
-                    do {
-                        try await DTGroupCryptoAPIImpl().cryptoDispose(
-                            groupId: gid,
-                            request: CryptoDisposeRequest(members: disposeUids)
-                        )
-                    } catch {
-                        Logger.error("[GroupCrypto] cryptoDispose failed for gid: \(gid), members: \(disposeUids), error: \(error)")
-                    }
-                }
-            }
         }
 
         guard display else { return }
@@ -470,6 +471,7 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
         // 去重后的数组赋值
         newGroupModel.groupMemberIds = Array(Set(updatedGroupMembers))
         newGroupModel.groupAdmin =  Array(Set(updateAdmins))
+        newGroupModel.intersectVerifiedMembersWithCurrentGroupMembers()
         newGroupThread.anyUpdateGroupThread(transaction: transaction) { gThread in
             gThread.groupModel = newGroupModel
         }
@@ -555,8 +557,10 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
                       timeStamp: UInt64,
                       transaction: SDSAnyWriteTransaction) {
 
-        Logger.info("[Group Notify] dismiss group")
-        DTGroupUtils.removeGroupBaseInfo(withGid: groupNotifyEntity.gid, transaction: transaction)
+        let gid = groupNotifyEntity.gid
+        DTGroupUtils.removeGroupBaseInfo(withGid: gid, transaction: transaction)
+        let hadKey = DTGroupCryptoManager.sharedManager.deleteRGroup(gid: gid, transaction: transaction)
+        Logger.info("[Group Notify] dismiss group, gid=...\(gid.suffix(6)), hadRGroup: \(hadKey)")
 
         newGroupThread.anyRemove(transaction: transaction)
     }
@@ -588,7 +592,9 @@ class GroupNotifyManagementHandler : GroupNotifyHandler {
             return
         }
 
-        let isPlainFallback = isEncrypted && !DTGroupCryptoDisplayHelper.shared.hasGroupKey(gid: gid, transaction: transaction)
+        // plainFallback = got the lock placeholder (can't decrypt). Keyed on "can decrypt", not "has key":
+        // a wrong R_group also can't decrypt. Avoids marking the lock image as a real avatar download.
+        let isPlainFallback = isEncrypted && !DTGroupCryptoDisplayHelper.shared.canDecryptAvatar(gid: gid, transaction: transaction)
 
         let capturedGroupId = groupId
         let version = newGroupModel.version

@@ -21,10 +21,32 @@ enum ConversationSection: CaseIterable {
     case main
 }
 
+struct InCallVoiceMemoAudioOwnership {
+    enum EndAction: Equatable {
+        case preserveRecording
+        case stopRecording
+    }
+
+    private(set) var liveKitOwnedRecordingAtStart = false
+
+    mutating func begin(hasMicrophonePublication: Bool) {
+        liveKitOwnedRecordingAtStart = hasMicrophonePublication
+    }
+
+    mutating func finish(hasCurrentMicrophonePublication: Bool) -> EndAction {
+        defer { liveKitOwnedRecordingAtStart = false }
+        return liveKitOwnedRecordingAtStart && hasCurrentMicrophonePublication
+            ? .preserveRecording
+            : .stopRecording
+    }
+
+    mutating func reset() {
+        liveKitOwnedRecordingAtStart = false
+    }
+}
+
 class CVViewState: NSObject {
-    
-    static var conversationTagInfo: [String: Bool] = [:]
-    
+
     var thread: TSThread
     
     var readTimer: Timer?
@@ -77,7 +99,10 @@ class CVViewState: NSObject {
     var isViewVisible = false
     var isUserScrolling = false
     var isWaitingForDeceleration = false
-    
+    // loadInitialMessages completion may arrive before viewIsAppearing flips isViewVisible to true;
+    // queue it here and replay from viewIsAppearing to avoid losing the first snapshot.
+    var pendingInitialLoadCompletion: ((Bool) -> Void)?
+
     var viewHasEverAppeared = false
     var shouldAnimateKeyboardChanges = false
     var needsInputToolbarRecreation = false
@@ -118,6 +143,11 @@ class CVViewState: NSObject {
     var lastPosition: CGFloat = .zero
     var isScrollUp = false
     var userHasScrolled = false
+    /// Set when a GIF is sent from the keyboard panel (which re-presents the system keyboard). The
+    /// keyboard's inset is applied asynchronously, so the message-insert scroll can race it and land
+    /// the new bubble behind the keyboard. Consumed in `inputAccessoryPlaceholderKeyboardDidPresent`
+    /// (inset now final) to re-scroll to bottom deterministically.
+    var scrollToBottomOnKeyboardSettle = false
     var lastReloadDate: Date?
     var scrollStateBeforeLoadingMore: ConversationScrollState?
     var mentionMessagesJumpManager: DTMentionMessagesJumpManager?
@@ -139,11 +169,11 @@ class CVViewState: NSObject {
     var actionMessageType: ConversationMessageType?
     weak var actionMenuController: ConversationActionMenuController?
     
-    // MARK: forward message
+    // MARK: Multi-select
     var forwardToolbar: DTMultiSelectToolbar?
     var isMultiSelectMode: Bool = false
     var forwardType: DTForwardMessageType = .oneByOne
-    var forwardMessageItems: [ConversationViewItem] = []
+    var selectedMessageItems: [ConversationViewItem] = []
     var targetThreads: [TSThread] = []
 
     // MARK: call
@@ -159,8 +189,16 @@ class CVViewState: NSObject {
     
     // MARK: audio
     var audioPlayer: OWSAudioPlayer?
-    var audioRecorder: DTAudioRecorder?
+    /// Multi-tap voice-message recorder (denoise + voice changer candidates).
+    var voiceRecorder: DualCandidateVoiceRecorder?
     var voiceMessageUUID: UUID?
+    /// Latched on release, consumed by `didFinish`. Reset on every terminal path.
+    var pendingVoiceMessageSendMode: VoiceMessageSendMode = .original
+    /// True while a voice memo forced LiveKit's ADM to capture (via
+    /// `startLocalRecording`) so an in-call *muted* recording can still pick up
+    /// the mic. Cleared when `endRecordingSession` restores the prior ownership.
+    var didStartInCallLocalRecording: Bool = false
+    var inCallVoiceMemoAudioOwnership = InCallVoiceMemoAudioOwnership()
     var currentAudioPlaybackRate: Float? // 当前会话的播放速度，nil 表示使用全局设置
     lazy var recordVoiceNoteAudioActivity: AudioActivity = {
         let activity = AudioActivity(audioDescription: "Voice Message Recording")
@@ -190,11 +228,6 @@ class CVViewState: NSObject {
 }
 
 extension ConversationViewController {
-    var conversationTagInfo: [String: Bool] {
-        get { CVViewState.conversationTagInfo }
-        set { CVViewState.conversationTagInfo = newValue }
-    }
-    
     @objc var thread: TSThread {
         get {
             viewState.thread
@@ -221,7 +254,6 @@ extension ConversationViewController {
             viewState.isViewVisible
         }
         set {
-            let wasVisible = viewState.isViewVisible
             viewState.isViewVisible = newValue
             // 为解决 modal 半屏 viewController 后，图片不展示问题，不去更改 cellIsVisible
             // updateCellsVisible()

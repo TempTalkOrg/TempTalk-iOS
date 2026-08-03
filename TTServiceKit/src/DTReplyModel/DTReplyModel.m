@@ -92,7 +92,7 @@
         attachmentStream = (TSAttachmentStream *)attachment;
     }
 
-    return [self initWithTimestamp:quotedMessage.timestamp
+    self = [self initWithTimestamp:quotedMessage.timestamp
                           authorId:quotedMessage.authorId
                               body:quotedMessage.body
                     thumbnailImage:thumbnailImage
@@ -102,6 +102,11 @@
         thumbnailAttachmentPointer:attachmentPointer
            thumbnailDownloadFailed:thumbnailDownloadFailed
               conversationViewItem:nil];
+    if (self) {
+        // Prefer the persisted animated bit from the quote snapshot (file may be absent).
+        _isAnimated = _isAnimated || attachmentInfo.isAnimated;
+    }
+    return self;
 }
 
 //需要子类自己实现
@@ -129,13 +134,17 @@
     _authorId = authorId;
     _body = body;
     _thumbnailImage = thumbnailImage;
-    _contentType = contentType;
+    // Compose-time reply drafts pass a nil contentType for a downloaded attachment; derive it from
+    // the stream so the preview shows the specific type ([GIF]/[图片]) instead of generic [附件].
+    _contentType = contentType ?: attachmentStream.contentType;
     _sourceFilename = sourceFilename;
     _attachmentStream = attachmentStream;
     _thumbnailAttachmentPointer = thumbnailAttachmentPointer;
     _thumbnailDownloadFailed = thumbnailDownloadFailed;
     _replyItem = conversationItem;
-    
+    // Flag-first from the source stream, MIME fallback from contentType.
+    _isAnimated = attachmentStream.isAnimatedImageAttachment || [MIMETypeUtil isMimeUnambiguouslyAnimated:contentType];
+
     return self;
 }
 

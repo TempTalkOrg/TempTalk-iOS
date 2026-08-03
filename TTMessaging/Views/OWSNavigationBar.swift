@@ -142,6 +142,14 @@ public class OWSNavigationBar: UINavigationBar {
         self.appearance = appearance
     }
 
+    /// Re-apply appearance so scaled nav fonts pick up an in-app text-size change.
+    /// Cached appearance tracks only colors/style, so clear it to bypass updateAppearance's guard.
+    internal func reapplyAppearanceForTextSizeChange() {
+        AssertIsOnMainThread()
+        appearance = nil
+        updateAppearance(animated: false)
+    }
+
     // MARK: - iOS >15 blur hacks
 
     @available(iOS 15, *)

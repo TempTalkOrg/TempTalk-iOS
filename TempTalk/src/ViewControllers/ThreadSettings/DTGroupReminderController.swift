@@ -30,10 +30,18 @@ class DTGroupReminderController: OWSTableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        tableView.backgroundColor = Theme.bgpageSecondaryColor
         navigationItem.title = Localized("SETTINGS_ITEM_GROUP_REMINDER", comment: "group reminder")
         updateTableContents()
 
         NotificationCenter.default.addObserver(self, selector: #selector(updateTableContents(noti:)), name: .DTGroupPeriodicRemind, object: nil)
+    }
+
+    override func applyTheme() {
+        super.applyTheme()
+        view.backgroundColor = Theme.bgpageSecondaryColor
+        tableView.backgroundColor = Theme.bgpageSecondaryColor
     }
 
     @objc func updateTableContents(noti: Notification) {
@@ -138,5 +146,20 @@ class DTGroupReminderController: OWSTableViewController {
         }
 
     }
-    
+
+}
+
+extension DTGroupReminderController: OWSNavigationChildController {
+
+    public var navbarBackgroundColorOverride: UIColor? { Theme.bgpageSecondaryColor }
+
+    public var childForOWSNavigationConfiguration: OWSNavigationChildController? { nil }
+
+    public var preferredNavigationBarStyle: OWSNavigationBarStyle { .solid }
+
+    public var navbarTintColorOverride: UIColor? { nil }
+
+    public var prefersNavigationBarHidden: Bool { false }
+
+    public var shouldCancelNavigationBack: Bool { false }
 }

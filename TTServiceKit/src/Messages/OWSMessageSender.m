@@ -6,6 +6,7 @@
 #import "AppContext.h"
 #import "ContactsUpdater.h"
 #import "NSData+messagePadding.h"
+#import "NSData+Image.h"
 #import <SignalCoreKit/NSDate+OWS.h>
 #import "NSError+MessageSending.h"
 #import "OWSBackgroundTask.h"
@@ -35,7 +36,6 @@
 #import "DTParamsBaseUtils.h"
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import "DTGroupUtils.h"
-#import "DTMessageConfig.h"
 #import "TSMessageReadPosition.h"
 #import "DTReadPositionEntity.h"
 
@@ -562,6 +562,11 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
                                                     albumId:thread.uniqueId];
         if (message.isVoiceMessage) {
             attachmentStream.attachmentType = TSAttachmentTypeVoiceMessage;
+        } else if (([MIMETypeUtil isImage:contentType] || [MIMETypeUtil isAnimated:contentType])
+                   && [dataSource.data imageMetadataWithPath:nil mimeType:contentType].isAnimated) {
+            // Mark animated images (GIF/animated-WebP/APNG) so receivers can preview without downloading.
+            // Gate on image MIME first so a large video/file never loads its bytes just to check.
+            attachmentStream.attachmentType = TSAttachmentTypeGif;
         }
 
         if (![attachmentStream writeDataSource:dataSource]) {

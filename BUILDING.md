@@ -1,147 +1,96 @@
 # Building
 
-## Prerequisites
+## 1. Clone
 
-### System Requirements
-- **macOS** (required for iOS development)
-- **Xcode 14.0+** (required for iOS development)
-- **Homebrew** (for package management)
+Clone the repo to a working directory
 
-### Development Tools
-- **Git** (for repository cloning and submodule management)
-- **Ruby 3.2.2** (specified in `.ruby-version` file)
-- **Bundler 2.3.16** (specified in `Gemfile.lock`)
-- **CocoaPods 1.16.2** (specified in `Gemfile`)
+## 2. Dependencies
 
-## 1. Clone Repository
+To build and configure the libraries Signal uses, just run:
 
-Clone the repo to a working directory:
-
-```bash
-git clone https://github.com/TempTalkOrg/TempTalk-iOS.git
-cd TempTalk-iOS
+```
+make dependencies
 ```
 
-## 2. Environment Setup
+If the above fails to run, or you just want to know more about our
+dependency management systems, read the next section, Dependency Details.
+Else if the above completed without error - jump ahead to step 3.
 
-### 2.1 Verify Ruby Version
+### Dependency Details
 
-Ensure your Ruby version is 3.2.2 (project requirement). If not installed or incorrect version, please install or configure a Ruby version manager yourself.
+We have a couple of dependency management tools. We us Carthage for
+managing frameworks, but because some of our dependencies are not yet
+framework compatible, we use Cocoapods to manage the remainder in a
+static library.
 
-Verify Ruby version:
+2.1) [CocoaPods](http://cocoapods.org) is used to manage the dependencies in our static library. Pods are setup easily and are distributed via a ruby gem. Follow the simple instructions on the website to setup. After setup, run the following command from the toplevel directory of Signal-iOS to download the dependencies for Signal-iOS:
 
-```bash
-ruby --version
-# Should output: ruby 3.2.2
 ```
-
-### 2.3 Install Bundler
-
-Install the specific bundler version required:
-
-```bash
-gem install bundler:2.3.16
-```
-
-### 2.4 Set Environment Variables
-
-Set UTF-8 encoding to avoid CocoaPods issues (temporary setting, valid for current session only):
-
-```bash
-export LANG=en_US.UTF-8
-export LC_ALL=en_US.UTF-8
-```
-
-## 3. Install Dependencies
-
-[CocoaPods](http://cocoapods.org) is used to manage the dependencies in our static library. Pods are setup easily and are distributed via a ruby gem. Follow the simple instructions on the website to setup.
-
-**Recommended approach** (using bundler):
-
-```bash
-bundle install
-bundle exec pod install
-```
-
-**Important**: Always use `bundle exec pod install` instead of `pod install` to ensure the correct CocoaPods version is used.
-
-**Direct CocoaPods usage** (not recommended):
-
-```bash
 pod install
 ```
 
-If you are having build issues, first make sure your pods are up to date:
+If you are having build issues, first make sure your pods are up to date
 
-```bash
+```
 pod repo update
 pod install
 ```
 
-Occasionally, CocoaPods itself will need to be updated:
+Occasionally, CocoaPods itself will need to be updated. Do this with
 
-```bash
+```
 gem update cocoapods
 pod repo update
 pod install
 ```
 
-## 4. Xcode Configuration
+2.2) Framework dependencies are built and managed using [Carthage](https://github.com/Carthage/Carthage). Our prebuilt WebRTC.framework also resides in the Carthage/Build directory.
 
-### 4.1 Open Workspace
+If you don't have carthage, here are the [install instructions](https://github.com/Carthage/Carthage#installing-carthage).
 
-Open the `Difft.xcworkspace` in Xcode:
+Once Carthage is installed, run:
 
-```bash
-open Difft.xcworkspace
+```
+// DO NOT run: `carthage update` or `carthage checkout`.
+git submodule update --init
+carthage build --platform iOS
 ```
 
-## 5. Build and Run
+### Building WebRTC
 
-After completing all the above steps:
+A prebuilt version of WebRTC.framework resides in our Carthage submodule
+and should be installed by the above steps.  However, if you'd like to
+build it from source, see: https://github.com/signalapp/signal-webrtc-ios
 
-1. Select your target device or simulator
-2. Build the project (⌘+B)
-3. Run the project (⌘+R)
+## 3. XCode
+
+Open the `Signal.xcworkspace` in Xcode.
+
+```
+open Signal.xcworkspace
+```
+
+In the TARGETS area of the General tab, change the Team drop down to
+your own. You will need to do that for all the listed targets, for ex. 
+Signal, SignalShareExtension, and SignalMessaging. You will need an Apple
+Developer account for this. 
+
+On the Capabilities tab, turn off Push Notifications and Data Protection,
+while keeping Background Modes on. The App Groups capability will need to
+remain on in order to access the shared data storage. The App ID needs to
+match the SignalApplicationGroup string set in TSConstants.h. 
+
+If you wish to test the Documents API, the iCloud capability will need to
+be on with the iCloud Documents option selected.
 
 Build and Run and you are ready to go!
 
-## Troubleshooting
+## Known issues
 
-### Common Issues
+Features related to push notifications are known to be not working for
+third-party contributors since Apple's Push Notification service pushes
+will only work with Open Whisper Systems production code signing
+certificate.
 
-#### Ruby Version Issues
-If you encounter Ruby version errors:
-```bash
-# Check current Ruby version
-ruby --version
+If you have any other issues, please ask on the [community forum](https://whispersystems.discoursehosting.net/).
 
-# Ensure you're using the correct version
-rbenv local 3.2.2
-eval "$(rbenv init -)"
-```
-
-#### CocoaPods Issues
-If CocoaPods fails with encoding errors:
-```bash
-export LANG=en_US.UTF-8
-export LC_ALL=en_US.UTF-8
-bundle exec pod install
-```
-
-#### Bundle Issues
-If bundler version conflicts occur:
-```bash
-gem install bundler:2.3.16
-bundle install
-```
-
-## Known Issues
-
-Features related to push notifications are known to be not working for third-party contributors since Apple's Push Notification service pushes will only work with the production code signing certificate.
-
-If you have any other issues, please:
-
-1. Check the [Issues](https://github.com/TempTalkOrg/TempTalk-iOS/issues) page
-2. Create a new issue with detailed error information
-3. Contact the development team: opensource@temptalk.app

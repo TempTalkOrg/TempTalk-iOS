@@ -2,26 +2,48 @@
 //  DTForwardNoticeTextFormatter.swift
 //  TTServiceKit
 //
-//  Single source of truth for the ForwardNotice system-message text.
-//  Shared by the receive path (OWSMessageManager) and the local-insert path
-//  used by the forwarder's own device (ForwardNoticeDispatcher), so both
-//  render the same phrasing and never drift apart.
-//
 
 import Foundation
 
+@objc
+public enum DTForwardNoticeCombinedForwardMode: Int {
+    case unknown = 0
+    case containsCombinedForward = 1
+    case allCombinedForward = 2
+    case subCombinedForward = 3
+
+    public var protoValue: DSKProtoMessageActivityNoticeCombinedForwardMode {
+        switch self {
+        case .unknown: return .unknown
+        case .containsCombinedForward: return .containsCombinedForward
+        case .allCombinedForward: return .allCombinedForward
+        case .subCombinedForward: return .subCombinedForward
+        }
+    }
+
+    public init(protoValue: DSKProtoMessageActivityNoticeCombinedForwardMode) {
+        switch protoValue {
+        case .unknown: self = .unknown
+        case .containsCombinedForward: self = .containsCombinedForward
+        case .allCombinedForward: self = .allCombinedForward
+        case .subCombinedForward: self = .subCombinedForward
+        }
+    }
+}
+
 @objcMembers
 public final class DTForwardNoticeTextFormatter: NSObject {
-    @objc(textWithOperatorId:messageCount:sourceAuthorIds:transaction:)
+
+    @objc(textWithOperatorId:messageCount:sourceAuthorIds:combinedForwardMode:transaction:)
     public static func text(
         operatorId: String?,
         messageCount: UInt32,
         sourceAuthorIds: [String]?,
+        combinedForwardMode: DTForwardNoticeCombinedForwardMode,
         transaction: SDSAnyReadTransaction
     ) -> String {
         let localNumber = TSAccountManager.localNumber()
-        let operatorDisplay = displayName(for: operatorId, localNumber: localNumber, transaction: transaction)
-        // "You" 不加引号;其他人名用引号包裹以突出显示
+        let operatorDisplay = DTNoticeAuthorListFormatter.displayName(for: operatorId, localNumber: localNumber, transaction: transaction)
         let isLocalOperator = operatorId != nil && operatorId == localNumber
         let displayedOperator = isLocalOperator ? operatorDisplay : "\"\(operatorDisplay)\""
 
@@ -32,6 +54,61 @@ public final class DTForwardNoticeTextFormatter: NSObject {
             transaction: transaction
         )
 
+        switch combinedForwardMode {
+        case .unknown:
+            return formatRegular(
+                displayedOperator: displayedOperator,
+                messageCount: messageCount,
+                authorList: authorList,
+                hasForeignAuthor: hasForeignAuthor
+            )
+        case .allCombinedForward:
+            return formatAllChatHistory(
+                displayedOperator: displayedOperator,
+                messageCount: messageCount,
+                authorList: authorList,
+                hasForeignAuthor: hasForeignAuthor
+            )
+        case .containsCombinedForward:
+            return formatMixed(
+                displayedOperator: displayedOperator,
+                messageCount: messageCount,
+                authorList: authorList,
+                hasForeignAuthor: hasForeignAuthor
+            )
+        case .subCombinedForward:
+            return formatFromChatHistoryDetail(
+                displayedOperator: displayedOperator,
+                authorList: authorList,
+                hasForeignAuthor: hasForeignAuthor
+            )
+        }
+    }
+
+    @objc(textWithOperatorId:messageCount:sourceAuthorIds:transaction:)
+    public static func text(
+        operatorId: String?,
+        messageCount: UInt32,
+        sourceAuthorIds: [String]?,
+        transaction: SDSAnyReadTransaction
+    ) -> String {
+        return text(
+            operatorId: operatorId,
+            messageCount: messageCount,
+            sourceAuthorIds: sourceAuthorIds,
+            combinedForwardMode: .unknown,
+            transaction: transaction
+        )
+    }
+
+    // MARK: - Format helpers
+
+    private static func formatRegular(
+        displayedOperator: String,
+        messageCount: UInt32,
+        authorList: String,
+        hasForeignAuthor: Bool
+    ) -> String {
         if messageCount <= 1 {
             return hasForeignAuthor
                 ? String(format: Localized("FORWARD_NOTICE_SINGLE"), displayedOperator, authorList)
@@ -43,7 +120,45 @@ public final class DTForwardNoticeTextFormatter: NSObject {
         }
     }
 
-    // MARK: - Private helpers
+    private static func formatAllChatHistory(
+        displayedOperator: String,
+        messageCount: UInt32,
+        authorList: String,
+        hasForeignAuthor: Bool
+    ) -> String {
+        if messageCount <= 1 {
+            return hasForeignAuthor
+                ? String(format: Localized("FORWARD_NOTICE_CHAT_HISTORY_SINGLE"), displayedOperator, authorList)
+                : String(format: Localized("FORWARD_NOTICE_CHAT_HISTORY_SINGLE_NO_FROM"), displayedOperator)
+        } else {
+            return hasForeignAuthor
+                ? String(format: Localized("FORWARD_NOTICE_CHAT_HISTORY_PLURAL"), displayedOperator, messageCount, authorList)
+                : String(format: Localized("FORWARD_NOTICE_CHAT_HISTORY_PLURAL_NO_FROM"), displayedOperator, messageCount)
+        }
+    }
+
+    private static func formatMixed(
+        displayedOperator: String,
+        messageCount: UInt32,
+        authorList: String,
+        hasForeignAuthor: Bool
+    ) -> String {
+        return hasForeignAuthor
+            ? String(format: Localized("FORWARD_NOTICE_PLURAL_MIXED"), displayedOperator, messageCount, authorList)
+            : String(format: Localized("FORWARD_NOTICE_PLURAL_MIXED_NO_FROM"), displayedOperator, messageCount)
+    }
+
+    private static func formatFromChatHistoryDetail(
+        displayedOperator: String,
+        authorList: String,
+        hasForeignAuthor: Bool
+    ) -> String {
+        return hasForeignAuthor
+            ? String(format: Localized("FORWARD_NOTICE_FROM_CHAT_HISTORY_SINGLE"), displayedOperator, authorList)
+            : String(format: Localized("FORWARD_NOTICE_FROM_CHAT_HISTORY_SINGLE_NO_FROM"), displayedOperator)
+    }
+
+    // MARK: - Author list
 
     private static func resolveAuthorList(
         operatorId: String?,
@@ -51,54 +166,11 @@ public final class DTForwardNoticeTextFormatter: NSObject {
         sourceAuthorIds: [String]?,
         transaction: SDSAnyReadTransaction
     ) -> (String, Bool) {
-        let maxVisible = 3
-        var visible: [String] = []
-        visible.reserveCapacity(maxVisible)
-        var seen = Set<String>()
-        var truncated = false
-        var hasForeignAuthor = false
-        let nonEmptyOperatorId: String? = (operatorId?.isEmpty == false) ? operatorId : nil
-        for authorId in sourceAuthorIds ?? [] {
-            guard !authorId.isEmpty, !seen.contains(authorId) else { continue }
-            seen.insert(authorId)
-            if let op = nonEmptyOperatorId {
-                if authorId != op { hasForeignAuthor = true }
-            } else {
-                // Unknown operator: any author should be treated as foreign for safety.
-                hasForeignAuthor = true
-            }
-            if visible.count >= maxVisible {
-                truncated = true
-                continue
-            }
-            let name = displayName(for: authorId, localNumber: localNumber, transaction: transaction)
-            if !name.isEmpty {
-                visible.append(name)
-            }
-        }
-        var list = visible.joined(separator: ", ")
-        if truncated {
-            list += "..."
-        }
-        return (list, hasForeignAuthor)
-    }
-
-    private static func displayName(
-        for userId: String?,
-        localNumber: String?,
-        transaction: SDSAnyReadTransaction
-    ) -> String {
-        guard let userId, !userId.isEmpty else { return "" }
-        if let localNumber, !localNumber.isEmpty, userId == localNumber {
-            return Localized("FORWARD_NOTICE_YOU", comment: "You")
-        }
-        let name = TextSecureKitEnv.shared().contactsManager.displayName(forPhoneIdentifier: userId, transaction: transaction)
-        if !name.isEmpty, name != userId {
-            return name
-        }
-        if userId.count > 6 {
-            return String(userId.suffix(6))
-        }
-        return userId
+        DTNoticeAuthorListFormatter.resolveAuthorList(
+            operatorId: operatorId,
+            localNumber: localNumber,
+            sourceAuthorIds: sourceAuthorIds,
+            transaction: transaction
+        )
     }
 }

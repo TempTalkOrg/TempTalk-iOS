@@ -20,17 +20,36 @@ struct RoomContextView: View {
     @State private var delayTask: Task<Void, Never>?
 
     var body: some View {
-        let toolbarHeight: CGFloat = 60
-        let toolbarBottomPadding: CGFloat = 24
-        let overlayBottomInset = toolbarHeight + toolbarBottomPadding
-
         GeometryReader { geometry in
-            let containerSize = geometry.size
+            let rawSize = geometry.size
+            let _ = {
+                if rawSize.width > rawSize.height {
+                    Logger.info("[RoomContextView] GeometryReader reported landscape size: \(rawSize), safeArea: \(geometry.safeAreaInsets)")
+                }
+            }()
+            // Portrait-locked, always full-screen (AppDelegate.supportedInterfaceOrientationsForWindow).
+            // Use the call window's stable size, not geometry.size, which can transiently report a
+            // transposed/safe-area-crushed size during screen-share orientation flips.
+            let containerSize = callContainerSize(fallback: rawSize)
+            let safeAreaInsets = callSafeAreaInsets(fallback: geometry.safeAreaInsets)
+            let toolbarHeight: CGFloat = 60
+            let toolbarBottomPadding: CGFloat = 24 + safeAreaInsets.bottom
+            let overlayBottomInset = toolbarHeight + toolbarBottomPadding
+            // The grid's top row intentionally tucks just under the translucent nav bar rather
+            // than clearing its full height, so reserve only a small gap below the top safe area.
+            let gridTopUnderNavGap: CGFloat = 8
+            let roomContentTopInset = safeAreaInsets.top + gridTopUnderNavGap
+            let roomContentBottomInset = overlayBottomInset + 8
 
             ZStack {
                 backgroundView
 
-                CallContentView(currentCall: currentCall)
+                CallContentView(
+                    currentCall: currentCall,
+                    containerSize: containerSize,
+                    contentTopInset: roomContentTopInset,
+                    contentBottomInset: roomContentBottomInset
+                )
 
                 BulletOverlayView(
                     bottomInset: overlayBottomInset,
@@ -46,6 +65,7 @@ struct RoomContextView: View {
                     leftItemAction: { roomCtx.toolbarMinimizeTaped() },
                     cameraRotateAction: switchCamera
                 )
+                .padding(.top, safeAreaInsets.top)
                 .frame(maxHeight: .infinity, alignment: .top)
 
                 BottomToolbarView(
@@ -64,8 +84,11 @@ struct RoomContextView: View {
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, toolbarBottomPadding)
             }
+            // Fixed to the stable window-derived size so controls stay anchored regardless of
+            // any transient GeometryReader size glitch.
             .frame(width: containerSize.width, height: containerSize.height)
         }
+        .ignoresSafeArea()
         // 举手入口已下掉，注释保留逻辑
         // .onReceive(RoomDataManager.shared.$hasRaiseHands) { hasRaiseHands = $0 }
         .onReceive(RoomDataManager.shared.$localRaiseHand) { localRaiseHand = $0 }
@@ -83,6 +106,30 @@ struct RoomContextView: View {
         }
     }
     
+    // Stable full-screen portrait size for this page. The call window keeps correct
+    // bounds across orientation flips, unlike GeometryReader.size.
+    private func callContainerSize(fallback fallbackSize: CGSize) -> CGSize {
+        let window = OWSWindowManager.shared().callViewWindow
+        let bounds = window.bounds.size
+        let sourceSize = bounds.width > 0 && bounds.height > 0 ? bounds : fallbackSize
+        let width = min(sourceSize.width, sourceSize.height)
+        let height = max(sourceSize.width, sourceSize.height)
+        return CGSize(width: max(width, 0), height: max(height, 0))
+    }
+
+    private func callSafeAreaInsets(fallback fallbackInsets: EdgeInsets) -> EdgeInsets {
+        let windowInsets = OWSWindowManager.shared().callViewWindow.safeAreaInsets
+        if windowInsets != .zero {
+            return EdgeInsets(
+                top: windowInsets.top,
+                leading: windowInsets.left,
+                bottom: windowInsets.bottom,
+                trailing: windowInsets.right
+            )
+        }
+        return fallbackInsets
+    }
+
     @ViewBuilder
     private var backgroundView: some View {
         if currentCall.callType == .private {
@@ -119,6 +166,9 @@ struct RoomContextView: View {
 
 struct CallContentView: View {
     @ObservedObject var currentCall: DTLiveKitCallModel
+    let containerSize: CGSize
+    let contentTopInset: CGFloat
+    let contentBottomInset: CGFloat
     @EnvironmentObject var roomCtx: RoomContext
     @EnvironmentObject var appCtx: LiveKitContext
 
@@ -133,7 +183,11 @@ struct CallContentView: View {
                 Room1on1ContentView()
             }
         } else {
-            RoomView()
+            RoomView(
+                containerSize: containerSize,
+                contentTopInset: contentTopInset,
+                contentBottomInset: contentBottomInset
+            )
         }
     }
 }
@@ -154,11 +208,11 @@ struct CallerWaitingView: View {
     func otherRecipientId() -> String {
         var recipientId = currentCall.conversationId ?? ""
         if roomCtx.room.connectionState == .reconnecting {
+            // Roster is kept across reconnect (Route B); read the other side from the live room.
             let localNum = TSAccountManager.localNumber()
-            let participants = DTMeetingManager.shared.sortedReconnectingParticipants()
-            for participant in participants {
-                if participant.identity != localNum {
-                    recipientId = participant.identity
+            for participant in roomCtx.room.remoteParticipants.values {
+                if let identity = participant.identity?.stringValue, identity != localNum {
+                    recipientId = identity
                 }
             }
         }

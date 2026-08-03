@@ -31,7 +31,7 @@ extension RoomContext: RoomDelegate {
     public nonisolated func room(_: Room, didUpdateConnectionState connectionState: ConnectionState, from oldValue: ConnectionState) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            Logger.info("\(logTag) Did update connectionState \(oldValue) -> \(connectionState)")
+            Logger.info("\(logTag) Did update connectionState \(oldValue) -> \(connectionState), isRoomReconnecting: \(isRoomReconnecting)")
 
             if case .disconnected = connectionState,
                let error = room.disconnectError,
@@ -49,51 +49,145 @@ extension RoomContext: RoomDelegate {
 
     public nonisolated func roomDidConnect(_: Room) {
         Logger.info("\(logTag) roomDidConnect")
+    }
 
-        Task { @MainActor [weak self] in
-            guard let self else { return }
+    @MainActor
+    func handleInitialRoomDidConnect(source: String) async {
+        if didHandleInitialRoomDidConnect {
+            Logger.debug("\(logTag) initial room connect already handled, source=\(source)")
+            return
+        }
+        didHandleInitialRoomDidConnect = true
 
-            callManager.stopConnectionPhaseTimer()
+        Logger.info("\(logTag) initial room connect handling: source=\(source)")
+        callManager.stopConnectionPhaseTimer()
 
-            let isPrivate = currentCall.callType == .private
-            let needPublishSilenceAudio = currentCall.ttcalResponseOptions?.autoPublishSilenceAudio ?? false
+        if callManager.shouldDeferInitialRoomAudioSetupForCallKit() {
+            deferredInitialRoomAudioSetupForCallKit = true
+            Logger.info("\(logTag) initial audio setup deferred: waitingForCallKitAudioSession=true, source=\(source)")
+        } else {
+            await handleInitialRoomAudioSetup(source: source)
+        }
 
-            Task.detached {
-                [weak self] in
-                guard let self else { return }
+        currentCall.roomSid = room.sid?.stringValue
 
-                do {
-                    await DTRTCAudioSession.shared.connectRoomSuccessConfig()
-                    if isPrivate {
-                        try await room.localParticipant.setMicrophone(enabled: default1on1MicphoneState)
-                    } else {
-                        if needPublishSilenceAudio {
-                            await setLocalMicrophone(enable: true, publishMuted: true)
-                        }
-                    }
-                } catch {
-                    Logger.error("\(logTag) failed to set audio track: isPrivate=\(isPrivate), needPublishSilenceAudio=\(needPublishSilenceAudio), \(error)")
-                }
+        callManager.feedbackUserSid = room.localParticipant.sid?.stringValue
+        callManager.feedbackRoomSid = room.sid?.stringValue
+        callManager.feedbackRoomId = currentCall.roomId
+
+        handlePostConnectState(for: room)
+
+        callManager.currentCallTalkingPop()
+        RoomDataManager.shared.connectParticipant(participant: room.localParticipant)
+        UIDevice.current.isProximityMonitoringEnabled = true
+    }
+
+    func handleCallKitAudioSessionActivated() async {
+        guard deferredInitialRoomAudioSetupForCallKit else { return }
+        Logger.info("\(logTag) initial audio setup resumed: CallKit audio session activated")
+        deferredInitialRoomAudioSetupForCallKit = false
+        await handleInitialRoomAudioSetup(source: "CallKit audio session activated")
+    }
+
+    private func handleInitialRoomAudioSetup(source: String) async {
+        if didHandleInitialRoomAudioSetup {
+            Logger.debug("\(logTag) initial audio setup already handled, source=\(source)")
+            return
+        }
+        didHandleInitialRoomAudioSetup = true
+
+        let isPrivate = currentCall.callType == .private
+        let needPublishSilenceAudio = currentCall.ttcalResponseOptions?.autoPublishSilenceAudio ?? false
+        callManager.seedPendingCallKitMuteIntentIfAvailable(
+            uuidString: currentCall.callKitUUID,
+            reason: "initial room audio setup start"
+        )
+        let initialPendingCallKitMuteState = callManager.pendingCallKitMuteState()
+        let shouldStartGroupMutedAtEngineStart = initialPendingCallKitMuteState ?? true
+        var finalShouldStartGroupMuted = shouldStartGroupMutedAtEngineStart
+
+        Logger.info("\(logTag) initial audio setup start: source=\(source), isPrivate=\(isPrivate), pendingCallKitMute=\(String(describing: initialPendingCallKitMuteState))")
+
+        do {
+            if !isPrivate, shouldStartGroupMutedAtEngineStart {
+                // Mute before the audio engine starts so iOS never observes an active mic during join.
+                DTMeetingManager.shared.beginCallKitMuteSuppression(3.0, mutedTarget: true)
+                AudioManager.shared.isMicrophoneMuted = true
+            }
+            await DTRTCAudioSession.shared.connectRoomSuccessConfig(self)
+
+            callManager.seedPendingCallKitMuteIntentIfAvailable(
+                uuidString: currentCall.callKitUUID,
+                reason: "initial room audio setup after connect config"
+            )
+            let pendingCallKitMuteState = callManager.pendingCallKitMuteState()
+            let shouldStartGroupMuted = pendingCallKitMuteState ?? shouldStartGroupMutedAtEngineStart
+            finalShouldStartGroupMuted = shouldStartGroupMuted
+            if pendingCallKitMuteState != initialPendingCallKitMuteState {
+                Logger.info("\(logTag) initial audio setup pending CallKit mute updated: \(String(describing: initialPendingCallKitMuteState)) -> \(String(describing: pendingCallKitMuteState))")
             }
 
-            // 连接成功之后给 sid 赋值
-            currentCall.roomSid = room.sid?.stringValue
+            isApplyingInitialRoomAudioSetup = true
+            defer { isApplyingInitialRoomAudioSetup = false }
 
-            // 使用 callManager（假设在 RoomContext 主文件里是计算属性）
-            callManager.feedbackUserSid = room.localParticipant.sid?.stringValue
-            callManager.feedbackRoomSid = room.sid?.stringValue
-            callManager.feedbackRoomId = currentCall.roomId
-
-            // 处理不同 callType 的连接后逻辑
-            handlePostConnectState(for: room)
-
-            // 自动离会处理（保持原行为）
-            callManager.currentCallTalkingPop()
-            // 当前用户参会
-            RoomDataManager.shared.connectParticipant(participant: room.localParticipant)
-            // 开启距离传感器
-            UIDevice.current.isProximityMonitoringEnabled = true
+            if isPrivate {
+                let microphoneEnabled = pendingCallKitMuteState.map { !$0 } ?? default1on1MicphoneState
+                let shouldGuardCallKitEcho = callManager.isFromCallkit
+                if shouldGuardCallKitEcho {
+                    callManager.armInitialRoomAudioSetupCallKitEchoGuard(
+                        expectedMuted: !microphoneEnabled,
+                        reason: "initial 1v1 microphone setup"
+                    )
+                }
+                defer {
+                    if shouldGuardCallKitEcho {
+                        callManager.clearInitialRoomAudioSetupCallKitEchoGuard(reason: "initial 1v1 microphone setup completed")
+                    }
+                }
+                try await room.localParticipant.setMicrophone(enabled: microphoneEnabled)
+                callManager.consumePendingCallKitMuteStateIfMatched(!microphoneEnabled, reason: "initial 1v1 microphone state applied")
+            } else {
+                if !shouldStartGroupMuted {
+                    Logger.info("\(logTag) initial audio setup applying pending CallKit unmute")
+                    let shouldGuardCallKitEcho = callManager.isFromCallkit
+                    if shouldGuardCallKitEcho {
+                        callManager.armInitialRoomAudioSetupCallKitEchoGuard(
+                            expectedMuted: false,
+                            reason: "initial group pending unmute"
+                        )
+                    }
+                    defer {
+                        if shouldGuardCallKitEcho {
+                            callManager.clearInitialRoomAudioSetupCallKitEchoGuard(reason: "initial group pending unmute completed")
+                        }
+                    }
+                    await setLocalMicrophone(enable: true)
+                    callManager.consumePendingCallKitMuteStateIfMatched(false, reason: "initial group unmute applied")
+                } else if needPublishSilenceAudio {
+                    Logger.info("\(logTag) initial audio setup publishing muted microphone")
+                    await setLocalMicrophone(enable: true, publishMuted: true)
+                } else {
+                    Logger.info("\(logTag) initial audio setup skip prewarm: muted group join")
+                }
+                // Keep ADM state aligned with the muted group-join state.
+                if shouldStartGroupMuted {
+                    if room.localParticipant.isMicrophoneEnabled() {
+                        Logger.debug("\(logTag) initial group mute reassert skipped: microphone already enabled")
+                    } else {
+                        AudioManager.shared.isMicrophoneMuted = true
+                    }
+                    callManager.consumePendingCallKitMuteStateIfMatched(true, reason: "initial group mute applied")
+                }
+            }
+        } catch {
+            Logger.error("\(logTag) failed to set audio track: isPrivate=\(isPrivate), needPublishSilenceAudio=\(needPublishSilenceAudio), \(error)")
         }
+
+        if !isPrivate, shouldStartGroupMutedAtEngineStart {
+            callManager.shortenCallKitMuteSuppressionTail(0.35, mutedTarget: finalShouldStartGroupMuted, reason: "initial room audio setup completed")
+        }
+        didCompleteInitialRoomAudioSetup = true
+        await callManager.applyPendingCallKitMuteStateIfReady(reason: "initial room audio setup completed")
     }
 
     private func handlePostConnectState(for room: Room) {
@@ -110,6 +204,13 @@ extension RoomContext: RoomDelegate {
             checkPartiantInRoom(room.localParticipant.identity?.stringValue ?? "")
         } else {
             // private call
+            // Remote is actually in the room after a (failover) connect: cancel any stale disconnect
+            // timer left from a failed first attempt, so it can't falsely hang up the live call 60s later.
+            // Only cancel when the remote is present; if it truly left (local only), keep the timer.
+            if !room.remoteParticipants.isEmpty {
+                callManager.stopParticipantDisTimer()
+            }
+
             if room.remoteParticipants.count > 1 {
                 callManager.turnIntoInstantCall()
             }
@@ -234,52 +335,64 @@ extension RoomContext: RoomDelegate {
                         showErrorToast: true
                     )
                 )
+
+                // Server kicked us out (canReconnect:false). The meeting may still be alive on the
+                // server, so refresh the active-call list to restore the home join bar and let the
+                // user rejoin.
+                callManager.syncServerCalls()
             } else {
                 Logger.info("\(logTag): normal disconnect")
             }
         }
     }
 
-    public nonisolated func roomDidReconnect(_: Room) {
+    public nonisolated func roomIsReconnecting(_ room: Room) {
+        DTRTCAudioSession.shared.setRoomReconnecting(true, reason: "room is reconnecting")
         Task { @MainActor [weak self] in
             guard let self else { return }
-            Logger.info("\(logTag) room reconnected - canceling disconnect timer")
-            isRoomReconnecting = false
-            callManager.stopParticipantDisTimer()
-            // 重连后检查是否有屏幕共享未展示
-            checkAndPresentScreenShareIfNeeded()
-            callManager.setVisibleParticipants([])
-            bumpVideoRefreshToken()
+            endLocalAudioDiagnostics(reason: "room is reconnecting")
+            Logger.info("\(logTag) [reconnect-state] isRoomReconnecting: \(isRoomReconnecting) → true (roomIsReconnecting)")
+            isRoomReconnecting = true
+            callManager.feedbackIsNetworkPoor = true
         }
     }
 
-    public nonisolated func roomIsReconnecting(_: Room) {
+    // MARK: - Reconnect lifecycle (covers both quick & full)
+    // Roster is kept by the SDK across reconnect (Route B) and VideoView freezes the last frame,
+    // so the UI renders live participants throughout — no snapshot capture needed.
+    public nonisolated func room(_ room: Room, didStartReconnectWithMode reconnectMode: ReconnectMode) {
+        DTRTCAudioSession.shared.setRoomReconnecting(true, reason: "did start reconnect \(reconnectMode)")
         Task { @MainActor [weak self] in
             guard let self else { return }
-            Logger.info("\(logTag) room is Reconnecting")
+            endLocalAudioDiagnostics(reason: "did start reconnect \(reconnectMode)")
+            Logger.info("\(logTag) [reconnect-state] didStartReconnect mode: \(reconnectMode), isRoomReconnecting: \(isRoomReconnecting) → true")
             isRoomReconnecting = true
-
-            let local = room.localParticipant
-            let isLocalValid = local.sid?.stringValue.isEmpty == false
             callManager.feedbackIsNetworkPoor = true
+        }
+    }
 
-            // 过滤 remoteParticipants 中 sid 有效的
-            let remoteParticipants = Array(room.remoteParticipants.values)
-            let validRemote = remoteParticipants.filter {
-                if let sid = $0.sid, !sid.stringValue.isEmpty {
-                    return true
-                }
-                return false
-            }
-            let isRemoteValid = !validRemote.isEmpty
+    public nonisolated func room(_ room: Room, didCompleteReconnectWithMode reconnectMode: ReconnectMode) {
+        if reconnectMode == .quick {
+            DTRTCAudioSession.shared.setRoomReconnecting(false, reason: "did complete quick reconnect")
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let participantCount = self.room.allParticipants.count
+            Logger.info("\(logTag) [reconnect-state] didCompleteReconnect mode: \(reconnectMode), participants: \(participantCount), isRoomReconnecting: \(isRoomReconnecting) → false")
 
-            if isLocalValid, isRemoteValid {
-                let local: Participant = room.localParticipant
-                var remote: [Participant] = room.remoteParticipants.values.map { $0 as Participant }
-                remote.append(local)
-                let sorteds = callManager.sortedMeetings(participants: remote)
-                let snapshots: [ParticipantSnapshot] = sorteds.map { ParticipantSnapshot(from: $0) }
-                callManager.reconnectingParticipants = snapshots
+            isRoomReconnecting = false
+
+            callManager.stopParticipantDisTimer()
+            checkAndPresentScreenShareIfNeeded()
+            callManager.setVisibleParticipants([])
+
+            RoomDataManager.shared.participantCount = participantCount
+
+            // Replay any CallKit/toolbar mute intent parked during the
+            // reconnect + post-reconnect `republishAllTracks` window.
+            await callManager.replayPendingCallKitMuteAfterReconnect(mode: reconnectMode)
+            if reconnectMode == .quick, room.localParticipant.isMicrophoneEnabled() {
+                restartLocalAudioDiagnostics(reason: "quick reconnect completed with microphone unmuted")
             }
         }
     }
@@ -328,7 +441,7 @@ extension RoomContext: RoomDelegate {
 
             // 自动离会处理
             callManager.currentCallTalkingPop()
-            // 远端入会人数发生变化
+            // 远端入会人数发生变化 — 必须在清除重连状态之前更新，保证 participantCount 先就位
             RoomDataManager.shared.connectParticipant(participant: participant)
         }
     }
@@ -341,12 +454,22 @@ extension RoomContext: RoomDelegate {
             let participantId = participantIdentity?.stringValue ?? "unknown"
             Logger.debug("\(logTag) remote disconnected, participantId: \(participantId), remaining participants: \(room.allParticipants.count)")
 
+            // Drop the mic-on dedup entry on a genuine leave so a later rejoin with the
+            // same identity bullets again. Skip during reconnect: a full reconnect may
+            // churn participants and re-subscribe them, and clearing here would let that
+            // re-subscribe re-bullet.
+            if !isRoomReconnecting, let id = participantIdentity?.stringValue {
+                micOnBulletedRemoteIdentities.remove(id)
+            }
+
             if let focusParticipant, focusParticipant.identity == participantIdentity {
                 self.focusParticipant = nil
             }
 
-            if currentCall.callType == .private, room.allParticipants.count == 1 {
-                Logger.info("\(logTag) private call - only local participant remains, start disconnect timer")
+            // Auto-end an emptied 1v1/instant call; a real group may keep a lone participant.
+            let hangupWhenAlone = (currentCall.callType == .private || currentCall.callType == .instant)
+            if hangupWhenAlone, room.allParticipants.count == 1 {
+                Logger.info("\(logTag) only local participant remains, start disconnect timer")
                 callManager.startParticipantDisTimer {
                     let roomId = DTMeetingManager.shared.currentCall.roomId
                     Logger.info("[newcall] remote participant disconnected - initiating hangup")
@@ -498,8 +621,31 @@ extension RoomContext: RoomDelegate {
 
     public nonisolated func room(_: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         let source = publication.source
+        let isAudioTrack = publication.track is AudioTrack
+        let isMuted = publication.isMuted
         Task { @MainActor [weak self, weak participant, weak publication] in
             guard let self, let participant, let publication else { return }
+
+            // A remote's first mic-on has no mute-state transition (the track is
+            // subscribed already-unmuted), so `didUpdateIsMuted` won't fire for
+            // it. Bullet the mic-on here for a genuine new subscription.
+            //
+            // Dedup via `micOnBulletedRemoteIdentities` rather than an
+            // `isRoomReconnecting` guard: the guard is unreliable across reconnect
+            // variants (a full reconnect clears it before staggered re-subscribes
+            // land, and a server switch re-subscribes existing unmuted tracks), so
+            // it would still let those re-subscribes re-bullet every remote. The
+            // dedup set stays populated across reconnects, so re-subscribing an
+            // already-announced remote is a no-op; remotes that join muted get
+            // their bullet later via `didUpdateIsMuted` on unmute.
+            if isAudioTrack, source == .microphone {
+                if !isMuted, let id = participant.identity?.stringValue,
+                   micOnBulletedRemoteIdentities.insert(id).inserted {
+                    RoomDataManager.shared.updateMuteParticipant(participant: participant, isMuted: false)
+                }
+                return
+            }
+
             guard participant.isScreenShareEnabled(),
                   source == .screenShareVideo else { return }
 
@@ -520,7 +666,7 @@ extension RoomContext: RoomDelegate {
 
     public nonisolated func room(_ room: Room, participant: RemoteParticipant, didUnpublishTrack publication: RemoteTrackPublication) {
         let source = publication.source
-        Task { @MainActor [weak self, weak participant] in
+        Task { @MainActor [weak self, weak participant, weak room] in
             guard let self else { return }
             guard source == .screenShareVideo else { return }
 
@@ -528,11 +674,21 @@ extension RoomContext: RoomDelegate {
                 RoomDataManager.shared.closeScreenSharedParticipant(participant: participant)
             }
 
+            // Immediately clear pending flag to prevent stale state from
+            // triggering a brief present→dismiss flash when returning to foreground
+            if let room, !room.isScreenShareActive() {
+                pendingShowUI = false
+            }
+
             unpublishScreenShareTask?.cancel()
             unpublishScreenShareTask = Task { @MainActor [weak self, weak room] in
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled, let self else { return }
                 guard let room, room.isScreenShareActive() else {
+                    if isRoomReconnecting {
+                        Logger.info("Screen share track unpublished but room is reconnecting, keeping share view")
+                        return
+                    }
                     Logger.info("Screen share track unpublished and no active share, dismissing")
                     dismissShareViewIfNeeded()
                     return
@@ -587,13 +743,33 @@ extension RoomContext: RoomDelegate {
             callManager.currentCallTalkingPop()
             guard let participant else { return }
             if isAudioTrack {
-                if let identity = participant.identity?.stringValue, let localNumber = TSAccountManager.localNumber() {
-                    if identity != "\(localNumber).2" {
-                        RoomDataManager.shared.updateMuteParticipant(participant: participant, isMuted: isMuted)
+                if participant is LocalParticipant {
+                    if isMuted {
+                        endLocalAudioDiagnostics(reason: "local microphone muted")
                     } else {
-                        RoomDataManager.shared.updateSeakingParticipant()
+                        beginLocalAudioDiagnostics(reason: "local microphone unmuted")
                     }
                 }
+                // Bullet on every real mic mute-state change: the local device,
+                // the same user's other endpoint (e.g. desktop `.2`, which is a
+                // RemoteParticipant here and must be surfaced), and other users.
+                // Fires only on genuine mute changes — reconnect republish reuses
+                // the existing track without toggling mute, so it won't spam here.
+                // (Replaces the old hardcoded `.1`/`.2` check, which wrongly
+                // suppressed the same user's desktop endpoint.)
+                //
+                // Keep the remote mic-on dedup set in sync with this transition so
+                // a reconnect that re-delivers the unmute can't double-bullet, and a
+                // mic-off re-opens the episode for the next mic-on. Local toggles are
+                // never deduped (every explicit toggle should bullet).
+                if let remote = participant as? RemoteParticipant, let id = remote.identity?.stringValue {
+                    if isMuted {
+                        micOnBulletedRemoteIdentities.remove(id)
+                    } else if !micOnBulletedRemoteIdentities.insert(id).inserted {
+                        return
+                    }
+                }
+                RoomDataManager.shared.updateMuteParticipant(participant: participant, isMuted: isMuted)
             } else if isVideoTrack {
                 RoomDataManager.shared.updateVideoMuteParticipant(participant: participant)
             }
@@ -603,13 +779,34 @@ extension RoomContext: RoomDelegate {
     public nonisolated func room(_: Room, participant: LocalParticipant, didPublishTrack publication: LocalTrackPublication) {
         let isAudioTrack = publication.track is AudioTrack
         let isVideoTrack = publication.track is VideoTrack
-        let publicationIsMuted = publication.isMuted
+        let isMuted = publication.isMuted
         Task { @MainActor [weak self, weak participant] in
             guard let self else { return }
             callManager.currentCallTalkingPop()
             guard let participant else { return }
-            if isAudioTrack, !publicationIsMuted {
-                RoomDataManager.shared.updateMuteParticipant(participant: participant, isMuted: false)
+            if isAudioTrack {
+                // The first mic-on has no mute-state transition: the microphone
+                // track is prewarmed and published already-unmuted, so
+                // `didUpdateIsMuted` never fires for it and the "mic on" bullet
+                // would otherwise be lost. Emit it here for a genuine first
+                // publish, but skip:
+                //   - reconnect `republishAllTracks` (re-publishes every full
+                //     reconnect → would flood the UI), and
+                //   - the initial auto join-time audio setup (self join must not
+                //     bullet, matching `connectParticipant`'s local exclusion).
+                // Subsequent toggles reuse the publication and still bullet via
+                // `didUpdateIsMuted`.
+                let isReconnectOrRepublish = isRoomReconnecting || participant.isRepublishingTracks
+                if isMuted {
+                    endLocalAudioDiagnostics(reason: "local microphone published muted")
+                } else if !isReconnectOrRepublish {
+                    beginLocalAudioDiagnostics(reason: "local microphone published unmuted")
+                }
+                if !isMuted, !isReconnectOrRepublish, didCompleteInitialRoomAudioSetup {
+                    RoomDataManager.shared.updateMuteParticipant(participant: participant, isMuted: false)
+                } else {
+                    RoomDataManager.shared.updateSeakingParticipant()
+                }
             } else if isVideoTrack {
                 RoomDataManager.shared.updateVideoMuteParticipant(participant: participant)
             }
@@ -725,8 +922,12 @@ extension RoomContext {
             return
         }
 
-        if OWSScreenLockUI.sharedManager().isShowingScreenLockUI {
-            Logger.info("[Livekit] Screen lock is active, deferring screen share until unlock")
+        // Only defer for the background privacy cover, which hides the call behind it. During
+        // a foreground passcode lock the call view is floated above the lock and stays
+        // interactive, so the share can be presented on the call window right away.
+        if OWSScreenLockUI.sharedManager().isShowingScreenLockUI,
+           !OWSWindowManager.shared().isCallViewFrontmostAboveScreenLock() {
+            Logger.info("[Livekit] Screen lock cover active (call not frontmost), deferring screen share until unlock")
             pendingShowUI = true
             return
         }

@@ -422,7 +422,7 @@ extension DTMeetingManager {
                 // 发送邀请人的文本消息
                 if createCallMsgEnabled() {
                     recipientIds.forEach { receiptId in
-                        sendOutgoingLocalPrivateInviteCallMessage(receiptId: receiptId)
+                        sendOutgoingLocalPrivateInviteCallMessage(call: currentCall, receiptId: receiptId)
                     }
                 } else {
                     sendInviteCallMessage(receiptIds: recipientIds)
@@ -463,36 +463,31 @@ extension DTMeetingManager: DTCallMessageDelegate {
                                      envelopeSourceDevice: UInt32?,
                                      serverTimestamp: UInt64?) {
         
-        Logger.info("\(logTag) receive incoming call, caller: \(caller).")
+        Logger.info("\(logTag) receive incoming call, createCallMsg: \(createCallMsg), controlType: \(controlType ?? "nil").")
 
-        Task {
-            
-            let result = await DTMeetingManager.checkRoomIdValid(roomId)
-            let isRoomIdValid = (result != nil)
-            guard isRoomIdValid else {
-                Logger.info("\(logTag) roomId invalid")
-                return
-                
-            }
-            
-            // 数据返回true就不执行
-            if result?.userStopped ?? false {
+        Task { @MainActor in
+
+            if consumeRoomIdRejectionByCallKit(roomId) {
+                Logger.info("\(logTag) already rejected via CallKit, skipping incoming call UI")
                 return
             }
-            
+
             if let currentRoomId = currentCall.roomId, currentRoomId == roomId {
                 return
             }
 
             let hasActiveCall = currentCall.roomId != nil
                 || (hasMeeting && roomContext != nil)
-            if hasActiveCall {
+
+            // Build the incoming-call model once — identical for the busy and idle paths.
+            func makeIncomingCall() -> DTLiveKitCallModel {
                 let newCall = DTLiveKitCallModel()
                 newCall.callState = .alerting
                 newCall.caller = caller
                 newCall.roomId = roomId
-                let fallbackRoomName = roomName ?? "[No Room Name]-\(caller)'s Call"
-                newCall.roomName = fallbackRoomName
+                // Bind UUID if CallKit already reported this roomId (VoIP push may arrive first).
+                newCall.callKitUUID = DTCallKitManager.shared().uuidString(fromRoomId: roomId)
+                newCall.roomName = roomName ?? "[No Room Name]-\(caller)'s Call"
                 newCall.publicKey = publicKey
                 newCall.emk = emk
                 newCall.createCallMsg = createCallMsg
@@ -502,84 +497,104 @@ extension DTMeetingManager: DTCallMessageDelegate {
                 newCall.serverTimestamp = serverTimestamp
                 newCall.envelopeSource = envelopeSource
                 newCall.envelopeSourceDevice = envelopeSourceDevice
+
+                var callType: CallType = .instant
                 if let conversationId {
                     let callInfo = conversationId.getCallInfo()
                     newCall.conversationId = callInfo.conversationId
-                    newCall.callType = callInfo.callType
-                    if callInfo.callType == .group, let gid = callInfo.conversationId {
-                        SDSDatabaseStorage.shared.read { tx in
-                            newCall.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupDisplayName(
-                                serverGroupId: gid,
-                                fallbackName: fallbackRoomName,
-                                transaction: tx)
-                        }
-                    }
-                } else {
-                    newCall.callType = .instant
+                    callType = callInfo.callType
                 }
-                if newCall.callType == .private, let localNumber = TSAccountManager.localNumber() {
+                newCall.callType = callType
+                if callType == .group, let gid = newCall.conversationId {
+                    SDSDatabaseStorage.shared.read { tx in
+                        newCall.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupCallDisplayName(
+                            trustedPlaintextName: roomName,
+                            serverGroupId: gid,
+                            transaction: tx)
+                    }
+                }
+                if callType == .private, let localNumber = TSAccountManager.localNumber() {
                     newCall.callees = [localNumber]
                 }
-                Logger.info("\(logTag) hasMeeting or currentCall exists, show alert banner for new call (roomId: \(roomId))")
+                return newCall
+            }
+
+            let newCall = makeIncomingCall()
+
+            // Record the call-log for both paths (busy still leaves a trace). Reads the passed
+            // newCall, so a later currentCall reset can't drop it.
+            dealCallingLocalMessage(call: newCall,
+                                    createCallMsg: createCallMsg,
+                                    controlType: controlType,
+                                    callees: callees,
+                                    caller: caller,
+                                    callType: newCall.callType,
+                                    conversationId: newCall.conversationId,
+                                    isFromOtherDevice: envelopeSource == TSAccountManager.localNumber(),
+                                    serverTimestamp: serverTimestamp)
+
+            if hasActiveCall {
+                // Busy: gate only the banner on validity; the call-log above stays unconditional.
+                let busyResult = await DTMeetingManager.checkRoomIdValid(roomId)
+                guard let busyResult, !busyResult.userStopped, !busyResult.anotherDeviceJoined else {
+                    Logger.info("\(logTag) busy: room invalid/ended, skip alert banner")
+                    return
+                }
+                Logger.info("\(logTag) hasMeeting or currentCall exists, show alert banner for new call")
                 DTAlertCallViewManager.shared().addLiveKitCallAlert(newCall)
                 return
             }
 
-            let isSameSource = envelopeSource == TSAccountManager.localNumber()
+            // Idle: full incoming flow. Set currentCall before the await so a concurrent
+            // main-actor hangup/reject can tear it down (the post-await guard detects that).
+            self.currentCall = newCall
 
-            let newCall = DTLiveKitCallModel()
-            newCall.callState = .alerting
-            newCall.caller = caller
-            newCall.roomId = roomId
-            let fallbackRoomName = roomName ?? "[No Room Name]-\(caller)'s Call"
-            newCall.roomName = fallbackRoomName
-            newCall.publicKey = publicKey
-            newCall.emk = emk
-            newCall.createCallMsg = createCallMsg
-            newCall.controlType = controlType
-            newCall.inviteCallees = callees
-            newCall.timestamp = timestamp
-            newCall.serverTimestamp = serverTimestamp
-            newCall.envelopeSource = envelopeSource
-            newCall.envelopeSourceDevice = envelopeSourceDevice
-
-            var callType: CallType = .instant
-            if let conversationId {
-                let callInfo = conversationId.getCallInfo()
-                newCall.conversationId = callInfo.conversationId
-                callType = callInfo.callType
-            }
-            newCall.callType = callType
-            if callType == .group, let gid = newCall.conversationId {
-                SDSDatabaseStorage.shared.read { tx in
-                    newCall.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupDisplayName(
-                        serverGroupId: gid,
-                        fallbackName: fallbackRoomName,
-                        transaction: tx)
+            // Reset on skip-UI returns: the call never rang, so a stale roomId would poison the next busy-check.
+            func resetRingingCurrentCall() {
+                if currentCall.roomId == roomId {
+                    Logger.info("\(logTag) resetRingingCurrentCall cleared currentCall")
+                    currentCall = DTLiveKitCallModel()
                 }
+                // Also dismiss any native CallKit ring for this roomId; idempotent.
+                endCallKitRing(roomId: roomId)
             }
 
-            if callType == .private, let localNumber = TSAccountManager.localNumber() {
-                newCall.callees = [localNumber]
+            // check-call now gates only the incoming UI.
+            let result = await DTMeetingManager.checkRoomIdValid(roomId)
+            // A concurrent hangup/reject may have torn down currentCall during the await; don't resurrect the UI.
+            guard currentCall.roomId == roomId else {
+                Logger.info("\(logTag) currentCall torn down during check, skip incoming UI")
+                return
+            }
+            // A lock-screen CallKit decline can land during the await; re-check the rejection flag.
+            if consumeRoomIdRejectionByCallKit(roomId) {
+                Logger.info("\(logTag) rejected via CallKit during check, skip incoming UI")
+                resetRingingCurrentCall()
+                return
+            }
+            guard let result else {
+                Logger.info("\(logTag) roomId invalid, skip incoming UI")
+                resetRingingCurrentCall()
+                return
+            }
+            if result.userStopped {
+                Logger.info("\(logTag) roomId userStopped, skip incoming UI")
+                resetRingingCurrentCall()
+                return
+            }
+            if result.anotherDeviceJoined {
+                // Already answered on another own device → not a missed call; skip incoming UI.
+                Logger.info("\(logTag) roomId anotherDeviceJoined, skip incoming UI")
+                resetRingingCurrentCall()
+                return
             }
 
             /// calling展示meetingbar
             handleMeetingBar(call: newCall, action: .add)
-            
-            // 收到邀请的calling就发文本消息
-            dealCallingLocalMessage(createCallMsg: createCallMsg,
-                                    controlType: controlType,
-                                    callees: callees,
-                                    caller: caller,
-                                    callType: callType,
-                                    conversationId: newCall.conversationId,
-                                    isFromOtherDevice: isSameSource,
-                                    serverTimestamp: serverTimestamp) {
-                self.currentCall = newCall
-            }
-            
+
             if let localNumber = TSAccountManager.localNumber(), localNumber == caller {
                 // 自己其他端发起的呼叫不展示接听
+                resetRingingCurrentCall()
                 return
             }
             
@@ -596,6 +611,12 @@ extension DTMeetingManager: DTCallMessageDelegate {
     }
     
     public func handleJoinedMessage(roomId: String, envelope: DSKProtoEnvelope) {
+        // Main-actor serialize: same offline→online race as handleWasHungupMessage.
+        Task { @MainActor in self.handleJoinedMessageOnMain(roomId: roomId, envelope: envelope) }
+    }
+
+    @MainActor
+    private func handleJoinedMessageOnMain(roomId: String, envelope: DSKProtoEnvelope) {
         let isCurrentDevice = RoomIdManager.shared.isCurrentDeviceCall(roomId)
         let envelopeSource = envelope.source ?? "unknown"
         let localNumber = TSAccountManager.localNumber() ?? "unknown"
@@ -631,7 +652,14 @@ extension DTMeetingManager: DTCallMessageDelegate {
                 // 说明另一个设备已经接听了，我们应该取消
                 if isSameUser {
                     Logger.info("\(logTag) Another device answered, canceling call")
+                    // Another device answered → stop ringing here. Dismiss the ring, keyed on roomId.
+                    endCallKitRing(roomId: roomId)
+                    let wasGroupCall = (currentCall.callType == .group)
                     await remoteCallHaveBeenCanceled()
+                    // Group meeting may still be live after teardown; re-derive the bar from server truth.
+                    if wasGroupCall {
+                        syncServerCalls()
+                    }
                 }
             }
         } else {
@@ -652,73 +680,102 @@ extension DTMeetingManager: DTCallMessageDelegate {
     
     // callee reveiced cancel to close alert view
     public func handleRemoteCanceledMessage(roomId: String) {
-        Logger.info("\(logTag) handleRemoteCanceledMessage roomId: \(roomId), currentRoomId: \(currentCall.roomId ?? "nil"), inMeeting: \(inMeeting)")
+        // Main-actor serialize: same offline→online race as handleWasHungupMessage.
+        Task { @MainActor in
+            Logger.info("\(logTag) handleRemoteCanceledMessage inMeeting: \(inMeeting)")
 
-        if roomId == currentCall.roomId {
-            if inMeeting {
-                Logger.warn("\(logTag) handleRemoteCanceledMessage - already in meeting, ignoring cancel for roomId: \(roomId)")
+            // A cancel targets a still-ringing call; once we're in a live meeting for it, ignore.
+            if roomId == currentCall.roomId, inMeeting {
+                Logger.info("\(logTag) handleRemoteCanceledMessage - already in meeting, ignoring cancel")
                 return
             }
-            Task {
-                Logger.info("\(logTag) handleRemoteCanceledMessage need remoteCallHaveBeenCanceled")
-                await remoteCallHaveBeenCanceled()
-            }
-        } else {
-            callAlertManager.removeLiveKitAlertCall(roomId)
-            handleMeetingBar(roomId: roomId, action: .remove)
 
-            let ckManager = DTCallKitManager.shared()
-            if let uuidString = ckManager.uuidString(fromRoomId: roomId) {
-                ckManager.endCallAction(uuidString, onlyForCallKit: true)
+            // Ring lifecycle is keyed on roomId, independent of current / non-current.
+            endCallKitRing(roomId: roomId)
+
+            if roomId == currentCall.roomId {
+                Task {
+                    Logger.info("\(logTag) handleRemoteCanceledMessage need remoteCallHaveBeenCanceled")
+                    await remoteCallHaveBeenCanceled()
+                }
+            } else {
+                callAlertManager.removeLiveKitAlertCall(roomId)
+                handleMeetingBar(roomId: roomId, action: .remove)
             }
         }
     }
     
     public func handleLocalWasRejectedMessage(roomId: String, envelope: DSKProtoEnvelope) {
+        // Main-actor serialize: same offline→online race as handleWasHungupMessage.
+        Task { @MainActor in self.handleLocalWasRejectedMessageOnMain(roomId: roomId, envelope: envelope) }
+    }
+
+    @MainActor
+    private func handleLocalWasRejectedMessageOnMain(roomId: String, envelope: DSKProtoEnvelope) {
         Logger.info("\(logTag) reject message roomId")
-        
+
         guard let currentRoomId = currentCall.roomId else {
+            // Idle device: dismiss a lingering CallKit ring for a call declined on another device.
+            if envelope.source == TSAccountManager.localNumber() {
+                endCallKitRing(roomId: roomId)
+            }
             return
         }
-        
+
         if roomId == currentRoomId {
             if currentCall.callType == .private, DTMeetingManager.shared.inMeeting, envelope.source == TSAccountManager.shared.localNumber() {
                 Logger.info("\(logTag) Ignoring reject message from other device while in meeting")
                 return
             }
-            
+
             if currentCall.callType == .private, let roomContext, roomContext.room.remoteParticipants.count > 0 {
                 Logger.info("\(logTag) Ignoring reject message - remote participant already in meeting")
                 return
             }
-            
-            if currentCall.callType == .private {
+
+            // "Callee declined" toast is for the CALLER only; skip it on self-origin rejects.
+            if currentCall.callType == .private, envelope.source != TSAccountManager.localNumber() {
                 DispatchMainThreadSafe {
                     DTToastHelper.showCallToast(Localized("SINGLE_CALL_CALLEE_DECLINED"))
                 }
             }
 
+            // Reject on a still-ringing call: dismiss the CallKit ring, keyed on roomId.
+            endCallKitRing(roomId: roomId)
+
+            let wasGroupCall = (currentCall.callType == .group)
             Task {
                 await othersideHungupCall(roomId: roomId)
+                // Group meeting may still be live after teardown; re-derive the bar from server truth.
+                if wasGroupCall {
+                    syncServerCalls()
+                }
             }
         } else {
             // MARK: call remove 多个 call 的悬浮小窗
+            endCallKitRing(roomId: roomId)
             callAlertManager.removeLiveKitAlertCall(roomId)
             handleMeetingBar(roomId: roomId, action: .remove)
         }
-                
+
     }
     
     public func handleWasHungupMessage(roomId: String) {
-        Logger.info("\(logTag) handleWasHungupMessage roomId: \(roomId), currentRoomId: \(currentCall.roomId ?? "nil")")
+        // Serialize on the main actor so this currentCall read can't race the calling handler.
+        Task { @MainActor in
+            Logger.info("\(logTag) handleWasHungupMessage")
 
-        if roomId == currentCall.roomId {
-            Task {
-                await othersideHungupCall(roomId: roomId)
+            // A hung-up call's CallKit ring always dies — keyed on roomId, independent of teardown.
+            endCallKitRing(roomId: roomId)
+
+            if roomId == currentCall.roomId {
+                Task {
+                    await othersideHungupCall(roomId: roomId)
+                }
+            } else {
+                callAlertManager.removeLiveKitAlertCall(roomId)
+                handleMeetingBar(roomId: roomId, action: .remove)
             }
-        } else {
-            callAlertManager.removeLiveKitAlertCall(roomId)
-            handleMeetingBar(roomId: roomId, action: .remove)
         }
     }
     

@@ -1397,6 +1397,26 @@ extension %sSerializer {
 
         # ---- Fetch ----
 
+        # Only TSInteraction has subclasses that return shouldBeSaved == false
+        # (forward/activity notices, sync transcripts, etc.). For every other
+        # model the guard would be dead code, so we only emit it there. Mirrors
+        # the shouldBeSaved guard in SDSModel.sdsSave.
+        if str(clazz.name) == 'TSInteraction':
+            should_be_saved_guard = '''        // An unsaved model (shouldBeSaved == false) never owns a DB row, and uniqueIds are
+        // deterministic (authorId_deviceId_timestamp), so anyFetch here could only return a
+        // DIFFERENT record that shares the id — e.g. the forward-notice TSInfoMessage that
+        // ForwardNoticeDispatcher inserts at the unsaved TSOutgoingForwardNoticeMessage's
+        // timestamp. Updating/saving that foreign row is always wrong (and the failed cast
+        // in typed wrappers like anyUpdateOutgoingMessage is fatal in Debug). Mirrors the
+        // shouldBeSaved guard in SDSModel.sdsSave.
+        guard shouldBeSaved else {
+            return
+        }
+
+'''
+        else:
+            should_be_saved_guard = ''
+
         swift_body += '''
 // MARK: - Save/Remove/Update
 
@@ -1452,7 +1472,7 @@ public extension %(class_name)s {
 
         block(self)
 
-        guard let dbCopy = type(of: self).anyFetch(uniqueId: uniqueId,
+%(should_be_saved_guard)s        guard let dbCopy = type(of: self).anyFetch(uniqueId: uniqueId,
                                                    transaction: transaction) else {
             return
         }
@@ -1500,7 +1520,7 @@ public extension %(class_name)s {
     }
 }
 
-''' % { "class_name": str(clazz.name) }
+''' % { "class_name": str(clazz.name), "should_be_saved_guard": should_be_saved_guard }
 
 
         # ---- Cursor ----

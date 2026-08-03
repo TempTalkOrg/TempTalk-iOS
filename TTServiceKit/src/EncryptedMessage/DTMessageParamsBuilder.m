@@ -45,8 +45,12 @@
         msgType = DSKProtoEnvelopeMsgTypeMsgRecall;
     }else if ([message isKindOfClass:[TSOutgoingForwardNoticeMessage class]]) {
         msgType = DSKProtoEnvelopeMsgTypeMsgForwardNotice;
+    }else if ([message isKindOfClass:[TSOutgoingActivityNoticeMessage class]]) {
+        msgType = DSKProtoEnvelopeMsgTypeMsgActivityNotice;
+    }else if ([message isKindOfClass:[TSOutgoingGroupKeyMessage class]]) {
+        msgType = DSKProtoEnvelopeMsgTypeMsgGroupKey;
     }
-    
+
     return msgType;
 }
 
@@ -82,7 +86,9 @@
     __block NSDictionary *apnsInfo = nil;
     __block NSDictionary *associatedConversation = nil;
     [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
-        if (![message isKindOfClass:[TSOutgoingForwardNoticeMessage class]]) {
+        if (![message isKindOfClass:[TSOutgoingForwardNoticeMessage class]]
+            && ![message isKindOfClass:[TSOutgoingActivityNoticeMessage class]]
+            && ![message isKindOfClass:[TSOutgoingGroupKeyMessage class]]) {
             apnsInfo = [[[DTApnsMessageBuilder alloc] initWithMessage:message
                                                                thread:thread
                                                          forRecipient:recipient

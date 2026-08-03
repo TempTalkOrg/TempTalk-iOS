@@ -67,6 +67,11 @@ extension AppDelegate  {
     public func initializeGrayReleaseManager() {
         GrayReleaseManager.shared.initialize()
     }
+
+    @objc
+    public func installCallServiceUrlLifecycleHook() {
+        CallServiceUrlLifecycleHook.shared.install()
+    }
 }
 
 extension AppDelegate {
@@ -77,7 +82,14 @@ extension AppDelegate {
             return
         }
         if StorageCoordinator.hasGrdbFile && GRDBDatabaseStorageAdapter.isKeyAccessible {
-            return 
+            return
+        }
+
+        // Non-production builds launch via Xcode, whose debugger delays foreground promotion,
+        // so applicationState reads .background here and would wrongly exit on first run.
+        if !TSConstants.isUsingProductionService {
+            Logger.info("Skipping background-launch DB key guard in non-production build.")
+            return
         }
 
         Logger.warn("Exiting because we are in the background and the database password is not accessible.")
@@ -111,7 +123,7 @@ extension AppDelegate {
         Logger.flush()
         exit(0)
     }
-    
+
     @objc func clearAllNotificationsAndRestoreBadgeCount() {
         AssertIsOnMainThread()
 

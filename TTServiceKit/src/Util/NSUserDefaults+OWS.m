@@ -16,20 +16,6 @@ NS_ASSUME_NONNULL_BEGIN
     return [[NSUserDefaults alloc] initWithSuiteName:TSConstants.applicationGroup];
 }
 
-+ (void)migrateToSharedUserDefaults
-{
-    OWSLogInfo(@"%@", self.logTag);
-
-    NSUserDefaults *appUserDefaults = self.appUserDefaults;
-
-    NSDictionary<NSString *, id> *dictionary = [NSUserDefaults standardUserDefaults].dictionaryRepresentation;
-    for (NSString *key in dictionary) {
-        id value = dictionary[key];
-        OWSAssertDebug(value);
-        [appUserDefaults setObject:value forKey:key];
-    }
-}
-
 + (void)removeAll
 {
     [NSUserDefaults.standardUserDefaults removeAll];

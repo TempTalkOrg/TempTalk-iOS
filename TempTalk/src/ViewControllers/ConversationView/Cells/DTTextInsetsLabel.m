@@ -68,6 +68,9 @@
 
 - (void)copyAction:(id)sender {
     [DTSecurePasteboard setString:self.text];
+    if (self.onCopy) {
+        self.onCopy();
+    }
 }
 
 - (void)pasteAction:(id)sender {

@@ -18,6 +18,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, copy) NSString *groupOwner;
 @property (nonatomic) NSArray<NSString *> *groupAdmin;
+
+/// 加密群已通过 uidSignature 校验的 uid 集合。非加密群不使用，旧 archive 默认为空集。
+@property (nonatomic, copy, nullable) NSSet<NSString *> *verifiedMemberUids;
 @property (nonatomic, strong) NSNumber *notificationType;
 @property (nonatomic, strong) NSNumber *useGlobal;//组的全局配置开关属性
 @property (nonatomic, strong) NSNumber *messageExpiry; // 群消息过期时间
@@ -98,6 +101,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (DTGroupRAPIDRole)rapidRoleFor:(NSString *)memberId;
 - (void)removeRapidRole:(NSString *)memberId;
 - (void)addRapidRole:(DTGroupRAPIDRole)rapidRole memberId:(NSString *)memberId;
+
+/// 把 verifiedMemberUids 与 groupMemberIds 求交，剔除已离开成员的验证记录。
+- (void)intersectVerifiedMembersWithCurrentGroupMembers;
 
 @end
 

@@ -67,11 +67,17 @@ NS_ASSUME_NONNULL_BEGIN
 //拨打方 通话连接成功 显示通话时间
 - (void)connectedOutgoingCall:(NSString *)uuidString;
 
+/// Fulfill the held answer action once the LiveKit room actually connects, so the
+/// system call UI flips from "Connecting…" to answered in sync with real media.
+/// No-op when no action is being held (caller side / non-CallKit answer).
+- (void)fulfillPendingAnswerAction:(NSString *)uuidString;
+
 /****结束通话 (app 同步到 callkit) ****/
 - (void)endCallAction:(NSString *)uuidString onlyForCallKit:(BOOL)onlyForCallKit;
 
 /****静音按钮事件 (app 同步到 callkit) ****/
 - (void)muteCurrentCall:(BOOL)isMute uuidString:(NSString *)uuidString;
+- (nullable NSNumber *)callKitMuteIntentForUUID:(NSString *)uuidString;
 
 - (void)handleVoipCallNotify:(NSDictionary *)apnsInfo completion:(void (^__nullable)(void))completion;
 

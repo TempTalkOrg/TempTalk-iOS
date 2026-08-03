@@ -54,6 +54,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)updateSignalAccountWithRecipientId:(NSString *)recipientId  withNewSignalAccount:(SignalAccount *)signalAccount withTransaction:(SDSAnyWriteTransaction *)transaction;
 
+- (void)removeAccountWithRecipientId:(NSString *)recipientId transaction:(SDSAnyWriteTransaction *)transaction;
+
 - (NSComparisonResult)compareSignalAccount:(SignalAccount *)left
                          withSignalAccount:(SignalAccount *)right NS_SWIFT_NAME(compare(signalAccount:with:));
 

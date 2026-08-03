@@ -105,6 +105,11 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
             strongSelf.versionMigrationsDidComplete()
         })
 
+        // Start the loopback proxy in this Share-extension process so sending shared content
+        // tunnels through the self-hosted proxy instead of leaking the real IP — the extension is
+        // a separate process and must start its own tunnel from the shared config.
+        ProxyManager.shared.applyConfiguration()
+
         // We don't need to use "screen protection" in the SAE.
         // Ensure OWSContactsSyncing is instantiated.
 //        OWSContactsSyncing.sharedManager()
@@ -642,7 +647,7 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
             var dataSource: AnyObject // 使用 AnyObject 类型
 
             if let contentText = contentText {
-                dataSource = DataSourceValue.dataSource(withOversizeText: "\(contentText) \n" + "\(webUrl.absoluteString)") as AnyObject
+                dataSource = DataSourceValue.dataSource(withOversizeText: "\(contentText.normalizedNewlines()) \n" + "\(webUrl.absoluteString)") as AnyObject
             } else {
                 dataSource = DataSourceValue.dataSource(withOversizeText: webUrl.absoluteString) as AnyObject
             }
@@ -656,12 +661,13 @@ public class ShareViewController: UIViewController, ShareViewDelegate, SAEFailed
             attachment.isConvertibleToContactShare = true
             return Promise.value(attachment)
         case .richText(let richText):
-            let dataSource = DataSourceValue.dataSource(withOversizeText: richText.string)
+            // Canonicalize newlines so oversize text-as-attachment matches sent text.
+            let dataSource = DataSourceValue.dataSource(withOversizeText: richText.string.normalizedNewlines())
             let attachment = SignalAttachment.attachment(dataSource: dataSource, dataUTI: kUTTypeText as String)
             attachment.isConvertibleToTextMessage = true
             return Promise.value(attachment)
         case .text(let text):
-            let dataSource = DataSourceValue.dataSource(withOversizeText: text)
+            let dataSource = DataSourceValue.dataSource(withOversizeText: text.normalizedNewlines())
             let attachment = SignalAttachment.attachment(dataSource: dataSource, dataUTI: kUTTypeText as String)
             attachment.isConvertibleToTextMessage = true
             return Promise.value(attachment)

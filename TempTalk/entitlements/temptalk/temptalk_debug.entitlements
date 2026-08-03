@@ -6,6 +6,7 @@
 	<string>development</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
+		<string>applinks:quicall.app</string>
 		<string>applinks:yelling.pro</string>
 		<string>applinks:temptalk.app</string>
 		<string>webcredentials:chative.com</string>

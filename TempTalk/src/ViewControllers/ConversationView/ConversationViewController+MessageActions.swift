@@ -44,7 +44,7 @@ extension ConversationViewController {
         viewItem: ConversationViewItem,
         bubbleView: ConversationMessageBubbleView
     ) {
-        clearAllForwardMessages()
+        clearSelectedMessages()
         self.inputToolbar.endEditing(true)
         
         // 防止非 TSIncomingMessage/TSOutgoingMessage 乱入造成 reaction crash
@@ -188,7 +188,12 @@ extension ConversationViewController: MessageActionsDelegate {
     func messageActionsForwardItem(_ conversationViewItem: ConversationViewItem) {
         forwardSingleMessage(conversationViewItem)
     }
-    
+
+    /// 添加到收藏表情（GIF）
+    func messageActionsAddToFavorite(_ conversationViewItem: ConversationViewItem) {
+        DTGifFavoriteMessageAction.addToFavorite(conversationViewItem, presenter: self)
+    }
+
     /// 撤回
     func messageActionsRecallItem(_ conversationViewItem: ConversationViewItem) {
         guard isCanSpeak else {
@@ -377,13 +382,17 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
                 image: #imageLiteral(resourceName: "ic_longpress_copy"),
                 title: Localized("MESSAGE_ACTION_COPY_TEXT", comment: "Action sheet button title"),
                 subtitle: nil,
-                block: { _ in
-                    guard let selectedRange = selectionView.getSelection() else { return }
+                block: { [weak self] _ in
+                    guard let selectedRange = selectionView.getSelection(), selectedRange.length > 0 else { return }
                     guard let text = textView.text, !text.isEmpty else { return }
                     guard selectedRange.location + selectedRange.length <= text.count else { return }
                     
                     let selectedString = text.substring(withRange: selectedRange)
-                    UIPasteboard.general.string = selectedString
+                    DTSecurePasteboard.setString(selectedString)
+                    DTToastHelper.toast(withText: Localized("COPY_SUCCESS_TOAST"), durationTime: 1)
+                    if let message = viewItem.interaction as? TSMessage {
+                        self?.insertSingleCopyNotice(for: message)
+                    }
                 }
             )
             let forwardAction = MenuAction(
@@ -397,7 +406,7 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
                     guard selectedRange.location + selectedRange.length <= text.count else { return }
                     
                     let selectedString = text.substring(withRange: selectedRange)
-                    self.forward(text: selectedString)
+                    self.forward(text: selectedString, sourceMessage: viewItem.interaction as? TSMessage)
                 }
             )
             let selectAllAction = MenuAction(
@@ -426,9 +435,10 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
         actionMenuController.showMenu(animation: true)
     }
     
-    private func forward(text: String) {
+    private func forward(text: String, sourceMessage: TSMessage? = nil) {
         guard !text.isEmpty else { return }
-        
+
+        let sourceThread = self.thread
         let tool = SelectThreadTool()
         tool.isCanSelectThread = { thread in
             return TSThreadPermissionHelper.checkCanSpeakAndToastTipMessage(thread)
@@ -446,6 +456,29 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
                     failure: { _ in }
                 )
             }
+
+            if let message = sourceMessage {
+                // "from" display uses the bubble sender; the trace decision may differ — a single
+                // forwarded message gates on its original content author, not the bubble sender (PRD).
+                let displayAuthorIds = ForwardNoticeBuilder.sourceAuthorIds(for: [message])
+                let triggerAuthorIds = ForwardNoticeBuilder.triggerAuthorIds(for: [message])
+                if DTNoticeTraceEvaluator.shouldLeaveTrace(
+                    sourceThread: sourceThread,
+                    targetThreads: threads,
+                    contentAuthorIds: triggerAuthorIds
+                ) {
+                    let fromAuthorIds = DTNoticeTraceEvaluator.orderForDisplay(displayAuthorIds)
+                    Task {
+                        try? await ForwardNoticeDispatcher.sendNotice(
+                            sourceConversation: sourceThread,
+                            scene: .single,
+                            sourceAuthorIds: fromAuthorIds,
+                            messageCount: 1,
+                            messageSender: SSKEnvironment.shared.messageSenderRef
+                        )
+                    }
+                }
+            }
         }
         tool.dismissHander = {
             DTToastHelper.toast(
@@ -454,8 +487,7 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
             )
         }
         tool.showSelectThreadViewController(source: self)
-        
-        // 防止 SelectThreadTool 被释放，block 不会执行
+
         selectThreadTool = tool
     }
 }

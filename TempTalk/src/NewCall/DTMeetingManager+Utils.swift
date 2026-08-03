@@ -77,12 +77,54 @@ extension DTMeetingManager {
 
     func micOnLineUp() -> [Participant] {
         guard let room = roomContext?.room else { return [] }
-        let allParticipants: [Participant] = [room.localParticipant] + Array(room.remoteParticipants.values)
         let speaker = currentSpeakingParticipant()
+        let allParticipants: [Participant] = [room.localParticipant] + Array(room.remoteParticipants.values)
 
-        return Array(allParticipants
-            .filter { $0.isMicrophoneEnabled() && $0 !== speaker }
-            .prefix(3))
+        // speaker 已在 SpeakerFloatingView header 单独展示,这里过滤掉避免重复
+        let candidates = allParticipants.filter {
+            $0.isMicrophoneEnabled() && $0 !== speaker
+        }
+
+        // 候选列表原始位置,用于"视频组内保序"和最终 tiebreaker,避免抖动
+        let positionOf: [ObjectIdentifier: Int] = Dictionary(
+            uniqueKeysWithValues: candidates.enumerated().map { (ObjectIdentifier($0.element), $0.offset) }
+        )
+
+        // 排序规则对齐 Android sortParticipantsByPriority:
+        // local > screenShare > camera > 视频组保持原顺序 > 说话音量分桶 > lastSpokeAt > 原顺序
+        // 注: candidates 已预过滤 isMicrophoneEnabled, 所以省略 Android 中的 mic 档.
+        let audioLevelThreshold: Float = 0.05
+        let sorted = candidates.sorted { a, b in
+            let aLocal = a is LocalParticipant
+            let bLocal = b is LocalParticipant
+            if aLocal != bLocal { return aLocal }
+
+            let aShare = a.isScreenShareEnabled()
+            let bShare = b.isScreenShareEnabled()
+            if aShare != bShare { return aShare }
+
+            let aCam = a.isCameraEnabled()
+            let bCam = b.isCameraEnabled()
+            if aCam != bCam { return aCam }
+
+            if aShare || aCam {
+                let pa = positionOf[ObjectIdentifier(a)] ?? .max
+                let pb = positionOf[ObjectIdentifier(b)] ?? .max
+                return pa < pb
+            }
+
+            let aBucket = a.isSpeaking ? -Int(a.audioLevel / audioLevelThreshold) : .max
+            let bBucket = b.isSpeaking ? -Int(b.audioLevel / audioLevelThreshold) : .max
+            if aBucket != bBucket { return aBucket < bBucket }
+
+            if a.lastSpokeAt != b.lastSpokeAt { return a.lastSpokeAt > b.lastSpokeAt }
+
+            let pa = positionOf[ObjectIdentifier(a)] ?? .max
+            let pb = positionOf[ObjectIdentifier(b)] ?? .max
+            return pa < pb
+        }
+
+        return Array(sorted.prefix(3))
     }
 
     func micOnLineUpDisplayNames() -> [String] {
@@ -103,11 +145,6 @@ extension DTMeetingManager {
     }
     
     // MARK: - 参会人排序
-
-    // 重连的缓存策略
-    func sortedReconnectingParticipants() -> [ParticipantSnapshot] {
-        return reconnectingParticipants ?? []
-    }
 
     func sortedMeetingParticipants() -> [Participant] {
         guard let room = roomContext?.room else { return [] }
@@ -149,8 +186,8 @@ extension DTMeetingManager {
     func setVisibleParticipants(_ newVisible: [Participant]) {
         DispatchMainThreadSafe { [weak self] in
             guard let self else { return }
-            let oldIds = self.visibleParticipants.map { $0.identity?.stringValue ?? "" }
-            let newIds = newVisible.map { $0.identity?.stringValue ?? "" }
+            let oldIds = self.visibleParticipants.map { Self.visibleParticipantSignature($0) }
+            let newIds = newVisible.map { Self.visibleParticipantSignature($0) }
             guard oldIds != newIds else { return }
             self.visibleParticipants = newVisible
         }
@@ -179,11 +216,16 @@ extension DTMeetingManager {
     ) -> (visible: [Participant], remaining: [Participant]) {
         var visible = currentVisible
 
-        // Step 1: 清理 visible 中已离会的人
-        let allIdentities = Set(participants.compactMap { $0.identity?.stringValue })
-        visible.removeAll { participant in
-            guard let id = participant.identity?.stringValue else { return true }
-            return !allIdentities.contains(id)
+        // Step 1: 清理 visible 中已离会的人，并替换为当前 Room 的 Participant 实例。
+        // 同一个会议反复进入时 identity 可能相同，但 Participant 对象已经换了。
+        var participantsByIdentity: [String: Participant] = [:]
+        for participant in participants {
+            guard let id = participant.identity?.stringValue else { continue }
+            participantsByIdentity[id] = participant
+        }
+        visible = visible.compactMap { participant in
+            guard let id = participant.identity?.stringValue else { return nil }
+            return participantsByIdentity[id]
         }
 
         // Step 2/3: 不满补充;已满替换
@@ -329,8 +371,15 @@ extension DTMeetingManager {
             return priority(a) < priority(b)
         }
     }
+
+    private static func visibleParticipantSignature(_ participant: Participant) -> String {
+        let identity = participant.identity?.stringValue ?? "nil"
+        let sid = participant.sid?.stringValue ?? "nil"
+        return "\(identity)#\(sid)#\(ObjectIdentifier(participant).hashValue)"
+    }
     
     // 小列表的规则
+    @MainActor
     func sortedParticipants() -> [Participant] {
         if let room = roomContext?.room {
             return sorted(participants: Array(room.allParticipants.values))
@@ -463,6 +512,7 @@ extension DTMeetingManager {
     
     // MARK: - 本地消息合并
     func prepareForMeetingStart(isCaller: Bool = true,
+                                call: DTLiveKitCallModel? = nil,
                                 thread: TSThread? = nil,
                                 timestamp: UInt64? = nil,
                                 serverTimestamp: UInt64? = nil,
@@ -470,9 +520,13 @@ extension DTMeetingManager {
         // 处理开始会议的主叫和非主叫的逻辑
         prepareForMeetingCaller(isCaller: isCaller,
                                 thread: thread)
+        // Resolve the passed call (fall back to currentCall) so the gate reads the same model the
+        // downstream generation uses, not the global that a concurrent reset may have cleared.
+        let call = call ?? currentCall
         // 处理开始和邀请的本地消息
-        guard currentCall.createCallMsg else { return }
-        prepareForMeetingStartOrInvite(thread: thread,
+        guard call.createCallMsg else { return }
+        prepareForMeetingStartOrInvite(call: call,
+                                       thread: thread,
                                        timestamp: timestamp,
                                        serverTimestamp: serverTimestamp,
                                        isOutgoing: source == "startCall")
@@ -498,23 +552,26 @@ extension DTMeetingManager {
         }
     }
 
-    func prepareForMeetingStartOrInvite(thread: TSThread? = nil,
+    func prepareForMeetingStartOrInvite(call: DTLiveKitCallModel? = nil,
+                                        thread: TSThread? = nil,
                                         timestamp: UInt64? = nil,
                                         serverTimestamp: UInt64? = nil,
                                         isOutgoing: Bool? = false) {
+        // Resolve now so the deferred task reads this call, not a concurrently-reset currentCall.
+        let call = call ?? currentCall
         Task { @MainActor in
             if isOutgoing ?? false  {
-                if currentCall.controlType == DTMeetingManager.sourceControlStart {
-                    currentCall.callType == .group
-                        ? sendOutgoingLocalGroupStartCallMessage(thread: thread, serverTimestamp: serverTimestamp)
-                        : sendOutgoingLocalPrivateStartCallMessage(thread: thread, serverTimestamp: serverTimestamp)
+                if call.controlType == DTMeetingManager.sourceControlStart {
+                    call.callType == .group
+                        ? sendOutgoingLocalGroupStartCallMessage(call: call, thread: thread, serverTimestamp: serverTimestamp)
+                        : sendOutgoingLocalPrivateStartCallMessage(call: call, thread: thread, serverTimestamp: serverTimestamp)
                 }
             } else {
-                maybeGenerateMeetingMessage(roomID: currentCall.roomId ?? "") {
-                    if currentCall.controlType == DTMeetingManager.sourceControlStart {
-                        currentCall.callType == .group
-                            ? receiveIncomingLocalGroupStartCallMessage(serverTimestamp: serverTimestamp)
-                            : receiveIncomingLocalPrivateStartCallMessage(serverTimestamp: serverTimestamp)
+                maybeGenerateMeetingMessage(roomID: call.roomId ?? "") {
+                    if call.controlType == DTMeetingManager.sourceControlStart {
+                        call.callType == .group
+                            ? receiveIncomingLocalGroupStartCallMessage(call: call, serverTimestamp: serverTimestamp)
+                            : receiveIncomingLocalPrivateStartCallMessage(call: call, serverTimestamp: serverTimestamp)
                     }
                 }
             }
@@ -589,6 +646,17 @@ extension DTMeetingManager {
     }
     
     func muteAudio(_ muted: Bool) async {
+        // Idempotency: skip when LiveKit's mic is already in the requested state.
+        // Prevents redundant setMicrophone calls (each toggles the VPIO hardware
+        // and is mirrored back by iOS as another CallKit action) from sustaining
+        // a CallKit<->LiveKit feedback loop.
+        if let room = roomContext?.room {
+            let currentlyEnabled = room.localParticipant.isMicrophoneEnabled()
+            if currentlyEnabled == !muted {
+                Logger.info("\(logTag) call utils mute audio \(muted) skipped: mic already \(muted ? "muted" : "unmuted")")
+                return
+            }
+        }
         Logger.info("\(logTag) call utils mute audio \(muted)")
         await roomContext?.setLocalMicrophone(enable: !muted)
     }
@@ -706,9 +774,10 @@ extension DTMeetingManager {
         if participant.isCameraEnabled(), let publication = participant.firstCameraPublication,
               let track = publication.track as? VideoTrack
         {
-            // 创建新的视频视图
+            // 创建新的视频视图。注意 track 需按对象身份判断是否变化：全量重连会用同一 sid 的新 track
+            // 对象替换旧的，调用方（updateDisplayedParticipant）据此决定是否重建并重新绑定。
             let videoView = VideoView()
-            videoView.track = track   // 一次绑定，不能频繁切换
+            videoView.track = track
             videoView.layoutMode = .fill
             videoView.clipsToBounds = true
 
@@ -760,8 +829,14 @@ extension DTMeetingManager {
         let newSid = participant.sid?.stringValue
         let newCameraEnabled = participant.isCameraEnabled()
 
+        // Also rebind when the underlying track OBJECT changed (e.g. a full reconnect re-subscribes a
+        // new track with the SAME sid): comparing sid alone would keep the pooled VideoView bound to
+        // the dead old track and freeze PiP video.
+        let liveTrack = participant.firstCameraPublication?.track as? VideoTrack
+        let boundTrack = currentlyDisplayedIdentity.flatMap { videoViewPool[$0]?.track }
         if newSid == currentlyDisplayedSid,
-           newCameraEnabled == currentlyCameraEnabled {
+           newCameraEnabled == currentlyCameraEnabled,
+           liveTrack === boundTrack {
             return
         }
 
@@ -789,10 +864,6 @@ extension DTMeetingManager {
     func denoiseNameRegex() -> String {
         let callConfig = CallConfigManager.fetchCallConfig()
         return callConfig.excludedNameRegex
-    }
-    
-    func startSpeedTest() {
-        clusterSpeedTester.start()
     }
     
     func isInputAirPods(portName: String) -> Bool {

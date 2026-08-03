@@ -12,6 +12,9 @@ typedef NS_ENUM(NSUInteger, SelectRecipientFrom) {
     SelectRecipientFrom_Meeting,
 };
 
+// Search-bar slot height in the fixed header.
+extern CGFloat const kSelectRecipientSearchBarHeight;
+
 @class SignalAccount;
 @class TSGroupThread;
 
@@ -61,6 +64,12 @@ typedef NS_ENUM(NSUInteger, SelectRecipientFrom) {
 @property (nonatomic, weak) id<SelectRecipientViewControllerDelegate> delegate;
 
 @property (nonatomic, readonly) OWSTableViewController *tableViewController;
+
+// Non-scrolling header above the table; holds the search bar. Subclasses may add rows
+// below it and grow the container via setFixedHeaderHeight:.
+@property (nonatomic, readonly) UIView *fixedHeaderContainer;
+
+- (void)setFixedHeaderHeight:(CGFloat)height;
 
 @property (nonatomic, readonly) ContactsViewHelper *contactsViewHelper;
 

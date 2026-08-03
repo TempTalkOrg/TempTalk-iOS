@@ -85,6 +85,10 @@ extension DTMeetingManager {
         startCallRecipientIds = nil
         fromSource = nil
         answerVC = nil
+        deferredIncomingCall = nil
+        DispatchQueue.main.async { [weak self] in
+            self?.dismissIncomingCallBanner()
+        }
 
         // 释放定时器
         releaseAllTimer()
@@ -101,7 +105,6 @@ extension DTMeetingManager {
         currentlyCameraEnabled = false
 
         // 清理缓存状态
-        reconnectingParticipants = nil
         lastParticipantsCount = 0
 
         // 清理 CallKit UUID，防止残留影响下次通话

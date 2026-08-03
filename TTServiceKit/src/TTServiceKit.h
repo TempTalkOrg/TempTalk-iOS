@@ -107,7 +107,6 @@ FOUNDATION_EXPORT const unsigned char TTServiceKitVersionString[];
 #import <TTServiceKit/DTServerConfigManager.h>
 #import <TTServiceKit/DTFileDownloader.h>
 #import <TTServiceKit/DTConversationConfig.h>
-#import <TTServiceKit/DTMessageConfig.h>
 #import <TTServiceKit/DTDisappearanceTimeIntervalConfig.h>
 #import <TTServiceKit/DTServersEntity.h>
 #import <TTServiceKit/DTGroupConfig.h>

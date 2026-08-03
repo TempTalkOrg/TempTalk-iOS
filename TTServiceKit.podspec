@@ -42,7 +42,6 @@ An Objective-C library for communicating with the Signal messaging service.
 
   s.dependency 'Curve25519Kit'
   s.dependency 'CocoaLumberjack'
-  s.dependency 'AFNetworking/NSURLSession'
   s.dependency 'HKDFKit'
   s.dependency 'Mantle'
   s.dependency 'SocketRocket'

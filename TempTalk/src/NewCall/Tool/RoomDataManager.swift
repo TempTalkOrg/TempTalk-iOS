@@ -100,11 +100,14 @@ class RoomDataManager: NSObject, ObservableObject {
         DispatchMainThreadSafe {
             if let pid = participant.identity?.stringValue {
                 let isLocal = pid.components(separatedBy: ".").first == TSAccountManager.shared.localNumber()
-                self.bulletType = isLocal ? .localPartConnect : .remotePartConnect
-                self.message = ""
-                self.isMuted = false
-                self.participantId = pid.components(separatedBy: ".").first ?? ""
-                self.onBulletMessageUpdate?()
+                // Local participant join should not show a barrage (matches Android: only remote participants trigger barrage)
+                if !isLocal {
+                    self.bulletType = .remotePartConnect
+                    self.message = ""
+                    self.isMuted = false
+                    self.participantId = pid.components(separatedBy: ".").first ?? ""
+                    self.onBulletMessageUpdate?()
+                }
             }
             self.participantCount = DTMeetingManager.shared.roomContext?.room.allParticipants.count ?? 0
             self.onMeetingUpdate?()
@@ -167,7 +170,7 @@ class RoomDataManager: NSObject, ObservableObject {
             self.message = message
             self.isMuted = false
             self.participantId = pid
-            Logger.info("[BulletChat] RoomDataManager sendRTMBarrageMessage - pid: \(pid), message: \(message)")
+            Logger.info("[BulletChat] RoomDataManager sendRTMBarrageMessage - pid: \(pid), messageLength: \(message.count)")
             self.onBulletMessageUpdate?()
         }
     }
@@ -178,7 +181,7 @@ class RoomDataManager: NSObject, ObservableObject {
             self.bubbleParticipantId = pid
             self.bubbleText = ""
             self.bubbleEmoji = ""
-            Logger.info("[BulletChat] RoomDataManager sendBubbleMessage - pid: \(pid), message: \(message)")
+            Logger.info("[BulletChat] RoomDataManager sendBubbleMessage - pid: \(pid), messageLength: \(message.count)")
             self.onBubbleMessageUpdate?()
         }
     }
@@ -189,7 +192,7 @@ class RoomDataManager: NSObject, ObservableObject {
             self.bubbleParticipantId = pid
             self.bubbleText = text
             self.bubbleEmoji = emoji
-            Logger.info("[BulletChat] RoomDataManager sendBubbleMessage - pid: \(pid), text: \(text), emoji: \(emoji)")
+            Logger.info("[BulletChat] RoomDataManager sendBubbleMessage - pid: \(pid), textLength: \(text.count), emoji: \(emoji)")
             self.onBubbleMessageUpdate?()
         }
     }

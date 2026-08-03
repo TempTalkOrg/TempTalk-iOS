@@ -88,6 +88,22 @@ NSString *const kContactsUpdateMembersKey = @"contactsUpdateMembersKey";
                     account = [[SignalAccount alloc] initWithRecipientId:obj.number];
                 }
 
+                // Remark/remarkAvatar live in conversation config, not the contacts directory, so the
+                // server contact here never carries them. Preserve the locally-cached values before
+                // replacing the contact — otherwise a directory update (e.g. the one that accompanies
+                // an unfriend → weak transition) wipes the remark the user set.
+                Contact *existingContact = account.contact;
+                if (existingContact) {
+                    if (!DTParamsUtils.validateString(obj.remark) && DTParamsUtils.validateString(existingContact.remark)) {
+                        obj.remark = existingContact.remark;
+                    }
+                    // remarkAvatar is an NSDictionary, so use validateDictionary (validateString would
+                    // always fail the kind check) — keeps the empty-value handling consistent with remark.
+                    if (!DTParamsUtils.validateDictionary(obj.remarkAvatar) && DTParamsUtils.validateDictionary(existingContact.remarkAvatar)) {
+                        obj.remarkAvatar = existingContact.remarkAvatar;
+                    }
+                }
+
                 account.contact = obj;
                 SignalAccount *newAccount = [account copy];
                 

@@ -33,12 +33,31 @@ fileprivate extension MediaDetailViewController {
     }
 }
 
+extension MediaPageViewController: UIGestureRecognizerDelegate {
+    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+        // Don't hijack the gesture while zoomed in — let the scroll view pan the image.
+        if currentViewController?.isZoomedIn == true { return false }
+        // Only start drag-to-dismiss for a predominantly vertical drag, so horizontal
+        // swipes still page between items.
+        let velocity = pan.velocity(in: view)
+        return abs(velocity.y) > abs(velocity.x)
+    }
+}
+
 class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSource, UIPageViewControllerDelegate, MediaDetailViewControllerDelegate, MediaGalleryDataSourceDelegate {
 
     private weak var mediaGalleryDataSource: MediaGalleryDataSource?
 
-    private var cachedPages: [MediaGalleryItem: MediaDetailViewController] = [:]
     private var initialPage: MediaDetailViewController?
+
+    // Full images decoded ahead of time so a freshly built neighbor page shows
+    // instantly instead of flashing its background while it decodes on swipe.
+    private let preloadedImageCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 5
+        return cache
+    }()
 
     public var currentViewController: MediaDetailViewController? {
         return viewControllers?.first as? MediaDetailViewController
@@ -111,6 +130,7 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
         }
         self.initialPage = initialPage
         self.setViewControllers([initialPage], direction: .forward, animated: false, completion: nil)
+        self.preloadNeighbors(of: initialItem)
     }
 
     @available(*, unavailable, message: "Unimplemented")
@@ -210,8 +230,6 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
     override func didReceiveMemoryWarning() {
         Logger.info("\(logTag) in \(#function)")
         super.didReceiveMemoryWarning()
-
-        self.cachedPages = [:]
     }
 
     // MARK: View Helpers
@@ -279,10 +297,14 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
             return
         }
 
-        var toolbarItems: [UIBarButtonItem] = [
-            UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(didPressShare)),
-            UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
-        ]
+        // Confidential messages are view-only: no share (share sheet also exposes save-to-album/files).
+        let isConfidential = currentItem?.message.messageModeType == .confidential
+
+        var toolbarItems: [UIBarButtonItem] = []
+        if !isConfidential {
+            toolbarItems.append(UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(didPressShare)))
+        }
+        toolbarItems.append(UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil))
 
         if (self.currentItem?.isVideo == true) {
             let videoButton = isPlayingVideo ? self.videoPauseBarButton : self.videoPlayBarButton
@@ -431,6 +453,10 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
                 updateFooterBarButtonItems(isPlayingVideo: false)
             }
         }
+
+        if transitionCompleted, let currentItem = currentViewController?.galleryItem {
+            preloadNeighbors(of: currentItem)
+        }
     }
 
     // MARK: UIPageViewControllerDataSource
@@ -492,12 +518,10 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
 
     private func buildGalleryPage(galleryItem: MediaGalleryItem) -> MediaDetailViewController? {
 
-        if let cachedPage = cachedPages[galleryItem] {
-            Logger.debug("\(logTag) in \(#function) cache hit.")
-            return cachedPage
-        }
-
-        Logger.debug("\(logTag) in \(#function) cache miss.")
+        // Always build a fresh page. Handing back a cached instance the page
+        // controller already holds (as the current or an adjacent page) corrupts
+        // its internal paging state, which shows up as a swipe in one direction
+        // doing nothing until you first swipe the other way.
         var fetchedItem: ConversationViewItem? = nil
         databaseStorage.uiRead { transaction in
             
@@ -530,9 +554,32 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
 
         let viewController = MediaDetailViewController(galleryItemBox: GalleryItemBox(galleryItem), viewItem: viewItem)
         viewController.delegate = self
+        viewController.preloadedImage = preloadedImageCache.object(forKey: galleryItem.attachmentStream.uniqueId as NSString)
 
-        cachedPages[galleryItem] = viewController
         return viewController
+    }
+
+    // Decode the images on either side of `item` in the background so the next
+    // swipe finds them ready in the cache instead of decoding on the main thread.
+    private func preloadNeighbors(of item: MediaGalleryItem) {
+        guard let mediaGalleryDataSource = self.mediaGalleryDataSource else { return }
+        if let before = mediaGalleryDataSource.galleryItem(before: item) {
+            preloadImageIfNeeded(before)
+        }
+        if let after = mediaGalleryDataSource.galleryItem(after: item) {
+            preloadImageIfNeeded(after)
+        }
+    }
+
+    private func preloadImageIfNeeded(_ item: MediaGalleryItem) {
+        let attachmentStream = item.attachmentStream
+        let key = attachmentStream.uniqueId as NSString
+        guard preloadedImageCache.object(forKey: key) == nil else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let image = MediaDetailViewController.decodedImage(forAttachment: attachmentStream) else { return }
+            self?.preloadedImageCache.setObject(image, forKey: key)
+        }
     }
 
     public func dismissSelf(animated isAnimated: Bool, completion: (() -> Void)? = nil) {

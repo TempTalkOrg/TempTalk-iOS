@@ -594,65 +594,26 @@ NS_ASSUME_NONNULL_BEGIN
                                    inThread:(TSThread *)thread
                                     success:(void (^)(void))successHandler
                                     failure:(void (^)(NSError * _Nonnull))failureHandler {
-    
     OWSAssertIsOnMainThread();
     OWSAssertDebug(thread);
-    
-    //TODO: 防止非TSIncomingMessage/TSOutgoingMessage乱入造成reaction crash
+
     if (![targetMessage isKindOfClass:[TSIncomingMessage class]] && ![targetMessage isKindOfClass:[TSOutgoingMessage class]]) {
         OWSLogError(@"interaction is %@ class", targetMessage.class);
         return nil;
     }
-    
-    uint64_t timestamp = [NSDate ows_millisecondTimeStamp];
-    uint32_t sourceDeviceId;
-    NSString *authorId = nil;
-    if ([targetMessage isKindOfClass:TSOutgoingMessage.class]) {
-        sourceDeviceId = ((TSOutgoingMessage *)targetMessage).sourceDeviceId ?: [OWSDevice currentDeviceId];
-        authorId = [TSAccountManager localNumber];
-    } else {
-        sourceDeviceId = ((TSIncomingMessage *)targetMessage).sourceDeviceId;
-        authorId = ((TSIncomingMessage *)targetMessage).authorId;
+
+    // Optimistic update + persistent job — fully managed by ReactionSendManager.
+    [ReactionSendManager.shared sendReactionWithEmoji:emoji
+                                               remove:remove
+                                        targetMessage:targetMessage
+                                               thread:thread];
+
+    // Immediately signal success to the UI (optimistic).
+    if (successHandler) {
+        successHandler();
     }
-    
-    DTReactionSource *oldReactionSource = nil;
-    if (remove && DTParamsUtils.validateDictionary(targetMessage.reactionMap)) {
-        NSArray <DTReactionSource *> *reactionSources = targetMessage.reactionMap[emoji];
-        for (DTReactionSource *reactionSource in reactionSources) {
-            if ([reactionSource.source isEqualToString:[TSAccountManager localNumber]]) {
-                oldReactionSource = reactionSource;
-                break;
-            }
-        }
-        BOOL isBreakTimestamp = timestamp < oldReactionSource.timestamp;
-        if (isBreakTimestamp) {
-            timestamp = oldReactionSource.timestamp + 1;
-        }
-    }
-    
-    DTRealSourceEntity *realSource = [[DTRealSourceEntity alloc] initSourceWithTimestamp:targetMessage.timestamp sourceDevice:sourceDeviceId source:authorId];
-    DTReactionMessage *reactionMessage = [[DTReactionMessage alloc] initWithEmoji:emoji source:realSource remove:remove];
-    DTReactionOutgoingMessage *message = [DTReactionOutgoingMessage reactionOutgoingMessageWithTimestamp:timestamp reactionMessage:reactionMessage thread:thread];
-    message.reactionInfo = [DTMergedReactionHandler buildParamsWithReactionMessage:reactionMessage removedReactionSource:oldReactionSource];
-        
-    [self.messageSender enqueueMessage:message
-                               success:^{
-                                
-        if (successHandler) {
-            successHandler();
-        }
-        
-        DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-            NSString *localNumber = [[TSAccountManager shared] localNumberWithTransaction:writeTransaction];
-            DTRealSourceEntity *ownSource = [[DTRealSourceEntity alloc] initSourceWithTimestamp:message.timestamp sourceDevice:[OWSDevice currentDeviceId] source:localNumber];
-            reactionMessage.ownSource = ownSource;
-            reactionMessage.conversationId = thread.uniqueId;
-            [reactionMessage saveWithTransaction:writeTransaction];
-        });
-    }
-                               failure:failureHandler];
-    
-    return message;
+
+    return nil;
 }
 
 @end

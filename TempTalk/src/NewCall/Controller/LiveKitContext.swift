@@ -33,14 +33,37 @@ final class LiveKitContext: ObservableObject {
     // is external audio device connected
     @Published var isExternalConnected: Bool = DTRTCAudioSession.shared.isExternalConnected()
 
+    private var speakerSwitchTarget: AVAudioSession.Port?
+    private var speakerSwitchDeadline: Date?
+
+    /// Optimistically update portType and suppress stale observer callbacks
+    /// until the actual audio route reaches the expected target (or timeout).
+    func beginSpeakerSwitch(toSpeaker: Bool) {
+        let target: AVAudioSession.Port = toSpeaker ? .builtInSpeaker : .builtInReceiver
+        speakerSwitchTarget = target
+        speakerSwitchDeadline = Date().addingTimeInterval(1.5)
+        portType = target
+    }
+
     func setPortTypeAndExternal(_ portType: AVAudioSession.Port, isExternalConnected: Bool) {
         guard Thread.isMainThread else {
             DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.setPortTypeAndExternal(portType, isExternalConnected:isExternalConnected) }
+                guard let self else { return }
+                self.setPortTypeAndExternal(portType, isExternalConnected: isExternalConnected)
+            }
             return
         }
-        
+
+        if let target = speakerSwitchTarget, let deadline = speakerSwitchDeadline {
+            if portType == target || Date() > deadline {
+                speakerSwitchTarget = nil
+                speakerSwitchDeadline = nil
+            } else {
+                self.isExternalConnected = isExternalConnected
+                return
+            }
+        }
+
         self.isExternalConnected = isExternalConnected
         self.portType = portType
     }

@@ -32,7 +32,7 @@ private extension ConversationViewController {
         let currentTimestamp = NSDate.ows_millisecondTimeStamp()
         let recallThreshold = DTRecallConfig.fetch().timeoutInterval
 
-        return viewState.forwardMessageItems.filter { viewItem in
+        return viewState.selectedMessageItems.filter { viewItem in
             guard viewItem.interaction is TSOutgoingMessage else { return false }
             let msgTimestamp = viewItem.interaction.timestamp
             guard currentTimestamp >= msgTimestamp else { return false }

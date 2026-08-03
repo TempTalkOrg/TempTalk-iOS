@@ -42,6 +42,9 @@ public class TSConstants: NSObject {
     private static var _cachedServerConfig: DTServersEntity?
     
     private static let _hostLock = UnfairLock()
+    // Explicit chat host override, written by LastHost restore or failover path.
+    // When set, serviceUrlPath(DTServerToChat) returns it instead of sortedDomainSpeeds.
+    private static var _mainServiceHostOverride: String?
 
     @objc public static var defaultServerConfig: DTServersEntity {
         if let cached = _configLock.withLock({ _cachedServerConfig }) { return cached }
@@ -69,17 +72,19 @@ public class TSConstants: NSObject {
         
     @objc public static var mainServiceHost: String {
         set {
-            _hostLock.withLock { shared.mainServiceHost = newValue }
+            // Non-empty → set override; empty → clear (fall back to speed-test order).
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            _hostLock.withLock { _mainServiceHostOverride = trimmed.isEmpty ? nil : trimmed }
         }
         get {
             guard let result = serviceUrlPath(with: DTServerToChat) else { return defaultMainHost }
             return result.domain
         }
     }
-    
+
     public static var meetingWebSocketURL: String {
-        let host = _hostLock.withLock { shared.mainServiceHost }
-        return "wss://" + host + "/centrifugo/connection/websocket"
+        // Use the public getter so override / serviceUrlPath stays consistent
+        return "wss://" + mainServiceHost + "/centrifugo/connection/websocket"
     }
     
     @objc
@@ -97,7 +102,7 @@ public class TSConstants: NSObject {
         }
     }
     
-    // 语音转文字
+    // Speech-to-text
     @objc
     public static var speechToTextServerURL: String {
         get {
@@ -106,7 +111,7 @@ public class TSConstants: NSObject {
         }
     }
     
-    // 头像服务
+    // Avatar storage
     @objc
     public static var avatarStorageServerURL: String {
         get {
@@ -115,7 +120,7 @@ public class TSConstants: NSObject {
         }
     }
     
-    // 会议相关的路径
+    // Meeting / call
     @objc
     public static var callServerURL: String {
         get {
@@ -124,7 +129,7 @@ public class TSConstants: NSObject {
         }
     }
     
-    // 文件分享的路径
+    // File sharing
     @objc
     public static var fileShareServiceURL: String {
         get {
@@ -133,7 +138,7 @@ public class TSConstants: NSObject {
         }
     }
 
-    // 根路径服务（空路径）
+    // Root service (no path suffix)
     @objc
     public static var rootServiceURL: String {
         get {
@@ -141,8 +146,17 @@ public class TSConstants: NSObject {
             return result.url
         }
     }
-    
-    @objc public static var appUserAgent: String { "\(TSConstants.displayNameForUA)/\(AppVersion.shared().currentAppReleaseVersion) (\(UIDevice.current.model); iOS \(UIDevice.current.systemVersion); Scale/\(UIScreen.main.scale))" }
+
+    // GIF proxy service (/gifs on the chat domain)
+    @objc
+    public static var gifServiceURL: String {
+        get {
+            guard let result = serviceUrlPath(with: DTServerToGIF) else { return "" }
+            return result.url
+        }
+    }
+
+    @objc public static var appUserAgent: String { "\(TSConstants.displayNameForUA)/\(AppVersion.shared().currentAppReleaseVersion) (\(AppVersion.shared().hardwareInfoString()); iOS \(UIDevice.current.systemVersion); Scale/\(UIScreen.main.scale); Build/\(AppVersion.shared().currentAppBuildVersion); AppId \(TSConstants.currentBundleId ?? TSConstants.temptalkBundleId))" }
     
     @objc public static var appDisplayName: String { shared.appDisplayName }
     
@@ -179,7 +193,7 @@ extension TSConstants {
         timeout: TimeInterval = 1.0,
         globalTimeout: TimeInterval = 1.5
     ) async -> [(String, TimeInterval)] {
-        // 包装单个域名测试
+        // Wrap a single domain speed test
         func testDomain(_ domain: String) async -> (String, TimeInterval)? {
             guard let url = URL(string: "https://\(domain)") else { return nil }
             
@@ -198,7 +212,7 @@ extension TSConstants {
         }
         
         return await withTaskGroup(of: (String, TimeInterval)?.self) { group in
-            // 并发启动所有域名测试
+            // Launch all domain tests concurrently
             for domain in domains {
                 group.addTask {
                     await testDomain(domain)
@@ -208,13 +222,13 @@ extension TSConstants {
             var results = [(String, TimeInterval)]()
             let deadline = Date().addingTimeInterval(globalTimeout)
             
-            // 收集结果，带全局超时
+            // Collect results with a global timeout
             for await result in group {
                 if let result = result {
                     results.append(result)
                 }
                 if Date() > deadline {
-                    group.cancelAll() // 超时 -> 取消未完成任务
+                    group.cancelAll() // timeout → cancel pending tasks
                     break
                 }
             }
@@ -228,7 +242,7 @@ extension TSConstants {
         Task {
             let results = await testDomains(allDomains)  // [(domain, speed)]
             
-            // 如果 key 重复，取最小的速度
+            // Deduplicate: keep the fastest (lowest) time per domain
             let domainSpeeds = Dictionary(results, uniquingKeysWith: { min($0, $1) })
             
             sortedDomainSpeeds = domainSpeeds
@@ -237,26 +251,58 @@ extension TSConstants {
         }
     }
     
-    // 根据name获取对应的url和认证类型
+    // Resolve service URL and cert type by service name
     public static func serviceUrlPath(with name: String) -> (url: String, domain: String, certType: String)? {
-        // Special handling for root service (empty path)
+        // Root service shares the chat domain (with switching) but has no path suffix
         if name == DTServerToRoot {
-            let finalDomain = defaultMainHost
-            let finalCertType = "self"
-            let url = defaultSchema + finalDomain
-            return (url, finalDomain, finalCertType)
+            guard let chatResult = serviceUrlPath(with: DTServerToChat) else {
+                let url = defaultSchema + defaultMainHost
+                return (url, defaultMainHost, "self")
+            }
+            let url = defaultSchema + chatResult.domain
+            return (url, chatResult.domain, chatResult.certType)
         }
 
         let config = defaultServerConfig
 
-        // 1. 找到服务
+        // 1. Find the service
         guard let service = config.services.first(where: { $0.name == name }) else { return nil }
 
-        // 2. 找到对应的 DTServerDomainEntity 对象
+        // 2. Map domain labels to DTServerDomainEntity objects
         let matchedDomains: [DTServerDomainEntity] = service.domains.compactMap { label in
             config.domains.first(where: { $0.label == label })
         }
-        
+
+        // Self-hosted proxy on: services riding the chat tunnel domains (chat / call / fileSharing /
+        // speech2text / grayCheck) resolve through a separate pinned-domain path. CDN / other
+        // services (avatar, …) and proxy-off fall through — everything below runs exactly as before,
+        // adding no branches to the original speed-test logic.
+        let chatTunnelDomains = ProxyManager.shared.tunnelChatDomains()
+        if ProxyManager.shared.routesThroughChatTunnel(matchedDomains: matchedDomains, tunnelDomains: chatTunnelDomains),
+           let proxyResult = proxyServiceUrlPath(servicePath: service.path, matchedDomains: matchedDomains, chatDomains: chatTunnelDomains) {
+            return proxyResult
+        }
+
+        // For chat: use the explicit override (set by restoreHostsToTSConstants or
+        // failover) until it is explicitly cleared by markAsInvalid or replaced by
+        // switchServerHost. This prevents WS reconnection from falling back to a
+        // bad defaultMainHost after the override is consumed.
+        if name == DTServerToChat,
+           let override = _hostLock.withLock({ _mainServiceHostOverride }),
+           !override.isEmpty {
+            let normalizedOverride = override.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let matchedEntity = matchedDomains.first(where: {
+                $0.domain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedOverride
+            })
+            if let matchedEntity = matchedEntity {
+                return (defaultSchema + override + service.path, override, matchedEntity.certType)
+            }
+            // Override not in current chat domain pool — stale pointer,
+            // clear it and fall back to speed-test order.
+            _hostLock.withLock { _mainServiceHostOverride = nil }
+            Logger.warn("[DomainSwitch] override \(override) not in matchedDomains, falling back to speed-test sort")
+        }
+
         var fastestDomainEntity: DTServerDomainEntity? = nil
         for domain in sortedDomainSpeeds {
             if let matched = matchedDomains.first(where: {
@@ -268,7 +314,7 @@ extension TSConstants {
             }
         }
             
-        // 如果没有找到匹配，就走默认
+        // No match found — use default
         var finalDomain = ""
         var finalCertType = ""
         if name == DTServerToAvatar {
@@ -283,11 +329,32 @@ extension TSConstants {
         let url = defaultSchema + finalDomain + service.path
         return (url, finalDomain, finalCertType)
     }
+
+    /// Service URL while the self-hosted proxy is on, for a service that rides the chat tunnel
+    /// domains: pinned to the whitelisted `proxy.tunnelDomains.chat` list — no speed-test order, no
+    /// fallback to non-listed origins (those would go direct and leak the real IP). Picks the current
+    /// override if it's one of the proxy domains (failover rotation pointer), else the first listed
+    /// domain. The caller has already confirmed the service rides the chat tunnel
+    /// (`routesThroughChatTunnel`); returns nil only if the whitelist became empty meanwhile.
+    private static func proxyServiceUrlPath(servicePath: String,
+                                            matchedDomains: [DTServerDomainEntity],
+                                            chatDomains: [String]) -> (url: String, domain: String, certType: String)? {
+        guard !chatDomains.isEmpty else { return nil }
+        let override = _hostLock.withLock { _mainServiceHostOverride }
+        let selected = override.flatMap { ov in
+            chatDomains.first(where: { $0.caseInsensitiveCompare(ov) == .orderedSame })
+        } ?? chatDomains[0]
+        let normalized = selected.lowercased()
+        let certType = matchedDomains.first(where: {
+            $0.domain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalized
+        })?.certType ?? "self"
+        return (defaultSchema + selected + servicePath, selected, certType)
+    }
 }
 
 // MARK: -
 
-// attention: 养成好习惯，加一套服务，每一步严格保持顺序一致，方便维护
+// NOTE: When adding a new service, keep all steps in consistent order for maintainability.
 // example: 1. s1,s2,s3 -> s1,s2,s3,s4(new) ✅
 //          2. s1,s2,s3 -> s1,s2,s4(new),s3 ❌
 private protocol TSConstantsProtocol: AnyObject {
@@ -316,8 +383,8 @@ private class TSConstantsTempTalkProduction: TSConstantsProtocol {
     public var callServerPath = DTServerToCall
     public var fileShareServicePath = DTServerToFileSharing
 
-    public let appDisplayName = "Yelling"
-    public let displayNameForUA = "Yelling"
+    public let appDisplayName = "Quicall"
+    public let displayNameForUA = "Quicall"
     public let appLogoName: String = "logoTempTalk"
     public let officialBotName: String = "Support Team"
     public let officialBotId: String = "+10000"
@@ -334,8 +401,8 @@ private class TSConstantsTempTalkTest: TSConstantsProtocol {
     public var callServerPath = DTServerToCall
     public var fileShareServicePath = DTServerToFileSharing
 
-    public let appDisplayName = "YellingTest"
-    public let displayNameForUA = "YellingTest"
+    public let appDisplayName = "QuicallTest"
+    public let displayNameForUA = "QuicallTest"
     public let appLogoName: String = "logoTempTalk"
     public let officialBotName: String = "Support Team"
     public let officialBotId: String = "+10000"

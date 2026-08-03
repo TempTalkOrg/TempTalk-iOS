@@ -11,6 +11,7 @@ import TTServiceKit
 extension NSNotification.Name {
     static let denoiseModeDidChange = NSNotification.Name("DenoiseModeDidChange")
     static let voiceChangerPresetDidChange = NSNotification.Name("VoiceChangerPresetDidChange")
+    static let voiceRecordingDidEnd = NSNotification.Name("VoiceRecordingDidEnd")
 }
 
 @objcMembers

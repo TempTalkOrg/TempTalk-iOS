@@ -19,6 +19,7 @@ const CGFloat OWSWindowManagerCallBannerHeight(void);
 const UIWindowLevel UIWindowLevel_CallView(void);
 const UIWindowLevel UIWindowLevel_AlertCallView(void);
 const UIWindowLevel UIWindowLevel_ScreenBlocking(void);
+const UIWindowLevel UIWindowLevel_ScreenProtection(void);
 
 extern const UIWindowLevel UIWindowLevel_Background;
 
@@ -37,7 +38,7 @@ extern const UIWindowLevel UIWindowLevel_Background;
 
 - (void)setupWithRootWindow:(UIWindow *)rootWindow screenBlockingWindow:(UIWindow *)screenBlockingWindow;
 
-- (void)setIsScreenBlockActive:(BOOL)isScreenBlockActive;
+- (void)setIsScreenBlockActive:(BOOL)isScreenBlockActive isForegroundLock:(BOOL)isForegroundLock;
 
 - (void)setIsPhotoLibraryAuth:(BOOL)isPhotoLibraryAuth;
 
@@ -60,6 +61,12 @@ extern const UIWindowLevel UIWindowLevel_Background;
 
 - (void)showFloatingCallView:(UIView *)floatingView;
 - (BOOL)hasCall;
+
+// YES when a screen block is active but it is the foreground passcode lock AND the call
+// view is floated above it and interactive. In this state UI can still be presented on the
+// call window, so callers should NOT defer presentation the way they do for the background
+// privacy cover (which hides the call behind it).
+- (BOOL)isCallViewFrontmostAboveScreenLock;
 
 /*
 - (void)startShowAlertCallView:(UIViewController *)alertCallViewController;

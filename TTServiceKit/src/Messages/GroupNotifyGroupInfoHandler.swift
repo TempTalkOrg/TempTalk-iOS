@@ -198,6 +198,17 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
                                      timeStamp: timeStamp,
                                      transaction: transaction)
 
+        } else if groupNotifyEntity.groupNotifyDetailedType == .rotateGroupCrypto {
+
+            handleRotateGroupCrypto(envelope: envelope,
+                                    groupNotifyEntity: groupNotifyEntity,
+                                    display: display,
+                                    oldGroupModel: oldGroupModel,
+                                    newGroupModel: newGroupModel,
+                                    newGroupThread: newGroupThread,
+                                    timeStamp: timeStamp,
+                                    transaction: transaction)
+
         } else {
 
             Logger.info("unsupported type")
@@ -587,6 +598,11 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
                                          encryptedAvatar: group?.encryptedAvatar,
                                          transaction: transaction)
 
+        // 加密群：和头像捆绑刷新群名
+        if isEncrypted {
+            DTGroupKeyMessageHandler.refreshEncryptedGroupNameIfNeeded(gid: gid, transaction: transaction)
+        }
+
         guard let avatar = DTGroupCryptoDisplayHelper.shared.prepareAvatarUpdate(
             plainAvatar: group?.avatar,
             encryptedAvatar: group?.encryptedAvatar,
@@ -669,18 +685,14 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
             return
         }
         
-        var resolvedName = rawName
         let group = groupNotifyEntity.group
-        if let group, group.groupCryptoMode > 0,
-           let encryptedName = group.encryptedName, !encryptedName.isEmpty,
-           let decrypted = DTGroupCryptoManager.shared.decryptedGroupName(
-               gid: gid,
-               encryptedName: encryptedName,
-               transaction: transaction),
-           !decrypted.isEmpty {
-            resolvedName = decrypted
-            Logger.info("[GroupCrypto] Decrypted group name for gid: \(gid)")
-        }
+        let resolvedName = DTGroupCryptoManager.shared.resolveGroupName(
+            gid: gid,
+            cryptoMode: group?.groupCryptoMode ?? 0,
+            encryptedName: group?.encryptedName,
+            oldName: oldGroupModel.groupName,
+            serverName: rawName,
+            transaction: transaction)
 
         DTGroupBaseInfoEntity.syncFields(gid: gid,
                                          name: resolvedName,
@@ -692,7 +704,12 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
         newGroupThread.anyUpdateGroupThread(transaction: transaction) { gthread in
             gthread.groupModel = newGroupModel
         }
-        
+
+        // 加密群：和群名捆绑刷新头像
+        if let group, group.groupCryptoMode > 0 {
+            DTGroupKeyMessageHandler.downloadEncryptedAvatarIfNeeded(gid: gid, transaction: transaction)
+        }
+
         // 如果旧的 groupName 和新的不一样，则构造变更信息
         guard oldGroupModel.groupName != resolvedName else {
             Logger.error("oldGroupModel.groupName == newGroupModel.groupName")
@@ -702,7 +719,7 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
         var updatedGroupInfoString = ""
         let source = groupNotifyEntity.source
         if !source.isEmpty {
-            let displayName = TextSecureKitEnv.shared().contactsManager.displayName(forPhoneIdentifier: source)
+            let displayName = TextSecureKitEnv.shared().contactsManager.displayName(forPhoneIdentifier: source, transaction: transaction)
             if !displayName.isEmpty {
                 updatedGroupInfoString = String(format: Localized("GROUP_NAME_CHANGED_SYSTEM_MSG"), displayName, resolvedName)
             } else {
@@ -773,6 +790,32 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
             gthread.groupModel = newGroupModel
         }
 
+        // baseInfo 刚写完，R_group 已在本地则立即解出新值
+        DTGroupKeyMessageHandler.refreshEncryptedGroupDisplay(gid: gid, transaction: transaction)
+
+        // 升级冷路径兜底：仅当 "普通群 → 加密群" 时主动触发一次单群信息拉取，
+        // 命中 runFullSyncVerificationForGid 完成全员校验，关闭升级后老成员未校验窗口。
+        if !wasAlreadyEncrypted {
+            if let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid),
+               !localGroupId.isEmpty {
+                let targetVersion = newGroupModel.version
+                Logger.info("[GroupCrypto] upgrade cold-path: trigger fullSync for serverGid=\(gid) version=\(targetVersion)")
+                transaction.addAsyncCompletion(queue: DTGroupUpdateMessageProcessor.serialQueue()) {
+                    SDSDatabaseStorage.shared.asyncWrite { writeTx in
+                        DTGroupUpdateMessageProcessor().requestGroupInfo(withGroupId: localGroupId,
+                                                                         targetVersion: targetVersion,
+                                                                         needSystemMessage: false,
+                                                                         generate: false,
+                                                                         envelope: envelope,
+                                                                         transaction: writeTx,
+                                                                         completion: { _ in })
+                    }
+                }
+            } else {
+                Logger.error("[GroupCrypto] upgrade cold-path: invalid localGroupId for serverGid=\(gid)")
+            }
+        }
+
         guard display else { return }
 
         if wasAlreadyEncrypted {
@@ -790,6 +833,83 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
         infoMessage.anyInsert(transaction: transaction)
 
         Logger.info("[GroupCrypto] Inserted upgrade system message for gid: \(gid)")
+    }
+
+    // MARK: - Rotate Group Crypto
+
+    /// Group is already encrypted; rotate only refreshes encrypted name/avatar + keyVersion and shows
+    /// a "key reset" system message. The new R_group itself is covered by the GroupKeyMessage path
+    /// (saveOrRotateRGroup) — no first-upgrade cold-path full sync here.
+    private func handleRotateGroupCrypto(envelope: DSKProtoEnvelope,
+                                         groupNotifyEntity: DTGroupNotifyEntity,
+                                         display: Bool,
+                                         oldGroupModel: TSGroupModel,
+                                         newGroupModel: TSGroupModel,
+                                         newGroupThread: TSGroupThread,
+                                         timeStamp: UInt64,
+                                         transaction: SDSAnyWriteTransaction) {
+        guard let groupBaseInfo = groupNotifyEntity.group else {
+            Logger.info("[GroupCrypto] rotateGroupCrypto: group base info is nil")
+            return
+        }
+
+        let cryptoMode = groupBaseInfo.groupCryptoMode
+        guard cryptoMode > 0 else {
+            Logger.info("[GroupCrypto] rotateGroupCrypto: groupCryptoMode is 0, ignoring")
+            return
+        }
+
+        let gid = groupNotifyEntity.gid
+        let newKeyVersion = groupBaseInfo.groupCryptoKeyVersion
+        Logger.info("[GroupCrypto] Rotate notify received: gid: \(gid), newKeyVersion: \(newKeyVersion), hasEncryptedName: \(groupBaseInfo.encryptedName?.isEmpty == false), hasEncryptedAvatar: \(groupBaseInfo.encryptedAvatar?.isEmpty == false)")
+
+        newGroupModel.groupCryptoMode = cryptoMode
+
+        // Apply the notify's ciphertext directly — no notify-side version gate. The single version
+        // authority is the GroupKeyMessage path (saveOrRotateRGroup), which gates the key itself.
+        // Decoupling avoids the notify-vs-GroupKeyMessage arrival-order hazard: a strict version gate
+        // here would drop the notify's (correct) encryptedName whenever the key message landed first
+        // and already bumped the local keyVersion. The non-empty guards keep a trigger-only notify
+        // from wiping a good local value; a rare stale/duplicate notify self-corrects on the next
+        // group-info refresh.
+        if let baseInfoEntity = DTGroupBaseInfoEntity.anyFetch(uniqueId: gid, transaction: transaction) {
+            baseInfoEntity.anyUpdate(transaction: transaction) { entity in
+                entity.groupCryptoMode = cryptoMode
+                if let encryptedName = groupBaseInfo.encryptedName, !encryptedName.isEmpty {
+                    entity.encryptedName = encryptedName
+                }
+                if let encryptedAvatar = groupBaseInfo.encryptedAvatar, !encryptedAvatar.isEmpty {
+                    entity.encryptedAvatar = encryptedAvatar
+                }
+            }
+        } else {
+            let newBaseInfo = DTGroupBaseInfoEntity()
+            newBaseInfo.gid = gid
+            newBaseInfo.name = newGroupModel.groupName ?? ""
+            newBaseInfo.avatar = groupBaseInfo.avatar
+            newBaseInfo.groupCryptoMode = cryptoMode
+            newBaseInfo.encryptedName = groupBaseInfo.encryptedName
+            newBaseInfo.encryptedAvatar = groupBaseInfo.encryptedAvatar
+            newBaseInfo.anyInsert(transaction: transaction)
+        }
+
+        newGroupThread.anyUpdateGroupThread(transaction: transaction) { gthread in
+            gthread.groupModel = newGroupModel
+        }
+
+        // If the new R_group already arrived (via GroupKeyMessage), decrypt the new name/avatar now.
+        DTGroupKeyMessageHandler.refreshEncryptedGroupDisplay(gid: gid, transaction: transaction)
+
+        guard display else { return }
+
+        let infoMessage = TSInfoMessage(timestamp: timeStamp,
+                                        in: newGroupThread,
+                                        messageType: .groupCryptoUpgrade,
+                                        customMessage: Localized("GROUP_CRYPTO_RESET_SYSTEM_MSG"))
+        infoMessage.isShouldAffectThreadSorting = true
+        infoMessage.anyInsert(transaction: transaction)
+
+        Logger.info("[GroupCrypto] Inserted rotate system message for gid: \(gid)")
     }
 
 }

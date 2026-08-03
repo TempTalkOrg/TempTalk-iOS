@@ -1,107 +1,34 @@
-# TempTalk iOS
+# Difft for iOS
 
-TempTalk iOS is a modern instant messaging application built with iOS native development, using Swift and Objective-C, designed for secure office team communication.
+Difft is an office IM app for private communication in company.
 
-<a href="https://www.temptalk.app/" target="_blank"><img src="https://github.com/user-attachments/assets/a6005000-9f4a-4a68-a7d0-90e5c7cbb76d" width="16" height="16" alt="TempTalk Logo" /></a> **Official Website**: [https://www.temptalk.app/](https://www.temptalk.app/)
+[![Available on the App Store](http://cl.ly/WouG/Download_on_the_App_Store_Badge_US-UK_135x40.svg)](https://itunes.apple.com/us/app/signal-private-messenger/id874139669?mt=8)
 
-## Features
+## Translation
+Help us translate Signal! The translation effort happens on [Transifex](https://www.transifex.com/open-whisper-systems/signal-ios/)
 
-- **Instant Messaging**: Support for text, voice, images, videos and other message types
-- **Voice & Video Calls**: High-quality audio and video calling functionality with LiveKit SDK
-- **Group Chats**: Create and manage group conversations with advanced features
-- **End-to-End Encryption**: Self-developed E2EE solution providing forward secrecy, device local key management, offline message secure transmission and message integrity protection
-- **Cross-Platform**: Native iOS application with modern UI
-- **File Sharing**: Share documents, images, and other files securely
-- **Push Notifications**: Real-time message notifications
-- **Multi-language Support**: Internationalization for global teams
+## Contributing Code
+Instructions on how to set up your development environment and build Signal-iOS can be found in [BUILDING.md](https://github.com/signalapp/Signal-iOS/blob/master/BUILDING.md). Other useful instructions for development can be found on the [Development Guide wiki page](https://github.com/signalapp/Signal-iOS/wiki/Development-Guide). We also recommend reading the [contribution guidelines](https://github.com/signalapp/Signal-iOS/blob/master/CONTRIBUTING.md).
 
-## Architecture
+## Contributing Ideas
+Have something you want to say about Open Whisper Systems projects or want to be part of the conversation? Get involved in the [community forum](https://community.signalusers.org).
 
-### Core Technology Stack
-- **Programming Language**: Swift 5.0+ / Objective-C
-- **UI Framework**: UIKit combined with modern SwiftUI components
-- **Architecture Pattern**: MVVM + Repository Pattern
-- **Dependency Management**: CocoaPods
-- **Networking Layer**: URLSession + custom networking layer
-- **Database**: SQLite with SQLCipher encryption
-- **Media Processing**: AVFoundation, WebRTC for calls
-- **Image Processing**: Custom image handling and YYImage
+## SignalServiceKit
 
-### Project Structure
-```
-TempTalk-iOS/
-├── TempTalk/                 # Main application target
-├── TTMessaging/             # Messaging module
-├── TTServiceKit/            # Service layer and business logic
-├── TTShareExtension/        # Share extension
-├── NSE/                     # Notification service extension
-├── DTProto/                 # Protocol definitions and FFI
-├── Pods/                    # CocoaPods dependencies
-├── Scripts/                 # Build and utility scripts
-├── fastlane/                # Fastlane automation scripts
-├── protobuf/                # Protocol buffer definitions
-└── Modules/                 # Custom modules (FTS5SimpleTokenizer)
-```
+Check out the [SignalServiceKit README](SignalServiceKit/README.md) for
+details about using SignalServiceKit in your own app.
 
-## Requirements
+## Cryptography Notice
 
-- iOS 14.0+
-- Xcode 14.0+
-- CocoaPods
+This distribution includes cryptographic software. The country in which you currently reside may have restrictions on the import, possession, use, and/or re-export to another country, of encryption software. 
+BEFORE using any encryption software, please check your country's laws, regulations and policies concerning the import, possession, or use, and re-export of encryption software, to see if this is permitted. 
+See <http://www.wassenaar.org/> for more information.
 
-## Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/TempTalkOrg/TempTalk-iOS.git
-   cd TempTalk-iOS
-   ```
-
-2. Install dependencies:
-   ```bash
-   pod install
-   ```
-
-3. Open `Difft.xcworkspace` in Xcode
-
-4. Build and run the project
-
-## Building
-
-For detailed build instructions, please refer to [BUILDING.md](BUILDING.md).
-
-This project uses the following open source libraries:
-
-- **Open Source Libraries**:
-  - **[Curve25519Kit](https://github.com/WhisperSystems/Curve25519Kit)** - Elliptic curve cryptography
-  - **[Signal iOS](https://github.com/signalapp/Signal-iOS)** - Core messaging and encryption components
-  - **[Mantle](https://github.com/Mantle/Mantle)** - Model framework for JSON serialization
-  - **[PanModal](https://github.com/slackhq/PanModal)** - Bottom sheet modals
-  - **[ZLPhotoBrowser](https://github.com/longitachi/ZLPhotoBrowser)** - Photo picker
-  - **[JXCategoryView](https://github.com/pujiaxin33/JXCategoryView)** - Category view components
-  - **[JXPagingView](https://github.com/pujiaxin33/JXPagingView)** - Paging view components
-  - **[YYImage](https://github.com/ibireme/YYImage)** - Image processing and animation
-
-We thank the Signal team and all open source contributors for their excellent work on secure messaging and their contributions to the open source community.
+The U.S. Government Department of Commerce, Bureau of Industry and Security (BIS), has classified this software as Export Commodity Control Number (ECCN) 5D002.C.1, which includes information security software using or performing cryptographic functions with asymmetric algorithms. 
+The form and manner of this distribution makes it eligible for export under the License Exception ENC Technology Software Unrestricted (TSU) exception (see the BIS Export Administration Regulations, Section 740.13) for both object code and source code.
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+Copyright 2014-2018 Open Whisper Systems
 
-## Support
-
-If you encounter any issues or have questions, please:
-
-1. Check the [Building Guide](BUILDING.md) for common issues
-2. Search [Issues](https://github.com/TempTalkOrg/TempTalk-iOS/issues)
-3. Create a new Issue
-4. Contact the development team: opensource@temptalk.app
-
-## Links
-
-- [Official Website](https://www.temptalk.app/) - TempTalk official website
-- [Project Homepage](https://github.com/TempTalkOrg/TempTalk-iOS)
-
----
-
-**TempTalk iOS** - Making communication simpler and connections more secure.
+Licensed under the GPLv3: http://www.gnu.org/licenses/gpl-3.0.html

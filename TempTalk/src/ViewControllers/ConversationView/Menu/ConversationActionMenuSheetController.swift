@@ -118,9 +118,15 @@ private class ActionView: UIView {
     
     private func setupView() {
         isUserInteractionEnabled = true
+        // UI automation: expose the whole row as one accessibility element labelled with the
+        // action title (the row is a plain UIView + tap gesture, so without this Maestro only
+        // sees the inner UILabel). Lets the "更多" sheet rows (e.g. 撤回/Recall) be matched.
+        isAccessibilityElement = true
+        accessibilityLabel = action.title
+        accessibilityIdentifier = ConversationActionMenuController.accessibilityIdentifier(for: action)
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(actionViewPressed))
         addGestureRecognizer(tapGesture)
-        
+
         addSubview(iconImageView)
         iconImageView.image = action.image
         iconImageView.snp.makeConstraints { make in

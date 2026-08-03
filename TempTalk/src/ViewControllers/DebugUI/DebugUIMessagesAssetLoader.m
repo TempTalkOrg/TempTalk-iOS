@@ -3,8 +3,9 @@
 //
 
 #import "DebugUIMessagesAssetLoader.h"
-#import <AFNetworking/AFHTTPSessionManager.h>
 #import <SignalCoreKit/Randomness.h>
+#import <TTServiceKit/OWSSignalService.h>
+#import <TTServiceKit/TSRequest.h>
 #import <TTServiceKit/MIMETypeUtil.h>
 #import <TTServiceKit/OWSFileSystem.h>
 #import <TTServiceKit/TSAttachment.h>
@@ -56,28 +57,35 @@ NS_ASSUME_NONNULL_BEGIN
         return success();
     }
 
-    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    AFHTTPSessionManager *sessionManager = [[AFHTTPSessionManager alloc] initWithSessionConfiguration:configuration];
-    sessionManager.responseSerializer = [AFHTTPResponseSerializer serializer];
-    OWSAssertDebug(sessionManager.responseSerializer);
-    [sessionManager GET:fileUrl
-             parameters:nil
-                headers:nil
-               progress:nil
-                success:^(NSURLSessionDataTask *task, NSData *_Nullable responseObject) {
-            if ([responseObject writeToFile:filePath atomically:YES]) {
-                self.filePath = filePath;
-                OWSAssertDebug([NSFileManager.defaultManager fileExistsAtPath:filePath]);
-                success();
-            } else {
-                OWSFailDebug(@"Error write url response [%@]: %@", fileUrl, filePath);
-                failure();
-            }
-        }
-        failure:^(NSURLSessionDataTask *_Nullable task, NSError *requestError) {
-            OWSFailDebug(@"Error downloading url[%@]: %@", fileUrl, requestError);
+    TSRequest *request = [TSRequest requestWithUrl:[NSURL URLWithString:fileUrl] method:@"GET" parameters:nil];
+    [OWSSignalService.sharedInstance.urlSessionForNoneService
+        performDownloadRequest:request
+                 completeQueue:dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)
+                       success:^(OWSUrlDownloadResponse * _Nonnull response) {
+        NSError *readError;
+        NSData *data = [NSData dataWithContentsOfURL:response.downloadUrl options:0 error:&readError];
+        if (readError || !data) {
+            OWSFailDebug(@"Error reading downloaded url[%@]: %@", fileUrl, readError);
             failure();
-        }];
+            return;
+        }
+
+        if ([data writeToFile:filePath atomically:YES]) {
+            self.filePath = filePath;
+            OWSAssertDebug([NSFileManager.defaultManager fileExistsAtPath:filePath]);
+            success();
+        } else {
+            OWSFailDebug(@"Error write url response [%@]: %@", fileUrl, filePath);
+            failure();
+        }
+    }
+                      progress:^(NSURLSessionTask * _Nonnull task, NSProgress * _Nonnull progress) {
+        // no-op
+    }
+                       failure:^(OWSHTTPErrorWrapper * _Nonnull errorWrapper) {
+        OWSFailDebug(@"Error downloading url[%@]: %@", fileUrl, errorWrapper.asNSError);
+        failure();
+    }];
 }
 
 #pragma mark -

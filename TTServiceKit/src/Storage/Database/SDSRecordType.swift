@@ -74,4 +74,5 @@ public enum SDSRecordType: UInt, CaseIterable {
     case dTScreenShotOutgoingMessage = 61
     case resetIdentifyKeyRecord = 62
     case groupCryptoKeyRecord = 63
+    case incomingCallMessage = 64
 }

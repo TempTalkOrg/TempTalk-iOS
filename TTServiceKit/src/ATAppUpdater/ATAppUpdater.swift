@@ -81,6 +81,7 @@ extension ATAppUpdater {
                let versionInfo = self.parseVersionData(data, currentVersion: context.currentVersion)
             {
                 DispatchQueue.main.async {
+                    self.appStoreURL = versionInfo.appStoreURL
                     completion(versionInfo.hasNewVersion,
                              versionInfo.needForceUpdate,
                              versionInfo.latestVersion)
@@ -88,10 +89,7 @@ extension ATAppUpdater {
                 return
             }
             
-            // Try next URL on failure
-            DispatchQueue.global().async { [weak self] in
-                self?.tryNextURL(context: context, completion: completion)
-            }
+            self.tryNextURL(context: context, completion: completion)
         }
         task.resume()
     }
@@ -118,8 +116,6 @@ extension ATAppUpdater {
             hasNewVersion = true
             needForceUpdate = true
         }
-        
-        self.appStoreURL = appStoreURL
         
         return (hasNewVersion, needForceUpdate, latestVersion, appStoreURL)
     }

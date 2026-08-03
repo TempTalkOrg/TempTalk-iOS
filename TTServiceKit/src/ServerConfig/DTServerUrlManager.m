@@ -146,7 +146,7 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
             }];
             oneServerStatusItems = serverStatusItems.copy;
             self.serverUrlsInfo[propertyName] = oneServerStatusItems;
-            OWSLogInfo(@"Multi-server: %@ create %@ server status items cout = %ld",self.logTag, [self getServersEntityPropertyNameWithServerType:serverType], (long)oneServerStatusItems.count);
+            OWSLogInfo(@"[DomainSwitch] %@ create %@ items count = %ld",self.logTag, [self getServersEntityPropertyNameWithServerType:serverType], (long)oneServerStatusItems.count);
         }
         
         OWSAssertDebug(oneServerStatusItems.count);
@@ -162,7 +162,16 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
 }
 
 - (NSArray<NSString *> *)getTheServerUrlsWithServerType:(DTServToType)serverType{
-    
+
+    // Under proxy: chat candidates are exactly the proxy.tunnelDomains.chat list (server config,
+    // else tier-2 derived), rotated within — never the speed-tested multi-origin pool.
+    if (serverType == DTServToTypeChat) {
+        NSArray<NSString *> *chatDomains = [ProxyManager shared].tunnelChatDomains;
+        if (chatDomains.count) {
+            return chatDomains;
+        }
+    }
+
     NSArray *oneServerStatusItems = [self getOrCreateOneServerStatusItemsWithServerType:serverType];
     NSMutableArray *availableItems = @[].mutableCopy;
     [oneServerStatusItems enumerateObjectsUsingBlock:^(DTServerStatusEntity *obj, NSUInteger idx, BOOL * _Nonnull stop) {
@@ -170,40 +179,70 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
             [availableItems addObject:obj];
         }
     }];
-    
+
     if (!availableItems.count) {
         [self resetWithServerType:serverType];
         [self startSpeedTestWithServerType:serverType];
         return [self getTheServerUrlsWithServerType:serverType];
     }
-    
+
+    NSString *lastSuccessfulHost = [[DTLastSuccessfulHostManager shared] getLastSuccessfulHostWithServerType:serverType];
+
     NSArray *newItems = [availableItems sortedArrayUsingComparator:^NSComparisonResult(DTServerStatusEntity *obj1, DTServerStatusEntity *obj2) {
-        NSNumber *number1 = [NSNumber numberWithDouble:obj1.timeConsuming];
-        NSNumber *number2 = [NSNumber numberWithDouble:obj2.timeConsuming];
-        return [number1 compare:number2];
+        BOOL obj1IsLast = (lastSuccessfulHost && [lastSuccessfulHost isEqualToString:obj1.url]);
+        BOOL obj2IsLast = (lastSuccessfulHost && [lastSuccessfulHost isEqualToString:obj2.url]);
+        if (obj1IsLast && !obj2IsLast) return NSOrderedAscending;
+        if (!obj1IsLast && obj2IsLast) return NSOrderedDescending;
+        return [@(obj1.timeConsuming) compare:@(obj2.timeConsuming)];
     }];
-    
+
     NSMutableArray *urls = @[].mutableCopy;
     [newItems enumerateObjectsUsingBlock:^(DTServerStatusEntity *obj, NSUInteger idx, BOOL * _Nonnull stop) {
         [urls addObject:obj.url];
     }];
-    
-    OWSLogInfo(@"Multi-server: %@ get urls count = %ld contents = %@",self.logTag, (long)urls.count, urls);
+
+    OWSLogInfo(@"[DomainSwitch] %@ get urls count = %ld contents = %@",self.logTag, (long)urls.count, urls);
     return urls;
-    
+
+}
+
+- (BOOL)containsHost:(NSString *)host serverType:(DTServToType)serverType {
+    if (!DTParamsUtils.validateString(host)) {
+        return NO;
+    }
+    NSString *normalized = [[host stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] lowercaseString];
+    NSArray<DTServerStatusEntity *> *items = [self getOrCreateOneServerStatusItemsWithServerType:serverType];
+    for (DTServerStatusEntity *item in items) {
+        if (!DTParamsUtils.validateString(item.url)) { continue; }
+        NSString *candidate = [[item.url stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] lowercaseString];
+        if ([candidate isEqualToString:normalized]) {
+            return YES;
+        }
+    }
+    return NO;
 }
 
 - (void)markAsInvalidWithUrl:(NSString *)url serverType:(DTServToType)serverType {
-    
+
     NSMutableArray *oneServerStatusItems = [self getOrCreateOneServerStatusItemsWithServerType:serverType].mutableCopy;
-    
+
     [oneServerStatusItems enumerateObjectsUsingBlock:^(DTServerStatusEntity *obj, NSUInteger idx, BOOL * _Nonnull stop) {
         if(obj.isAvailable && [url isEqualToString:obj.url]){
             obj.isAvailable = NO;
-            OWSLogInfo(@"Multi-server: %@ mark as invalid url = %@",self.logTag, url);
+            OWSLogInfo(@"[DomainSwitch] %@ mark invalid: %@",self.logTag, url);
         }
     }];
-    
+
+    // Record the invalidated host so late-arriving success callbacks won't re-persist it.
+    [[DTLastSuccessfulHostManager shared] markHostInvalidated:url serverType:serverType];
+
+    // Clear the in-memory override in TSConstants so subsequent requests
+    // don't keep using this now-invalid host. Under proxy the chat override is the
+    // failover rotation pointer within the fixed tunnelDomains list (rotated by
+    // switchServerHost), so don't clear it there.
+    if (serverType == DTServToTypeChat && ![ProxyManager shared].isEnabled) {
+        TSConstants.mainServiceHost = @"";
+    }
 }
 
 /*
@@ -248,7 +287,7 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
 }
 
 - (void)startSpeedTestAll{
-    OWSLogInfo(@"Multi-server: startSpeedTestAll.");
+    OWSLogInfo(@"[DomainSwitch] startSpeedTestAll");
     
     NSArray *serverTypes = @[@(DTServToTypeChat)];
     
@@ -258,10 +297,16 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
 }
 
 - (void)startSpeedTestWithServerType:(DTServToType)serverType{
-    
+
+    // Under proxy: chat is pinned to one domain, so speed-testing the others (which dials them
+    // directly and leaks the real IP) is both unnecessary and unsafe — skip it.
+    if (serverType == DTServToTypeChat && [ProxyManager shared].isEnabled) {
+        return;
+    }
+
 //    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
-        
-        OWSLogInfo(@"Multi-server: startSpeedTestWithServerType: %ld.", serverType);
+
+        OWSLogInfo(@"[DomainSwitch] startSpeedTest type: %ld", (long)serverType);
         
         if(CACurrentMediaTime() - [self speedTestQueueWithServerType:serverType].lastCompleteTime.doubleValue >= kDefaultTestInterval){
             NSArray *oneServerStatusItems = [self getOrCreateOneServerStatusItemsWithServerType:serverType];
@@ -279,7 +324,7 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
     @synchronized(self){
         _serversEntity = nil;
         self.serverUrlsInfo = @{}.mutableCopy;
-        OWSLogInfo(@"Multi-server: %@ reset all servers",self.logTag);
+        OWSLogInfo(@"[DomainSwitch] %@ reset all servers",self.logTag);
     }
 }
 
@@ -288,7 +333,7 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
     @synchronized(self){
         NSString *propertyName = [self getServersEntityPropertyNameWithServerType:serverType];
         [self.serverUrlsInfo removeObjectForKey:propertyName];
-        OWSLogInfo(@"Multi-server: %@ reset %@ server",self.logTag, propertyName);
+        OWSLogInfo(@"[DomainSwitch] %@ reset %@ server",self.logTag, propertyName);
     }
 }
 
@@ -313,7 +358,7 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
 
 /*
 - (void)applicationDidBecomeActiveNofity:(NSNotification *)nofity{
-    OWSLogInfo(@"Multi-server: %@ active notify, start speed test.",self.logTag);
+    OWSLogInfo(@"[DomainSwitch] %@ active notify, start speed test",self.logTag);
     
     [self startSpeedTestAll];
 }
@@ -321,7 +366,7 @@ static void * lastCompleteTimePropertyKey = &lastCompleteTimePropertyKey;
 
 - (void)serverConfigUpdatedNofity:(NSNotification *)nofity{
     
-    OWSLogInfo(@"Multi-server: %@ server config updated nofity",self.logTag);
+    OWSLogInfo(@"[DomainSwitch] %@ server config updated",self.logTag);
     
     [self cancelAllSpeedTests];
     [self resetAll];

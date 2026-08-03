@@ -11,6 +11,7 @@
 #import "TSInteraction.h"
 #import "TSOutgoingMessage.h"
 #import "TSThread.h"
+#import "MIMETypeUtil.h"
 #import <TTServiceKit/TTServiceKit-Swift.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -23,9 +24,14 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertDebug(attachmentStream.uniqueId);
     OWSAssertDebug(attachmentStream.contentType);
 
-    return [self initWithAttachmentId:attachmentStream.uniqueId
+    self = [self initWithAttachmentId:attachmentStream.uniqueId
                           contentType:attachmentStream.contentType
                        sourceFilename:attachmentStream.sourceFilename];
+    if (self) {
+        // Flag-first precise value from the source attachment.
+        _isAnimated = attachmentStream.isAnimatedImageAttachment;
+    }
+    return self;
 }
 
 - (instancetype)initWithAttachmentId:(nullable NSString *)attachmentId
@@ -40,6 +46,9 @@ NS_ASSUME_NONNULL_BEGIN
     _attachmentId = attachmentId;
     _contentType = contentType;
     _sourceFilename = sourceFilename;
+    // MIME fallback (WebP excluded — needs the flag); overridden with the precise flag when built
+    // from a source stream (see initWithAttachmentStream:).
+    _isAnimated = [MIMETypeUtil isMimeUnambiguouslyAnimated:contentType];
 
     return self;
 }
@@ -135,6 +144,10 @@ NS_ASSUME_NONNULL_BEGIN
         OWSAttachmentInfo *attachmentInfo = [[OWSAttachmentInfo alloc] initWithAttachmentId:nil
                                                                                 contentType:quotedAttachment.contentType
                                                                              sourceFilename:quotedAttachment.fileName];
+        // Wire GIF flag wins over the MIME-only default (which can't detect animated WebP).
+        if (quotedAttachment.hasFlags && (quotedAttachment.flags & (UInt32)DSKProtoAttachmentPointerFlagsGif) != 0) {
+            attachmentInfo.isAnimated = YES;
+        }
 
         // We prefer deriving any thumbnail locally rather than fetching one from the network.
         TSAttachmentStream *_Nullable thumbnailStream =

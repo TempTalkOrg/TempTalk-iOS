@@ -51,12 +51,32 @@
 #import "DTSignChativeController.h"
 #import "SMLagMonitor.h"
 #import "SMCallTrace.h"
+#import <Reachability/Reachability.h>
+#import <objc/runtime.h>
 
 @import FirebaseCrashlytics;
 @import FirebaseCore;
 @import Intents;
 
 static NSTimeInterval launchStartedAt;
+
+/// iOS 18 UIKit bug: during background snapshotting, UIKit's text-editing overlay
+/// (UIUndoGestureInteraction) sends -actualSceneBounds to the private _UISnapshotWindow,
+/// which doesn't implement it → NSInvalidArgumentException (Crashlytics 61e69895).
+/// Defensively add the missing method, returning the window's bounds.
+static CGRect DTSnapshotWindowActualSceneBounds(UIView *self, SEL _cmd)
+{
+    return self.bounds;
+}
+
+static void DTInstallSnapshotWindowCrashGuard(void)
+{
+    Class snapshotWindowClass = NSClassFromString(@"_UISnapshotWindow");
+    SEL selector = NSSelectorFromString(@"actualSceneBounds");
+    if (snapshotWindowClass && ![snapshotWindowClass instancesRespondToSelector:selector]) {
+        class_addMethod(snapshotWindowClass, selector, (IMP)DTSnapshotWindowActualSceneBounds, "{CGRect={CGPoint=dd}{CGSize=dd}}@:");
+    }
+}
 
 @interface AppDelegate ()
 
@@ -75,8 +95,9 @@ static NSTimeInterval launchStartedAt;
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
     OWSLogWarn(@"%@ applicationDidEnterBackground.", self.logTag);
-    
-    [DDLog flushLog];
+
+    // Log flush on background/resign is owned by MainAppContext's lifecycle
+    // observers (flushed off the main thread) — see -[MainAppContext flushLogsInBackground].
     if ([TSAccountManager isRegistered]) {
         [self reportBackgroundStatusByWebSocket:YES];
     }
@@ -95,7 +116,7 @@ static NSTimeInterval launchStartedAt;
 {
     OWSLogWarn(@"%@ applicationWillTerminate.", self.logTag);
 
-    [DDLog flushLog];
+    // Log flush on terminate is owned by MainAppContext's lifecycle observer.
 }
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
@@ -103,8 +124,10 @@ static NSTimeInterval launchStartedAt;
     MainAppContext *mainAppContext = [MainAppContext new];
     SetCurrentAppContext(mainAppContext,false);
 
+    DTInstallSnapshotWindowCrashGuard();
+
     launchStartedAt = CACurrentMediaTime();
-    BOOL isLoggingEnabled = [self setupCrashAndLogReport];
+    [self setupCrashAndLogReport];
 
     OWSLogWarn(@"%@ application: didFinishLaunchingWithOptions.", self.logTag);
 
@@ -113,27 +136,22 @@ static NSTimeInterval launchStartedAt;
     // XXX - careful when moving this. It must happen before we initialize OWSPrimaryStorage.
     [self verifyDBKeysAvailableBeforeBackgroundLaunch];
 
-#if RELEASE
-    // ensureIsReadyForAppExtensions may have changed the state of the logging
-    // preference (due to [NSUserDefaults migrateToSharedUserDefaults]), so honor
-    // that change if necessary.
-    if (isLoggingEnabled && !OWSPreferences.isLoggingEnabled) {
-        [DebugLogger.shared disableFileLogging];
-    }
-#endif
-    [NSUserDefaults migrateToSharedUserDefaults];
     // 初始化应用版本管理器（包含版本和名称管理）
     [AppVersion shared];
     
     [self setupNSEInteroperation];
-    
-    // 服务器配置和测速 - 非关键操作，延迟执行避免阻塞启动
+
+    // Restore last successful host so speed-test and initial requests prefer it
+    [[DTLastSuccessfulHostManager shared] restoreHostsToTSConstants];
+
+    // Self-hosted proxy: bring up the local CONNECT proxy (if the user enabled one) before
+    // any network request (speed-test / config / WSS) so tunneled sessions route through it
+    // from the first call. No-op when disabled. Uses NSUserDefaults, independent of SSKEnvironment.
+    [[ProxyManager shared] applyConfiguration];
+
+    // 版本检查和通知清理 - 不依赖 SSKEnvironment，可以提前执行
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
-        // 检查版本更新并执行通知清理
         [self checkVersionUpdateAndCleanupNotifications];
-        [[DTServerConfigManager sharedManager] updateConfig];
-        [[DTServerUrlManager sharedManager] startSpeedTestAll];
-//        [[DTMetricKitMonitor shared] startMonitoring];
     });
     
     // Prevent the device from sleeping during database view async registration
@@ -154,6 +172,12 @@ static NSTimeInterval launchStartedAt;
         [TextSecureKitEnv sharedEnv].settingsManager = [DTSettingsManager shared];
         [SignalApp sharedApp];
         [LogoutManager shared].logoutDelegate = [DTSettingsManager shared];
+
+        // 服务器配置和测速 - 必须在 SSKEnvironment 初始化之后执行
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+            [[DTServerConfigManager sharedManager] updateConfig];
+            [[DTServerUrlManager sharedManager] startSpeedTestAll];
+        });
     } migrationCompletion:^{
         OWSAssertIsOnMainThread();
 
@@ -192,7 +216,7 @@ static NSTimeInterval launchStartedAt;
     // Show LoadingViewController until the async database view registrations are complete.
     mainWindow.rootViewController = [LoadingViewController new];
     [mainWindow makeKeyAndVisible];
-    
+
 //    [AppUpdateNag.sharedInstance showAppUpgradeNagIfNecessary];
 
     [OWSScreenLockUI.sharedManager setupWithRootWindow:self.window];
@@ -227,6 +251,14 @@ static NSTimeInterval launchStartedAt;
     [CurrentAppContext() setColdStart:YES];
 
     AppReadinessRunNowOrWhenAppDidBecomeReadyAsync(^{
+        // Reaction job queue: setup + start after DB migrations are complete.
+        [ReactionSendManager.shared setupWithReachabilityManager:[[SSKReachabilityManagerImpl alloc] init]];
+        [ReactionSendManager.shared start];
+
+        // GIF favorite job queue: optimistic add/remove with retryable upload + commit.
+        [DTGifFavoriteSendManager.shared setupWithReachabilityManager:[[SSKReachabilityManagerImpl alloc] init]];
+        [DTGifFavoriteSendManager.shared start];
+
         if([TSAccountManager sharedInstance].isRegistered){
             [[DTCallManager sharedInstance] requestForConfigMeetingversion];
         }
@@ -236,6 +268,10 @@ static NSTimeInterval launchStartedAt;
         [[OWSArchivedMessageJob sharedJob] cleanupEmptyThreadsIfNeeded];
         // 渐进式回填历史同步消息的 readPosition（每次启动处理 500 条，直到完成）
         [[TSMessageReadPositionMigrator shared] performMigrationIfNeeded];
+
+        // Proxy self-heal tier 2: watch WSS health and rebuild the tunnel if it stays down. Started
+        // once here (idempotent); no-op unless the proxy is enabled.
+        [ProxyTunnelHealthCoordinator.shared start];
     });
     
     [self addLocalNotificationDelegate];
@@ -432,6 +468,23 @@ static NSTimeInterval launchStartedAt;
     // AppDelegate.didReceiveLocalNotification will always
     // be called _before_ we become active.
     [self clearAllNotificationsAndRestoreBadgeCount];
+
+    // Foreground self-heal fallback: after a background suspend the loopback proxy tunnel often
+    // wedges, taking WSS (and all traffic) offline until the user manually toggles the proxy. Give
+    // healthy sockets a ~5s grace to reconnect on their own, then rebuild the tunnel only if the
+    // proxy is on, WSS still isn't open, and the device actually has a route — a genuine no-network
+    // state must NOT trigger a rebuild.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        BOOL enabled = [ProxyManager.shared isEnabled];
+        BOOL socketOpen = ([SSKEnvironment.shared.socketManagerRef socketState] == OWSWebSocketStateOpen);
+        BOOL reachable = [Reachability reachabilityForInternetConnection].isReachable;
+        // Log the verdict whether or not we act, so a device log shows why self-heal did/didn't fire.
+        OWSLogInfo(@"%@ [Proxy][self-heal] foreground check: enabled=%d socketOpen=%d reachable=%d", self.logTag, enabled, socketOpen, reachable);
+        if (enabled && !socketOpen && reachable) {
+            [ProxyManager.shared recoverTunnelIfEnabled:@"foreground, socket not open"];
+        }
+    });
+
     OWSLogInfo(@"%@ applicationDidBecomeActive completed.", self.logTag);
 }
 
@@ -476,6 +529,10 @@ extern bool bScreenLockDone;
                 [[OWSArchivedMessageJob sharedJob] startIfNecessary];
                 [[DTConversationsJob sharedJob] startIfNecessary];
 
+                // Weak contacts (pending removal): reconcile the local mirror with
+                // the server set on cold start, to recover from missed notifications.
+                [[DTWeakContactManager shared] reconcileFromServer];
+
                 [self enableBackgroundRefreshIfNecessary];
                 
                 // 数据库清理操作 - 异步执行避免阻塞
@@ -487,6 +544,7 @@ extern bool bScreenLockDone;
 
                 [self initializeMeetingManager];
                 [self initializeGrayReleaseManager];
+                [self installCallServiceUrlLifecycleHook];
 
                 // 非关键网络操作 - 延迟执行避免阻塞app激活
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
@@ -494,8 +552,6 @@ extern bool bScreenLockDone;
                     [[DTSettingsManager shared] syncRemoteProfileInfo];
                     // 将之前打断的数据再次进行
                     [[DTSettingsManager shared] checkResetKeyMap];
-                    // 开始测速
-                    [[DTMeetingManager shared] startSpeedTest];
                 });
             });
             
@@ -582,8 +638,6 @@ extern bool bScreenLockDone;
     [self.window endEditing:YES];
 
     OWSLogWarn(@"%@ applicationWillResignActive.", self.logTag);
-    
-    [DDLog flushLog];
 }
 
 - (void)application:(UIApplication *)application
@@ -929,7 +983,7 @@ extern bool bScreenLockDone;
     
     [[TSAccountManager sharedInstance] resetForReregistration];
 //    [[TSSocketManager sharedManager] deregisteredBrokenSocket];
-    [[OWSWindowManager sharedManager] setIsScreenBlockActive:NO];
+    [[OWSWindowManager sharedManager] setIsScreenBlockActive:NO isForegroundLock:NO];
     OWSScreenLockUI.sharedManager.screenBlockingWindow.windowLevel = UIWindowLevel_Background;
     [SignalApp resetAppDataNoExit];
     

@@ -41,6 +41,7 @@
         @"messageArchivingTimeOptionValues": @[@(3600), @(172800), @(604800)],
         @"confidentialModeThreshold": @(20),
         @"encryptionEnabled": @(NO),
+        @"encryptionKeyResetEnabled": @(NO),
     };
 }
 

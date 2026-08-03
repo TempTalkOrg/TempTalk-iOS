@@ -852,6 +852,53 @@ public extension NSString {
     var isStructurallyValidE164: Bool { (self as String).isStructurallyValidE164 }
 }
 
+// MARK: - Newline Normalization
+
+public extension String {
+    /// Newline-family variants that must collapse to a canonical `\n` (U+000A) so
+    /// text renders identically across iOS / Android / Desktop. `\n` itself is
+    /// excluded from the set, which makes normalization idempotent.
+    ///
+    /// Family: CRLF, CR, VT, FF, NEL, LS, PS. CRLF is the first alternation on
+    /// purpose — it is the only 2->1 case, so it must collapse as a single unit
+    /// rather than as two separate breaks. ICU `\x{...}` escapes keep this source
+    /// file pure ASCII (embedding the raw code points risks silent editor mangling).
+    private static let newlineFamilyRegex = try! NSRegularExpression(
+        pattern: "\\r\\n|[\\r\\x{000B}\\x{000C}\\x{0085}\\x{2028}\\x{2029}]",
+        options: []
+    )
+
+    private var containsNewlineFamilyVariant: Bool {
+        unicodeScalars.contains {
+            switch $0.value {
+            case 0x0D, 0x000B, 0x000C, 0x0085, 0x2028, 0x2029: return true
+            default: return false
+            }
+        }
+    }
+
+    /// Collapses every newline-family variant (CRLF, CR, VT, FF, NEL, LS, PS) to a
+    /// canonical `\n`. Idempotent — a plain-`\n` string is returned unchanged.
+    func normalizedNewlines() -> String {
+        guard containsNewlineFamilyVariant else { return self }
+        let range = NSRange(location: 0, length: (self as NSString).length)
+        return Self.newlineFamilyRegex.stringByReplacingMatches(
+            in: self,
+            options: [],
+            range: range,
+            withTemplate: "\n"
+        )
+    }
+}
+
+@objc
+public extension NSString {
+    /// ObjC bridge for `String.normalizedNewlines()`.
+    func dt_normalizedNewlines() -> NSString {
+        return (self as String).normalizedNewlines() as NSString
+    }
+}
+
 // MARK: - StrippedNonEmptyString
 
 /// A String that's been fed through `strippedOrNil` and isn't `nil`.

@@ -89,6 +89,12 @@ open class OWSNavigationController: UINavigationController {
             name: .themeDidChange,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(textSizeDidChange),
+            name: .textSizeDidChange,
+            object: nil
+        )
     }
 
     public override convenience init(rootViewController: UIViewController) {
@@ -129,6 +135,12 @@ open class OWSNavigationController: UINavigationController {
     private func themeDidChange() {
         updateNavbarAppearance()
         applyTheme()
+    }
+
+    @objc
+    private func textSizeDidChange() {
+        // Nav fonts are scaled at apply-time; force a re-apply since text size isn't in cached appearance.
+        owsNavigationBar.reapplyAppearanceForTextSizeChange()
     }
     
     open func applyTheme() {

@@ -41,11 +41,29 @@ public class OWSAudioSession: NSObject {
     #else
     public let rtcCategoryOptions: AVAudioSession.CategoryOptions = [.mixWithOthers, .allowBluetooth, .allowBluetoothA2DP, .allowAirPlay]
     #endif
-    public let rtcCategoryMixOnlyOptions: AVAudioSession.CategoryOptions = [.mixWithOthers]
+    // Options for Playback category used during in-call "mic-off speakerphone" listening.
+    //
+    // IMPORTANT: do NOT add .allowBluetoothA2DP / .allowAirPlay / .allowBluetoothHFP here.
+    // Those options are valid ONLY on the playAndRecord category — setting them on Playback
+    // makes iOS reject the configuration with AVAudioSessionErrorCodeUnspecified ('what',
+    // OSStatus 2003329396).
+    //
+    // Bluetooth A2DP and AirPlay output are implicitly supported by the Playback category
+    // (per Apple docs), so once an A2DP profile is actually established (e.g. user takes
+    // AirPods out of the case), it shows up in currentRoute.outputs automatically — no
+    // option needed.
+    public let rtcCategoryPlaybackOptions: AVAudioSession.CategoryOptions = [.mixWithOthers]
 
     public let rtcModeVoice: AVAudioSession.Mode = .voiceChat
     public let rtcModeVideo: AVAudioSession.Mode = .videoChat
     public let rtcModeSpoken: AVAudioSession.Mode = .spokenAudio
+
+    public static func inCallSessionSupportsRecording(
+        category: AVAudioSession.Category,
+        isInputAvailable: Bool
+    ) -> Bool {
+        return category == .playAndRecord && isInputAvailable
+    }
 
     // Ignores hardware mute switch, plays through external speaker
     @objc
@@ -102,7 +120,21 @@ public class OWSAudioSession: NSObject {
         insertActivity(audioActivity)
 
         if inCalling {
-            return true
+            if Self.inCallSessionSupportsRecording(
+                category: avAudioSession.category,
+                isInputAvailable: avAudioSession.isInputAvailable
+            ) {
+                return true
+            }
+
+            do {
+                Logger.warn("repair recording activity while inCalling with non-recording audio session: category=\(avAudioSession.category.rawValue), mode=\(avAudioSession.mode.rawValue), inputs=\(avAudioSession.currentRoute.inputs.count)")
+                try avAudioSession.setCategory(rtcCategory, options: rtcCategoryOptions)
+                return true
+            } catch {
+                Logger.error("failed to repair in-call recording audio session: \(error)")
+                return false
+            }
         }
 
         do {

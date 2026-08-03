@@ -30,7 +30,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D221A088169C9E5E00537ABF"
-               BuildableName = "Yelling.app"
+               BuildableName = "Quicall.app"
                BlueprintName = "Yelling"
                ReferencedContainer = "container:Difft.xcodeproj">
             </BuildableReference>
@@ -61,7 +61,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D221A088169C9E5E00537ABF"
-            BuildableName = "Yelling.app"
+            BuildableName = "Quicall.app"
             BlueprintName = "Yelling"
             ReferencedContainer = "container:Difft.xcodeproj">
          </BuildableReference>
@@ -80,7 +80,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D221A088169C9E5E00537ABF"
-            BuildableName = "Yelling.app"
+            BuildableName = "Quicall.app"
             BlueprintName = "Yelling"
             ReferencedContainer = "container:Difft.xcodeproj">
          </BuildableReference>

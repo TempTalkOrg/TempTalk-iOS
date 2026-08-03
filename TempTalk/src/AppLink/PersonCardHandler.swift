@@ -29,11 +29,10 @@ struct PersonCardHandler: AppLinkHandler {
     
     static func isValidPhoneNumber(phoneNumber: String) -> Bool {
         if phoneNumber.hasPrefix("+") {
-            if phoneNumber.count == 6 || phoneNumber.count == 12 {
-                return true
-            }
+            return phoneNumber.count == 6 || phoneNumber.count == 12
         }
-        return false
+        // numeric uid synced from other clients (e.g. Mac mention)
+        return !phoneNumber.isEmpty && phoneNumber.allSatisfy { $0.isASCII && $0.isNumber }
     }
     
     static func handle(url: URL, fromExternal: Bool, sourceVC: UIViewController?) -> Bool {

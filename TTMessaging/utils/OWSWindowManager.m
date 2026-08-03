@@ -36,11 +36,13 @@ const UIWindowLevel UIWindowLevel_Background = -1.f;
 //    return UIWindowLevelStatusBar - 1;
 //}
 
-// In front of the root window, behind the screen blocking window.
+// In front of the root window and the foreground passcode "screen lock" window,
+// but behind the background "screen protection" cover. Placing the call view above
+// the passcode lock keeps an active call from being obscured by the unlock screen.
 const UIWindowLevel UIWindowLevel_CallView(void);
 const UIWindowLevel UIWindowLevel_CallView(void)
 {
-    return UIWindowLevelNormal + 1.f;
+    return UIWindowLevelStatusBar + 3.f;
 }
 
 // In front of the status bar and CallView
@@ -50,11 +52,20 @@ const UIWindowLevel UIWindowLevel_AlertCallView(void)
     return UIWindowLevelStatusBar - 1.f;
 }
 
-// In front of the status bar, alertCallView and CallView
+// Foreground passcode "screen lock" page. Sits above the root window but BELOW the
+// call view, so an in-progress call floats above the unlock screen.
 const UIWindowLevel UIWindowLevel_ScreenBlocking(void);
 const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
 {
     return UIWindowLevelStatusBar + 2.f;
+}
+
+// Background / app-switcher privacy cover. Sits ABOVE the call view so an active
+// call cannot leak into the app-switcher snapshot when the app is backgrounded.
+const UIWindowLevel UIWindowLevel_ScreenProtection(void);
+const UIWindowLevel UIWindowLevel_ScreenProtection(void)
+{
+    return UIWindowLevelStatusBar + 4.f;
 }
 
 @implementation OWSWindowRootViewController
@@ -86,6 +97,10 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
 @property (nonatomic) UIWindow *screenBlockingWindow;
 
 @property (nonatomic) BOOL isScreenBlockActive;
+// YES when the active screen block is the foreground passcode "screen lock" page
+// (the call view floats above it); NO when it is the background privacy cover
+// (the cover sits above the call view).
+@property (nonatomic) BOOL screenBlockIsForegroundLock;
 @property (nonatomic) BOOL haveMutilCall;
 
 @property (nonatomic) BOOL shouldShowCallView;
@@ -171,11 +186,12 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
     return window;
 }
 
-- (void)setIsScreenBlockActive:(BOOL)isScreenBlockActive
+- (void)setIsScreenBlockActive:(BOOL)isScreenBlockActive isForegroundLock:(BOOL)isForegroundLock
 {
     OWSAssertIsOnMainThread();
 
     _isScreenBlockActive = isScreenBlockActive;
+    _screenBlockIsForegroundLock = isForegroundLock;
 
     [self ensureWindowState];
 }
@@ -325,6 +341,17 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
     return self.callViewController != nil;
 }
 
+- (BOOL)isCallViewFrontmostAboveScreenLock
+{
+    // Mirrors the ensureWindowState branch that floats the call view above the foreground
+    // passcode lock (see -ensureWindowState). Only true for the foreground lock, never for
+    // the background privacy cover (which is placed above the call view to hide it).
+    return self.isScreenBlockActive
+        && self.screenBlockIsForegroundLock
+        && self.callViewController != nil
+        && self.shouldShowCallView;
+}
+
 - (UIWindow *)getToastSuitableWindow {
     if (!self.callViewWindow.isHidden) {
         return self.callViewWindow;
@@ -363,7 +390,18 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
         [self ensureScreenBlockWindowShown];
         [self ensureRootWindowHidden];
         if (self.callViewController && self.shouldShowCallView) {
-            OWSLogInfo(@"[Window] keeping call window visible behind screen block (in meeting)");
+            if (self.screenBlockIsForegroundLock) {
+                // Foreground passcode lock: float the call view ABOVE the lock screen
+                // (higher window level) so the active call is not obscured. Shown last
+                // so the call window becomes key and stays interactive on top.
+                OWSLogInfo(@"[Window] keeping call window ABOVE foreground screen lock");
+                [self ensureCallViewWindowShown];
+            } else {
+                // Background privacy cover: keep the call window visible but BEHIND the
+                // cover (cover has a higher level) so the call can't leak into the
+                // app-switcher snapshot.
+                OWSLogInfo(@"[Window] keeping call window behind screen protection cover");
+            }
         } else {
             [self ensureCallViewWindowHidden];
         }
@@ -387,14 +425,21 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
         [self ensureScreenBlockWindowHidden];
     }
     
+    UIWindow *frontWindow;
+    if (self.isScreenBlockActive && self.screenBlockIsForegroundLock
+        && self.callViewController && self.shouldShowCallView) {
+        // Call view floats above the foreground passcode lock.
+        frontWindow = self.callViewWindow;
+    } else if (self.isScreenBlockActive) {
+        frontWindow = self.screenBlockingWindow;
+    } else if (self.callViewController && self.shouldShowCallView) {
+        frontWindow = self.callViewWindow;
+    } else {
+        frontWindow = self.rootWindow;
+    }
+    [frontWindow.rootViewController setNeedsStatusBarAppearanceUpdate];
     if (@available(iOS 16, *)) {
-        if (self.isScreenBlockActive) {
-            [self.screenBlockingWindow.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];
-        } else if (self.callViewController && self.shouldShowCallView) {
-            [self.callViewWindow.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];
-        } else {
-            [self.rootWindow.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];
-        }
+        [frontWindow.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];
     }
 }
 
@@ -484,11 +529,17 @@ const UIWindowLevel UIWindowLevel_ScreenBlocking(void)
 {
     OWSAssertIsOnMainThread();
 
-    if (self.screenBlockingWindow.windowLevel != UIWindowLevel_ScreenBlocking()) {
+    // Foreground passcode lock sits below the call view (UIWindowLevel_ScreenBlocking);
+    // the background privacy cover sits above it (UIWindowLevel_ScreenProtection).
+    UIWindowLevel targetLevel = self.screenBlockIsForegroundLock
+        ? UIWindowLevel_ScreenBlocking()
+        : UIWindowLevel_ScreenProtection();
+
+    if (self.screenBlockingWindow.windowLevel != targetLevel) {
         OWSLogInfo(@"%@ showing block window.", self.logTag);
     }
 
-    self.screenBlockingWindow.windowLevel = UIWindowLevel_ScreenBlocking();
+    self.screenBlockingWindow.windowLevel = targetLevel;
     [self.screenBlockingWindow makeKeyAndVisible];
 }
 

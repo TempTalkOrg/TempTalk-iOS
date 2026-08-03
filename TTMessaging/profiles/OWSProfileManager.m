@@ -26,7 +26,6 @@
 #import <TTServiceKit/UIImage+OWS.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 #import <SignalCoreKit/Threading.h>
-#import <AFNetworking/AFURLSessionManager.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -180,7 +179,7 @@ const NSUInteger kOWSProfileManager_MaxAvatarDiameter = 640;
         return profileName;
     }else {
         OWSContactsManager *contactManager = Environment.shared.contactsManager;
-        NSString *recipientId = [TSAccountManager sharedInstance].localNumber;
+        NSString *recipientId = [[TSAccountManager sharedInstance] localNumberWithTransaction:transaction];
         SignalAccount *account = [contactManager signalAccountForRecipientId:recipientId transaction:transaction];
         return account.contact.fullName;
     }
@@ -846,15 +845,14 @@ const NSUInteger kOWSProfileManager_MaxAvatarDiameter = 640;
 
         OWSLogVerbose(@"%@ downloading profile avatar: %@", self.logTag, userProfile.uniqueId);
 
-        NSString *tempDirectory = NSTemporaryDirectory();
-        NSString *tempFilePath = [tempDirectory stringByAppendingPathComponent:fileName];
-
-        void (^completionHandler)(NSURLResponse *_Nonnull, NSURL *_Nullable, NSError *_Nullable) = ^(
-            NSURLResponse *_Nonnull response, NSURL *_Nullable filePathParam, NSError *_Nullable error) {
+        // Completion handler accepts the encrypted bytes directly (formerly read
+        // back from a temp file written by AFNetworking). With OWSURLSession the
+        // download already lands in a temp URL we can read in-place.
+        void (^completionHandler)(NSData *_Nullable, NSError *_Nullable) = ^(
+            NSData *_Nullable encryptedData, NSError *_Nullable error) {
             // Ensure disk IO and decryption occurs off the main thread.
             dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                 // 3 decrypt avatar data
-                NSData *_Nullable encryptedData = (error ? nil : [NSData dataWithContentsOfFile:tempFilePath]);
                 NSData *_Nullable decryptedData = [self decryptProfileData:encryptedData profileKey:profileKeyAtStart];
                 UIImage *_Nullable image = nil;
                 if (decryptedData) {
@@ -898,7 +896,7 @@ const NSUInteger kOWSProfileManager_MaxAvatarDiameter = 640;
                     
                     // If we're updating the profile that corresponds to our local number,
                     // update the local profile as well.
-                    NSString *_Nullable localNumber = [TSAccountManager sharedInstance].localNumber;
+                    NSString *_Nullable localNumber = [[TSAccountManager sharedInstance] localNumberWithTransaction:writeTransaction];
                     if (localNumber && [localNumber isEqualToString:userProfile.recipientId]) {
                         OWSUserProfile *localUserProfile = self.localUserProfile;
                         OWSAssertDebug(localUserProfile);
@@ -952,23 +950,25 @@ const NSUInteger kOWSProfileManager_MaxAvatarDiameter = 640;
         if (!url) {
             return;
         }
-        
-        // 2 download the avatar image
-        NSURL *avatarUrlPath = [NSURL URLWithString:url];
-        NSURLRequest *request = [NSURLRequest requestWithURL:avatarUrlPath];
-        AFURLSessionManager *manager = [[AFURLSessionManager alloc]
-            initWithSessionConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
-        NSURLSessionDownloadTask *downloadTask = [manager downloadTaskWithRequest:request
-            progress:^(NSProgress *_Nonnull downloadProgress) {
-                DDLogVerbose(
-                    @"Downloading avatar for %@ %f", userProfile.recipientId, downloadProgress.fractionCompleted);
-            }
-            destination:^NSURL *_Nonnull(NSURL *_Nonnull targetPath, NSURLResponse *_Nonnull response) {
-                return [NSURL fileURLWithPath:tempFilePath];
-            }
-            completionHandler:completionHandler];
 
-        [downloadTask resume];
+        // 2 download the avatar image via OWSURLSession (no AFN, no separate
+        // file downloader). performDownloadRequest writes to a temp URL we read
+        // directly in the success block.
+        TSRequest *downloadReq = [TSRequest requestWithUrl:[NSURL URLWithString:url] method:@"GET" parameters:nil];
+        [OWSSignalService.sharedInstance.urlSessionForNoneService
+            performDownloadRequest:downloadReq
+                     completeQueue:dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)
+                           success:^(OWSUrlDownloadResponse * _Nonnull response) {
+            NSError *readError;
+            NSData *data = [NSData dataWithContentsOfURL:response.downloadUrl options:0 error:&readError];
+            completionHandler(data, readError);
+        }
+                          progress:^(NSURLSessionTask * _Nonnull task, NSProgress * _Nonnull progress) {
+            DDLogVerbose(@"Downloading avatar for %@ %f", userProfile.recipientId, progress.fractionCompleted);
+        }
+                           failure:^(OWSHTTPErrorWrapper * _Nonnull errorWrapper) {
+            completionHandler(nil, errorWrapper.asNSError);
+        }];
     });
 }
 
@@ -996,7 +996,7 @@ const NSUInteger kOWSProfileManager_MaxAvatarDiameter = 640;
         
         // If we're updating the profile that corresponds to our local number,
         // update the local profile as well.
-        NSString *_Nullable localNumber = [TSAccountManager sharedInstance].localNumber;
+        NSString *_Nullable localNumber = [[TSAccountManager sharedInstance] localNumberWithTransaction:transaction];
         if (localNumber && [localNumber isEqualToString:recipientId]) {
             OWSUserProfile *localUserProfile = self.localUserProfile;
             OWSAssertDebug(localUserProfile);

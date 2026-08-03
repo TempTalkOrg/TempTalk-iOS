@@ -157,7 +157,7 @@ public class GRDBDatabaseStorageAdapter: NSObject {
         ]
     }
     static var swiftTables: [TableRecord.Type] {
-        [ResetIdentifyKeyRecord.self]
+        [ResetIdentifyKeyRecord.self, DTGroupCryptoKeyRecord.self, JobRecord.self]
     }
     /*
     static var tables: [SDSTableMetadata] {

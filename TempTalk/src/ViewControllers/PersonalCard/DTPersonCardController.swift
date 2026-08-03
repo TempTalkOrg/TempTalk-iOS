@@ -80,6 +80,12 @@ class DTPersonalCardController: OWSTableViewController,
         databaseStorage.read { transaction in
             account = contactsManager.signalAccount(forRecipientId: recipientId, transaction: transaction)
         }
+        // Weak (pending-removal) contacts are server-snapshot owned: the live account may be
+        // missing or clobbered by a contacts sync, so prefer the weak display account.
+        if DTWeakContactManager.shared.isWeakContact(recipientId: recipientId) {
+            completeBlock?(DTWeakContactManager.shared.displayAccount(forWeakUid: recipientId) ?? account)
+            return
+        }
         if account != nil,
            account?.contact != nil,
            account?.contact?.fullName != recipientId,
@@ -154,25 +160,43 @@ class DTPersonalCardController: OWSTableViewController,
         }
     }
     
+    /// Single source of truth for this card's relation to the contact. Weak (pending removal) wins
+    /// over the friend flag, which is transiently stale during the pending-removal window (the server
+    /// still reports friend=true). ALL friend-state decisions in this controller go through here —
+    /// never read `account.isFriend` directly, or weak contacts get misjudged as friends.
+    var contactRelation: DTContactRelationState {
+        guard let recipientId else {
+            return account.isFriend ? .friend : .stranger
+        }
+        return DTWeakContactManager.shared.relationState(recipientId: recipientId)
+    }
+
     func updateMoreBtnStatus() {
-        if account.isFriend {
+        switch contactRelation {
+        case .friend:
             let moreBtn = UIBarButtonItem(image: UIImage(named: "nav_bar_more"), style: .plain, target: self, action: #selector(moreBtnClick))
             if type == .other {
                 // Show edit button for both bot and non-bot accounts
-                let editButton = UIButton(type: .custom)
-                let editImage = UIImage(named: "setting_edit")?.withRenderingMode(.alwaysTemplate)
-                editButton.setImage(editImage, for: .normal)
-                editButton.tintColor = navigationController?.navigationBar.tintColor
-                editButton.frame = CGRect(x: 0, y: 0, width: 20, height: 20)
-                editButton.addTarget(self, action: #selector(editNameBtnClick), for: .touchUpInside)
-                let editBtn = UIBarButtonItem(customView: editButton)
-                self.navigationItem.rightBarButtonItems = [moreBtn, editBtn]
+                self.navigationItem.rightBarButtonItems = [moreBtn, makeEditBarButtonItem()]
             } else {
                 self.navigationItem.rightBarButtonItems = [moreBtn]
             }
-        } else {
+        case .pendingRemoval where type == .other:
+            // Weak contacts are non-friends but still support remark editing.
+            self.navigationItem.rightBarButtonItems = [makeEditBarButtonItem()]
+        default:
             self.navigationItem.rightBarButtonItems = nil
         }
+    }
+
+    private func makeEditBarButtonItem() -> UIBarButtonItem {
+        let editButton = UIButton(type: .custom)
+        let editImage = UIImage(named: "setting_edit")?.withRenderingMode(.alwaysTemplate)
+        editButton.setImage(editImage, for: .normal)
+        editButton.tintColor = navigationController?.navigationBar.tintColor
+        editButton.frame = CGRect(x: 0, y: 0, width: 20, height: 20)
+        editButton.addTarget(self, action: #selector(editNameBtnClick), for: .touchUpInside)
+        return UIBarButtonItem(customView: editButton)
     }
     
     func isPresented() -> Bool {
@@ -211,6 +235,17 @@ class DTPersonalCardController: OWSTableViewController,
     }
 
     @objc func reloadAccountFromDB() {
+        guard let recipientId = self.recipientId else { return }
+        // Weak contacts are server-snapshot owned: rebuild from the display account so the card
+        // stays consistent with preConfigure (snapshot avatar + external state + overlaid remark).
+        // The raw DB account can diverge (missing avatar / stale external flag) and flips the card
+        // back to the friend layout after a remark edit.
+        if DTWeakContactManager.shared.isWeakContact(recipientId: recipientId),
+           let weakAccount = DTWeakContactManager.shared.displayAccount(forWeakUid: recipientId) {
+            self.account = weakAccount
+            self.updateTableContents()
+            return
+        }
         let contactsManager = Environment.shared.contactsManager
         databaseStorage.asyncRead {[weak self] transaction in
             guard let self, let recipientId = self.recipientId else {return}
@@ -304,7 +339,7 @@ class DTPersonalCardController: OWSTableViewController,
         }
 
         if account.isBot() {
-            let botWebsite = "https://yelling.pro"
+            let botWebsite = "https://quicall.app"
             contactsSection.add(OWSTableItem(customCellBlock: { [weak self] in
                 guard let self else { return UITableViewCell()}
                 return self.personCardForOther(withTitle: Localized("PERSON_CARD_WEBSITE"), detailText: botWebsite, detailColor: Theme.tinfoColor, longPressSel: nil, accessoryType: .none)
@@ -337,7 +372,13 @@ class DTPersonalCardController: OWSTableViewController,
         guard let recipientId = recipientId else { return }
         TSAccountManager.sharedInstance().getContactMessageV1(byPhoneNumber: [recipientId]) { [weak self] contacts in
             guard let self = self, let newContact = contacts.first as? Contact else { return }
-            
+
+            // Weak (pending-removal) contacts are server-snapshot owned. The server still reports
+            // friend=true during the pending window, so refreshing would flip the demoted account
+            // back to non-external (isFriend=true) and clobber the snapshot avatar/remark. Leave the
+            // demoted account untouched; the card renders from the weak display account.
+            if DTWeakContactManager.shared.isWeakContact(recipientId: recipientId) { return }
+
             //当前存在，并且相同
             if let contact = self.account.contact, contact.isEqual(newContact) { return }
             
@@ -616,8 +657,11 @@ class DTPersonalCardController: OWSTableViewController,
         iconImage.autoPinEdgesToSuperviewEdges()
         avatarContentView.autoSetDimension(.height, toSize: 75)
         avatarContentView.autoSetDimension(.width, toSize: 75)
-        iconImage.setImage(signalAccount: account, displayName: nicknameForAvatar, completion: nil)
-        
+        // Mirror the contacts list: render from the live in-memory account so a demoted
+        // (weak) contact's snapshot avatar shows here too, instead of a stale self.account.
+        let avatarAccount = Environment.shared.contactsManager?.signalAccount(forRecipientId: recipientId ?? "") ?? account
+        iconImage.setImage(signalAccount: avatarAccount, displayName: nicknameForAvatar, completion: nil)
+
         topContentRow.addArrangedSubview(avatarContentView)
         topContentRow.addArrangedSubview(topRightContentView)
         
@@ -802,17 +846,58 @@ class DTPersonalCardController: OWSTableViewController,
         cell.contentView.backgroundColor = Theme.bgpageSecondaryColor
         
         cell.haveCall = canCall()
-        cell.isFriend = account.isFriend
+        cell.isFriend = contactRelation == .friend
+        cell.showRemoveNow = type == .other && contactRelation == .pendingRemoval
         cell.setupAllSubViews()
-       
         return cell
     }
     
+    private func handleWeakRemoveNow() {
+        guard let recipientId = self.recipientId else { return }
+        showAlert(.alert,
+                  title: Localized("WEAK_CONTACT_REMOVE_NOW"),
+                  msg: Localized("WEAK_CONTACT_REMOVE_NOW_CONFIRM"),
+                  cancelTitle: Localized("TXT_CANCEL_TITLE"),
+                  confirmTitle: Localized("WEAK_CONTACT_REMOVE_NOW"),
+                  confirmStyle: .destructive) { [weak self] in
+            self?.performWeakRemoveNow(recipientId: recipientId)
+        }
+    }
+
+    private func performWeakRemoveNow(recipientId: String) {
+        DTToastHelper.show()
+        Task { [weak self] in
+            do {
+                try await DTDeletedRecordsApi().removeDeletedRecord(uid: recipientId)
+            } catch {
+                await MainActor.run {
+                    DTToastHelper.hide()
+                    let errorString = NSError.errorDesc(error as NSError, errResponse: nil)
+                    DTToastHelper.toast(withText: errorString,
+                                        in: DTToastHelper.shared().frontWindow(),
+                                        durationTime: 2.0,
+                                        afterDelay: 0.2)
+                }
+                return
+            }
+            guard let self else {
+                await MainActor.run { DTToastHelper.hide() }
+                return
+            }
+            self.databaseStorage.asyncWrite { transaction in
+                DTWeakContactManager.shared.removeFromWeakState(uid: recipientId, transaction: transaction)
+            } completion: {
+                DTToastHelper.hide()
+                self.backBtnClick()
+            }
+        }
+    }
+
     func canCall() -> Bool {
         if let recipientId = self.recipientId,
             self.type == .other,
            recipientId.count > 6,
-           account.isFriend {
+           contactRelation == .friend {
             return true
         }
         
@@ -822,7 +907,7 @@ class DTPersonalCardController: OWSTableViewController,
     func cornerRadiusCell() -> UITableViewCell {
         let cell = UITableViewCell(style: .default, reuseIdentifier: "UITableViewCellSectionRadiusStyleIdentifier")
         cell.backgroundColor = .clear
-        cell.contentView.backgroundColor = Theme.bg1Color
+        cell.contentView.backgroundColor = Theme.bgpageSecondaryColor
         return cell
     }
     
@@ -837,8 +922,11 @@ class DTPersonalCardController: OWSTableViewController,
         titleLabel.text = title
         titleLabel.font = UIFont(name: "PingFangSC-Medium", size: 16)
         sectionHeaderCell.selectionStyle = .none
-        sectionHeaderCell.backgroundColor = Theme.bg1Color
+        sectionHeaderCell.backgroundColor = Theme.bgpageSecondaryColor
         sectionHeaderCell.contentView.backgroundColor = Theme.bg1Color
+        sectionHeaderCell.contentView.layer.cornerRadius = 16
+        sectionHeaderCell.contentView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        sectionHeaderCell.contentView.layer.masksToBounds = true
         return sectionHeaderCell
     }
     
@@ -1206,7 +1294,7 @@ extension DTPersonalCardController : DTQuickActionCellDelegate {
         switch type {
 
         case DTQuickActionTypeShare:
-            account.isFriend ? showSelectThreadController() : handleMessageAction()
+            contactRelation == .friend ? showSelectThreadController() : handleMessageAction()
 
         case DTQuickActionTypeCall:
             if canCall() {
@@ -1215,6 +1303,9 @@ extension DTPersonalCardController : DTQuickActionCellDelegate {
 
         case DTQuickActionTypeMessage:
             handleMessageAction()
+
+        case DTQuickActionTypeRemoveNow:
+            handleWeakRemoveNow()
 
         default:
             break
@@ -1238,22 +1329,34 @@ extension DTPersonalCardController : DTQuickActionCellDelegate {
 
             guard let recipientId = self.recipientId else { return }
 
-            if !self.account.isFriend {
+            if self.contactRelation != .friend {
+                // Navigate only when the friend request succeeds; on any failure (incl. the
+                // account-unavailable alert) stay on this page. Matches Android behavior.
                 AddFriendHandler.handleRequestAddFriend(identifier: recipientId,
                                                         sourceType: .inUserCard,
                                                         sourceConversationID: nil,
                                                         shareContactCardUId: nil,
-                                                        action: nil)
+                                                        action: nil,
+                                                        proceedHandler: { [weak self] in
+                    DispatchQueue.main.async {
+                        self?.openConversation(recipientId: recipientId)
+                    }
+                })
+                return
             }
 
-            let thread = TSContactThread.getOrCreateThread(contactId: recipientId)
-            self.contactThread = thread
+            self.openConversation(recipientId: recipientId)
+        }
+    }
 
-            if self.isFromContacts {
-                self.handleContactConversation(thread: thread)
-            } else {
-                self.handleFloatingConversation(thread: thread)
-            }
+    private func openConversation(recipientId: String) {
+        let thread = TSContactThread.getOrCreateThread(contactId: recipientId)
+        self.contactThread = thread
+
+        if self.isFromContacts {
+            self.handleContactConversation(thread: thread)
+        } else {
+            self.handleFloatingConversation(thread: thread)
         }
     }
 

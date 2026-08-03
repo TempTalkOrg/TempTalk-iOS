@@ -60,8 +60,33 @@ public class LinkingTextView: UITextView {
 
 extension LinkingTextView: UITextViewDelegate {
     public func textView(_ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
-        let vc = SFSafariViewController(url: URL)
-        CurrentAppContext().frontmostViewController()?.present(vc, animated: true, completion: nil)
+        // SFSafariViewController only accepts http/https; hand other schemes
+        // (mailto:, tel:, custom) back to UITextView for native handling.
+        let scheme = URL.scheme?.lowercased()
+        guard scheme == "http" || scheme == "https" else {
+            return true
+        }
+        guard DTLinkSafetyChecker.isSuspicious(URL) else {
+            Self.openInSafari(URL)
+            return false
+        }
+
+        Logger.info("suspicious link detected, host: \(URL.host ?? "nil")")
+        let alert = UIAlertController(
+            title: Localized("WORKSPACE_WARNING_TITLE"),
+            message: String(format: Localized("WORKSPACE_WARNING_DESC"), URL.absoluteString),
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: Localized("CANCEL"), style: .cancel))
+        alert.addAction(UIAlertAction(title: Localized("OPEN"), style: .destructive) { _ in
+            LinkingTextView.openInSafari(URL)
+        })
+        CurrentAppContext().frontmostViewController()?.present(alert, animated: true, completion: nil)
         return false
+    }
+
+    private static func openInSafari(_ url: URL) {
+        let vc = SFSafariViewController(url: url)
+        CurrentAppContext().frontmostViewController()?.present(vc, animated: true, completion: nil)
     }
 }

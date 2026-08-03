@@ -6,13 +6,14 @@
 //
 
 #import "DTFileDownloader.h"
-#import "AFHTTPSessionManager.h"
 #import "OWSError.h"
 #import <TTServiceKit/TTServiceKit-Swift.h>
 
 @interface DTFileDownloader ()
 
-@property (nonatomic, strong) AFHTTPSessionManager *manager;
+// atomic: refreshDownloadSession may reassign this from a background self-heal queue while a
+// download reads it on another queue — atomic keeps the pointer read/write from tearing.
+@property (atomic, strong) OWSURLSession *downloadSession;
 
 @end
 
@@ -24,101 +25,165 @@
     dispatch_once(&onceToken, ^{
         _defaultDownloader = [DTFileDownloader new];
     });
-    
+
     return _defaultDownloader;
 }
 
 - (instancetype)init{
     if(self = [super init]){
-        self.manager = [AFHTTPSessionManager manager];
-        _manager.requestSerializer     = [AFHTTPRequestSerializer serializer];
-
-        // modified: remove header "Content-Type", because some oss storage do not support this header
-        //           and add new header: "Accept: */*"
-        //[manager.requestSerializer setValue:OWSMimeTypeApplicationOctetStream forHTTPHeaderField:@"Content-Type"];
-        [_manager.requestSerializer setValue:@"*/*" forHTTPHeaderField:@"Accept"];
-        [_manager.requestSerializer setValue:@"no-cache" forHTTPHeaderField:@"Cache-Control"];
-        _manager.responseSerializer = [AFHTTPResponseSerializer serializer];
-        _manager.completionQueue    = dispatch_get_main_queue();
+        self.downloadSession = OWSSignalService.sharedInstance.urlSessionForNoneService;
     }
     return self;
 }
 
-- (void)downloadFileWithUrl:(NSString *)url success:(void (^)(NSData * _Nonnull))successHandler failure:(void (^)(NSURLSessionDataTask * _Nullable, NSError * _Nonnull))failureHandler{
-    __block NSURLSessionDataTask *task = nil;
-    __block BOOL hasCheckedContentLength = NO;
-    const long kMaxDownloadSize = 200 * 1024 * 1024; // 150->200
-    task = [_manager GET:url
-              parameters:nil
-                 headers:nil
-                progress:^(NSProgress *_Nonnull progress) {
-            OWSAssertDebug(progress != nil);
-            
-            // Don't do anything until we've received at least one byte of data.
-            if (progress.completedUnitCount < 1) {
-                return;
-            }
+- (void)refreshDownloadSession{
+    // Swap in a session built with the current proxy routing so future downloads take the new
+    // route. A download already in flight keeps the old session alive (its URLSession delegate
+    // self-retains until the task finishes) and completes/fails on the old route — only the next
+    // download picks up the change. That's enough: the bug being fixed is future calls stranded
+    // on a dead loopback port, which this clears without an app restart.
+    self.downloadSession = OWSSignalService.sharedInstance.urlSessionForNoneService;
+    OWSLogInfo(@"[Proxy] download session rebuilt for current routing");
+}
 
-            void (^abortDownload)(void) = ^{
-                OWSFailDebug(@"%@ Download aborted.", self.logTag);
-                [task cancel];
-            };
+- (BOOL)isSecureURL:(NSString *)urlString {
+    if (!urlString || urlString.length == 0) {
+        return NO;
+    }
 
-            if (progress.totalUnitCount > OWSMediaUtils.kMaxFileSizeGeneric || progress.completedUnitCount > kMaxDownloadSize) {
-                // A malicious service might send a misleading content length header,
-                // so....
-                //
-                // If the current downloaded bytes or the expected total byes
-                // exceed the max download size, abort the download.
-                DDLogError(@"%@ Attachment download exceed expected content length: %lld, %lld.",
-                    self.logTag,
-                    (long long)progress.totalUnitCount,
-                    (long long)progress.completedUnitCount);
-                abortDownload();
-                return;
-            }
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (!url || !url.scheme) {
+        return NO;
+    }
 
-            // We only need to check the content length header once.
-            if (hasCheckedContentLength) {
-                return;
-            }
-            
-            // Once we've received some bytes of the download, check the content length
-            // header for the download.
-            //
-            // If the task doesn't exist, or doesn't have a response, or is missing
-            // the expected headers, or has an invalid or oversize content length, etc.,
-            // abort the download.
-            NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)task.response;
-            if (![httpResponse isKindOfClass:[NSHTTPURLResponse class]]) {
-                DDLogError(@"%@ Attachment download has missing or invalid response.", self.logTag);
-                abortDownload();
-                return;
-            }
-            
-            NSDictionary *headers = [httpResponse allHeaderFields];
-            if (![headers isKindOfClass:[NSDictionary class]]) {
-                DDLogError(@"%@ Attachment download invalid headers.", self.logTag);
-                abortDownload();
-                return;
-            }
-            
-            // This response has a valid content length that is less
-            // than our max download size.  Proceed with the download.
-            hasCheckedContentLength = YES;
+    return [url.scheme.lowercaseString isEqualToString:@"https"];
+}
+
+- (void)downloadFileWithUrl:(NSString *)location
+                    success:(void (^)(NSData * _Nonnull))successHandler
+                    failure:(void (^)(NSError * _Nonnull))failureHandler{
+    [self downloadFileWithUrls:location ? @[location] : @[]
+                      progress:nil
+                       success:successHandler
+                       failure:failureHandler];
+}
+
+- (void)downloadFileWithUrls:(NSArray<NSString *> *)locations
+                     progress:(nullable DTFileDownloadProgressBlock)progressHandler
+                      success:(void (^)(NSData * _Nonnull))successHandler
+                      failure:(void (^)(NSError * _Nonnull))failureHandler{
+    // Use urls array if available, otherwise fallback to single location
+    if (!locations || locations.count == 0) {
+        OWSLogError(@"%@ No download URLs provided", self.logTag);
+        NSError *error = OWSErrorMakeUnableToProcessServerResponseError();
+        return failureHandler(error);
+    }
+
+    __block NSMutableArray *urlErrors = [NSMutableArray array];
+
+    [self attemptDownloadWithUrls:locations
+                         urlIndex:0
+                        urlErrors:urlErrors
+                         progress:progressHandler
+                          success:successHandler
+                          failure:failureHandler];
+}
+
+- (void)attemptDownloadWithUrls:(NSArray<NSString *> *)locations
+                       urlIndex:(NSUInteger)urlIndex
+                      urlErrors:(NSMutableArray *)urlErrors
+                       progress:(nullable DTFileDownloadProgressBlock)progressHandler
+                        success:(void (^)(NSData * _Nonnull))successHandler
+                        failure:(void (^)(NSError * _Nonnull))failureHandler{
+
+    if (urlIndex >= locations.count) {
+        // Log all accumulated errors for debugging
+        OWSLogError(@"%@ All download URLs failed. Errors:", self.logTag);
+        for (NSUInteger i = 0; i < urlErrors.count; i++) {
+            OWSLogError(@"  URL %lu: %@", (unsigned long)(i + 1), urlErrors[i]);
         }
-        success:^(NSURLSessionDataTask *_Nonnull task, id _Nullable responseObject) {
-            if (![responseObject isKindOfClass:[NSData class]]) {
-                DDLogError(@"%@ Failed retrieval of attachment. Response had unexpected format.", self.logTag);
-                NSError *error = OWSErrorMakeUnableToProcessServerResponseError();
-                return failureHandler(task, error);
-            }
-            successHandler((NSData *)responseObject);
+        
+        NSError *error = OWSErrorMakeUnableToProcessServerResponseError();
+        return failureHandler(error);
+    }
+
+    NSString *location = locations[urlIndex];
+
+    // Validate URL is HTTPS for security
+    if (![self isSecureURL:location]) {
+        NSError *urlError = [NSError errorWithDomain:@"DTFileDownloader"
+                                                 code:1001
+                                             userInfo:@{NSLocalizedDescriptionKey: @"Non-HTTPS URL rejected"}];
+        [urlErrors addObject:urlError];
+
+        OWSLogError(@"%@ Rejecting non-HTTPS URL %lu: %@", self.logTag, (unsigned long)(urlIndex + 1), location);
+        [self attemptDownloadWithUrls:locations
+                             urlIndex:urlIndex + 1
+                            urlErrors:urlErrors
+                             progress:progressHandler
+                              success:successHandler
+                              failure:failureHandler];
+        return;
+    }
+
+    OWSLogInfo(@"%@ Attempting download from URL %lu/%lu: %@", self.logTag, (unsigned long)(urlIndex + 1), (unsigned long)locations.count, location);
+
+    NSURL *url = [NSURL URLWithString:location];
+    TSRequest *request = [TSRequest requestWithUrl:url method:@"GET" parameters:nil];
+
+    __weak typeof(self) weakSelf = self;
+    [self.downloadSession performDownloadRequest:request success:^(OWSUrlDownloadResponse * _Nonnull response) {
+
+        NSData *responseData = [NSData dataWithContentsOfURL:response.downloadUrl];
+
+        if (![responseData isKindOfClass:[NSData class]]) {
+            NSError *responseError = [NSError errorWithDomain:@"DTFileDownloader"
+                                                          code:1002
+                                                      userInfo:@{NSLocalizedDescriptionKey: @"Invalid response format"}];
+            [urlErrors addObject:responseError];
+
+            OWSLogError(@"%@ URL %lu failed: Invalid response format", weakSelf.logTag, (unsigned long)(urlIndex + 1));
+
+            [weakSelf attemptDownloadWithUrls:locations
+                                     urlIndex:urlIndex + 1
+                                    urlErrors:urlErrors
+                                     progress:progressHandler
+                                      success:successHandler
+                                      failure:failureHandler];
+            return;
         }
-        failure:^(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error) {
-            DDLogError(@"Failed to retrieve attachment with error: %@", error.description);
-            return failureHandler(task, error);
-        }];
+
+        OWSLogInfo(@"%@ Successfully downloaded from URL %lu", weakSelf.logTag, (unsigned long)(urlIndex + 1));
+        
+        successHandler(responseData);
+    } progress:^(NSURLSessionTask * _Nonnull task, NSProgress * _Nonnull progress) {
+        // Don't do anything until we've received at least one byte of data.
+        if (progress.completedUnitCount < 1) {
+            return;
+        }
+
+        // Call the progress handler if provided
+        // The handler is responsible for:
+        // - Progress notifications
+        // - Size limit enforcement
+        // - Content-Length validation
+        // - Aborting downloads when necessary
+        if (progressHandler) {
+            progressHandler(task, progress);
+        }
+    } failure:^(OWSHTTPErrorWrapper * _Nonnull errorWrapper) {
+        NSError *error = errorWrapper.asNSError;
+        [urlErrors addObject:error];
+
+        OWSLogError(@"%@ URL %lu: Failed to retrieve attachment with error: %@", weakSelf.logTag, (unsigned long)(urlIndex + 1), error.description);
+
+        [weakSelf attemptDownloadWithUrls:locations
+                                 urlIndex:urlIndex + 1
+                                urlErrors:urlErrors
+                                 progress:progressHandler
+                                  success:successHandler
+                                  failure:failureHandler];
+    }];
 }
 
 @end

@@ -62,6 +62,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 @implementation MediaDetailViewController
 
+// The custom `image` getter below manages this ivar; synthesize it explicitly
+// since implementing the getter suppresses ivar autosynthesis.
+@synthesize image = _image;
+
 - (void)dealloc
 {
     [self stopAnyVideo];
@@ -77,15 +81,42 @@ NS_ASSUME_NONNULL_BEGIN
 
     _galleryItemBox = galleryItemBox;
     _viewItem = viewItem;
-    // We cache the image data in case the attachment stream is deleted.
-    _image = galleryItemBox.attachmentStream.image;
 
     return self;
+}
+
+- (UIImage *)image
+{
+    // Decode lazily so building an off-screen page (e.g. a swipe neighbor) stays
+    // cheap; prefer the image the pager pre-decoded. Cache it once resolved in
+    // case the attachment stream is later deleted.
+    if (!_image) {
+        _image = self.preloadedImage ?: self.attachmentStream.image;
+    }
+    return _image;
 }
 
 - (TSAttachmentStream *)attachmentStream
 {
     return self.galleryItemBox.attachmentStream;
+}
+
++ (nullable UIImage *)decodedImageForAttachment:(TSAttachmentStream *)attachmentStream
+{
+    if (attachmentStream.isAnimated) {
+        NSURL *_Nullable url = attachmentStream.mediaURL;
+        if (!url) {
+            return nil;
+        }
+        NSData *_Nullable data = [NSData dataWithContentsOfURL:url];
+        if (!data) {
+            return nil;
+        }
+        return [YYImage imageWithData:data];
+    } else if (attachmentStream.isImage) {
+        return attachmentStream.image;
+    }
+    return nil;
 }
 
 - (NSURL *_Nullable)attachmentUrl
@@ -115,12 +146,18 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 - (void)applyTheme {
-    
-    UIColor *backgroundColor = Theme.isDarkThemeEnabled ? [UIColor ows_blackColor] : [UIColor ows_whiteColor];
+
+    // Animated GIFs match the chat bubble's neutral placeholder so scrolling never flashes a bright page.
+    UIColor *backgroundColor;
+    if (self.isAnimated) {
+        backgroundColor = Theme.isDarkThemeEnabled ? [UIColor ows_gray75Color] : [UIColor ows_gray05Color];
+    } else {
+        backgroundColor = Theme.isDarkThemeEnabled ? [UIColor ows_blackColor] : [UIColor ows_whiteColor];
+    }
     self.view.backgroundColor = backgroundColor;
     self.scrollView.backgroundColor = backgroundColor;
     self.mediaView.backgroundColor = backgroundColor;
-    
+
     if (self.recognizeButton) {
         [self.recognizeButton applyTheme];
     }
@@ -130,8 +167,6 @@ NS_ASSUME_NONNULL_BEGIN
 {
     [super viewDidLoad];
 
-    self.view.backgroundColor = [UIColor ows_whiteColor];
-
     [self createContents];
 }
 
@@ -139,6 +174,16 @@ NS_ASSUME_NONNULL_BEGIN
 {
     [super viewWillAppear:animated];
     [self resetMediaFrame];
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+
+    // Reset zoom when leaving: a page left zoomed-in keeps the inner scroll view
+    // scrollable, and on return it would swallow the horizontal paging swipe.
+    // Restoring min zoom also re-centers contentOffset automatically.
+    [self zoomOutAnimated:NO];
 }
 
 - (void)viewDidLayoutSubviews
@@ -186,6 +231,11 @@ NS_ASSUME_NONNULL_BEGIN
     }
 }
 
+- (BOOL)isZoomedIn
+{
+    return self.scrollView.zoomScale > self.scrollView.minimumZoomScale + 0.01;
+}
+
 #pragma mark - Initializers
 
 - (void)createContents
@@ -198,15 +248,23 @@ NS_ASSUME_NONNULL_BEGIN
     scrollView.showsVerticalScrollIndicator = NO;
     scrollView.showsHorizontalScrollIndicator = NO;
     scrollView.decelerationRate = UIScrollViewDecelerationRateFast;
-    [scrollView contentInsetAdjustmentBehavior];
+    // Disable auto safe-area insets: otherwise the content stays scrollable even
+    // at fit-to-screen zoom, and the inner scroll view swallows the horizontal
+    // swipe so the page controller can't turn the page.
+    scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     
     [scrollView autoPinEdgesToSuperviewEdges];
 
     if (self.isAnimated) {
         if (self.attachmentStream.isValidImage) {
-            YYImage *animatedGif = [YYImage imageWithData:self.fileData];
-            YYAnimatedImageView *animatedView = [YYAnimatedImageView new];
-            animatedView.image = animatedGif;
+            // Prefer the pre-decoded animated image the pager injected; fall back
+            // to decoding here. Init with the image so frame == image.size up front
+            // (matches the static path below); otherwise centerMediaViewConstraints
+            // may read a zero frame during a swipe and push the GIF to the bottom-right.
+            YYImage *animatedGif = [self.preloadedImage isKindOfClass:YYImage.class]
+                ? (YYImage *)self.preloadedImage
+                : [YYImage imageWithData:self.fileData];
+            YYAnimatedImageView *animatedView = [[YYAnimatedImageView alloc] initWithImage:animatedGif];
             self.mediaView = animatedView;
         } else {
             self.mediaView = [UIImageView new];

@@ -165,7 +165,7 @@ final class DTInviteCodeViewController: OWSViewController {
         }
         let action = MenuAction(image: iconImage, title: Localized("INVITE_SHARE"), subtitle: nil, block: {[weak self] _ in
             
-            let inviteDesc = Localized("INVITE_DESC") + " " + (self?.inviteCodeEntity?.inviteLink ?? "https://yelling.pro")
+            let inviteDesc = Localized("INVITE_DESC") + " " + (self?.inviteCodeEntity?.inviteLink ?? "https://quicall.app")
             let activityController = UIActivityViewController.init(activityItems: [inviteDesc], applicationActivities: nil)
             activityController.completionWithItemsHandler =  { activity, success, items, error in
                 if(success == true){

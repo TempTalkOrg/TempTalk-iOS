@@ -35,11 +35,19 @@ public struct CryptoDisposeRequest {
     }
 }
 
+public struct CryptoDisposeResponse {
+    public let removed: [String]
+    public let rejected: [String]
+}
+
 // MARK: - Protocol
 
 public protocol GroupCryptoAPI {
     func upgradeToEncrypted(groupId: String, request: UpgradeGroupCryptoRequest) async throws
-    func cryptoDispose(groupId: String, request: CryptoDisposeRequest) async throws
+    /// Rotate an already-encrypted group's crypto key. `baseKeyVersion` is the CAS baseline
+    /// (the current groupCryptoKeyVersion known before rotating). Returns the new keyVersion.
+    func rotateCrypto(groupId: String, request: UpgradeGroupCryptoRequest, baseKeyVersion: Int) async throws -> Int
+    func cryptoDispose(groupId: String, request: CryptoDisposeRequest) async throws -> CryptoDisposeResponse
 }
 
 // MARK: - Implementation
@@ -73,15 +81,63 @@ public final class DTGroupCryptoAPIImpl: GroupCryptoAPI {
         Logger.info("[GroupCrypto] Upgrade to encrypted succeeded for gid: \(groupId)")
     }
 
-    public func cryptoDispose(groupId: String, request: CryptoDisposeRequest) async throws {
+    public func rotateCrypto(groupId: String, request: UpgradeGroupCryptoRequest, baseKeyVersion: Int) async throws -> Int {
+        let path = String(format: "/v1/groups/%@/rotate-crypto", groupId)
+
+        var parameters: [String: Any] = [
+            "groupCryptoMode": request.groupCryptoMode,
+            "encryptedName": request.encryptedName,
+            "groupMemberVerifyPublicKey": request.groupMemberVerifyPublicKey,
+            "memberBindings": request.memberBindings,
+            "baseGroupCryptoKeyVersion": baseKeyVersion
+        ]
+        if let encryptedAvatar = request.encryptedAvatar {
+            parameters["encryptedAvatar"] = encryptedAvatar
+        }
+
+        guard let url = URL(string: path) else {
+            throw OWSGenericError("[GroupCrypto] Invalid URL for rotate-crypto: \(path)")
+        }
+        let tsRequest = TSRequest(url: url, method: "PUT", parameters: parameters)
+        let httpResponse = try await networkManager.asyncRequest(tsRequest)
+
+        // The server's returned new keyVersion IS the proof that it actually committed the rotate. We
+        // require it (and that it advanced past the CAS base) and use it verbatim — the server is the
+        // sole authority. If it's missing/invalid we throw rather than fabricate base+1: a version-less
+        // 200 means the rotate is unconfirmed (e.g. a proxy/cache 200, server didn't really rotate), and
+        // distributing a key the server may not recognize is exactly the silent client/server mismatch
+        // that breaks decryption + add-member. Failing loudly is recoverable (retry re-GETs a fresh base).
+        var parsedVersion: Int?
+        if let json = httpResponse.responseBodyJson as? [String: Any],
+           let data = json["data"] as? [String: Any] {
+            parsedVersion = (data["groupCryptoKeyVersion"] as? Int) ?? (data["keyVersion"] as? Int)
+        }
+        guard let newKeyVersion = parsedVersion, newKeyVersion > baseKeyVersion else {
+            throw OWSGenericError("[GroupCrypto] rotate-crypto returned no valid new keyVersion (base: \(baseKeyVersion), parsed: \(parsedVersion.map(String.init) ?? "nil"))")
+        }
+        Logger.info("[GroupCrypto] rotate-crypto succeeded for gid: \(groupId), base: \(baseKeyVersion), newKeyVersion: \(newKeyVersion)")
+        return newKeyVersion
+    }
+
+    @discardableResult
+    public func cryptoDispose(groupId: String, request: CryptoDisposeRequest) async throws -> CryptoDisposeResponse {
         let path = String(format: "/v1/groups/%@/members/crypto-dispose", groupId)
-        let parameters: [String: Any] = ["members": request.members]
+        let parameters: [String: Any] = ["uids": request.members]
 
         guard let url = URL(string: path) else {
             throw OWSGenericError("[GroupCrypto] Invalid URL for crypto-dispose: \(path)")
         }
         let tsRequest = TSRequest(url: url, method: "POST", parameters: parameters)
-        _ = try await networkManager.asyncRequest(tsRequest)
-        Logger.info("[GroupCrypto] Crypto dispose succeeded for gid: \(groupId)")
+        let httpResponse = try await networkManager.asyncRequest(tsRequest)
+
+        var removed: [String] = []
+        var rejected: [String] = []
+        if let json = httpResponse.responseBodyJson as? [String: Any],
+           let data = json["data"] as? [String: Any] {
+            removed = data["removed"] as? [String] ?? []
+            rejected = data["rejected"] as? [String] ?? []
+        }
+        
+        return CryptoDisposeResponse(removed: removed, rejected: rejected)
     }
 }

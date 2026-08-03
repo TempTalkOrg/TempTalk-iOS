@@ -13,12 +13,18 @@ public class WebSocketFactoryHybrid: NSObject, WebSocketFactory {
 
     public func buildSocket(request: URLRequest,
                             callbackQueue: DispatchQueue) -> SSKWebSocket? {
-//        if FeatureFlags.canUseNativeWebsocket,
-//           #available(iOS 13, *) {
-            return SSKWebSocketNative(request: request, callbackQueue: callbackQueue)
-//        } else {
-//            return SSKWebSocketStarScream(request: request, callbackQueue: callbackQueue)
-//        }
+        // One atomic routing snapshot (avoids racing a tunnel start/teardown across two reads).
+        switch ProxyManager.shared.urlSessionRouting() {
+        case .failClosed:
+            // Proxy on but tunnel not ready: connecting the IM WSS directly would leak the real
+            // client IP, so return a socket that never dials — it just reports failure and
+            // OWSWebSocket retries; a later rebuild picks the proxied transport once the tunnel is up.
+            return SSKWebSocketFailClosed(callbackQueue: callbackQueue)
+        case .viaProxy(let dict):
+            return SSKWebSocketNative(request: request, callbackQueue: callbackQueue, proxyDictionary: dict)
+        case .direct:
+            return SSKWebSocketNative(request: request, callbackQueue: callbackQueue, proxyDictionary: nil)
+        }
     }
 
     public func statusCode(forError error: Error) -> Int {
@@ -33,6 +39,49 @@ public class WebSocketFactoryHybrid: NSObject, WebSocketFactory {
             return error.httpStatusCode ?? 0
         }
     }
+}
+
+// MARK: -
+
+/// The self-hosted proxy's tunnel isn't carrying traffic. Reported by the fail-closed socket so
+/// callers never mistake it for a routed connection.
+public enum SSKWebSocketProxyError: Error {
+    case tunnelUnavailable
+}
+
+/// A no-op `SSKWebSocket` that never opens a connection. The factory returns this — instead of the
+/// direct-connecting `SSKWebSocketNative` — when the proxy is enabled but its tunnel isn't ready:
+/// dialing directly would leak the real client IP, so we fail closed. `connect()` immediately
+/// reports a disconnect; `OWSWebSocket` then retries, and once the tunnel comes up a later
+/// `buildSocket` returns the proxied transport instead.
+final class SSKWebSocketFailClosed: SSKWebSocket {
+
+    private static let idCounter = AtomicUInt(lock: .sharedGlobal)
+    let id = SSKWebSocketFailClosed.idCounter.increment()
+
+    weak var delegate: SSKWebSocketDelegate?
+
+    private let callbackQueue: DispatchQueue
+    private let hasReported = AtomicBool(false, lock: .sharedGlobal)
+
+    init(callbackQueue: DispatchQueue? = nil) {
+        self.callbackQueue = callbackQueue ?? .main
+    }
+
+    var state: SSKWebSocketState { .disconnected }
+
+    func connect() {
+        guard !hasReported.swap(true) else { return }
+        Logger.warn("[Proxy] IM WSS fail-closed: proxy on but tunnel not ready [\(id)]")
+        callbackQueue.async { [weak self] in
+            guard let self, let delegate = self.delegate else { return }
+            delegate.websocketDidDisconnectOrFail(socket: self, error: SSKWebSocketProxyError.tunnelUnavailable)
+        }
+    }
+
+    func disconnect() {}
+    func write(data: Data) {}
+    func writePing() {}
 }
 
 // MARK: -

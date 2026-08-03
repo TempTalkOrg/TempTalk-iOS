@@ -25,9 +25,12 @@ struct ParticipantView: View {
     @EnvironmentObject var liveKitCtx: LiveKitContext
 
     var is1on1: Bool = false
+    /// Compact avatar info for the 1v1 floating window.
+    var compact: Bool = false
     var videoViewMode: VideoView.LayoutMode = .fit
 
     @State private var isRendering: Bool = false
+    @State private var didRenderFirstFrame: Bool = false
     @State private var cachedIdentity: String?
     @State private var cameraUnmuteCounter: Int = 0
     @State private var previousCameraMuted: Bool? = nil
@@ -69,12 +72,17 @@ struct ParticipantView: View {
                             renderMode: liveKitCtx.preferSampleBufferRendering ? .sampleBuffer : .auto,
                             pinchToZoomOptions: liveKitCtx.videoViewPinchToZoomOptions,
                             isDebugMode: liveKitCtx.showInformationOverlay,
-                            isRendering: $isRendering
+                            keepLastFrameOnTrackChange: true,
+                            isRendering: $isRendering,
+                            didRenderFirstFrame: $didRenderFirstFrame
                         )
                         .id(cameraUnmuteCounter)
                         .ignoresSafeArea()
 
-                        if !isRendering && !publication.isMuted {
+                        // Only show the loading spinner before the very first frame.
+                        // After the first frame, weak-network stalls/reconnect keep the last
+                        // frame frozen (no spinner).
+                        if !didRenderFirstFrame && !publication.isMuted {
                             ProgressView().progressViewStyle(CircularProgressViewStyle())
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         }
@@ -182,19 +190,9 @@ struct ParticipantView: View {
     private func mutedAvatarOverlay(geometry: GeometryProxy) -> some View {
         let recipientId = recipientId(participant)
         if is1on1 {
-            let participantName = DTLiveKitCallModel.getDisplayName(recipientId: recipientId)
+            // Opaque background over the live renderer, then avatar info.
             Color.dtBackground
-            VStack {
-                AvatarImageViewRepresentable(recipientId: recipientId)
-                    .frame(width: 120, height: 120)
-
-                Text(participantName)
-                    .font(.system(size: 17))
-                    .foregroundColor(.white)
-                    .padding(.top, 10)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .position(CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2.5))
+            avatar1on1Column(geometry: geometry)
         } else {
             Color(hex: 0x181A20)
             AvatarImageViewRepresentable(recipientId: recipientId)
@@ -206,7 +204,35 @@ struct ParticipantView: View {
     private func noTrackAvatarView(geometry: GeometryProxy) -> some View {
         let recipientId = recipientId(participant)
         if is1on1 {
-            let participantName = DTLiveKitCallModel.getDisplayName(recipientId: recipientId)
+            avatar1on1Column(geometry: geometry)
+        } else {
+            AvatarImageViewRepresentable(recipientId: recipientId)
+                .padding(EdgeInsets(top: 20, leading: 22, bottom: 24, trailing: 22))
+        }
+    }
+
+    /// 1v1 avatar column: full-size by default, scaled down + mic status when compact.
+    @ViewBuilder
+    private func avatar1on1Column(geometry: GeometryProxy) -> some View {
+        let recipientId = recipientId(participant)
+        let participantName = DTLiveKitCallModel.getDisplayName(recipientId: recipientId)
+        if compact {
+            VStack(spacing: 4) {
+                AvatarImageViewRepresentable(recipientId: recipientId)
+                    .frame(width: 48, height: 48)
+
+                HStack(spacing: 2) {
+                    micStatusIcon(size: 10)
+
+                    Text(truncatedName(participantName, maxChars: 8))
+                        .font(.system(size: 11))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
             VStack {
                 AvatarImageViewRepresentable(recipientId: recipientId)
                     .frame(width: 120, height: 120)
@@ -218,10 +244,38 @@ struct ParticipantView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .position(CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2.5))
-        } else {
-            AvatarImageViewRepresentable(recipientId: recipientId)
-                .padding(EdgeInsets(top: 20, leading: 22, bottom: 24, trailing: 22))
         }
+    }
+
+    /// Mic status icon: muted / silent / speaking.
+    @ViewBuilder
+    private func micStatusIcon(size: CGFloat) -> some View {
+        if let publication = participant.firstAudioPublication, !publication.isMuted {
+            if participant.isSpeaking {
+                LottieView(animation: .named("Meeting_audio"))
+                    .playing(loopMode: .loop)
+                    .frame(width: size, height: size)
+                    .padding(1)
+            } else {
+                Image(uiImage: UIImage(named: "ic_call_unmuted") ?? UIImage())
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: size, height: size)
+                    .padding(1)
+            }
+        } else {
+            Image(uiImage: UIImage(named: "call_ic_muted") ?? UIImage())
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .padding(1)
+        }
+    }
+
+    /// Truncate name to maxChars with a trailing ellipsis.
+    private func truncatedName(_ name: String, maxChars: Int) -> String {
+        guard name.count > maxChars else { return name }
+        return String(name.prefix(maxChars)) + "…"
     }
 
     @ViewBuilder

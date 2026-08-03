@@ -37,6 +37,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// 群信息加密功能开关（服务端下发，默认 NO）
 @property (nonatomic, assign) BOOL encryptionEnabled;
 
+/// 群密钥重置入口开关（服务端下发，默认 NO）
+@property (nonatomic, assign) BOOL encryptionKeyResetEnabled;
+
 @end
 
 @class SDSAnyReadTransaction;

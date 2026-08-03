@@ -88,7 +88,8 @@ class DTSaveToAlbumSettingController: OWSTableViewController {
 
     private func tipFooterCell() -> UITableViewCell {
         let cell = UITableViewCell(style: .default, reuseIdentifier: "tipCell")
-        cell.contentView.backgroundColor = Theme.defaultColor
+        cell.backgroundColor = Theme.bgpageSecondaryColor
+        cell.contentView.backgroundColor = Theme.bgpageSecondaryColor
         cell.selectionStyle = .none
         cell.preservesSuperviewLayoutMargins = true
         cell.contentView.preservesSuperviewLayoutMargins = true

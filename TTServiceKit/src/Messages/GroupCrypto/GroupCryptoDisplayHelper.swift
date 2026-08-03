@@ -63,15 +63,39 @@ import Foundation
             return decrypted
         }
 
-        if let effective = effectiveEncryptedName, !effective.isEmpty, originalName == effective {
-            Logger.info("[GroupCrypto] displayGroupName avoid ciphertext leak, gid: \(gid)")
+        // Has ciphertext but can't decrypt (e.g. stale R_group after rotation) -> placeholder,
+        // not stale cached plaintext, so the "can't read new name" state stays visible.
+        if let effectiveEncryptedName, !effectiveEncryptedName.isEmpty {
             return Self.encryptedGroupNamePlaceholder
         }
-
+        // No ciphertext to decrypt (transient, e.g. just joined) -> fall back to last known name.
         return (originalName?.isEmpty == false ? originalName : nil) ?? Self.encryptedGroupNamePlaceholder
     }
 
-    /// 给会议等场景解析群显示名。对加密群走本地解密
+    @objc public func decryptedGroupName(rGroup: Data, encryptedName: String) -> String? {
+        manager.decryptedGroupName(rGroup: rGroup, encryptedName: encryptedName)
+    }
+
+    /// Call-scene name resolver. Trusts caller's E2EE plaintext first;
+    /// local DB decrypt may fail when R_group hasn't landed yet (first call into an encrypted group).
+    @objc public func resolveGroupCallDisplayName(trustedPlaintextName: String?,
+                                                  serverGroupId: String?,
+                                                  transaction: SDSAnyReadTransaction) -> String {
+        if let name = trustedPlaintextName, !name.isEmpty {
+            return name
+        }
+        if let gid = serverGroupId, !gid.isEmpty {
+            let dbName = resolveGroupDisplayName(serverGroupId: gid,
+                                                  fallbackName: nil,
+                                                  transaction: transaction)
+            if !dbName.isEmpty {
+                return dbName
+            }
+        }
+        return Self.encryptedGroupNamePlaceholder
+    }
+
+    /// 给会议等场景解析群显示名。
     @objc public func resolveGroupDisplayName(serverGroupId: String?,
                                               fallbackName: String?,
                                               transaction: SDSAnyReadTransaction) -> String {
@@ -80,18 +104,29 @@ import Foundation
               let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: serverGroupId) else {
             return fallback
         }
-
         let threadId = TSGroupThread.threadId(fromGroupId: groupId)
-        let placeholder = Self.encryptedGroupNamePlaceholder
-
         guard let thread = TSGroupThread.anyFetchGroupThread(uniqueId: threadId, transaction: transaction) else {
             return fallback
         }
-        let name = thread.name(with: transaction)
-        let resolved = !name.isEmpty && name != placeholder
-        let hasKey = manager.hasRGroup(gid: serverGroupId, transaction: transaction)
-        Logger.info("[GroupCrypto] resolve gid=\(serverGroupId) hasKey=\(hasKey) resolved=\(resolved)")
-        return resolved ? name : fallback
+
+        guard thread.groupModel.isEncryptedGroup else {
+            let name = thread.name(with: transaction)
+            return name.isEmpty ? fallback : name
+        }
+
+        // fallback chain: decrypted -> cached local name -> caller fallback
+        let encryptedName = DTGroupBaseInfoEntity.anyFetch(uniqueId: serverGroupId, transaction: transaction)?.encryptedName
+        if let decrypted = manager.decryptedGroupName(gid: serverGroupId, encryptedName: encryptedName, transaction: transaction),
+           !decrypted.isEmpty {
+            return decrypted
+        }
+        if manager.hasRGroup(gid: serverGroupId, transaction: transaction) {
+            Logger.error("[GroupCrypto] resolve unresolved with R_group present, gid: \(serverGroupId)")
+        }
+        if let localName = thread.groupModel.groupName, !localName.isEmpty {
+            return localName
+        }
+        return fallback
     }
 
     // MARK: - Avatar Update
@@ -100,9 +135,9 @@ import Foundation
     private enum AvatarDecision {
         case download(url: String)
         /// 清空 groupImage，UI 走 empty-group-avatar
-        case clear(reason: String)
+        case clear
         /// 保持现状
-        case keep(reason: String)
+        case keep
         /// R_group 未到达，（服务端下发的加锁占位图）
         case pendingDecryption
     }
@@ -120,20 +155,17 @@ import Foundation
                                             gid: gid,
                                             transaction: transaction) {
         case .download(let url):
-            Logger.info("[GroupCrypto] Avatar decrypted, will download for gid: \(gid)")
+            Logger.info("[GroupCrypto] Avatar will download, gid: \(gid)")
             return url
-        case .clear(let reason):
+        case .clear:
+            // No real encrypted avatar: clear groupImage and return nil so the UI falls back
+            // to empty-group-avatar (like plaintext groups), not the server lock placeholder.
             clearGroupImage(gid: gid, transaction: transaction)
-            let fallback = plainFallback(plainAvatar)
-            Logger.info("[GroupCrypto] Avatar cleared for gid: \(gid) (\(reason)), hasPlainFallback: \(fallback != nil)")
-            return fallback
-        case .keep(let reason):
-            Logger.info("[GroupCrypto] Avatar keep current state for gid: \(gid) (\(reason))")
+            return nil
+        case .keep:
             return nil
         case .pendingDecryption:
-            let fallback = plainFallback(plainAvatar)
-            Logger.info("[GroupCrypto] Avatar pending decryption for gid: \(gid), hasPlainFallback: \(fallback != nil)")
-            return fallback
+            return plainFallback(plainAvatar)
         }
     }
 
@@ -145,11 +177,7 @@ import Foundation
             : loadEncryptedAvatar(gid: gid, transaction: transaction)
 
         guard let encrypted = effectiveEncrypted else {
-            return .clear(reason: "no ciphertext")
-        }
-
-        if isAvatarFingerprintUnchanged(gid: gid, encryptedAvatar: encrypted) {
-            return .keep(reason: "fingerprint unchanged")
+            return .clear
         }
 
         guard manager.hasRGroup(gid: gid, transaction: transaction) else {
@@ -159,31 +187,24 @@ import Foundation
         guard let decrypted = manager.decryptedGroupAvatar(gid: gid,
                                                              encryptedAvatar: encrypted,
                                                              transaction: transaction) else {
-            return .keep(reason: "decrypt failed")
+            // Has ciphertext but can't decrypt (e.g. stale R_group) -> lock placeholder, matching the
+            // "🔒" name, instead of keeping a stale image. Decryptable avatars take .download instead.
+            return .pendingDecryption
         }
 
         if decrypted.isEmpty {
-            return .clear(reason: "decrypted empty plaintext")
+            return .clear
         }
 
         return .download(url: decrypted)
     }
 
-    // MARK: - Avatar Fingerprint
+    // MARK: - Avatar Download Marker
+    // 仅用于 plainFallback 路径避免覆盖已下载的真实头像。
     @objc public func markAvatarDownloaded(gid: String, encryptedAvatar: String) {
-        guard !gid.isEmpty else { return }
-        guard !encryptedAvatar.isEmpty else {
-            Logger.info("[GroupCrypto] markAvatarDownloaded skip: empty encryptedAvatar, gid: \(gid)")
-            return
-        }
+        guard !gid.isEmpty, !encryptedAvatar.isEmpty else { return }
         fingerprintQueue.sync {
             self.downloadedAvatarFingerprint[gid] = encryptedAvatar
-        }
-    }
-
-    private func isAvatarFingerprintUnchanged(gid: String, encryptedAvatar: String) -> Bool {
-        fingerprintQueue.sync {
-            downloadedAvatarFingerprint[gid] == encryptedAvatar
         }
     }
 
@@ -191,6 +212,13 @@ import Foundation
         guard !gid.isEmpty else { return false }
         return fingerprintQueue.sync {
             downloadedAvatarFingerprint[gid] != nil
+        }
+    }
+
+    @objc public func clearAvatarFingerprint(gid: String) {
+        guard !gid.isEmpty else { return }
+        fingerprintQueue.sync {
+            downloadedAvatarFingerprint.removeValue(forKey: gid)
         }
     }
 
@@ -202,6 +230,15 @@ import Foundation
 
     @objc public func hasGroupKey(gid: String, transaction: SDSAnyReadTransaction) -> Bool {
         manager.hasRGroup(gid: gid, transaction: transaction)
+    }
+
+    /// Whether the current key can decrypt the stored encrypted avatar. If not (no key or wrong R_group),
+    /// what shows is the lock placeholder — used to avoid marking it as a "real avatar downloaded".
+    @objc public func canDecryptAvatar(gid: String, transaction: SDSAnyReadTransaction) -> Bool {
+        guard let encrypted = loadEncryptedAvatar(gid: gid, transaction: transaction), !encrypted.isEmpty else {
+            return false
+        }
+        return manager.decryptedGroupAvatar(gid: gid, encryptedAvatar: encrypted, transaction: transaction) != nil
     }
 
     // MARK: - Private

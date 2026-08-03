@@ -5,7 +5,6 @@
 import Foundation
 import SignalCoreKit
 import CoreImage
-import AFNetworking
 
 public extension RESTNetworkManager {
     func makePromise(request: TSRequest) -> Promise<HTTPResponse> {
@@ -36,10 +35,13 @@ public class RESTSessionManager: NSObject {
     private let urlSession: OWSURLSession
     private let urlCallSession: OWSURLSession
     private let urlFileShareSession: OWSURLSession
-    
+    private let urlSpeech2TextSession: OWSURLSession
+    private let urlStorageSession: OWSURLSession
+    private let urlRootSession: OWSURLSession
+
     @objc
     public let createdDate = Date()
-    
+
     @objc public var baseUrlHost: String? {
         urlSession.baseUrl?.host
     }
@@ -48,12 +50,12 @@ public class RESTSessionManager: NSObject {
     public override required init() {
         assertOnQueue(NetworkManagerQueue())
 
-        // 15s
         self.urlSession = Self.signalService.urlSessionForMainSignalService()
-        // 5s
         self.urlCallSession = Self.signalService.urlSessionForCallService()
-        // 30s
         self.urlFileShareSession = Self.signalService.urlSessionForFileShareService()
+        self.urlSpeech2TextSession = Self.signalService.urlSessionForSpeech2TextService()
+        self.urlStorageSession = Self.signalService.urlSessionForStorageService()
+        self.urlRootSession = Self.signalService.urlSessionForRootService()
     }
 
     @objc
@@ -63,33 +65,35 @@ public class RESTSessionManager: NSObject {
         assertOnQueue(NetworkManagerQueue())
         owsAssertDebug(!FeatureFlags.deprecateREST || signalService.isCensorshipCircumventionActive)
 
-        // We should only use the RESTSessionManager for requests to the Signal main service.
-        var urlSession = self.urlSession
-
-        var urlStr = TSConstants.mainServiceURL
-        if request.serverType == .fileSharing {
-            urlStr = TSConstants.fileShareServiceURL
+        // Select session by request server type; each session's baseUrl is
+        // computed dynamically from TSConstants via its serviceType.
+        // isMainService: services sharing the chat domain pool; record LastHost on success.
+        let urlSession: OWSURLSession
+        let isMainService: Bool
+        switch request.serverType {
+        case .avatar:
+            urlSession = self.urlStorageSession
+            isMainService = false
+        case .fileSharing:
             urlSession = self.urlFileShareSession
-        } else if request.serverType == .call {
-            urlStr = TSConstants.callServerURL
+            isMainService = true
+        case .call:
             urlSession = self.urlCallSession
-        } else if request.serverType == .speech2Text {
-            urlStr = TSConstants.speechToTextServerURL
-        } else if request.serverType == .avatar {
-            urlStr = TSConstants.avatarStorageServerURL
-        } else if request.serverType == .root {
-            urlStr = TSConstants.rootServiceURL
+            isMainService = true
+        case .speech2Text:
+            urlSession = self.urlSpeech2TextSession
+            isMainService = true
+        case .root:
+            urlSession = self.urlRootSession
+            isMainService = true
+        default:
+            urlSession = self.urlSession
+            isMainService = true
         }
-         
-        if let url = URL(string: urlStr), urlSession.unfrontedBaseUrl != url {
-            urlSession.baseUrl = url
-        }
-            
-        owsAssertDebug(urlSession.unfrontedBaseUrl == URL(string: urlStr))
 
         guard let requestUrl = request.url else {
             owsFailDebug("Missing requestUrl.")
-            let url: URL = urlSession.baseUrl ?? URL(string: urlStr)!
+            let url: URL = urlSession.baseUrl ?? URL(string: TSConstants.mainServiceURL)!
             failure(OWSHTTPErrorWrapper(error: .missingRequest(requestUrl: url)))
             return
         }
@@ -97,6 +101,17 @@ public class RESTSessionManager: NSObject {
         firstly {
             urlSession.promiseForTSRequest(request)
         }.done(on: DispatchQueue.global()) { (response: HTTPResponse) in
+            Logger.debug("Request base url: \(String(describing: urlSession.baseUrl))")
+
+            if isMainService,
+               let host = urlSession.baseUrl?.host,
+               DTServerUrlManager.shared().containsHost(host, serverType: .chat) {
+                DTLastSuccessfulHostManager.shared.saveLastSuccessfulHost(
+                    host,
+                    serverType: .chat
+                )
+            }
+            
             success(response)
         }.catch(on: DispatchQueue.global()) { error in
             // OWSUrlSession should only throw OWSHTTPError or OWSAssertionError.
@@ -228,64 +243,36 @@ extension OWSURLSession {
             return Promise(error: OWSHTTPError.invalidRequest(requestUrl: rawRequestUrl))
         }
 
-        let methods = [HTTPMethod.get, HTTPMethod.head]
-        var requestBody = Data()
-        if !(methods.contains(method)) {
-            if let httpBody = rawRequest.httpBody {
-                owsAssertDebug(rawRequest.parameters.isEmpty)
-                
-                requestBody = httpBody
-            } else if !rawRequest.parameters.isEmpty {
-                let jsonData: Data?
-                do {
-                    jsonData = try JSONSerialization.data(withJSONObject: rawRequest.parameters, options: [])
-                } catch {
-                    owsFailDebug("Could not serialize JSON parameters: \(error).")
-                    return Promise(error: OWSHTTPError.invalidRequest(requestUrl: rawRequestUrl))
-                }
-                
-                if let jsonData = jsonData {
-                    requestBody = jsonData
-                    // If we're going to use the json serialized parameters as our body, we should overwrite
-                    // the Content-Type on the request.
-                    httpHeaders.addHeader("Content-Type",
-                                          value: "application/json",
-                                          overwriteOnConflict: true)
-                }
-            }
-        }
-
         let urlSession = self
-        var request: URLRequest
+
+        // Process parameters based on HTTP method (URL query for GET/HEAD; JSON body otherwise)
+        let processedRequest: (url: URL, body: Data)
         do {
-            request = try urlSession.buildRequest(rawRequestUrl.absoluteString,
-                                                  method: method,
-                                                  headers: httpHeaders.headers,
-                                                  body: requestBody)
+            processedRequest = try urlSession.processRequestParameters(
+                baseURL: rawRequestUrl,
+                method: method,
+                parameters: rawRequest.parameters,
+                httpBody: rawRequest.httpBody
+            )
         } catch {
-            owsFailDebug("Missing or invalid request: \(rawRequestUrl).")
+            owsFailDebug("Failed to process request parameters: \(error)")
             return Promise(error: OWSHTTPError.invalidRequest(requestUrl: rawRequestUrl))
         }
-        
-        if methods.contains(method), !rawRequest.parameters.isEmpty {
-            guard let url = request.url else {
-                owsFailDebug("Missing or invalid request url: \(rawRequestUrl).")
-                return Promise(error: OWSHTTPError.invalidRequest(requestUrl: rawRequestUrl))
-            }
-            
-            if var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-                let querystring = AFQueryStringFromParameters(rawRequest.parameters)
-                
-                let newQueryString = [components.percentEncodedQuery, querystring].compactMap { $0 }.joined(separator: "&")
-                components.percentEncodedQuery = newQueryString.isEmpty ? nil : newQueryString
-                
-                guard let newURL = components.url else {
-                    owsFailDebug("Missing or invalid new request url: \(url).")
-                    return Promise(error: OWSHTTPError.invalidRequest(requestUrl: rawRequestUrl))
-                }
-                
-                request.url = newURL
-            }
+
+        // Add Content-Type for JSON body
+        if !processedRequest.body.isEmpty && !httpMethodsEncodingParametersInURI.contains(method) {
+            httpHeaders.addHeader("Content-Type", value: "application/json", overwriteOnConflict: true)
+        }
+
+        let request: URLRequest
+        do {
+            request = try urlSession.buildRequest(processedRequest.url.absoluteString,
+                                                  method: method,
+                                                  headers: httpHeaders.headers,
+                                                  body: processedRequest.body)
+        } catch {
+            owsFailDebug("Missing or invalid request: \(processedRequest.url).")
+            return Promise(error: OWSHTTPError.invalidRequest(requestUrl: rawRequestUrl))
         }
 
         var backgroundTask: OWSBackgroundTask? = OWSBackgroundTask(label: "\(#function)")
@@ -293,7 +280,7 @@ extension OWSURLSession {
         Logger.verbose("Making request: \(rawRequest.description)")
 
         return firstly(on: DispatchQueue.global()) { () throws -> Promise<HTTPResponse> in
-            urlSession.uploadTaskPromise(request: request, data: requestBody)
+            urlSession.uploadTaskPromise(request: request, data: processedRequest.body)
         }.map(on: DispatchQueue.global()) { (response: HTTPResponse) -> HTTPResponse in
             Logger.info("Success: \(rawRequest.description)")
             return response

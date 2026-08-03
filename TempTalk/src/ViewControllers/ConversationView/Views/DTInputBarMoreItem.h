@@ -19,7 +19,8 @@ typedef enum : NSUInteger {
     DTToolBarMoreItemTypeContact,
     DTToolBarMoreItemTypeFile,
     DTToolBarMoreItemTypeConfide,
-    DTToolBarMoreItemTypeMention
+    DTToolBarMoreItemTypeMention,
+    DTToolBarMoreItemTypeGif
 } DTToolBarMoreItemType;
 
 @interface DTInputToolBarMoreItem : NSObject

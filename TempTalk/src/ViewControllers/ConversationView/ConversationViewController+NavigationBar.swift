@@ -166,6 +166,10 @@ extension ConversationViewController {
         let callImage = UIImage(named: "user_voice_call")?.withRenderingMode(.alwaysTemplate)
         callButton.setImage(callImage, for: .normal)
         callButton.accessibilityLabel = Localized("CALL_LABEL")
+        // UI automation id. Verified on-device: XCUITest/Maestro surface the wrapping
+        // UIBarButtonItem's identifier (see below), so the id on the bar button item is
+        // what actually matches; this customView id is set to the same value for safety.
+        callButton.accessibilityIdentifier = DTCallAccessibilityID.startCall
         callButton.addTarget(self, action: #selector(startCallAction), for: .touchUpInside)
         
         callButton.isEnabled = true
@@ -192,7 +196,7 @@ extension ConversationViewController {
         let callButtonHeight = round(imageHeight + imageEdgeInsets.top + imageEdgeInsets.bottom)
         callButton.frame = CGRectMake(0, 0, callButtonWidth, callButtonHeight)
         
-        let callBarButtonItem = UIBarButtonItem(customView: callButton, accessibilityIdentifier: "call")
+        let callBarButtonItem = UIBarButtonItem(customView: callButton, accessibilityIdentifier: DTCallAccessibilityID.startCall)
         return callBarButtonItem
     }
 
@@ -567,7 +571,7 @@ extension ConversationViewController: OWSNavigationChildController {
     }
     
     func enterMultiSelectMode(viewItem: ConversationViewItem) {
-        addForwardMessage(viewItem)
+        addSelectedMessage(viewItem)
 
         isMultiSelectMode = true
         tapGestureRecognizer.isEnabled = false
@@ -579,7 +583,7 @@ extension ConversationViewController: OWSNavigationChildController {
         forwardToolbar.updateActionItemsSelectedCount(
             1,
             maxCount: 50,
-            enableCounts: [1, 2, 1, NSNumber(value: recallableCount > 0 ? 1 : UInt.max)],
+            enableCounts: [1, 1, 1, NSNumber(value: recallableCount > 0 ? 1 : UInt.max)],
             recallableCount: UInt(recallableCount)
         )
         leftEdgePanGestureDisabled(true)
@@ -590,7 +594,7 @@ extension ConversationViewController: OWSNavigationChildController {
     }
     
     func cancelMultiSelectMode() {
-        clearAllForwardMessages()
+        clearSelectedMessages()
         
         isMultiSelectMode = false
         tapGestureRecognizer.isEnabled = true
@@ -618,10 +622,11 @@ extension ConversationViewController {
             return groupThread.groupThreadNameWithMemberCount()
         }
 
+        let cachedEncryptedName = DTGroupBaseInfoEntity.anyFetch(uniqueId: groupThread.serverThreadId, transaction: transaction)?.encryptedName
         let displayName = DTGroupCryptoDisplayHelper.shared.displayGroupName(
             gid: groupThread.serverThreadId,
             groupCryptoMode: model.groupCryptoMode,
-            encryptedName: nil,
+            encryptedName: cachedEncryptedName,
             originalName: model.groupName,
             transaction: transaction
         )

@@ -18,6 +18,7 @@
 @property (nonatomic, strong) DTLayoutButton *shareButton;//分享
 @property (nonatomic, strong) DTLayoutButton *callButton;//语音
 @property (nonatomic, strong) DTLayoutButton *messageButton;//消息
+@property (nonatomic, strong) DTLayoutButton *removeNowButton;//立即移除（弱态）
 @end
 
 @implementation DTQuickActionCell
@@ -46,6 +47,9 @@
         self.callButton.hidden = true;
     }
     [self.quickActionStackView addArrangedSubview:self.shareButton];
+    if (self.showRemoveNow) {
+        [self.quickActionStackView addArrangedSubview:self.removeNowButton];
+    }
     [self.quickActionStackView autoPinEdge:ALEdgeTop toEdge:ALEdgeTop ofView:self withOffset:16.0];
     [self.quickActionStackView autoPinEdge:ALEdgeBottom toEdge:ALEdgeBottom ofView:self withOffset:-16];
     [self.quickActionStackView autoPinLeadingToEdgeOfView:self.contentView offset:16.0];
@@ -83,6 +87,12 @@
     }
 }
 
+- (void)removeNowButtonAction:(DTLayoutButton *)sender {
+    if ([self.cellDelegate respondsToSelector:@selector(quickActionCell:button:actionType:)]) {
+        [self.cellDelegate quickActionCell:self button:sender actionType:DTQuickActionTypeRemoveNow];
+    }
+}
+
 - (DTLayoutButton *)shareButton {
     if (!_shareButton) {
         _shareButton = [DTLayoutButton new];
@@ -104,7 +114,7 @@
 - (DTLayoutButton *)callButton {
     if (!_callButton) {
         _callButton = [DTLayoutButton new];
-        [_callButton setImage:[UIImage imageNamed:@"user_voice_call"] forState:UIControlStateNormal];
+        [_callButton setImage:[[UIImage imageNamed:@"user_voice_call"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate] forState:UIControlStateNormal];
         _callButton.layer.cornerRadius = 8;
         _callButton.clipsToBounds = true;
         _callButton.backgroundColor = Theme.bg1Color;
@@ -137,6 +147,26 @@
         [_messageButton setTitle:Localized(@"PERSON_CARD_SEND_MESSAGE",@"") forState:UIControlStateNormal];
     }
     return _messageButton;
+}
+
+- (DTLayoutButton *)removeNowButton {
+    if (!_removeNowButton) {
+        _removeNowButton = [DTLayoutButton new];
+        UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:18 weight:UIImageSymbolWeightRegular];
+        UIImage *trashImage = [[UIImage systemImageNamed:@"trash" withConfiguration:config] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+        [_removeNowButton setImage:trashImage forState:UIControlStateNormal];
+        _removeNowButton.layer.cornerRadius = 8;
+        _removeNowButton.clipsToBounds = true;
+        _removeNowButton.backgroundColor = Theme.bg1Color;
+        _removeNowButton.titleAlignment = DTButtonTitleAlignmentTypeBottom;
+        _removeNowButton.spacing = 8;
+        _removeNowButton.tintColor = Theme.errorColor;
+        [_removeNowButton setTitleColor:Theme.errorColor forState:UIControlStateNormal];
+        [_removeNowButton addTarget:self action:@selector(removeNowButtonAction:) forControlEvents:UIControlEventTouchUpInside];
+        _removeNowButton.titleLabel.font = [UIFont systemFontOfSize:12];
+        [_removeNowButton setTitle:Localized(@"WEAK_CONTACT_REMOVE_NOW",@"") forState:UIControlStateNormal];
+    }
+    return _removeNowButton;
 }
 
 - (UIStackView *)quickActionStackView {

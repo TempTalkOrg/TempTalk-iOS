@@ -27,6 +27,7 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
     let errorTipsLabel: UILabel = UILabel()
     var doneButton = OWSFlatButton()
     var doneCallback : ((String?) -> Void)?
+    private var focusRequestID: UInt = 0
     
     @objc
     public class func buildScreenLockView(viewType: DTScreenLockViewType, doneCallback:  @escaping (String?) -> Void) -> DTScreenLockBaseViewController {
@@ -56,15 +57,75 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         self.navigationController?.setNavigationBarHidden(true, animated: false)
-        
-        if !shouldShowPatternView() {
-            passcodeField.becomeFirstResponder()
+    }
+
+    public override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Focus here (not viewWillAppear): the blocking window is only key & visible
+        // after this point, so an earlier becomeFirstResponder would silently fail.
+        focusPasscodeFieldIfNeeded()
+    }
+
+    /// Focuses the passcode field on the next runloop, after the window is key & visible.
+    /// Safe to call repeatedly; no-op in pattern mode.
+    @objc public func focusPasscodeFieldIfNeeded() {
+        guard !shouldShowPatternView() else { return }
+        focusRequestID &+= 1
+        requestPasscodeFocusIfNeeded(requestID: focusRequestID, retryDeadline: Date().addingTimeInterval(1.0))
+    }
+
+    private func requestPasscodeFocusIfNeeded(requestID: UInt, retryDeadline: Date) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard requestID == self.focusRequestID else { return }
+            guard !self.shouldShowPatternView(), !self.passcodeField.isHidden else { return }
+
+            guard let window = self.view.window, !window.isHidden, window.alpha > 0 else {
+                self.retryPasscodeFocusIfNeeded(requestID: requestID, retryDeadline: retryDeadline)
+                return
+            }
+
+            if let windowScene = window.windowScene, windowScene.activationState != .foregroundActive {
+                self.retryPasscodeFocusIfNeeded(requestID: requestID, retryDeadline: retryDeadline)
+                return
+            }
+
+            let callIsFrontmostAboveScreenLock = OWSWindowManager.shared().isCallViewFrontmostAboveScreenLock()
+            guard !callIsFrontmostAboveScreenLock else {
+                if self.passcodeField.isFirstResponder {
+                    self.passcodeField.resignFirstResponder()
+                }
+                return
+            }
+
+            guard window.isKeyWindow else {
+                self.retryPasscodeFocusIfNeeded(requestID: requestID, retryDeadline: retryDeadline)
+                return
+            }
+
+            // Make sure the passcode field has its final frame before asking UIKit for the keyboard.
+            self.view.layoutIfNeeded()
+            self.passcodeField.becomeFirstResponder()
+            if !self.passcodeField.isFirstResponder {
+                self.retryPasscodeFocusIfNeeded(requestID: requestID, retryDeadline: retryDeadline)
+            }
+        }
+    }
+
+    private func retryPasscodeFocusIfNeeded(requestID: UInt, retryDeadline: Date) {
+        guard Date() < retryDeadline else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self else { return }
+            guard requestID == self.focusRequestID else { return }
+            self.requestPasscodeFocusIfNeeded(requestID: requestID, retryDeadline: retryDeadline)
         }
     }
     
     public override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        
+        super.viewWillDisappear(animated)
+
+        focusRequestID &+= 1
         passcodeField.resignFirstResponder()
     }
     
@@ -74,6 +135,24 @@ public class DTScreenLockBaseViewController: OWSViewController, UITextFieldDeleg
         setupUI()
         autolayout()
         refreshTheme()
+        // Retry focus when the app returns to foreground. If this VC was presented
+        // during the app-backgrounding race, viewDidAppear's becomeFirstResponder is
+        // swallowed by iOS and never retried (the VC is reused, not re-appeared),
+        // leaving a blinking cursor with no keyboard.
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(applicationDidBecomeActive),
+                                               name: UIApplication.didBecomeActiveNotification,
+                                               object: nil)
+    }
+
+    @objc private func applicationDidBecomeActive() {
+        // Only retry when actually on screen (attached to a window).
+        guard view.window != nil else { return }
+        focusPasscodeFieldIfNeeded()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     private func setupUIPropety() {

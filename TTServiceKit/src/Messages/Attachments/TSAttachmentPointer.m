@@ -132,6 +132,8 @@ NS_ASSUME_NONNULL_BEGIN
     TSAttachmentType attachmentType = TSAttachmentTypeDefault;
     if ([MIMETypeUtil isVoiceMessage:attachmentProto]) {
         attachmentType = TSAttachmentTypeVoiceMessage;
+    } else if ([MIMETypeUtil isAnimatedGifFlag:attachmentProto]) {
+        attachmentType = TSAttachmentTypeGif;
     }
     
     albumMessageId = albumMessageId;
@@ -204,7 +206,8 @@ NS_ASSUME_NONNULL_BEGIN
     builder.size = self.byteCount;
     builder.key = self.encryptionKey;
     builder.digest = self.digest;
-    builder.flags = self.isVoiceMessage ? DSKProtoAttachmentPointerFlagsVoiceMessage : 0;
+    builder.flags = (self.isVoiceMessage ? DSKProtoAttachmentPointerFlagsVoiceMessage : 0)
+        | (self.attachmentType == TSAttachmentTypeGif ? DSKProtoAttachmentPointerFlagsGif : 0);
     if (self.width > 0) {
         [builder setWidth:self.width];
     }

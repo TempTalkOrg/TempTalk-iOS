@@ -240,14 +240,15 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
 + (NSString *)getBaseInfoStringWithOldGroupModel:(TSGroupModel *)oldGroupModel
                                         newModel:(TSGroupModel *)newModel
                                           source:(NSString *)source
-                       shouldAffectThreadSorting:(BOOL *)shouldAffectThreadSorting {
+                       shouldAffectThreadSorting:(BOOL *)shouldAffectThreadSorting
+                                     transaction:(SDSAnyReadTransaction *)transaction {
     NSString *updatedGroupInfoString = @"";
 
     if (![oldGroupModel.groupName isEqual:newModel.groupName]) {
         *shouldAffectThreadSorting = YES;
         NSString *displayName = nil;
         if(source.length){
-            displayName = [self.contactsManager displayNameForPhoneIdentifier:source];
+            displayName = [self.contactsManager displayNameForPhoneIdentifier:source transaction:transaction];
         }
         if(displayName.length){
             updatedGroupInfoString = [updatedGroupInfoString
@@ -524,7 +525,8 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
     NSString *baseUpdateInfo = [self getBaseInfoStringWithOldGroupModel:oldGroupModel
                                                                newModel:newGroupModel
                                                                  source:@""
-                                              shouldAffectThreadSorting:&tmpShouldAffectSorting];
+                                              shouldAffectThreadSorting:&tmpShouldAffectSorting
+                                                            transaction:transaction];
     if(baseUpdateInfo.length){
         [infos addObject:baseUpdateInfo];
     }
@@ -927,12 +929,13 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
 
 + (void)removeGroupBaseInfoWithGid:(NSString *)gid
                        transaction:(SDSAnyWriteTransaction *)transaction {
-    
+
     DTGroupBaseInfoEntity *baseInfo = [DTGroupBaseInfoEntity anyFetchWithUniqueId:gid transaction:transaction];
     if (baseInfo) {
         [baseInfo anyRemoveWithTransaction:transaction];
         [DTGroupUtils postGroupBaseInfoChangeWith:baseInfo remove:YES];
     }
+    [DTGroupCryptoDisplayHelper.shared clearAvatarFingerprintWithGid:gid];
 }
 
 + (void)upsertGroupBaseInfo:(DTGroupBaseInfoEntity *)baseInfo

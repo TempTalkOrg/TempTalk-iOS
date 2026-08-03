@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/difftim/client-sdk-swift",
       "state" : {
-        "revision" : "b63259520fd6338a984fea019fb44a1db7c84922",
-        "version" : "2.10.2-a8"
+        "revision" : "c6714b4bb58a218714dcfd6156694bf802769468",
+        "version" : "2.12.1-a28"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/difftim/denoise-plugin-swift",
       "state" : {
-        "revision" : "2ab3cd2f3db4007c6606f94ee229f1bb8ba6986a",
-        "version" : "1.0.7"
+        "revision" : "32851a172fc3e08ed4386e356dc0c0f5b8a6d2f4",
+        "version" : "1.0.16"
       }
     },
     {
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/livekit/livekit-uniffi-xcframework.git",
       "state" : {
-        "revision" : "be164f3a9bfe83a7354a63e57950cc7d7c6393d0",
-        "version" : "0.0.3"
+        "revision" : "61229f4032131311b997ddb1bc1cb8f5afbe30c8",
+        "version" : "0.0.5"
       }
     },
     {
@@ -56,12 +56,21 @@
       }
     },
     {
+      "identity" : "ttsignal-xcframework",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/3th1UOYgUtJkurSZ/ttsignal-xcframework.git",
+      "state" : {
+        "revision" : "2f47280774c0aeb324c1c21fc9e204b3ce24e43f",
+        "version" : "1.0.20260612-1"
+      }
+    },
+    {
       "identity" : "webrtc-xcframework",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/livekit/webrtc-xcframework.git",
+      "location" : "https://github.com/chative/webrtc-xcframework.git",
       "state" : {
-        "revision" : "5b40f56c637369064b9c82e8f9cfa820f942658f",
-        "version" : "137.7151.10"
+        "revision" : "48e4a907ca4ab5eca48d341422d6b72ce5496ba1",
+        "version" : "144.7559.8"
       }
     }
   ],

@@ -171,12 +171,19 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
 
 //展示底部的选中展示人员的容器
 - (void)showBottomSelectedPersonContainView {
+    // Deactivate the previous constraint first; show can be called repeatedly.
+    if (self.tableViewBottomLayoutConstraint) {
+        [NSLayoutConstraint deactivateConstraints:@[self.tableViewBottomLayoutConstraint]];
+    }
     self.tableViewBottomLayoutConstraint = [self.tableView autoPinEdgeToSuperviewSafeArea:ALEdgeBottom withInset:kGroupMemberBottomViewHeight];
     self.bottomContainView.hidden = false;
 }
 - (void)hideBottomSelectedPersonContainView {
-    [NSLayoutConstraint deactivateConstraints:@[self.tableViewBottomLayoutConstraint]];
-    
+    // Constraint is set only in show; if hide runs first it's nil and @[nil] crashes.
+    if (self.tableViewBottomLayoutConstraint) {
+        [NSLayoutConstraint deactivateConstraints:@[self.tableViewBottomLayoutConstraint]];
+    }
+
     [self.tableView autoPinEdge:ALEdgeBottom toEdge:ALEdgeBottom ofView:self.view];
     self.bottomContainView.hidden = true;
 }

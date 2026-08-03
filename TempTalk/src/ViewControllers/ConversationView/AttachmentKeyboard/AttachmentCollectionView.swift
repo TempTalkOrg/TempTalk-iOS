@@ -124,7 +124,7 @@ class AttachmentCollectionView: UICollectionView {
                                                                     comment: "Input bar action button title when open file"),
                                           imageName:"input_attachment_file",
                                           itemType: DTToolBarMoreItemTypeFile)
-        
+
         let at = DTInputToolBarMoreItem(title: OWSLocalizedString("INPUTTOOL_ATTACHMENT_MENTION",
                                                                   comment: "Input bar action button title when start mention"),
                                         imageName:"input_attachment_at",
@@ -148,20 +148,6 @@ class AttachmentCollectionView: UICollectionView {
             ])
         }
 
-    }
-
-    // Presentation Animations
-
-    func prepareForPresentation() {
-        UIView.performWithoutAnimation {
-            self.alpha = 0
-        }
-    }
-
-    func performPresentationAnimation() {
-        UIView.animate(withDuration: 0.2) {
-            self.alpha = 1
-        }
     }
 }
 
@@ -206,7 +192,16 @@ extension AttachmentCollectionView: UICollectionViewDataSource {
 
         let item = collectionContents[indexPath.row]
         cell.configure(item: item)
-        
+
+        switch item.itemType {
+        case DTToolBarMoreItemTypePhoto:
+            cell.accessibilityIdentifier = DTConversationAccessibilityID.attachMedia
+        case DTToolBarMoreItemTypeContact:
+            cell.accessibilityIdentifier = DTConversationAccessibilityID.attachContact
+        default:
+            cell.accessibilityIdentifier = nil
+        }
+
         return cell
     }
 }

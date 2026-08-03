@@ -41,7 +41,8 @@ extern NSString *const DTGroupCriticalAlertChangedNotification;
 + (NSString *)getBaseInfoStringWithOldGroupModel:(TSGroupModel * _Nullable)oldGroupModel
                                         newModel:(TSGroupModel * _Nullable)newModel
                                           source:(NSString *)source
-                       shouldAffectThreadSorting:(BOOL *)shouldAffectThreadSorting;
+                       shouldAffectThreadSorting:(BOOL *)shouldAffectThreadSorting
+                                     transaction:(SDSAnyReadTransaction *)transaction;
 
 + (NSString *)getMemberChangedInfoStringWithJoinedMemberIds:(NSArray *_Nullable)joinedMemberIds
                                            removedMemberIds:(NSArray *_Nullable)removedMemberIds

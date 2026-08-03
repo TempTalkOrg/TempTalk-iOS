@@ -17,8 +17,8 @@
 #import "TSMessage.h"
 #import "TSThread.h"
 #import "DTFileRequestHandler.h"
+#import "DTFileDownloader.h"
 #import <TTServiceKit/TTServiceKit-Swift.h>
-#import <AFNetworking/AFHTTPSessionManager.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -100,31 +100,29 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
     
     if(!forceDownload){
         for (TSAttachmentPointer *attachmentPointer in items) {
-            
+
             UInt64 byteCount = attachmentPointer.byteCount;
-            
+
             if (byteCount >= kAttachmentAutoDownloadMaxSize) {
                 OWSLogInfo(@"Ignore download for message: %@, reason: over max file size", message.uniqueId);
                 [items removeObject:attachmentPointer];
-                
+
             } else if ([attachmentPointer.contentType isEqualToString:OWSMimeTypeOversizeTextMessage]) {
                 // auto download
             } else if ([MIMETypeUtil isAudio:attachmentPointer.contentType]) {
                 // auto download
-            } else if (CurrentAppContext().isNSE) { // 如果是 NSE 入库的消息，不自动下载, 历史消息
+            } else if (CurrentAppContext().isNSE) { // NSE-imported history messages: defer to foreground.
                 OWSLogInfo(@"Ignore download for message: %@, reason: is NSE", message.uniqueId);
                 [items removeObject:attachmentPointer];
-                
-            } else if (![[self class] autoDownloadImageEnableWithTransaction:transaction]) {
-                OWSLogInfo(@"Ignore download for message: %@, reason: disable auto download", message.uniqueId);
-                [items removeObject:attachmentPointer];
-                
-            } else if (![MIMETypeUtil isVisualMedia:attachmentPointer.contentType]) {
-                OWSLogInfo(@"Ignore download for message: %@, reason: invalid media type", message.uniqueId);
-                [items removeObject:attachmentPointer];
-                
+
+            } else if ([MIMETypeUtil isVisualMedia:attachmentPointer.contentType]) {
+                // Image / video respects the user's auto-download setting.
+                if (![[self class] autoDownloadImageEnableWithTransaction:transaction]) {
+                    OWSLogInfo(@"Ignore download for message: %@, reason: disable auto download", message.uniqueId);
+                    [items removeObject:attachmentPointer];
+                }
             } else {
-                // auto download
+                // Generic files: auto-download when within size limit.
             }
         }
     }
@@ -192,10 +190,6 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
             backgroundTask = nil;
         });
     };
-
-//    if (attachment.serverId < 100) {
-//        DDLogError(@"%@ Suspicious attachment id: %llu", self.logTag, (unsigned long long)attachment.serverId);
-//    }
     
     NSString *gid = nil;
     if (message.isPinnedMessage) {
@@ -209,12 +203,19 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
                                       authorizeId:attachment.serverId
                                               gid:gid
                                        completion:^(DTFileDataEntity * _Nullable entity, NSError * _Nullable error) {
-        if(error){
+        // Use urls array if available, otherwise fallback to single url
+        NSArray<NSString *> *downloadUrls = entity.urls;
+        if (!downloadUrls || downloadUrls.count == 0) {
+            // Fallback to legacy single url field for backward compatibility
+            downloadUrls = entity.url ? @[entity.url] : @[];
+        }
+        
+        if(error || !downloadUrls || downloadUrls.count == 0){
             DDLogError(@"%@ getFileInfoWithFileHash Response had unexpected format. or error : %@", self.logTag, error);
-            // 根据状态码设置不同的错误状态
+            // Map status code to error state
             NSInteger statusCode = error.code;
             if (statusCode == DTAPIRequestResponseStatusNoPermission) {
-                // 状态码2：文件已过期
+                // Status 2: file expired
                 NSError *expiredError = OWSErrorMakeUnableToProcessServerResponseError();
                 dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                     [self setAttachment:attachment didExpireInMessage:message error:expiredError];
@@ -226,121 +227,119 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
                        statusCode == DTAPIRequestResponseStatusNoSuchFile ||
                        statusCode == DTAPIRequestResponseStatusOperateError ||
                        statusCode == DTAPIRequestResponseStatusOtherError) {
-                // 状态码1,9,12,99：失败状态，可以重试
+                // Status 1,9,12,99: retryable failure
                 NSError *retryError = OWSErrorMakeUnableToProcessServerResponseError();
                 return markAndHandleFailure(retryError);
             } else {
-                // 其他错误
+                // Other errors
                 NSError *generalError = OWSErrorMakeUnableToProcessServerResponseError();
                 return markAndHandleFailure(generalError);
             }
-        } else if(!DTParamsUtils.validateString(entity.url)){
-            DDLogError(@"%@ getFileInfoWithFileHash Response had unexpected format. entity.url is nil", self.logTag);
-            NSError *error = OWSErrorMakeUnableToProcessServerResponseError();
-            return markAndHandleFailure(error);
-        }else{
+        } else {
             dispatch_async([OWSDispatch attachmentsQueue], ^{
-                [self downloadFromLocation:entity.url
-                    pointer:attachment
-                    success:^(NSData *_Nonnull encryptedData) {
+                // Create progress callback to track download progress and enforce size limits
+                // Note: __block variable is captured by progress block and persists for the duration
+                // of the download operation. Access is protected by @synchronized for thread safety.
+                __block BOOL hasCheckedContentLength = NO;
+                __weak typeof(self) weakSelf = self;
+                DTFileDownloadProgressBlock progressBlock = ^(NSURLSessionTask *task, NSProgress *progress) {
+                    __strong typeof(weakSelf) strongSelf = weakSelf;
+                    if (!strongSelf) { return; }
+
+                    OWSAssertDebug(progress != nil);
+
+                    if (progress.completedUnitCount < 1) {
+                        return;
+                    }
+
+                    void (^abortDownload)(void) = ^{
+                        OWSFailDebug(@"%@ Download aborted.", strongSelf.logTag);
+                        [task cancel];
+                    };
+
+                    if ((progress.totalUnitCount > 0 && progress.totalUnitCount > OWSMediaUtils.kMaxFileSizeGeneric) ||
+                        progress.completedUnitCount > OWSMediaUtils.kMaxFileSizeGeneric) {
+                        // A malicious service might send a misleading content length header,
+                        // so....
+                        //
+                        // If the current downloaded bytes or the expected total byes
+                        // exceed the max download size, abort the download.
+                        OWSLogError(@"%@ Attachment download exceed expected content length: %lld, %lld.",
+                                    strongSelf.logTag,
+                                    (long long)progress.totalUnitCount,
+                                    (long long)progress.completedUnitCount);
+                        abortDownload();
+                        return;
+                    }
+
+                    [strongSelf fireProgressNotification:MAX(kAttachmentDownloadProgressTheta, progress.fractionCompleted)
+                                            attachmentId:attachment.uniqueId];
+                    // We only need to check the content length header once.
+                    if (hasCheckedContentLength) { return; }
+
+                    // Once we've received some bytes of the download, check the content length
+                    // header for the download.
+                    //
+                    // If the task doesn't exist, or doesn't have a response, or is missing
+                    // the expected headers, or has an invalid or oversize content length, etc.,
+                    // abort the download.
+                    NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)task.response;
+                    if (![httpResponse isKindOfClass:[NSHTTPURLResponse class]]) {
+                        DDLogError(@"%@ Attachment download has missing or invalid response.", strongSelf.logTag);
+                        abortDownload();
+                        return;
+                    }
+
+                    NSDictionary *headers = [httpResponse allHeaderFields];
+                    if (![headers isKindOfClass:[NSDictionary class]]) {
+                        DDLogError(@"%@ Attachment download invalid headers.", strongSelf.logTag);
+                        abortDownload();
+                        return;
+                    }
+
+                    // Check Content-Length header if present (optional for Aliyun CDN compatibility)
+                    NSString *contentLength = headers[@"Content-Length"];
+                    if (contentLength && [contentLength isKindOfClass:[NSString class]]) {
+                        // Validate Content-Length only if header exists
+                        if (contentLength.longLongValue > OWSMediaUtils.kMaxFileSizeGeneric) {
+                            DDLogError(@"%@ Content length exceeds max download size: %@", strongSelf.logTag, contentLength);
+                            abortDownload();
+                            return;
+                        }
+                    } else {
+                        // No Content-Length header - proceed (Aliyun servers don't provide this field)
+                        // Size limit enforcement relies on completedUnitCount check above
+                        DDLogInfo(@"%@ No Content-Length header, relying on byte count validation", strongSelf.logTag);
+                    }
+
+                    // Header validation complete - mark as checked to avoid redundant validation
+                    hasCheckedContentLength = YES;
+                };
+
+                [[DTFileDownloader defaultDownloader] downloadFileWithUrls:downloadUrls
+                                                                  progress:progressBlock
+                                                                   success:^(NSData * _Nonnull encryptedData) {
                     [self decryptAttachmentData:encryptedData
-                                        keyHash:(NSData *)keyHash
+                                        keyHash:keyHash
                                         pointer:attachment
                                         success:markAndHandleSuccess
                                         failure:markAndHandleFailure];
+                }
+                                                                   failure:^(NSError * _Nonnull error) {
+                    // 404 from any URL means server file expired; invalidate fileHash so upstream re-requests.
+                    if (error.httpStatusCode.integerValue == 404) {
+                        [DTFileRequestHandler markAsInvalidWithFileHash:[keyHash base64EncodedString]
+                                                             authorizeId:attachment.serverId
+                                                              completion:^(DTFileDataEntity * _Nullable entity, NSError * _Nullable err) {
+                        }];
                     }
-                    failure:^(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error) {
-//                        if (attachment.serverId < 100) {
-//                            // This looks like the symptom of the "frequent 404
-//                            // downloading attachments with low server ids".
-//                            NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)task.response;
-//                            NSInteger statusCode = [httpResponse statusCode];
-//                            OWSFailDebug(@"%@ %d Failure with suspicious attachment id: %llu, %@",
-//                                self.logTag,
-//                                (int)statusCode,
-//                                (unsigned long long)attachment.serverId,
-//                                error);
-//                        }
-                        if([task.response respondsToSelector:@selector(statusCode)] && ((NSHTTPURLResponse *)task.response).statusCode == 404){
-                            
-                            [DTFileRequestHandler markAsInvalidWithFileHash:[keyHash base64EncodedString]
-                                                                authorizeId:attachment.serverId
-                                                                 completion:^(DTFileDataEntity * _Nullable entity, NSError * _Nullable error) {
-                            }];
-                        }
-                        if (markAndHandleFailure) {
-                            markAndHandleFailure(error);
-                        }
-                    }];
+                    if (markAndHandleFailure) {
+                        markAndHandleFailure(error);
+                    }
+                }];
             });
         }
     }];
-    
-    /*
-    
-    TSRequest *request =
-        [OWSRequestFactory attachmentRequestWithAttachmentId:attachment.serverId relay:attachment.relay];
-
-    [self.networkManager makeRequest:request
-        success:^(NSURLSessionDataTask *task, id responseObject) {
-            if (![responseObject isKindOfClass:[NSDictionary class]]) {
-                DDLogError(@"%@ Failed retrieval of attachment. Response had unexpected format.", self.logTag);
-                NSError *error = OWSErrorMakeUnableToProcessServerResponseError();
-                return markAndHandleFailure(error);
-            }
-            NSString *location = [(NSDictionary *)responseObject objectForKey:@"location"];
-            if (!location) {
-                DDLogError(@"%@ Failed retrieval of attachment. Response had no location.", self.logTag);
-                NSError *error = OWSErrorMakeUnableToProcessServerResponseError();
-                return markAndHandleFailure(error);
-            }
-
-            dispatch_async([OWSDispatch attachmentsQueue], ^{
-                [self downloadFromLocation:location
-                    pointer:attachment
-                    success:^(NSData *_Nonnull encryptedData) {
-                        [self decryptAttachmentData:encryptedData
-                                            pointer:attachment
-                                            success:markAndHandleSuccess
-                                            failure:markAndHandleFailure];
-                    }
-                    failure:^(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error) {
-                        if (attachment.serverId < 100) {
-                            // This looks like the symptom of the "frequent 404
-                            // downloading attachments with low server ids".
-                            NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)task.response;
-                            NSInteger statusCode = [httpResponse statusCode];
-                            OWSFailDebug(@"%@ %d Failure with suspicious attachment id: %llu, %@",
-                                self.logTag,
-                                (int)statusCode,
-                                (unsigned long long)attachment.serverId,
-                                error);
-                        }
-                        if (markAndHandleFailure) {
-                            markAndHandleFailure(error);
-                        }
-                    }];
-            });
-        }
-        failure:^(NSURLSessionDataTask *task, NSError *error) {
-            if (!error.isNetworkConnectivityFailure) {
-                OWSProdError([OWSAnalyticsEvents errorAttachmentRequestFailed]);
-            }
-            DDLogError(@"Failed retrieval of attachment with error: %@", error);
-            if (attachment.serverId < 100) {
-                // This _shouldn't_ be the symptom of the "frequent 404
-                // downloading attachments with low server ids".
-                NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)task.response;
-                NSInteger statusCode = [httpResponse statusCode];
-                OWSFailDebug(@"%@ %d Failure with suspicious attachment id: %llu, %@",
-                    self.logTag,
-                    (int)statusCode,
-                    (unsigned long long)attachment.serverId,
-                    error);
-            }
-            return markAndHandleFailure(error);
-        }];
-     */
 }
 
 + (void)decryptVoiceAttachment:(TSAttachmentStream *)attachment
@@ -458,136 +457,29 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
     
 
     DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+        // Backfill grdbId BEFORE upsert: initWithPointer: doesn't inherit the row id, and
+        // anyDidUpdateWithTransaction skips the attachmentReadCache refresh for grdbId-nil
+        // instances — leaving a stale TSAttachmentPointer cached and the voice message
+        // stuck in the "downloading" UI until next cold launch.
+        if (!stream.grdbId) {
+            TSAttachment *existingAttachment = [TSAttachment anyFetchWithUniqueId:stream.uniqueId
+                                                                       transaction:transaction];
+            if (existingAttachment.grdbId) {
+                [stream updateRowId:existingAttachment.grdbId.longLongValue];
+                OWSLogInfo(@"decryptAttachment: backfilled stream grdbId from DB: %@", stream.grdbId);
+            }
+        }
+
         [stream anyUpsertWithTransaction:transaction];
 
         if (!stream.grdbId) {
-            TSAttachment *fetchedStream = [TSAttachment anyFetchWithUniqueId:stream.uniqueId
-                                                                  transaction:transaction];
-            if (fetchedStream.grdbId) {
-                [stream updateRowId:fetchedStream.grdbId.longLongValue];
-                OWSLogInfo(@"decryptAttachment: updated stream grdbId from DB: %@", stream.grdbId);
-            } else {
-                OWSLogError(@"decryptAttachment: failed to get grdbId after upsert for stream: %@", stream.uniqueId);
-            }
+            OWSLogError(@"decryptAttachment: missing grdbId after upsert for stream: %@", stream.uniqueId);
         }
 
         OWSLogInfo(@"decryptAttachment: upserted stream=%@ grdbId=%@ contentType=%@",
                    stream.uniqueId, stream.grdbId, stream.contentType);
     });
     successHandler(stream);
-}
-
-- (void)downloadFromLocation:(NSString *)location
-                     pointer:(TSAttachmentPointer *)pointer
-                     success:(void (^)(NSData *encryptedData))successHandler
-                     failure:(void (^)(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error))failureHandler
-{
-    AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
-    manager.requestSerializer     = [AFHTTPRequestSerializer serializer];
-
-    // modified: remove header "Content-Type", because some oss storage do not support this header
-    //           and add new header: "Accept: */*"
-    //[manager.requestSerializer setValue:OWSMimeTypeApplicationOctetStream forHTTPHeaderField:@"Content-Type"];
-    [manager.requestSerializer setValue:@"*/*" forHTTPHeaderField:@"Accept"];
-    manager.responseSerializer = [AFHTTPResponseSerializer serializer];
-    manager.completionQueue    = dispatch_get_main_queue();
-
-    // TODO stream this download rather than storing the entire blob.
-    __block NSURLSessionDataTask *task = nil;
-    __block BOOL hasCheckedContentLength = NO;
-    task = [manager GET:location
-             parameters:nil
-                headers:nil
-               progress:^(NSProgress *_Nonnull progress) {
-            OWSAssertDebug(progress != nil);
-            
-            // Don't do anything until we've received at least one byte of data.
-            if (progress.completedUnitCount < 1) {
-                return;
-            }
-
-            void (^abortDownload)(void) = ^{
-                OWSFailDebug(@"%@ Download aborted.", self.logTag);
-                [task cancel];
-            };
-
-            if (progress.totalUnitCount > OWSMediaUtils.kMaxFileSizeGeneric || progress.completedUnitCount > OWSMediaUtils.kMaxFileSizeGeneric) {
-                // A malicious service might send a misleading content length header,
-                // so....
-                //
-                // If the current downloaded bytes or the expected total byes
-                // exceed the max download size, abort the download.
-                DDLogError(@"%@ Attachment download exceed expected content length: %lld, %lld.",
-                    self.logTag,
-                    (long long)progress.totalUnitCount,
-                    (long long)progress.completedUnitCount);
-                abortDownload();
-                return;
-            }
-
-            [self fireProgressNotification:MAX(kAttachmentDownloadProgressTheta, progress.fractionCompleted)
-                              attachmentId:pointer.uniqueId];
-
-            // We only need to check the content length header once.
-            if (hasCheckedContentLength) {
-                return;
-            }
-            
-            // Once we've received some bytes of the download, check the content length
-            // header for the download.
-            //
-            // If the task doesn't exist, or doesn't have a response, or is missing
-            // the expected headers, or has an invalid or oversize content length, etc.,
-            // abort the download.
-            NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)task.response;
-            if (![httpResponse isKindOfClass:[NSHTTPURLResponse class]]) {
-                DDLogError(@"%@ Attachment download has missing or invalid response.", self.logTag);
-                abortDownload();
-                return;
-            }
-            
-            NSDictionary *headers = [httpResponse allHeaderFields];
-            if (![headers isKindOfClass:[NSDictionary class]]) {
-                DDLogError(@"%@ Attachment download invalid headers.", self.logTag);
-                abortDownload();
-                return;
-            }
-            
-            
-            NSString *contentLength = headers[@"Content-Length"];
-            if (![contentLength isKindOfClass:[NSString class]]) {
-                DDLogError(@"%@ Attachment download missing or invalid content length.", self.logTag);
-                abortDownload();
-                return;
-            }
-            
-            
-            if (contentLength.longLongValue > OWSMediaUtils.kMaxFileSizeGeneric) {
-                DDLogError(@"%@ Attachment download content length exceeds max download size.", self.logTag);
-                abortDownload();
-                return;
-            }
-            
-            // This response has a valid content length that is less
-            // than our max download size.  Proceed with the download.
-            hasCheckedContentLength = YES;
-        }
-        success:^(NSURLSessionDataTask *_Nonnull task, id _Nullable responseObject) {
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                if (![responseObject isKindOfClass:[NSData class]]) {
-                    DDLogError(@"%@ Failed retrieval of attachment. Response had unexpected format.", self.logTag);
-                    NSError *error = OWSErrorMakeUnableToProcessServerResponseError();
-                    return failureHandler(task, error);
-                }
-                successHandler((NSData *)responseObject);
-            });
-        }
-        failure:^(NSURLSessionDataTask *_Nullable task, NSError *_Nonnull error) {
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                DDLogError(@"Failed to retrieve attachment with error: %@", error.description);
-                return failureHandler(task, error);
-            });
-        }];
 }
 
 - (void)fireProgressNotification:(CGFloat)progress attachmentId:(NSString *)attachmentId

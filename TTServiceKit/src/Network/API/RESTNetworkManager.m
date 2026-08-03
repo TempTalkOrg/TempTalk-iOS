@@ -38,6 +38,13 @@ NS_ASSUME_NONNULL_BEGIN
                                                name:NSNotificationNameIsCensorshipCircumventionActiveDidChange
                                              object:nil];
 
+    // Proxy on/off/address change: pooled sessions froze the proxy dict at build time, so discard
+    // them at once (otherwise a stale proxy route lingers until the 5-min TTL expires).
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(proxyConfigurationDidChange)
+                                               name:ProxyManager.proxyConfigurationDidChangeNotificationName
+                                             object:nil];
+
     return self;
 }
 
@@ -46,6 +53,14 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertIsOnMainThread();
 
     self.lastDiscardDate = [NSDate new];
+}
+
+- (void)proxyConfigurationDidChange
+{
+    OWSAssertIsOnMainThread();
+
+    self.lastDiscardDate = [NSDate new];
+    OWSLogInfo(@"[Proxy] REST session pool discarded (proxy changed)");
 }
 
 - (RESTSessionManager *)get
@@ -184,6 +199,14 @@ NS_ASSUME_NONNULL_BEGIN
                 [RESTNetworkManager.tsAccountManager setIsDeregistered:NO];
             }
 
+            // Record LastHost on successful main-service HTTP (complements WS tracking)
+            NSString *successHost = sessionManager.baseUrlHost;
+            if (successHost.length > 0 &&
+                [[DTServerUrlManager sharedManager] containsHost:successHost serverType:DTServToTypeChat]) {
+                [[DTLastSuccessfulHostManager shared] saveLastSuccessfulHost:successHost
+                                                                 serverType:DTServToTypeChat];
+            }
+
             successParam(response);
             
             [OutageDetection.shared reportConnectionSuccess];
@@ -198,14 +221,20 @@ NS_ASSUME_NONNULL_BEGIN
             handleNetworkFailure:^(OWSHTTPErrorWrapper *errorWrapper) {
                 dispatch_async(completionQueue, ^{
                     
-                    if (errorWrapper.asNSError.httpResponseData == nil) {
-                        
-                        [[DTServerUrlManager sharedManager] markAsInvalidWithUrl:sessionManager.baseUrlHost serverType:DTServToTypeChat];
-                        
+                    // Switch domain on abnormal status (<100 or >=500, incl. 0 = no response).
+                    // Only act if the failed host belongs to the chat pool.
+                    NSString *failedHost = sessionManager.baseUrlHost;
+                    NSInteger statusCode = errorWrapper.asNSError.httpStatusCode.integerValue;
+                    BOOL shouldSwitchDomain = (statusCode < 100 || statusCode >= 500);
+                    if (shouldSwitchDomain &&
+                        [[DTServerUrlManager sharedManager] containsHost:failedHost serverType:DTServToTypeChat]) {
+
+                        [[DTServerUrlManager sharedManager] markAsInvalidWithUrl:failedHost serverType:DTServToTypeChat];
+
                         NSArray *serverUrls = [[DTServerUrlManager sharedManager] getTheServerUrlsWithServerType:DTServToTypeChat];
                         if (serverUrls.count) {
-                            
                             TSConstants.mainServiceHost = serverUrls.firstObject;
+                            OWSLogInfo(@"[DomainSwitch] HTTP switch from %@ to %@ (status: %ld)", failedHost, serverUrls.firstObject, (long)statusCode);
                         }
                     }
                     

@@ -612,7 +612,7 @@ public class OWSWebSocket: NSObject {
                 Logger.info("\(currentWebSocket.logPrefix) 2")
             }
             
-            // TODO: perf cache signalingKey，当前每次都会去读数据库
+            // TODO: cache signalingKey to avoid repeated DB reads
             guard let decryptedPayload = SSKCryptography.decryptAppleMessagePayload(encryptedEnvelope, withSignalingKey: signalingKey) else {
                 ackMessage(OWSGenericError("Missing encrypted envelope on message \(currentWebSocket.logPrefix)"), serverDeliveryTimestamp)
                 return
@@ -1123,16 +1123,33 @@ public class OWSWebSocket: NSObject {
     // MARK: -
     
     private func switchServerHost() {
-        let currentHost = TSConstants.mainServiceHost
+        let chatDomains = ProxyManager.shared.tunnelChatDomains()
+        if ProxyManager.shared.isEnabled, !chatDomains.isEmpty {
+            // Under proxy: rotate within the fixed proxy.tunnelDomains.chat list (all go through the
+            // proxy, so all are safe). Never fall back to the speed-tested origin pool — a non-listed
+            // host would connect directly and leak the real IP.
+            let current = TSConstants.mainServiceHost
+            let idx = chatDomains.firstIndex { $0.caseInsensitiveCompare(current) == .orderedSame }
+            let next = chatDomains[((idx ?? -1) + 1) % chatDomains.count]
+            // Single pinned domain (the common case) leaves next == current — nothing to switch to,
+            // so skip the self-assign and its meaningless log. Reconnect retries the same domain.
+            if next.caseInsensitiveCompare(current) != .orderedSame {
+                TSConstants.mainServiceHost = next
+                Logger.info("\(logPrefix) [DomainSwitch] proxy rotate to: \(next)")
+            }
+        } else {
+            // Proxy off: original speed-tested origin-pool failover, unchanged.
+            let currentHost = TSConstants.mainServiceHost
 
-        Logger.info("\(logPrefix) Multi-server: change current mainServiceHost: \(currentHost)")
-        
-        DTServerUrlManager.shared().markAsInvalid(withUrl: currentHost, serverType: .chat)
-        
-        let hosts = DTServerUrlManager.shared().getTheServerUrls(withServerType: .chat)
-        if let host = hosts.first {
-            TSConstants.mainServiceHost = host
-            Logger.info("\(logPrefix) Multi-server: change mainServiceHost: \(host)")
+            Logger.info("\(logPrefix) [DomainSwitch] WS switch from: \(currentHost)")
+
+            DTServerUrlManager.shared().markAsInvalid(withUrl: currentHost, serverType: .chat)
+
+            let hosts = DTServerUrlManager.shared().getTheServerUrls(withServerType: .chat)
+            if let host = hosts.first {
+                TSConstants.mainServiceHost = host
+                Logger.info("\(logPrefix) [DomainSwitch] WS switch to: \(host)")
+            }
         }
     }
 
@@ -1475,6 +1492,12 @@ extension OWSWebSocket: SSKWebSocketDelegate {
         }
 
         outageDetection.reportConnectionSuccess()
+
+        // Persist the host that just connected so the next launch can prefer it.
+        DTLastSuccessfulHostManager.shared.saveLastSuccessfulHost(
+            TSConstants.mainServiceHost,
+            serverType: .chat
+        )
 
         notifyStatusChange()
     }

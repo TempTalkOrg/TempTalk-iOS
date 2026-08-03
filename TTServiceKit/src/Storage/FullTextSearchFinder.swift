@@ -288,25 +288,23 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
 
             let tableName = "model_TSMessageSecondary_virtual"
 
-            // simple_query 是 FTS5 自定义分词器 simple 自定义函数，用于 wrap 需要查询的字符串
-            let query = "simple_query('\(searchText)')"
-
             // simple_snippet 效果等同于 FTS5 的 snippet，获取匹配结果中命中的关键词
             let snippet = "simple_snippet(\(tableName), 2, '', '', '', 1) as snippet"
 
+            // simple_query() builds the FTS5 match query; bind searchText/threadId to avoid SQL injection
             let sql = """
                 SELECT \(messageSecondaryColumn: .uniqueId), \(snippet)
                 FROM \(tableName)
-                WHERE \(messageSecondaryColumn: .thread) = '\(threadId)'
+                WHERE \(messageSecondaryColumn: .thread) = ?
                 AND \(messageSecondaryColumn: .display) = 1
-                AND \(messageSecondaryColumn: .message) MATCH \(query)
+                AND \(messageSecondaryColumn: .message) MATCH simple_query(?)
                 ORDER BY \(messageSecondaryColumn: .timestamp) DESC
                 \(Self.assembleQuery(strategy: loadStrategy))
             """
 
             do {
 
-                let rows = try Row.fetchCursor(transaction.database, sql: sql)
+                let rows = try Row.fetchCursor(transaction.database, sql: sql, arguments: [threadId, searchText])
                 var results: [(uniqueId: String, snippet: String)] = []
                 while let row = try rows.next() {
                     let uniqueId = row["uniqueId"] as? String
@@ -342,23 +340,21 @@ class GRDBFullTextSearchFinder: AnyFullTextSearchFinder {
 
             let tableName = "model_TSMessageSecondary_virtual"
 
-            // simple_query 是 FTS5 自定义分词器 simple 自定义函数，用于 wrap 需要查询的字符串
-            let query = "simple_query('\(searchText)')"
-
             // simple_snippet 效果等同于 FTS5 的 snippet，获取匹配结果中命中的关键词
             let snippet = "simple_snippet(\(tableName), 2, '', '', '', 1) as snippet"
 
+            // simple_query() builds the FTS5 match query; bind searchText to avoid SQL injection
             let sql = """
                 SELECT \(messageSecondaryColumn: .uniqueId), \(snippet)
                 FROM \(tableName)
                 WHERE \(messageSecondaryColumn: .display) = 1
-                AND \(messageSecondaryColumn: .message) MATCH \(query)
+                AND \(messageSecondaryColumn: .message) MATCH simple_query(?)
                 ORDER BY \(messageSecondaryColumn: .timestamp) DESC
                 \(Self.assembleQuery(strategy: loadStrategy))
             """
 
             do {
-                let rows = try Row.fetchCursor(transaction.database, sql: sql)
+                let rows = try Row.fetchCursor(transaction.database, sql: sql, arguments: [searchText])
                 var results: [(uniqueId: String, snippet: String)] = []
                 while let row = try rows.next() {
                     let uniqueId = row["uniqueId"] as? String

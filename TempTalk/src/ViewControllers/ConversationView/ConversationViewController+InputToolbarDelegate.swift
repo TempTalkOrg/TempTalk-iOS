@@ -8,8 +8,61 @@
 
 import Foundation
 import CoreServices
+import PanModal
 import TTMessaging
 import TTServiceKit
+
+// MARK: - DTGIFPickerViewControllerDelegate
+
+extension ConversationViewController: DTGIFPickerViewControllerDelegate {
+    func gifPickerViewController(_ viewController: DTGIFPickerViewController, didSelect attachment: SignalAttachment) {
+        if viewController.isHostedInKeyboard {
+            // Keyboard panel already closed on tap; just send.
+            tryToSendAttachments([attachment], preSendMessageCallBack: { _ in }, messageText: nil, completion: nil)
+        } else {
+            // Modal search: dismiss the sheet, then return to the keyboard (close the underlying
+            // GIF panel + focus input) and send — consistent with the in-panel tabs.
+            viewController.dismiss(animated: true) { [weak self] in
+                guard let self else { return }
+                // Re-presenting the keyboard here would otherwise race the message-insert scroll.
+                self.viewState.scrollToBottomOnKeyboardSettle = true
+                self.inputToolbar.dismissGifKeyboard()
+                self.tryToSendAttachments([attachment], preSendMessageCallBack: { _ in }, messageText: nil, completion: nil)
+            }
+        }
+    }
+
+    func gifPickerViewControllerRequestDismiss(_ viewController: DTGIFPickerViewController) {
+        // A GIF is being sent: dismissing re-presents the system keyboard, whose inset is applied
+        // asynchronously. Flag a deterministic scroll-to-bottom once the keyboard settles so the new
+        // bubble can't land behind it (see CVViewState.scrollToBottomOnKeyboardSettle).
+        viewState.scrollToBottomOnKeyboardSettle = true
+        inputToolbar.dismissGifKeyboard()
+    }
+
+    func gifPickerViewControllerDidSelectCancel(_ viewController: DTGIFPickerViewController) {
+        if viewController.isHostedInKeyboard {
+            inputToolbar.dismissGifKeyboard()
+        } else {
+            viewController.dismiss(animated: true)
+        }
+    }
+
+    func gifPickerViewControllerDidRequestSearch(_ viewController: DTGIFPickerViewController) {
+        let searchPicker = DTGIFPickerViewController()
+        searchPicker.delegate = self
+        searchPicker.startInSearch = true
+        // System pageSheet (~9分屏 card): native inner-scroll coordination, so the
+        // grid scrolls without fighting a drag-to-dismiss gesture like PanModal did.
+        searchPicker.modalPresentationStyle = .pageSheet
+        if #available(iOS 15.0, *), let sheet = searchPicker.sheetPresentationController {
+            sheet.detents = [.large()]
+            sheet.prefersGrabberVisible = true
+            sheet.preferredCornerRadius = 16
+        }
+        present(searchPicker, animated: true)
+    }
+}
 
 // MARK: - ConversationInputTextViewDelegate
 
@@ -114,28 +167,37 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
     public func voiceMemoGestureDidStart() {
         AssertIsOnMainThread()
         
+        // Recording a voice message while muted inside a call is now supported:
+        // `startRecordingVoiceMemo` temporarily forces LiveKit mic capture
+        // (see `beginInCallLocalRecordingIfNeeded`) so the recorder tap picks up
+        // audio, then restores the muted state when the recording ends.
+        
         let kIgnoreMessageSendDoubleTapDurationSeconds: TimeInterval = 2.0
         if let lastMessageSentDate = self.lastMessageSentDate,
            abs(lastMessageSentDate.timeIntervalSinceNow) < kIgnoreMessageSendDoubleTapDurationSeconds {
-            // If users double-taps the message send button, the second tap can look like a
-            // very short voice message gesture.  We want to ignore such gestures.
             cancelVoiceMemo()
             return
         }
         
         self.inputToolbar.showVoiceMemoUI()
-//        AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
         requestRecordingVoiceMemo()
     }
     
     func voiceMemoGestureDidComplete() {
         AssertIsOnMainThread()
-        
+
         self.inputToolbar.hideVoiceMemoUI(animated: true)
         endRecordingVoiceMemo()
 //        AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
     }
-    
+
+    /// Latch mode for `didFinish`, then fall through to the shared path.
+    public func voiceMemoGestureDidComplete(withMode mode: VoiceMessageSendMode) {
+        AssertIsOnMainThread()
+        viewState.pendingVoiceMessageSendMode = mode
+        voiceMemoGestureDidComplete()
+    }
+
     public func voiceMemoGestureDidCancel() {
         AssertIsOnMainThread()
         
@@ -145,7 +207,15 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
     }
     
     func voiceMemoGestureWasInterrupted() {
-        
+        AssertIsOnMainThread()
+        // System (e.g. AVAudioSession interruption from an incoming call) or
+        // gesture system claimed the touch out from under us. Match the
+        // explicit-cancel branch — drop the in-flight recording and its
+        // candidate files, then reset the toolbar UI. Previously this was
+        // an empty stub, which left the mic capture path running and
+        // produced an undeliverable file.
+        self.inputToolbar.hideVoiceMemoUI(animated: false)
+        cancelRecordingVoiceMemo()
     }
     
     // MARK: Attachments
@@ -181,7 +251,11 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
     func fileButtonPressed() {
         showDocumentPicker()
     }
-    
+
+    func gifButtonPressed() {
+        inputToolbar.showGifKeyboard()
+    }
+
     func confideButtonPressed() {
         performConfidentialModeToggleIfNeeded(completion: nil)
     }
@@ -370,7 +444,10 @@ extension ConversationViewController {
         guard isCanSpeak else { return }
         AssertIsOnMainThread()
         
-        let strippedText = text.stripped
+        // Canonicalize newlines up front so both the normal and the oversize-text
+        // (text-as-attachment) branches send clean `\n`, and mentions computed below
+        // align to it without needing a remap.
+        let strippedText = text.stripped.normalizedNewlines()
         guard !strippedText.isEmpty else { return }
         
         // Limit outgoing text messages to 16kb.

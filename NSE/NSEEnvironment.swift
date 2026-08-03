@@ -169,6 +169,12 @@ class NSEEnvironment: Dependencies {
 
         listenForMainAppLaunch()
 
+        // Start the loopback proxy in this NSE process so the push-driven message fetch tunnels
+        // through the self-hosted proxy. The NSE is a separate process from the main app, so its
+        // own tunnel must be started from the shared config — otherwise the fetch leaks the real
+        // IP to the chat server. No-op when the proxy is off.
+        ProxyManager.shared.applyConfiguration()
+
         return nil
     }
     

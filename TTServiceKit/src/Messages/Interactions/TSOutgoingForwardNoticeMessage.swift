@@ -71,17 +71,20 @@ public class TSOutgoingForwardNoticeMessage: TSOutgoingMessage {
     private let sourceAuthorIdsValue: [String]
     private let messageCountValue: UInt32
     private let sourceConversation: DTForwardNoticeConversation
+    private let combinedForwardModeValue: DTForwardNoticeCombinedForwardMode
 
     @objc
     public init(thread: TSThread,
                 scene: DTForwardNoticeScene,
                 sourceAuthorIds: [String],
                 messageCount: UInt32,
-                sourceConversation: DTForwardNoticeConversation) {
+                sourceConversation: DTForwardNoticeConversation,
+                combinedForwardMode: DTForwardNoticeCombinedForwardMode = .unknown) {
         self.sceneValue = scene
         self.sourceAuthorIdsValue = sourceAuthorIds
         self.messageCountValue = messageCount
         self.sourceConversation = sourceConversation
+        self.combinedForwardModeValue = combinedForwardMode
 
         super.init(outgoingMessageWithTimestamp: NSDate.ows_millisecondTimeStamp(),
                    in: thread,
@@ -111,7 +114,8 @@ public class TSOutgoingForwardNoticeMessage: TSOutgoingMessage {
     public override func shouldBeSaved() -> Bool { false }
 
     public override func shouldSyncTranscript() -> Bool {
-        sourceConversation.scope == .oneOnOne
+        // Sync to other linked devices for 1:1 and Saved (note-to-self); group notices don't sync.
+        sourceConversation.scope != .group
     }
 
     public override var isSilent: Bool { true }
@@ -149,6 +153,9 @@ public class TSOutgoingForwardNoticeMessage: TSOutgoingMessage {
         noticeBuilder.setSourceAuthorIds(sourceAuthorIdsValue)
         noticeBuilder.setMessageCount(messageCountValue)
         noticeBuilder.setConversation(try sourceConversation.buildProto())
+        if combinedForwardModeValue != .unknown {
+            noticeBuilder.setCombinedForwardMode(combinedForwardModeValue.protoValue)
+        }
         return try noticeBuilder.build()
     }
 }

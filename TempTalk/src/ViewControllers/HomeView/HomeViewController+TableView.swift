@@ -91,11 +91,11 @@ extension HomeViewController {
                 case .reminders:
                     return self.reminderViewCell
                 case .virtualThread:
-                    return virtualCell(for: itemIdentifier)
+                    return self.virtualCell(for: itemIdentifier, indexPath: indexPath)
                 case .conversations:
-                    return conversationCell(for: itemIdentifier)
+                    return self.conversationCell(for: itemIdentifier, indexPath: indexPath)
                 case .archiveButton:
-                    return archivedCell()
+                    return self.archivedCell()
                 }
             }
         )
@@ -136,21 +136,24 @@ extension HomeViewController {
         
         if forceReloadRange != .none {
             let oldSnapshot = self.dataSource.snapshot()
-            let oldItemIds = oldSnapshot.itemIdentifiers
-            
-            // 获取 thread 新旧快照的交集
-            let threadIntersectionIds = Set(threadIds).intersection(Set(oldItemIds))
-            // 获取 virtual thread 新旧快照的交集
-            let virtualThreadIntersectionIds = Set(virtualThreadIds).intersection(Set(oldItemIds))
-            
-            // 获取需要强制刷新的 item id
+            let oldSections = Set(oldSnapshot.sectionIdentifiers)
+
+            // 必须按 section 分别取交集，跨 section 的 id 不能进 reconfigureItems
+            let oldConversationIds: Set<String> = oldSections.contains(.conversations)
+                ? Set(oldSnapshot.itemIdentifiers(inSection: .conversations))
+                : []
+            let oldVirtualThreadIds: Set<String> = oldSections.contains(.virtualThread)
+                ? Set(oldSnapshot.itemIdentifiers(inSection: .virtualThread))
+                : []
+
+            let threadIntersectionIds = Set(threadIds).intersection(oldConversationIds)
+            let virtualThreadIntersectionIds = Set(virtualThreadIds).intersection(oldVirtualThreadIds)
+
             var forceReloadItemIds: [String] = []
             switch forceReloadRange {
             case .all:
-                // 刷新全部 = thread 新旧快照的交集 + virtual thread 新旧快照的交集，一定要刷新交集，否则会 crash
                 forceReloadItemIds = Array(threadIntersectionIds.union(virtualThreadIntersectionIds))
             case .part(let itemIds):
-                // 刷新部分 = (thread 新旧快照的交集 + virtual thread 新旧快照的交集) 与 part 指定的 itemIds 的交集
                 let needReloadThreadIds = threadIntersectionIds.filter { itemIds.contains($0) }
                 let needReloadVirtualThreadIds = virtualThreadIntersectionIds.filter { itemIds.contains($0) }
                 forceReloadItemIds = Array(needReloadThreadIds.union(needReloadVirtualThreadIds))
@@ -159,7 +162,6 @@ extension HomeViewController {
             }
 
             if !forceReloadItemIds.isEmpty {
-                // 使用 reconfigureItems 代替 reloadItems 来避免 cell 重新创建
                 if #available(iOS 15.0, *) {
                     newSnapshot.reconfigureItems(forceReloadItemIds)
                 } else {
@@ -291,12 +293,14 @@ extension HomeViewController {
         }
     }
     
-    private func conversationCell(for identifier: String) -> UITableViewCell {
-        guard let cell = self.tableView.dequeueReusableCell(withIdentifier: HomeViewCell.cellReuseIdentifier()) as? HomeViewCell else {
-            return UITableViewCell()
+    private func conversationCell(for identifier: String, indexPath: IndexPath) -> UITableViewCell {
+        // 必须用带 indexPath 的 dequeue，否则 reconfigureItems 路径上 UIKit 会断言失败
+        let dequeued = self.tableView.dequeueReusableCell(withIdentifier: HomeViewCell.cellReuseIdentifier(), for: indexPath)
+        guard let cell = dequeued as? HomeViewCell else {
+            return dequeued
         }
         guard let threadViewModel = threadViewModel(for: identifier) else {
-            return UITableViewCell()
+            return cell
         }
         cell.isShowSticked = true
         cell.shouldObserveMeeting = true
@@ -333,13 +337,14 @@ extension HomeViewController {
         return newThreadViewModel
     }
     
-    private func virtualCell(for identifier: String) -> UITableViewCell {
-        guard let cell = self.tableView.dequeueReusableCell(withIdentifier: DTHomeVirtualCell.cellReuseIdentifier()) as? DTHomeVirtualCell else {
-            return UITableViewCell()
+    private func virtualCell(for identifier: String, indexPath: IndexPath) -> UITableViewCell {
+        let dequeued = self.tableView.dequeueReusableCell(withIdentifier: DTHomeVirtualCell.cellReuseIdentifier(), for: indexPath)
+        guard let cell = dequeued as? DTHomeVirtualCell else {
+            return dequeued
         }
         guard let virtualThread = threadMapping.virtualThread(for: identifier) else {
             Logger.error("can not find virtual thread for identifier: \(identifier)")
-            return UITableViewCell()
+            return cell
         }
         cell.meetingBarDelegate = self;
         cell.config(with: virtualThread)

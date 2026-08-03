@@ -25,6 +25,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSArray<NSString *> *)getTheServerUrlsWithServerType:(DTServToType)serverType;
 
+/// Whether `host` belongs to the given serverType pool (including invalidated entries).
+/// Used to filter out non-chat requests (OSS / third-party) before domain switching.
+- (BOOL)containsHost:(NSString *)host serverType:(DTServToType)serverType;
+
 - (void)markAsInvalidWithUrl:(NSString *)url serverType:(DTServToType)serverType;
 
 - (void)resetAll;

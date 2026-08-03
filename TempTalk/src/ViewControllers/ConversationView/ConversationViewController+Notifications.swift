@@ -251,10 +251,21 @@ private extension ConversationViewController {
         self.cellMediaCache.removeAllObjects()
         cancelReadTimer()
         dismissPresentedViewControllerIfNecessary()
-        
+
+        // Cancel any in-flight voice memo recording. Without this, the
+        // recorder keeps the mic open in the background (a privacy concern
+        // and a battery drain), and on return the candidate files are
+        // either truncated or full of silence depending on how iOS routes
+        // the now-stale AVAudioEngine inputNode. Matches the Android
+        // `onDetachedFromWindow` behaviour.
+        if voiceMemoIsActive {
+            self.inputToolbar.hideVoiceMemoUI(animated: false)
+            cancelRecordingVoiceMemo()
+        }
+
         updateShouldObserveDBModifications()
     }
-    
+
     func applicationDidBecomeActive(_ notification: Notification) {
         startReadTimer()
         updateShouldObserveDBModifications()
@@ -362,37 +373,14 @@ private extension ConversationViewController {
             return
         }
 
-        var targetThread = thread
-        let currentCall = DTMeetingManager.shared.currentCall
-
-        if DTMeetingManager.shared.hasMeeting,
-           !DTMeetingManager.shared.isMinimize,  // ✅ 添加小窗模式检查
-           let conversationId = currentCall.conversationId,
-           !conversationId.isEmpty {
-
-            if currentCall.callType == .private || currentCall.callType == .group {
-                Logger.info("[Conversation] Active call in full screen (not minimized) detected, redirecting screenshot to call conversation")
-
-                databaseStorage.write { transaction in
-                    if currentCall.callType == .private {
-                        if let contactThread = TSContactThread.getThread(contactId: conversationId, transaction: transaction) {
-                            targetThread = contactThread
-                            Logger.info("[Conversation] Redirecting screenshot to private call thread: \(conversationId)")
-                        }
-                    } else if currentCall.callType == .group {
-                        if let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId),
-                           let groupThread = TSGroupThread.getWithGroupId(localGroupId, transaction: transaction) {
-                            targetThread = groupThread
-                            Logger.info("[Conversation] Redirecting screenshot to group call thread: \(conversationId)")
-                        }
-                    }
-                }
-            }
-        } else if DTMeetingManager.shared.hasMeeting && DTMeetingManager.shared.isMinimize {
-            Logger.info("[Conversation] Call is minimized, screenshot will be sent to current conversation: \(thread.uniqueId)")
+        // Full-screen meeting is handled by DTMeetingManager; otherwise send to the current conversation.
+        guard !(DTMeetingManager.shared.hasMeeting && !DTMeetingManager.shared.isMinimize) else {
+            Logger.info("[Conversation] Screenshot during full-screen meeting, handled by DTMeetingManager")
+            return
         }
 
-        ThreadUtil.sendScreenShotMessage(in: targetThread) {} failure: {_ in }
+        Logger.info("[Conversation] Screenshot, sending to current thread: \(thread.uniqueId)")
+        ThreadUtil.sendScreenShotMessage(in: thread) {} failure: {_ in }
     }
     
     func didChangeContentSizeCategory(_ notification: NSNotification) {

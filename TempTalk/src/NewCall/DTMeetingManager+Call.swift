@@ -15,11 +15,50 @@ extension DTMeetingManager {
     ///   - thread: 发起1on1/group时传入
     ///   - recipientIds: 发起instant会议时需要
     ///   - displayLoading: 是否展示loading
+    /// Non-nil reason when the user's self-hosted proxy is ON but can't carry a private call:
+    /// not actually running, missing TURN (`t`) media relay, no usable signaling channel, or the
+    /// last reachability probe said unavailable. nil = OK to call. Keyed on `isEnabled` (user
+    /// intent), so a call is never silently made direct and leaks the real IP.
+    ///
+    /// Signaling hides the IP one of two ways: QUIC-over-proxy (MASQUE, share-link `q`, any iOS) or
+    /// WSS over the app's loopback CONNECT tunnel. The WSS tunnel relies on URLSession's
+    /// `connectionProxyDictionary`, which `URLSessionWebSocketTask` only honors on iOS 17+; on older
+    /// iOS it is silently ignored and the WebSocket connects directly. So without `q`, a call is only
+    /// allowed on iOS 17+ — otherwise blocked, never leaked.
+    var proxyCallBlockReason: String? {
+        // In-call IP protection off → calls go direct (proxy doesn't carry them), so never block.
+        guard ProxyManager.shared.protectCallIPEnabled else { return nil }
+        guard ProxyManager.shared.isEnabled else { return nil }
+        guard let cfg = ProxyManager.shared.activeConfig else { return "proxy not running" }
+        if cfg.turnEnabled() == false { return "no TURN (t)" }
+        // Signaling targets come exclusively from the call tunnel whitelist. If it resolved to no
+        // host, MeetingConnectionPlanner builds zero attempts and the coordinator would spin through
+        // every retry phase to a generic timeout — block early with the same proxy guidance instead.
+        if ProxyTunnelConfig.tunnelDomains("call").isEmpty { return "no call tunnel domains" }
+        if cfg.quicEnabled == false {
+            guard #available(iOS 17, *) else { return "no QUIC relay (q); WSS proxy needs iOS 17+" }
+        }
+        if ProxyManager.shared.lastProbeStatus == .unavailable { return "proxy unavailable" }
+        return nil
+    }
+
     func startCall(thread: TSThread?,
                    recipientIds: [String]? = nil,
                    displayLoading: Bool = false)
     {
         Logger.info("\(logTag) start call with direct LiveKit connection, current state: \(lifecycleState)")
+
+        // Block at the initiation entry — before any state change or call UI — so the tip lands on
+        // the conversation page and persists, instead of flashing by on a call screen that is then
+        // torn down. The deeper connect path keeps the same guard for the answer path.
+        if let reason = proxyCallBlockReason {
+            Logger.warn("\(logTag) startCall blocked: proxy on but unusable — \(reason)")
+            DispatchMainThreadSafe {
+                DTToastHelper.hide()
+                DTToastHelper.show(withInfo: Localized("CALL_PROXY_TURN_REQUIRED_TIP"))
+            }
+            return
+        }
 
         // TODO: 补丁代码——根因未定位，加详细日志收集线上数据后彻底根除
         if lifecycleState != .idle && roomContext == nil {
@@ -408,13 +447,34 @@ extension DTMeetingManager {
     ) async {
         Logger.info("\(logTag) connecting directly to LiveKit with ttCallRequest, skipCleanup: \(skipCleanup)")
 
+        // Defense-in-depth for the answer/other paths: never connect a call while the proxy is on
+        // but unusable, which would leak the real IP via a direct connection.
+        // The initiate path is already blocked earlier in startCall (toast on the conversation page).
+        if let reason = proxyCallBlockReason {
+            Logger.warn("\(logTag) call blocked: proxy on but unusable — \(reason)")
+            await MainActor.run {
+                DTToastHelper.hide()
+                DTToastHelper.show(withInfo: Localized("CALL_PROXY_TURN_REQUIRED_TIP"))
+            }
+            isAnswering = false
+            await hangupCall(needSyncCallKit: fromCallKit,
+                             isByLocal: true,
+                             forceEndGroupMeeting: false,
+                             roomId: currentCall.roomId,
+                             showErrorToast: false)
+            return
+        }
+
         do {
             currentCall.timestamp = timestamp
 
             let token = try await requestAuthToken()
             let collapseId = collapseId(timestamp: timestamp)
 
-            let connectOptions = buildConnectOptions(
+            // 失败不阻塞，coordinator 内部还会再尝试 fetch / assets 兜底
+            _ = try? await CallServiceUrlManager.shared.ensureServiceUrlsForCall(timeout: 15)
+
+            let baseOptions = buildBaseConnectOptions(
                 callType: callType,
                 roomId: roomId,
                 conversationId: conversationId,
@@ -426,16 +486,10 @@ extension DTMeetingManager {
                 token: token
             )
 
-            // 确保在连接前清理旧的连接状态（如果还没有清理过）
             if !skipCleanup {
                 await ensureCleanConnectionState(roomId: roomId)
             }
 
-            // Abort if the call was cancelled while we were waiting on async work above
-            // (e.g. another device answered → hangupCall → clearCurrentCall reset the model).
-            // Without this guard, we would build a new roomContext on top of a blank
-            // `currentCall`, later read `conversationId == nil` in handlePostConnectState,
-            // and incorrectly flip a group call to an instant call.
             guard lifecycleState == .connecting else {
                 Logger.warn("\(logTag) connectDirectlyToLiveKit aborted: state=\(lifecycleState) is not .connecting, call was cancelled during async wait")
                 isAnswering = false
@@ -456,16 +510,14 @@ extension DTMeetingManager {
                 return
             }
 
-            // 先出UI
+            // 先出 UI
             await MainActor.run {
                 DTToastHelper.hide()
                 presentCallUI(callType: callType, isCaller: isCaller, fromCallKit: fromCallKit)
             }
 
-            // 后连接
-            await connectRoomSafely(fromCallKit: fromCallKit, connectOptions: connectOptions)
+            await connectRoomViaCoordinator(fromCallKit: fromCallKit, baseConnectOptions: baseOptions)
 
-            // 连接完成后，主动检查屏幕共享（onAppear 时 room 未连接，检测不到）
             if fromCallKit {
                 await MainActor.run {
                     roomContext?.checkAndPresentScreenShareIfNeeded()
@@ -482,7 +534,8 @@ extension DTMeetingManager {
         }
     }
 
-    private func buildConnectOptions(
+    /// transport / serverHost / caCertPem / cidTag / deviceType 由 RoomContext.connect 按 attempt 套上。
+    private func buildBaseConnectOptions(
         callType: CallType,
         roomId: String?,
         conversationId: String?,
@@ -493,58 +546,53 @@ extension DTMeetingManager {
         collapseId: String,
         token: String
     ) -> ConnectOptions {
-        var connectOptions = ConnectOptions()
-
-        // Determine transport kind based on gray release
-        let transportKind: TransportKind = GrayReleaseManager.shared.isQuicEnabled ? .quic : .websocket
-        if let cipherMessages,
-           let encInfos,
-           let publicKey
-        {
-            connectOptions = ConnectOptions(
-                autoSubscribe: true,
-                reconnectAttempts: 20,
-                reconnectAttemptDelay: 2,
-                ttCallRequest: Livekit_TTCallRequest.with {
-                    $0.token = token
-                    $0.startCall = Livekit_TTStartCall.with {
-                        $0.type = callType.rawValue
-                        $0.version = Self.meetingVersion
-                        $0.timestamp = Int64(timestamp)
-                        $0.conversationID = conversationId ?? ""
-                        $0.publicKey = publicKey
-                        $0.cipherMessages = cipherMessages
-                        $0.encInfos = encInfos
-                        $0.notification = Livekit_TTNotification.with {
-                            $0.type = Int32(DTApnsMessageType.ENC_CALL.rawValue)
-                            $0.args = .with { $0.collapseID = collapseId }
-                        }
+        let ttCallRequest: Livekit_TTCallRequest?
+        if let cipherMessages, let encInfos, let publicKey {
+            ttCallRequest = Livekit_TTCallRequest.with {
+                $0.token = token
+                $0.startCall = Livekit_TTStartCall.with {
+                    $0.type = callType.rawValue
+                    $0.version = Self.meetingVersion
+                    $0.timestamp = Int64(timestamp)
+                    $0.conversationID = conversationId ?? ""
+                    $0.publicKey = publicKey
+                    $0.cipherMessages = cipherMessages
+                    $0.encInfos = encInfos
+                    $0.notification = Livekit_TTNotification.with {
+                        $0.type = Int32(DTApnsMessageType.ENC_CALL.rawValue)
+                        $0.args = .with { $0.collapseID = collapseId }
                     }
-                    $0.userAgent = TSConstants.appUserAgent
-                },
-                userAgent: TSConstants.appUserAgent,
-                transportKind: transportKind
-            )
+                }
+                $0.userAgent = TSConstants.appUserAgent
+            }
         } else if let roomId {
-            connectOptions = ConnectOptions(
-                reconnectAttempts: 20,
-                reconnectAttemptDelay: 2,
-                ttCallRequest: Livekit_TTCallRequest.with {
-                    $0.token = token
-                    $0.startCall = Livekit_TTStartCall.with {
-                        $0.type = callType.rawValue
-                        $0.roomID = roomId
-                        $0.version = Self.meetingVersion
-                        $0.timestamp = Int64(timestamp)
-                    }
-                    $0.userAgent = TSConstants.appUserAgent
-                },
-                userAgent: TSConstants.appUserAgent,
-                transportKind: transportKind
-            )
+            ttCallRequest = Livekit_TTCallRequest.with {
+                $0.token = token
+                $0.startCall = Livekit_TTStartCall.with {
+                    $0.type = callType.rawValue
+                    $0.roomID = roomId
+                    $0.version = Self.meetingVersion
+                    $0.timestamp = Int64(timestamp)
+                }
+                $0.userAgent = TSConstants.appUserAgent
+            }
+        } else {
+            return ConnectOptions()
         }
 
-        return connectOptions
+        return ConnectOptions(
+            autoSubscribe: true,
+            reconnectAttempts: 20,
+            reconnectAttemptDelay: 2,
+            ttCallRequest: ttCallRequest,
+            userAgent: TSConstants.appUserAgent
+        )
+    }
+
+    /// `+73504107953` -> `73504107953`
+    static func quicCidTag(for localNumber: String?) -> String {
+        guard let number = localNumber, !number.isEmpty else { return "" }
+        return number.hasPrefix("+") ? String(number.dropFirst()) : number
     }
 
     @MainActor
@@ -584,12 +632,8 @@ extension DTMeetingManager {
             return false
         }
 
-        let serviceUrlManager = TTCallServiceUrlManager()
-        guard let url = await serviceUrlManager.getCurrentUrl() else { return false }
-
-        roomContext = RoomContext(url: url, token: token, lkContext: appContext)
-        roomContext?.serviceUrlManager = serviceUrlManager
-        Logger.info("\(logTag) created new roomContext")
+        roomContext = RoomContext(token: token, lkContext: appContext)
+        Logger.info("\(logTag) created new roomContext (attempt-driven)")
         return true
     }
 
@@ -627,48 +671,64 @@ extension DTMeetingManager {
                 }
             }
         } else {
-            if let answerVC {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            // Push the real call UI as soon as it's ready. answerVC is already the root of
+            // callNavigationController (set synchronously in startCall), so no wait is needed.
+            if let answerVC, let nav = answerVC.navigationController {
+                nav.pushViewController(callVC, animated: false, completion: { [weak self] in
                     guard let self else { return }
-                    if let nav = answerVC.navigationController {
-                        nav.pushViewController(callVC, animated: false, completion: { [weak self] in
-                            guard let self else { return }
-                            Logger.error("\(logTag) answer nav removeViewController")
-                            answerVC.navigationController?.removeViewController(ofType: type(of: answerVC))
-                            self.answerVC = nil
-                        })
-                    } else {
-                        Logger.error("\(logTag) answer nav nil")
-                        self.answerVC = nil
-                        OWSWindowManager.shared().startCall(callVC, animated: false)
-                    }
-                }
+                    Logger.info("\(logTag) answer nav removeViewController")
+                    answerVC.navigationController?.removeViewController(ofType: type(of: answerVC))
+                    self.answerVC = nil
+                })
             } else {
-                Logger.info("\(logTag) isCaller = false, startCall")
+                if answerVC != nil {
+                    Logger.error("\(logTag) answer nav nil")
+                } else {
+                    Logger.info("\(logTag) isCaller = false, startCall")
+                }
+                self.answerVC = nil
                 OWSWindowManager.shared().startCall(callVC, animated: false)
             }
         }
     }
 
-    /// 安全发起连接
-    private func connectRoomSafely(fromCallKit: Bool, connectOptions: ConnectOptions) async {
-        Logger.info("\(logTag) starting direct LiveKit connection with ttCallRequest")
+    @MainActor
+    private func connectRoomViaCoordinator(fromCallKit: Bool, baseConnectOptions: ConnectOptions) async {
+        Logger.info("\(logTag) starting LiveKit connection via CallConnectionCoordinator")
+        guard let roomContext else {
+            Logger.error("\(logTag) connectRoomViaCoordinator: roomContext is nil, aborting")
+            isAnswering = false
+            await hangupCall(needSyncCallKit: fromCallKit,
+                             isByLocal: true,
+                             roomId: currentCall.roomId,
+                             showErrorToast: true)
+            return
+        }
+
+        let coordinator = CallConnectionCoordinator()
         do {
-            guard let roomContext else {
-                Logger.error("\(logTag) connectRoomSafely: roomContext is nil, aborting")
-                throw CallError.roomContextCreationFailed
-            }
-            _ = try await roomContext.connect(fromCallKit: fromCallKit, connectOptions: connectOptions)
+            _ = try await coordinator.connectToRoomWithFailover(
+                connectAttempt: { [weak roomContext] attempt in
+                    guard let roomContext else { throw CallError.roomContextCreationFailed }
+                    _ = try await roomContext.connect(
+                        fromCallKit: fromCallKit,
+                        attempt: attempt,
+                        baseConnectOptions: baseConnectOptions
+                    )
+                },
+                reporter: CallStatisticsLogManager.shared
+            )
+
             let state = roomContext.room.connectionState
             if state != .connected {
-                Logger.error("\(logTag) connect returned but state=\(state), treating as failure")
+                Logger.error("\(logTag) coordinator returned success but room state=\(state), treating as failure")
                 throw CallError.connectionFailed
             }
         } catch is CancellationError {
             Logger.info("\(logTag) room connect cancelled, skip hangup")
             isAnswering = false
         } catch {
-            Logger.info("\(logTag) hangup callkit room connect failed, error: \(error)")
+            Logger.info("\(logTag) coordinator failover exhausted, error: \(error)")
             isAnswering = false
             let failedRoomId = currentCall.roomId
             let isPrivateCaller = currentCall.callType == .private && currentCall.isCaller
@@ -677,7 +737,6 @@ extension DTMeetingManager {
                              roomId: failedRoomId)
             if let lkError = error as? LiveKitError, lkError.type == .startCall {
                 if lkError.response?.base.status == 22001 {
-                    // 会议已结束，无论 callType 都移除 meetingBar
                     if let roomId = failedRoomId {
                         handleMeetingBar(roomId: roomId, action: .remove)
                     }
@@ -686,7 +745,6 @@ extension DTMeetingManager {
                     await DTToastHelper.dismiss(withInfo: lkError.response?.base.reason ?? Localized("ROOM_CONNECT_FAILED"))
                 }
             } else if case CallError.tokenExpired = error, isPrivateCaller {
-                // 仅 1v1 主叫的 token 超时沿用旧文案，与 60s 响铃超时一致
                 await DTToastHelper.dismiss(withInfo: Localized("SINGLE_CALL_TIMEOUT"))
             } else {
                 await DTToastHelper.dismiss(withInfo: Localized("ROOM_CONNECT_FAILED"))
@@ -782,7 +840,11 @@ extension DTMeetingManager {
 
                 DispatchMainThreadSafe {
                     self.startCallTimeoutTimer()
-                    self.presentAnswerVC(call: call, caller: caller, roomId: roomId, publicKey: publicKey, emk: emk)
+                    if DTMeetingManager.isVoiceRecordingActive {
+                        self.presentIncomingCallBanner(call: call, caller: caller, roomId: roomId, publicKey: publicKey, emk: emk)
+                    } else {
+                        self.presentAnswerVC(call: call, caller: caller, roomId: roomId, publicKey: publicKey, emk: emk)
+                    }
                 }
             }
         }
@@ -898,5 +960,77 @@ extension DTMeetingManager {
     /// 清理 AnswerVC 状态
     private func clearAnswerVCState() {
         answerVC = nil
+    }
+
+    // MARK: - Incoming Call Banner (during voice recording)
+
+    @MainActor
+    private func presentIncomingCallBanner(call: DTLiveKitCallModel, caller: String, roomId: String, publicKey: Data, emk: Data) {
+        Logger.info("\(logTag) presenting incoming call banner (voice recording active)")
+
+        deferredIncomingCall = (call, caller, roomId, publicKey, emk)
+
+        let bannerView = IncomingCallBannerView(
+            callerName: contactsManager.displayName(forPhoneIdentifier: caller),
+            callerId: caller,
+            isGroupCall: call.callType != .private,
+            onAnswer: { [weak self] in
+                guard let self, let deferred = consumeDeferredCall() else { return }
+                stopCallTimeoutTimer()
+                answerCall(caller: deferred.caller, roomId: deferred.roomId, publicKey: deferred.publicKey, emk: deferred.emk, fromCallKit: false)
+            },
+            onDecline: { [weak self] in
+                guard let self, let deferred = consumeDeferredCall() else { return }
+                stopCallTimeoutTimer()
+                if deferred.call.callType != .private {
+                    handleMeetingBar(call: deferred.call, action: .add)
+                }
+                Task { await self.rejectRemoteCall() }
+            }
+        )
+
+        let hostingVC = UIHostingController(rootView: bannerView)
+        hostingVC.view.backgroundColor = .clear
+
+        let window = UIWindow(frame: UIScreen.main.bounds)
+        window.windowLevel = .alert + 1
+        window.rootViewController = hostingVC
+        window.backgroundColor = .clear
+        window.makeKeyAndVisible()
+        incomingCallBannerWindow = window
+
+        voiceRecordingEndObserver = NotificationCenter.default.addObserver(
+            forName: .voiceRecordingDidEnd,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.onVoiceRecordingEnded()
+        }
+    }
+
+    /// Consumes the deferred incoming call and dismisses the banner. Returns the call info, or nil if already consumed.
+    @MainActor
+    private func consumeDeferredCall() -> (call: DTLiveKitCallModel, caller: String, roomId: String, publicKey: Data, emk: Data)? {
+        guard let deferred = deferredIncomingCall else { return nil }
+        deferredIncomingCall = nil
+        dismissIncomingCallBanner()
+        return deferred
+    }
+
+    @MainActor
+    func dismissIncomingCallBanner() {
+        if let observer = voiceRecordingEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+            voiceRecordingEndObserver = nil
+        }
+        incomingCallBannerWindow?.isHidden = true
+        incomingCallBannerWindow = nil
+    }
+
+    @MainActor
+    private func onVoiceRecordingEnded() {
+        guard let deferred = consumeDeferredCall() else { return }
+        Logger.info("\(logTag) voice recording ended, presenting deferred incoming call UI")
+        presentAnswerVC(call: deferred.call, caller: deferred.caller, roomId: deferred.roomId, publicKey: deferred.publicKey, emk: deferred.emk)
     }
 }

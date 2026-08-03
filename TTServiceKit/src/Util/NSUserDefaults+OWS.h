@@ -8,8 +8,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (NSUserDefaults *)appUserDefaults;
 
-+ (void)migrateToSharedUserDefaults;
-
 + (void)removeAll;
 
 @end

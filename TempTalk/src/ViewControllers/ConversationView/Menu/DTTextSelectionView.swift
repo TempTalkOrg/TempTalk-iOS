@@ -56,6 +56,12 @@ class DTTextSelectionView: UIView {
     lazy var highlightAreaView = UIView()
     
     weak var delegate: DTTextSelectionViewDelegate?
+
+    /// When the host text view scrolls, its caret/selection rects stay in content space while
+    /// this overlay is pinned to the visible frame. Enable this so selection rects are shifted
+    /// by `contentOffset` into visible space. Leave off for non-scrolling hosts (e.g. chat
+    /// bubbles), where contentOffset is always zero and the shift is a no-op anyway.
+    var compensatesForContentOffset = false
     
     init(textView: UITextView) {
         self.textView = textView
@@ -101,7 +107,11 @@ class DTTextSelectionView: UIView {
             
             var mappedPoint = self.convert(point, to: self.textView)
             // 当光标已经在第一行或者最后一行，此时向上或者向下拖动，光标会直接移动到文本的开头或末尾，容易误触，通过限制触摸点范围来解决这个问题
-            mappedPoint.y = min(mappedPoint.y, self.textView.height - 1)
+            // mappedPoint is in content space. A scrolling host must clamp to content height,
+            // not the visible height, or a content-space y gets squashed into the viewport and
+            // the knob jumps to the upper half of the text.
+            let maxSelectableY = self.compensatesForContentOffset ? self.textView.contentSize.height : self.textView.height
+            mappedPoint.y = min(mappedPoint.y, maxSelectableY - 1)
             mappedPoint.y = max(mappedPoint.y, 0)
             
             if let closetPosition = self.textView.closestPosition(to: mappedPoint) {
@@ -135,43 +145,7 @@ class DTTextSelectionView: UIView {
             self.delegate?.selectionViewDidEndSelect(self)
         }
         recognizer.beginSelection = { [weak self] point in
-            guard let self, let attributedString = self.textView.attributedText else {
-                return
-            }
-            
-            self.dismissSelection()
-            
-            let mappedPoint = self.convert(point, to: self.textView)
-            var resultRange: NSRange?
-            if let closetPosition = self.textView.closestPosition(to: mappedPoint) {
-                let stringIndex = self.textView.offset(
-                    from: self.textView.beginningOfDocument,
-                    to: closetPosition
-                )
-                let string = attributedString.string as NSString
-                let inputRange = CFRangeMake(0, string.length)
-                let flag = UInt(kCFStringTokenizerUnitWord)
-                let locale = CFLocaleCopyCurrent()
-                let tokenizer = CFStringTokenizerCreate(kCFAllocatorDefault, string as CFString, inputRange, flag, locale)
-                var tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer)
-                
-                while !tokenType.isEmpty {
-                    let currentTokenRange = CFStringTokenizerGetCurrentTokenRange(tokenizer)
-                    if currentTokenRange.location <= stringIndex && currentTokenRange.location + currentTokenRange.length > stringIndex {
-                        resultRange = NSRange(location: currentTokenRange.location, length: currentTokenRange.length)
-                        break
-                    }
-                    tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer)
-                }
-                if resultRange == nil {
-                    resultRange = NSRange(location: stringIndex, length: 1)
-                }
-            }
-            
-            self.currentRange = resultRange.flatMap {
-                ($0.lowerBound, $0.upperBound)
-            }
-            self.updateSelection(range: resultRange, animateIn: true)
+            self?.selectWord(at: point, animated: true)
         }
         recognizer.clearSelection = { [weak self] in
             guard let self else { return }
@@ -232,6 +206,49 @@ class DTTextSelectionView: UIView {
         return range
     }
     
+    /// Select the word at `point` (in this selection view's own coordinate space).
+    /// Falls back to a single character when no word token contains the point.
+    /// Callers driving selection externally must convert the touch into this view first.
+    func selectWord(at point: CGPoint, animated: Bool) {
+        guard let attributedString = textView.attributedText, !attributedString.isEmpty else {
+            return
+        }
+
+        dismissSelection()
+
+        let mappedPoint = convert(point, to: textView)
+        var resultRange: NSRange?
+        if let closetPosition = textView.closestPosition(to: mappedPoint) {
+            let stringIndex = textView.offset(
+                from: textView.beginningOfDocument,
+                to: closetPosition
+            )
+            let string = attributedString.string as NSString
+            let inputRange = CFRangeMake(0, string.length)
+            let flag = UInt(kCFStringTokenizerUnitWord)
+            let locale = CFLocaleCopyCurrent()
+            let tokenizer = CFStringTokenizerCreate(kCFAllocatorDefault, string as CFString, inputRange, flag, locale)
+            var tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer)
+
+            while !tokenType.isEmpty {
+                let currentTokenRange = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+                if currentTokenRange.location <= stringIndex && currentTokenRange.location + currentTokenRange.length > stringIndex {
+                    resultRange = NSRange(location: currentTokenRange.location, length: currentTokenRange.length)
+                    break
+                }
+                tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer)
+            }
+            if resultRange == nil {
+                resultRange = NSRange(location: stringIndex, length: 1)
+            }
+        }
+
+        currentRange = resultRange.flatMap {
+            ($0.lowerBound, $0.upperBound)
+        }
+        updateSelection(range: resultRange, animateIn: animated)
+    }
+
     func setSelection(range: NSRange, animated: Bool) {
         guard let attributedString = textView.attributedText else {
             return
@@ -249,6 +266,16 @@ class DTTextSelectionView: UIView {
         var rects: (rects: [CGRect], start: CGRect, end: CGRect)?
         if let range {
             rects = textView.rangeRects(in: range)
+            // rangeRects are in the text view's content space. For a scrolling host, shift them
+            // by contentOffset into this overlay's (visible-frame) space so the highlight and
+            // knobs track the glyphs. No-op when compensation is off or contentOffset is zero.
+            if compensatesForContentOffset, let r = rects {
+                let offset = textView.contentOffset
+                let shift: (CGRect) -> CGRect = {
+                    $0.offsetBy(dx: -offset.x, dy: -offset.y)
+                }
+                rects = (r.rects.map(shift), shift(r.start), shift(r.end))
+            }
         }
         self.currentRects = rects?.rects
         

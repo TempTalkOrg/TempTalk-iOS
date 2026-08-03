@@ -298,3 +298,105 @@ class CallConfigManager {
     }
 }
 
+// MARK: - DTCallAccessibilityID
+
+/// Central registry of accessibilityIdentifier strings for the Call UI automation
+/// surface (Maestro smoke tests). One source of truth avoids magic-string drift
+/// between Swift and the test YAML — change both in lockstep. Pure labels, no logic,
+/// present in all build configs (debug/beta/official) so any build is testable.
+///
+/// Lives here (an already-compiled file) rather than a standalone file to avoid a
+/// project.pbxproj edit; move to a dedicated file when the full P1 ID set lands.
+enum DTCallAccessibilityID {
+    /// 1v1 conversation nav-bar "start call" button. Set on the customView UIButton,
+    /// NOT the wrapping UIBarButtonItem — XCUITest/Maestro surface the customView.
+    static let startCall = "chat.btn.startCall"
+
+    /// Incoming-call in-app answer button (`CallAnswerView`, the foreground main path).
+    static let incomingAnswer = "incomingCall.answer"
+
+    /// Incoming-call in-app decline button (`CallAnswerView`).
+    static let incomingDecline = "incomingCall.decline"
+
+    /// Active-call duration text in the top bar. Appears only once the call reaches
+    /// CONNECTED (timer running) — the automation sentinel for "call connected".
+    static let callDuration = "call.duration"
+
+    /// Bottom-toolbar microphone toggle button.
+    static let mic = "call.btn.mic"
+
+    /// Bottom-toolbar camera toggle button.
+    static let camera = "call.btn.camera"
+
+    /// Bottom-toolbar speaker / earpiece toggle button.
+    static let speaker = "call.btn.speaker"
+
+    /// Bottom-toolbar "more" button (opens the denoise / invite popup).
+    static let more = "call.btn.more"
+
+    /// 1v1 call hang-up button.
+    static let hangup = "call.btn.hangup"
+
+    /// Group call "leave" button (the left part of the end/leave control).
+    static let leave = "call.btn.leave"
+
+    /// Group call end-choices chevron (opens the end/leave action sheet).
+    static let endChoices = "call.btn.endChoices"
+
+    /// "End for all" action in the end/leave action sheet.
+    static let endForAll = "call.endSheet.endForAll"
+
+    /// Root container of the active-call screen.
+    static let root = "call.root"
+}
+
+// MARK: - DTConversationAccessibilityID
+
+/// Central registry of accessibilityIdentifier strings for the Conversation (IM) UI
+/// automation surface (Maestro smoke tests). One source of truth avoids magic-string
+/// drift between Swift and the test YAML — change both in lockstep. Pure labels, no
+/// logic, present in all build configs so any build is testable.
+///
+/// Lives here (an already-compiled file) rather than a standalone file to avoid a
+/// project.pbxproj edit; all Conversation/IM source files share the same TempTalk app
+/// target and can reference it directly.
+enum DTConversationAccessibilityID {
+    /// Message bubble body text view. The text value stays accessible so Maestro can
+    /// match message content — do NOT override accessibilityLabel.
+    static let messageBody = "message.body"
+
+    /// Long-press action-menu "Quote" button.
+    static let menuQuote = "messageAction.quote"
+
+    /// Long-press action-menu "Forward" button.
+    static let menuForward = "messageAction.forward"
+
+    /// Long-press action-menu "Recall" button.
+    static let menuRecall = "messageAction.recall"
+
+    /// Long-press action-menu "Copy" button.
+    static let menuCopy = "messageAction.copy"
+
+    /// Long-press action-menu "Translate" button.
+    static let menuTranslate = "messageAction.translate"
+
+    /// Long-press action-menu "Speech to text" button.
+    static let menuSpeechToText = "messageAction.speechToText"
+
+    /// Long-press action-menu "More" button.
+    static let menuMore = "messageAction.more"
+
+    /// Per-emoji reaction button id prefix. The full id is `prefix + index` using the
+    /// 0-based enumeration index, e.g. "emojiReaction.0".
+    static let emojiReactionPrefix = "emojiReaction."
+
+    /// Attachment panel "Photo / Media" item.
+    static let attachMedia = "chat.btn.media"
+
+    /// Attachment panel "Contact card" item.
+    static let attachContact = "chat.btn.contact"
+
+    /// Input-bar press-to-record voice button.
+    static let voiceRecord = "chat.btn.voiceRecord"
+}
+

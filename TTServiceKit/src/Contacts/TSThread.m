@@ -210,9 +210,9 @@ BOOL IsNoteToSelfEnabled(void)
 {
     OWSLogInfo(@"[Archive] Starting cleanup of empty visible threads");
 
-    // 1. 清理 shouldBeVisible=1 的空会话（按清理间隔等待）
-    NSArray<NSString *> *emptyThreadIds = [InteractionFinder findThreadsWithOnlyArchiveMessagesWithTransaction:transaction];
-    OWSLogInfo(@"[Archive] Found %lu threads with only archived messages", (unsigned long)emptyThreadIds.count);
+    // 1. Visible threads with no real messages (incl. system-only); cleaned after the interval.
+    NSArray<NSString *> *emptyThreadIds = [InteractionFinder findCleanableVisibleThreadIdsWithTransaction:transaction];
+    OWSLogInfo(@"[Archive] Found %lu cleanable visible threads (no real messages)", (unsigned long)emptyThreadIds.count);
 
     for (NSString *threadId in emptyThreadIds) {
         TSThread *thread = [TSThread anyFetchWithUniqueId:threadId transaction:transaction];
@@ -684,7 +684,13 @@ BOOL IsNoteToSelfEnabled(void)
         }
         instance.hasEverHadMessage = YES;
         instance.shouldBeVisible = YES;
+        BOOL wasRemovedFromConversation = instance.removedFromConversation;
         instance.removedFromConversation = NO;
+        // Restore note-to-self default pin when it reappears after deletion (removed -> visible).
+        // Only on this transition, so a manual unpin during normal use is preserved.
+        if (wasRemovedFromConversation && instance.isNoteToSelf && !instance.isSticked) {
+            [instance stickThread];
+        }
         [instance updateLatestMentionedMsg:lastMessage];
         if (count == 1){
             NSUInteger unreadCount = [instance getUnreadMessageCountWithTransaction:transaction];

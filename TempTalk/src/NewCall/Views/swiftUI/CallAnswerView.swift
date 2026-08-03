@@ -61,7 +61,8 @@ struct CallAnswerView: View {
                         .background(Color.red)
                         .clipShape(Circle())
                 }
-                
+                .accessibilityIdentifier(DTCallAccessibilityID.incomingDecline)
+
                 Button(action: {
                     guard !isConnecting && !hasAutoAccepted else {
                         Logger.info("\(logTag) button action ignored - isConnecting: \(isConnecting), hasAutoAccepted: \(hasAutoAccepted)")
@@ -85,6 +86,7 @@ struct CallAnswerView: View {
                     .clipShape(Circle())
                 }
                 .disabled(isConnecting)
+                .accessibilityIdentifier(DTCallAccessibilityID.incomingAnswer)
             }
             .padding(.bottom, 90),
             alignment: .bottom

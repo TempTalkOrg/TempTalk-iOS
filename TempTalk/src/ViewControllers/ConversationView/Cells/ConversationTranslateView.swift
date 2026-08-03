@@ -322,6 +322,11 @@ class ConversationTranslateView: UIView, UIEditMenuInteractionDelegate {
             bottom: CVTranslateRenderItem.insetTopMargin,
             right: 2
         )
+        label.onCopy = { [weak self] in
+            guard let self,
+                  let message = self.renderItem.viewItem.interaction as? TSMessage else { return }
+            CopyNoticeDispatcher.sendNotice(for: message, in: self.renderItem.viewItem.thread)
+        }
         return label
     }()
     

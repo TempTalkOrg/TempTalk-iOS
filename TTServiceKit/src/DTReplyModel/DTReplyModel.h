@@ -56,6 +56,9 @@ typedef NS_ENUM(NSInteger, DTInputPreviewType) {//输入框引用的类型
 @property (nonatomic, readonly, nullable) NSString *sourceFilename;
 @property (nonatomic, readonly, nullable) UIImage *thumbnailImage;
 
+// Animated image (GIF/animated-WebP/APNG): flag-first with MIME fallback.
+@property (nonatomic, readonly) BOOL isAnimated;
+
 // Convenience initializer for building an outgoing quoted reply preview, before it's sent
 - (instancetype)initWithTimestamp:(uint64_t)timestamp
                          authorId:(NSString *)authorId

@@ -26,10 +26,12 @@ public struct BottomToolbarView: View {
     @EnvironmentObject var appCtx: LiveKitContext
     @EnvironmentObject var roomCtx: RoomContext
     @EnvironmentObject var room: Room
-    
+
+    // Observe the call model so callType changes (1v1 → instant) re-render the toolbar.
+    @ObservedObject private var currentCall = DTMeetingManager.shared.currentCall
+
     @State var isCameraPublishingBusy = false
     @State var isMicrophonePublishingBusy = false
-    @State var isSpeakerPhoneChangingBusy = false
     
     @Binding var isGroupMembers: Bool
     @Binding var localRaiseHand: Bool
@@ -42,7 +44,7 @@ public struct BottomToolbarView: View {
     }
     
     private var paddingSpacer: CGFloat {
-        ((portraitWidth - 48 * 5) / 6) - 10
+        max(0, ((portraitWidth - 48 * 5) / 6) - 10)
     }
     
     public var body: some View {
@@ -156,6 +158,7 @@ public struct BottomToolbarView: View {
             voiceChangerPreset = DTMeetingManager.shared.roomContext?.currentVoicePreset() ?? "original"
         }
         .onDisappear { hasTriggerCloseNoise = false }
+        .accessibilityIdentifier(DTCallAccessibilityID.mic)
     }
 
     private var cameraButton: some View {
@@ -167,6 +170,7 @@ public struct BottomToolbarView: View {
             barClickHandler()
             didTapCamera(isCameraEnabled: isCameraEnabled)
         }
+        .accessibilityIdentifier(DTCallAccessibilityID.camera)
     }
 
     @ViewBuilder
@@ -180,12 +184,12 @@ public struct BottomToolbarView: View {
                 image: speakerEnabled ? Image("ic_call_speaker") : Image("ic_call_phone")
             ) {
                 barClickHandler()
-                isSpeakerPhoneChangingBusy = true
-                defer { Task { @MainActor in isSpeakerPhoneChangingBusy = false } }
                 let newSpeakerState = !speakerEnabled
                 Logger.info("\(logTag) pressed speaker: \(speakerEnabled) -> \(newSpeakerState)")
+                appCtx.beginSpeakerSwitch(toSpeaker: newSpeakerState)
                 DTRTCAudioSession.shared.switchToSpeaker(newSpeakerState)
             }
+            .accessibilityIdentifier(DTCallAccessibilityID.speaker)
         }
     }
 
@@ -210,15 +214,17 @@ public struct BottomToolbarView: View {
         toolbarCircleButton(image: Image("ic_call_more")) {
             moreClickHandler()
         }
+        .accessibilityIdentifier(DTCallAccessibilityID.more)
     }
     
     @ViewBuilder
     private var endCallButton: some View {
-        if DTMeetingManager.shared.currentCall.callType == .private {
+        if currentCall.callType == .private {
             toolbarCircleButton(image: Image("ic_call_hangup")) {
                 Logger.info("\(logTag) End Call pressed")
                 Task { await roomCtx.toolbarEndCallTaped() }
             }
+            .accessibilityIdentifier(DTCallAccessibilityID.hangup)
         } else {
             ZStack {
                 RoundedRectangle(cornerRadius: 24)
@@ -231,7 +237,8 @@ public struct BottomToolbarView: View {
                         Logger.info("\(logTag) End Call pressed")
                         Task { await roomCtx.toolbarEndCallTaped() }
                     }
-                    
+                    .accessibilityIdentifier(DTCallAccessibilityID.leave)
+
                     Button(action: {
                         roomCtx.presentHangupActionSheet()
                     }) {
@@ -242,11 +249,13 @@ public struct BottomToolbarView: View {
                             .padding(2)
                     }
                     .padding(.trailing, 6)
+                    .accessibilityIdentifier(DTCallAccessibilityID.endChoices)
                 }
             }
         }
     }
     
+    @MainActor
     func didTapMicrophone(isMicrophoneEnabled: Bool) {
         if !isMicrophoneEnabled {
             if let metadata = RoomDataProcessor.parseMetadata(from: room),
@@ -260,6 +269,15 @@ public struct BottomToolbarView: View {
         
         let localParticipant = room.localParticipant
         let portName = roomCtx.lastPortName ?? ""
+        if DTMeetingManager.shared.deferMicrophoneChangeIfConnecting(enable: !isMicrophoneEnabled,
+                                                                     reason: "bottom toolbar tap while connecting") {
+            DTMeetingManager.shared.roomContext?.syncLocalMicrophoneStateToCallKit(muted: isMicrophoneEnabled)
+            return
+        }
+        // User is driving the mic here; suppress the CallKit mute echoes iOS
+        // mirrors back from the resulting VPIO hardware change so they don't
+        // feed back into LiveKit.
+        DTMeetingManager.shared.beginCallKitMuteSuppression(1.0, mutedTarget: isMicrophoneEnabled)
         Task {
             isMicrophonePublishingBusy = true
             defer { Task { @MainActor in isMicrophonePublishingBusy = false } }
@@ -272,6 +290,10 @@ public struct BottomToolbarView: View {
                     DTMeetingManager.shared.roomContext?.setDenoiseFilter(enabled: false)
                 }
                 Logger.info("\(logTag) Successfully Microphone muted track \(isMicrophoneEnabled)")
+                // The mic bullet is emitted by the SDK's `didUpdateIsMuted` delegate
+                // (fires on the real mute-state change, and only then — reconnect
+                // republish reuses the existing track without changing mute state, so
+                // it won't spam). Do NOT bullet here too, or every toggle double-fires.
                 RoomDataManager.shared.updateSeakingParticipant()
             } catch {
                 Logger.error("\(logTag) Failed to Microphone mute track: \(error)")
@@ -326,4 +348,3 @@ struct BadgeView: View {
             .padding(4)
     }
 }
-

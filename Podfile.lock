@@ -1,11 +1,4 @@
 PODS:
-  - AFNetworking/NSURLSession (4.0.1):
-    - AFNetworking/Reachability
-    - AFNetworking/Security
-    - AFNetworking/Serialization
-  - AFNetworking/Reachability (4.0.1)
-  - AFNetworking/Security (4.0.1)
-  - AFNetworking/Serialization (4.0.1)
   - BlockiesSwift (0.1.2)
   - CocoaLumberjack (3.7.4):
     - CocoaLumberjack/Core (= 3.7.4)
@@ -248,7 +241,6 @@ PODS:
   - SwiftProtobuf (1.28.2)
   - SwiftQRCodeGenerator (2.0.2)
   - TTServiceKit (0.9.0):
-    - AFNetworking/NSURLSession
     - CocoaLumberjack
     - Curve25519Kit
     - DTProto
@@ -284,7 +276,6 @@ PODS:
   - ZXingObjC/All (3.6.9)
 
 DEPENDENCIES:
-  - AFNetworking/NSURLSession (= 4.0.1)
   - BlockiesSwift
   - Curve25519Kit (from `https://github.com/TempTalkOrg/Curve25519Kit`, branch `temptalk`)
   - DSF_QRCode (~> 23.0.0)
@@ -324,7 +315,6 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
-    - AFNetworking
     - BlockiesSwift
     - CocoaLumberjack
     - DSF_QRCode
@@ -455,7 +445,6 @@ CHECKOUT OPTIONS:
     :git: https://github.com/TempTalkOrg/ZLPhotoBrowser.git
 
 SPEC CHECKSUMS:
-  AFNetworking: 3bd23d814e976cd148d7d44c3ab78017b744cd58
   BlockiesSwift: 22d8d56dd187e6bfd16cb8c8fbd4fd4896c3e65d
   CocoaLumberjack: 543c79c114dadc3b1aba95641d8738b06b05b646
   Curve25519Kit: bb372e320f9e9ed74aab122de2b440bf33523139
@@ -514,13 +503,13 @@ SPEC CHECKSUMS:
   SwiftImageReadWrite: f58e807c5e3e211b788b5e058c4da464096ed430
   SwiftProtobuf: 4dbaffec76a39a8dc5da23b40af1a5dc01a4c02d
   SwiftQRCodeGenerator: cc02fed209335064d0b0dd61b2a0874b9bc6bd5a
-  TTServiceKit: 24a0f22c4b18746c312b1ea4d9329a292a5afde5
+  TTServiceKit: fdb14bb88f707754bc992ca62b411d0ce626b946
   TwistedOakCollapsingFutures: f359b90f203e9ab13dfb92c9ff41842a7fe1cd0c
   UnionFind: c33be5adb12983981d6e827ea94fc7f9e370f52d
   YYImage: 063c27467d07cbe2bd1444e7e77f653006e1bbb5
   ZLPhotoBrowser: ea6b3c04cb40d65e17c55f636cf1739c12953fef
   ZXingObjC: 8898711ab495761b2dbbdec76d90164a6d7e14c5
 
-PODFILE CHECKSUM: ead312706dc124847bc7f215042f6244f6682d00
+PODFILE CHECKSUM: 486dbca83b96de3120cad4887b9bc7b5c4dd3d13
 
 COCOAPODS: 1.16.2

@@ -86,8 +86,10 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
         }
 
         if viewItem.isConfidentialMessage {
+            // Confidential contact card: show full card, then burn the source message on view.
             handleConfidentialMessageTap(viewItem: viewItem) { [weak self] in
-                self?.messageActionsShowDetailsForItem(viewItem)
+                self?.showPersonalInfoCard(recipientId: shareContractId)
+                self?.burnConfidentialMessageOnView(viewItem)
             }
         } else {
             showPersonalInfoCard(recipientId: shareContractId)
@@ -354,6 +356,19 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
 // MARK: - Private
 
 private extension ConversationViewController {
+    /// Burn a confidential contact card on view: mark read + delete the source message.
+    /// Incoming only, mirroring DTConfidentialFilePreviewController.markAsReadAndDelete.
+    func burnConfidentialMessageOnView(_ viewItem: ConversationViewItem) {
+        guard let incoming = viewItem.interaction as? TSIncomingMessage,
+              incoming.isConfidentialMessage() else {
+            return
+        }
+        OWSReadReceiptManager.shared().confidentialMessageWasReadLocally(incoming)
+        databaseStorage.asyncWrite { transaction in
+            incoming.anyRemove(transaction: transaction)
+        }
+    }
+
     /// 处理机密消息点击，如果需要则显示提示弹窗
     func handleConfidentialMessageTap(
         viewItem: ConversationViewItem,

@@ -9,6 +9,7 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol ConversationViewItem;
 @class GalleryItemBox;
 @class MediaDetailViewController;
+@class TSAttachmentStream;
 
 typedef NS_OPTIONS(NSInteger, MediaGalleryOption) {
     MediaGalleryOptionSliderEnabled = 1 << 0,
@@ -33,6 +34,19 @@ typedef NS_OPTIONS(NSInteger, MediaGalleryOption) {
 
 @property (nonatomic, weak) id<MediaDetailViewControllerDelegate> delegate;
 @property (nonatomic, readonly) GalleryItemBox *galleryItemBox;
+
+// YES when the media is zoomed in past fit-to-screen. Drag-to-dismiss is
+// disabled in that state so a pan pans the zoomed image instead.
+@property (nonatomic, readonly) BOOL isZoomedIn;
+
+// Full image decoded ahead of time by the pager. Set before the view loads so
+// the page shows instantly instead of flashing its background while decoding.
+// For animated attachments this is a YYImage.
+@property (nonatomic, nullable) UIImage *preloadedImage;
+
+// Decodes an attachment's full image off the main thread for preloading. Returns
+// a YYImage for animated attachments, a UIImage for still images, nil otherwise.
++ (nullable UIImage *)decodedImageForAttachment:(TSAttachmentStream *)attachmentStream;
 
 // If viewItem is non-null, long press will show a menu controller.
 - (instancetype)initWithGalleryItemBox:(GalleryItemBox *)galleryItemBox

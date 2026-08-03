@@ -73,11 +73,13 @@ import Foundation
                 await DTMeetingManager.shared.othersideHungupCall(roomId: targetRoomId)
             }
         } else {
-            // State already cleared, but CallKit might still be showing.
-            // Match by roomId to end only the specific call, not an unrelated active call.
+            // Ringing, never joined: terminate the in-app ringing call, else drop the stale CallKit UI.
             let callKitManager = DTCallKitManager.shared()
             DispatchQueue.main.async {
-                if let uuidString = callKitManager.uuidString(fromRoomId: targetRoomId) {
+                let manager = DTMeetingManager.shared
+                if targetRoomId == manager.currentCall.roomId {
+                    Task { await manager.remoteCallHaveBeenCanceled() }
+                } else if let uuidString = callKitManager.uuidString(fromRoomId: targetRoomId) {
                     callKitManager.endCallAction(uuidString, onlyForCallKit: true)
                 }
             }

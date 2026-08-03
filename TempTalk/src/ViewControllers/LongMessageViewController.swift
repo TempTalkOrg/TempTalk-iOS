@@ -15,11 +15,12 @@ import PanModal
 
 // MARK: - CustomTextView
 
-/// 自定义 UITextView，禁用系统菜单但保留选中效果
+/// Text view with all system menu items disabled. Selection and link interaction are
+/// turned off entirely (isSelectable = false); taps and long-presses are driven by our
+/// own gesture recognizers, so the system never paints its selection loupe or link preview.
 private class LongMessageTextView: UITextView {
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        // 禁用所有系统菜单项
         return false
     }
 }
@@ -35,26 +36,66 @@ public class LongMessageViewController: OWSViewController {
     private let messageBody: String
     private var messageTextView: UITextView?
 
+    // Always-available dismiss control (a long link can cover the whole screen,
+    // leaving no blank area to tap for tap-to-dismiss).
+    private var closeButton: UIButton?
+
     // Action menu
     private var actionMenuController: ConversationActionMenuController?
 
-    // 标记是否正在调整文本选择（拖拽光标）
+    // The interaction is fully custom (the text view is not selectable). A long-press either
+    // targets a single link (activeLinkText set, link range highlighted, menu anchored at the
+    // touch point) or the body text, where it starts a word selection that the user can extend
+    // with drag handles (textSelectionView set, menu follows the selection knobs).
+    private var activeLinkText: String?
+    private var linkMenuAnchorRect: CGRect?
+    private var highlightedLinkRange: NSRange?
+
+    // Word/range selection for body text (reuses the chat-bubble selection component).
+    private var textSelectionView: DTTextSelectionView?
+
+    // True while the user is dragging a selection knob. Knob drags auto-scroll the text view,
+    // and scrollViewDidScroll would otherwise dismiss the menu mid-adjustment; this guards it.
     private var isAdjustingSelection = false
 
-    // 记录滚动开始时的触摸点位置
-    private var scrollBeganTouchPoint: CGPoint?
-
-    // 用于管理菜单显示的延迟任务，可以取消
-    private var menuPresentWorkItem: DispatchWorkItem?
+    // True while a long-press is in flight. The tap that ends the long-press fires in the same
+    // touch sequence and would otherwise immediately dismiss the just-shown menu; we swallow it
+    // so the menu stays up until a separate, later tap.
+    private var isHandlingLongPress = false
 
     // Forward
     private var targetThreads: [TSThread]?
     private var forwardingText: String?
 
-    // 标记是否全选转发（用于判断是否带消息来源）
+    // Whether the current forward targets the whole message (forwards the original message,
+    // carrying its source). A partial text selection forwards as plain text instead.
     private var isForwardingFullText = false
 
+    // Whether the current forward acts on a single link. A link is "bringing a URL out" rather
+    // than relaying someone's message, so it does not leave a forward-trace notice. Captured at
+    // forward time because activeLinkText is cleared once the menu dismisses.
+    private var isForwardingLink = false
+
     static let kVisitingCardScheme = "personinfocard"
+
+    /// Text the current menu acts on: a single link when long-pressing a link, the selected
+    /// substring when a body-text selection is active, otherwise the whole message.
+    private var actionTargetText: String {
+        if let activeLinkText { return activeLinkText }
+        if let range = textSelectionView?.getSelection(), range.length > 0,
+           let full = messageTextView?.text as NSString?,
+           range.location + range.length <= full.length {
+            return full.substring(with: range)
+        }
+        return messageTextView?.text ?? ""
+    }
+
+    /// Whether the active body-text selection currently covers the entire message.
+    private var isSelectionWholeText: Bool {
+        guard let range = textSelectionView?.getSelection(),
+              let full = messageTextView?.text as NSString? else { return false }
+        return range.length == full.length
+    }
 
     // MARK: - Initialization
 
@@ -110,18 +151,14 @@ public class LongMessageViewController: OWSViewController {
     private func setupUI() {
         view.backgroundColor = Theme.bg1Color
 
-        // 添加点击手势，点击屏幕任意位置即可关闭
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
-        tapGesture.delegate = self
-        view.addGestureRecognizer(tapGesture)
-
-        // 创建自定义 UITextView（禁用系统菜单）
+        // Fully custom text view: selection and the system link interaction are off, so taps
+        // (open link / dismiss) and long-presses (action menu) are handled by our gestures.
         messageTextView = LongMessageTextView()
         messageTextView?.backgroundColor = .clear
         messageTextView?.isEditable = false
-        messageTextView?.isSelectable = true  // 启用选择功能
+        messageTextView?.isSelectable = false
         messageTextView?.isScrollEnabled = true
-        messageTextView?.dataDetectorTypes = .link
+        messageTextView?.dataDetectorTypes = []
         messageTextView?.delegate = self
         messageTextView?.showsHorizontalScrollIndicator = false
         messageTextView?.showsVerticalScrollIndicator = true
@@ -131,15 +168,17 @@ public class LongMessageViewController: OWSViewController {
         messageTextView?.layoutManager.usesFontLeading = true
         messageTextView?.contentInsetAdjustmentBehavior = .never
         messageTextView?.textContainerInset = UIEdgeInsets(top: 0, left: 28, bottom: 0, right: 28)
-        messageTextView?.linkTextAttributes = [
-            .foregroundColor: Theme.tinfoColor,
-            .underlineStyle: NSUnderlineStyle.single.rawValue
-        ]
 
-        // 添加点击手势到 TextView，用于取消选择
+        // Tap: open a link, dismiss the menu, or dismiss the page (on blank space).
         let textViewTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTextViewTap(_:)))
         textViewTapGesture.delegate = self
         messageTextView?.addGestureRecognizer(textViewTapGesture)
+
+        // Long-press: highlight the link (or target the whole message) and show the action menu.
+        let textViewLongPress = UILongPressGestureRecognizer(target: self, action: #selector(handleTextViewLongPress(_:)))
+        textViewLongPress.minimumPressDuration = 0.3
+        textViewLongPress.delegate = self
+        messageTextView?.addGestureRecognizer(textViewLongPress)
 
         if let messageTextView = messageTextView {
             view.addSubview(messageTextView)
@@ -148,7 +187,34 @@ public class LongMessageViewController: OWSViewController {
             }
         }
 
+        setupCloseButton()
+
         applyTheme()
+    }
+
+    /// Circular close button pinned to the bottom center, kept on top of the text view
+    /// so it stays tappable even when a long link fills the entire screen.
+    private func setupCloseButton() {
+        let closeButton = UIButton(type: .custom)
+        // Asset carries its own light/dark variants, so no template tinting is needed.
+        closeButton.setImage(UIImage(named: "long_message_close"), for: .normal)
+        closeButton.layer.cornerRadius = 24
+        // cornerRadius rounds the background fill; keep clipping off so the drop shadow can render.
+        closeButton.clipsToBounds = false
+        closeButton.layer.shadowColor = UIColor.black.cgColor
+        closeButton.layer.shadowOpacity = 0.4
+        closeButton.layer.shadowOffset = CGSize(width: 0, height: 4)
+        closeButton.layer.shadowRadius = 3.5
+        closeButton.addTarget(self, action: #selector(handleCloseButtonTap), for: .touchUpInside)
+
+        view.addSubview(closeButton)
+        closeButton.snp.makeConstraints { make in
+            make.centerX.equalToSuperview()
+            make.bottom.equalTo(view.safeAreaLayoutGuide.snp.bottom).offset(-14)
+            make.width.height.equalTo(48)
+        }
+
+        self.closeButton = closeButton
     }
 
     private func loadContent() {
@@ -206,7 +272,7 @@ public class LongMessageViewController: OWSViewController {
         // 根据文本长度判断对齐方式：大于200字使用左对齐，否则居中对齐
         paragraphStyle.alignment = text.count > 200 ? .left : .center
 
-        return NSAttributedString(
+        let attributedString = NSMutableAttributedString(
             string: text,
             attributes: [
                 .font: font,
@@ -214,6 +280,8 @@ public class LongMessageViewController: OWSViewController {
                 .paragraphStyle: paragraphStyle
             ]
         )
+        applyAutoLinks(to: attributedString)
+        return attributedString
     }
 
     private func buildAttributedText(viewItem: ConversationViewItem) -> NSAttributedString {
@@ -242,6 +310,10 @@ public class LongMessageViewController: OWSViewController {
                 .paragraphStyle: paragraphStyle
             ]
         )
+
+        // Auto-detect plain URLs (replaces the system dataDetectorTypes, which only works when
+        // the text view is selectable — and selection is off here).
+        applyAutoLinks(to: attributedString)
 
         // Handle forward message source links
         DTPatternHelper.getForwardMessageSourceText(with: text, withCallBackCheckingResult: { resultArray in
@@ -292,11 +364,31 @@ public class LongMessageViewController: OWSViewController {
 
         return attributedString
     }
-    
+
+    /// Detect plain URLs and attach `.link` + link styling. We carry the `.link` attribute purely
+    /// for our own hit-testing (`linkRange(at:)`) — the system never interacts with it because the
+    /// text view is non-selectable.
+    private func applyAutoLinks(to attributedString: NSMutableAttributedString) {
+        let nsText = attributedString.string as NSString
+        guard nsText.length > 0,
+              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return
+        }
+        detector.enumerateMatches(in: attributedString.string, options: [], range: NSRange(location: 0, length: nsText.length)) { match, _, _ in
+            guard let match = match, let url = match.url, match.range.length > 0 else { return }
+            attributedString.addAttribute(.link, value: url, range: match.range)
+            attributedString.addAttribute(.foregroundColor, value: Theme.tinfoColor, range: match.range)
+            attributedString.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: match.range)
+        }
+    }
+
     public override func applyTheme() {
         super.applyTheme()
 
         view.backgroundColor = Theme.bg1Color
+
+        // Solid surface from design token; the close icon brings its own light/dark variants.
+        closeButton?.backgroundColor = Theme.bg3Color
 
         // 重新构建 attributedText 以应用新的主题颜色
         if let viewItem = self.viewItem {
@@ -310,72 +402,178 @@ public class LongMessageViewController: OWSViewController {
 
     // MARK: - Actions
 
-    @objc private func handleTap() {
-        // 如果有菜单，关闭菜单和选择
-        if let actionMenuController = actionMenuController {
+    @objc private func handleCloseButtonTap() {
+        // Close menu first if it is open, otherwise dismiss the whole page.
+        if actionMenuController != nil {
+            dismissMenuAndCancelSelection()
+            return
+        }
+        dismiss(animated: true)
+    }
+
+    /// Tap: close an open menu, open a tapped link, or dismiss the page on blank space.
+    @objc private func handleTextViewTap(_ gesture: UITapGestureRecognizer) {
+        // Swallow the tap that ends a long-press, so the menu stays up after the finger lifts.
+        if isHandlingLongPress { return }
+
+        if actionMenuController != nil {
             dismissMenuAndCancelSelection()
             return
         }
 
-        // 如果 textView 正在滚动，点击只是停止滚动，不关闭页面
-        if messageTextView?.isDecelerating == true || messageTextView?.isDragging == true {
+        // Strict hit test: only act when the tap lands on a glyph, so taps in the blank margins
+        // of a screen-filling link still dismiss the page.
+        let location = gesture.location(in: messageTextView)
+        if let range = linkRange(at: location, strict: true), let url = linkURL(forRange: range) {
+            // 过滤掉 @all 的点击
+            let mentionsAll = "\(Self.kVisitingCardScheme)://\(MENTIONS_ALL)"
+            guard !url.absoluteString.contains(mentionsAll) else { return }
+            _ = AppLinkManager.handle(url: url, fromExternal: false, sourceVC: self)
             return
         }
 
-        // 否则关闭整个页面
+        // Blank tap: a tap that only stops momentum scrolling should not also dismiss.
+        if messageTextView?.isDecelerating == true || messageTextView?.isDragging == true {
+            return
+        }
         dismiss(animated: true)
     }
 
-    @objc private func handleTextViewTap(_ gesture: UITapGestureRecognizer) {
-        // 如果有选中的文本或菜单，点击 TextView 空白区域取消选择
-        if (messageTextView?.selectedRange.length ?? 0) > 0 || actionMenuController != nil {
-            let location = gesture.location(in: messageTextView)
-
-            // 检查点击位置是否在文本范围内
-            guard let messageTextView = messageTextView else { return }
-            let textContainer = messageTextView.textContainer
-            let layoutManager = messageTextView.layoutManager
-            let textStorage = messageTextView.textStorage
-
-            var locationInTextContainer = location
-            locationInTextContainer.x -= messageTextView.textContainerInset.left
-            locationInTextContainer.y -= messageTextView.textContainerInset.top
-
-            let characterIndex = layoutManager.characterIndex(
-                for: locationInTextContainer,
-                in: textContainer,
-                fractionOfDistanceBetweenInsertionPoints: nil
-            )
-
-            // 如果点击在文本范围外，或者在已选中文本外，取消选择
-            if characterIndex >= textStorage.length || !isTapInSelectedText(characterIndex) {
-                dismissMenuAndCancelSelection()
+    /// Long-press: highlight a link (or target the whole message) and show the action menu
+    /// anchored at the press point.
+    @objc private func handleTextViewLongPress(_ gesture: UILongPressGestureRecognizer) {
+        switch gesture.state {
+        case .ended, .cancelled, .failed:
+            // Clear after the current touch sequence so the lift of THIS long-press is swallowed
+            // by handleTextViewTap, while a later separate tap still dismisses the menu.
+            DispatchQueue.main.async { [weak self] in
+                self?.isHandlingLongPress = false
             }
+            return
+        case .began:
+            break
+        default:
+            return
         }
+
+        guard let messageTextView = messageTextView else { return }
+        isHandlingLongPress = true
+
+        let touchInView = gesture.location(in: view)
+        let touchInTextView = gesture.location(in: messageTextView)
+        linkMenuAnchorRect = CGRect(x: touchInView.x, y: touchInView.y, width: 1, height: 1)
+
+        // Lenient (nearest-character) hit test: a long press on the large preview font often
+        // lands slightly off the glyph or in the inter-line gap.
+        if let range = linkRange(at: touchInTextView, strict: false),
+           case let linkText = (messageTextView.text as NSString).substring(with: range),
+           !linkText.isEmpty {
+            // Link mode: act on this link, highlight it. Drop any stale body-text selection
+            // left over from a previous long-press so the two highlights never coexist.
+            tearDownBodyTextSelection()
+            activeLinkText = linkText
+            highlightLink(range: range)
+        } else if isPointOnGlyph(touchInTextView) {
+            // Body-text mode: select the word under the press; the user can drag the handles
+            // to extend the selection. The menu then acts on the selected substring.
+            beginBodyTextSelection(at: touchInView)
+        } else {
+            // Blank area (margins, gaps, past the end of the text): nothing to select, so don't
+            // show the menu.
+            return
+        }
+
+        presentActionMenu()
     }
 
-    /// 判断点击的字符索引是否在选中文本范围内
-    private func isTapInSelectedText(_ characterIndex: Int) -> Bool {
-        guard let messageTextView = messageTextView else { return false }
-        let selectedRange = messageTextView.selectedRange
-        return characterIndex >= selectedRange.location &&
-               characterIndex < selectedRange.location + selectedRange.length
+    /// Whether `location` (in the text view's coordinate space) lands on an actual glyph rather
+    /// than blank area. Mirrors the strict hit test used by `linkRange(at:strict:)`.
+    private func isPointOnGlyph(_ location: CGPoint) -> Bool {
+        guard let messageTextView = messageTextView,
+              messageTextView.textStorage.length > 0 else { return false }
+
+        let textContainer = messageTextView.textContainer
+        let layoutManager = messageTextView.layoutManager
+
+        var locationInTextContainer = location
+        locationInTextContainer.x -= messageTextView.textContainerInset.left
+        locationInTextContainer.y -= messageTextView.textContainerInset.top
+
+        let glyphIndex = layoutManager.glyphIndex(for: locationInTextContainer, in: textContainer)
+        let glyphRect = layoutManager
+            .boundingRect(forGlyphRange: NSRange(location: glyphIndex, length: 1), in: textContainer)
+            .insetBy(dx: -2, dy: -6) // small tolerance so presses between wrapped lines still count
+        return glyphRect.contains(locationInTextContainer)
+    }
+
+    /// Start a body-text selection at `touchInView` (in `view` coordinates) using the same
+    /// selection component as chat bubbles. The menu follows the selection knobs.
+    private func beginBodyTextSelection(at touchInView: CGPoint) {
+        guard let messageTextView = messageTextView else { return }
+        activeLinkText = nil
+        // Body-text selection drives the menu position via its knobs, not a fixed anchor.
+        linkMenuAnchorRect = nil
+        // Drop any stale link highlight left over from a previous long-press.
+        clearLinkHighlight()
+
+        // Rebuild a fresh selection view each time.
+        tearDownBodyTextSelection()
+
+        let selectionView = DTTextSelectionView(textView: messageTextView)
+        selectionView.delegate = self
+        // The text view scrolls, so selection rects must be shifted by its contentOffset.
+        selectionView.compensatesForContentOffset = true
+        // messageTextView is a direct child of view, so its frame is already in view coordinates.
+        selectionView.frame = messageTextView.frame
+        // Keep below the close button so it stays tappable even over a full-screen selection.
+        if let closeButton = closeButton {
+            view.insertSubview(selectionView, belowSubview: closeButton)
+        } else {
+            view.addSubview(selectionView)
+        }
+        textSelectionView = selectionView
+
+        selectionView.selectWord(at: view.convert(touchInView, to: selectionView), animated: true)
+    }
+
+    /// Tear down the body-text selection overlay, if any.
+    private func tearDownBodyTextSelection() {
+        isAdjustingSelection = false
+        textSelectionView?.dismissSelection()
+        textSelectionView?.removeFromSuperview()
+        textSelectionView = nil
+    }
+
+    /// Paint a translucent highlight over `range` directly on the text storage (no system selection).
+    private func highlightLink(range: NSRange) {
+        guard let textStorage = messageTextView?.textStorage,
+              range.location + range.length <= textStorage.length else { return }
+        textStorage.addAttribute(.backgroundColor, value: Theme.primaryColor.withAlphaComponent(0.25), range: range)
+        highlightedLinkRange = range
+    }
+
+    /// Remove the link highlight painted by `highlightLink`.
+    private func clearLinkHighlight() {
+        guard let range = highlightedLinkRange else { return }
+        highlightedLinkRange = nil
+        guard let textStorage = messageTextView?.textStorage,
+              range.location + range.length <= textStorage.length else { return }
+        textStorage.removeAttribute(.backgroundColor, range: range)
     }
 
     // MARK: - Menu Management
 
     /// 显示操作菜单
-    private func presentActionMenu(at point: CGPoint? = nil) {
+    private func presentActionMenu() {
         guard let messageTextView = messageTextView else { return }
         let actions = createMenuActions()
-        let menuPosition = calculateMenuPosition()
 
         let menuVC = ConversationActionMenuController(
             actions: actions,
             emojiAction: nil,
             sourceView: messageTextView,
             sourceViewController: self,
-            textSelectionView: nil
+            textSelectionView: textSelectionView
         )
 
         menuVC.dismissHandler = { [weak self] in
@@ -383,21 +581,35 @@ public class LongMessageViewController: OWSViewController {
             self?.actionMenuController = nil
         }
 
-        menuVC.isSelectedAll = isTextFullySelected()
+        // Only a full body-text selection counts as "select all"; a link is always partial.
+        menuVC.isSelectedAll = (activeLinkText == nil) && isSelectionWholeText
 
-        // 设置初始位置，避免菜单位置跳动
-        // 使用兜底的选中区域（如果无法获取，使用 messageTextView 的 frame）
-        let selectedRect = getSelectedTextRect() ?? (messageTextView.frame)
-        menuVC.setInitialMenuPosition(
-            top: menuPosition.top,
-            left: menuPosition.left,
-            arrowDirection: menuPosition.arrowDirection,
-            sourceRect: selectedRect
-        )
+        if textSelectionView == nil {
+            // Link mode: no selection knobs, so anchor the menu at the touch point.
+            let menuPosition = calculateMenuPosition()
+            let anchorRect = linkMenuAnchorRect ?? messageTextView.frame
+            menuVC.setInitialMenuPosition(
+                top: menuPosition.top,
+                left: menuPosition.left,
+                arrowDirection: menuPosition.arrowDirection,
+                sourceRect: anchorRect
+            )
+        } else {
+            // Body-text mode: leave initialMenuPosition unset so the menu follows the selection
+            // knobs. This page has no nav/input bar, so hand the menu the full-screen visible
+            // range; otherwise a last-line knob is judged off-screen and the menu jumps to top.
+            let safeArea = view.safeAreaInsets
+            menuVC.visibleRangeOverride = (
+                top: safeArea.top,
+                bottom: UIScreen.main.bounds.height - safeArea.bottom
+            )
+        }
 
         menuVC.modalPresentationStyle = .overFullScreen
         menuVC.modalTransitionStyle = .crossDissolve
-        present(menuVC, animated: true)
+        // Present without animation: the highlight is already painted, and a cross-dissolve would
+        // blend the un-highlighted and highlighted frames into a washed-out gray flash.
+        present(menuVC, animated: false)
 
         actionMenuController = menuVC
     }
@@ -436,18 +648,21 @@ public class LongMessageViewController: OWSViewController {
             }
         ))
 
-        // Select All
-        if !isTextFullySelected() {
+        // Select All — only in body-text mode (a link selection is always partial) and only when
+        // the selection doesn't already cover the whole message. Tapping it expands the selection
+        // to the full text and refreshes the menu, which drops this item. Mirrors the chat bubble
+        // selection menu.
+        if activeLinkText == nil, textSelectionView != nil, !isSelectionWholeText {
             actions.append(MenuAction(
                 image: #imageLiteral(resourceName: "ic_select_all"),
                 title: Localized("MESSAGE_ACTION_SELECT_ALL", comment: ""),
                 subtitle: nil,
                 dismissBeforePerformAction: false,
                 block: { [weak self] _ in
-                    self?.selectAllText()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        self?.updateMenuAfterSelectAll()
-                    }
+                    guard let self, let menuVC = self.actionMenuController else { return }
+                    self.textSelectionView?.selectAll(animated: true)
+                    menuVC.update(actions: self.createMenuActions(), emojiAction: nil)
+                    menuVC.isSelectedAll = true
                 }
             ))
         }
@@ -455,21 +670,10 @@ public class LongMessageViewController: OWSViewController {
         return actions
     }
 
-    /// 更新菜单（Select All 之后）
-    private func updateMenuAfterSelectAll() {
-        guard let actionMenuController = actionMenuController else { return }
-
-        let actions = createMenuActions()
-        actionMenuController.update(actions: actions, emojiAction: nil)
-        actionMenuController.isSelectedAll = true
-
-        positionMenuForSelectedText()
-    }
-
     /// 关闭菜单并取消文本选择
     private func dismissMenuAndCancelSelection() {
-        actionMenuController?.dismiss(animated: true) {
-            self.actionMenuController = nil
+        actionMenuController?.dismiss(animated: true) { [weak self] in
+            self?.actionMenuController = nil
         }
         cancelTextSelection()
     }
@@ -477,20 +681,29 @@ public class LongMessageViewController: OWSViewController {
     // MARK: - Menu Actions
 
     private func copySelectedText() {
-        guard let selectedText = getSelectedText() else { return }
+        let selectedText = actionTargetText
+        guard !selectedText.isEmpty else { return }
         DTSecurePasteboard.setString(selectedText)
         DTToastHelper.show(withInfo: Localized("MESSAGE_ACTION_COPY_TEXT", comment: ""))
+        if let message = viewItem?.interaction as? TSMessage, let thread = viewItem?.thread {
+            CopyNoticeDispatcher.sendNotice(for: message, in: thread)
+        }
     }
 
     private func forwardSelectedText() {
-        guard let selectedText = getSelectedText() else { return }
-        // 记录是否全选
-        isForwardingFullText = isTextFullySelected()
+        let selectedText = actionTargetText
+        guard !selectedText.isEmpty else { return }
+        let isLink = activeLinkText != nil
+        // Only a full body-text selection forwards the original message (with source); a link or
+        // a partial selection forwards as plain text. A link additionally suppresses the trace.
+        isForwardingLink = isLink
+        isForwardingFullText = !isLink && isSelectionWholeText
         forwardText(selectedText)
     }
 
     private func translateSelectedText() {
-        guard let selectedText = getSelectedText() else { return }
+        let selectedText = actionTargetText
+        guard !selectedText.isEmpty else { return }
 
         // 获取目标翻译语言（从 app 设置中获取）
         let targetLanguage = getTargetTranslateLanguage()
@@ -499,30 +712,10 @@ public class LongMessageViewController: OWSViewController {
 
     // MARK: - Menu Position Calculation
 
-    /// 获取选中文本在 view 中的位置
-    private func getSelectedTextRect() -> CGRect? {
-        guard let selectedRange = messageTextView?.selectedTextRange else { return nil }
-
-        // 获取选中文本的所有矩形区域
-        let rects = messageTextView?.selectionRects(for: selectedRange)
-
-        // 计算所有矩形的并集
-        guard let tempRect = rects else { return nil }
-        let unionRect = tempRect
-            .filter { !$0.rect.isEmpty }
-            .map { $0.rect }
-            .reduce(CGRect.null) { $0.union($1) }
-
-        guard !unionRect.isNull && !unionRect.isEmpty else { return nil }
-
-        // 转换到 view 坐标系
-        return messageTextView?.convert(unionRect, to: view)
-    }
-
     /// 计算菜单位置信息
     private func calculateMenuPosition() -> (top: CGFloat, left: CGFloat, arrowDirection: ConversationActionMenuController.ArrowDirection) {
-        guard let rectInView = getSelectedTextRect() else {
-            // 兜底：如果无法获取选中区域，使用屏幕中央位置
+        guard let rectInView = linkMenuAnchorRect else {
+            // 兜底：如果无法获取锚点区域，使用屏幕中央位置
             return getFallbackMenuPosition()
         }
 
@@ -578,43 +771,14 @@ public class LongMessageViewController: OWSViewController {
         return (top: menuTop, left: menuLeft, arrowDirection: .top)
     }
 
-    /// 更新菜单位置
-    private func positionMenuForSelectedText() {
-        guard let actionMenuController = actionMenuController else { return }
+    // MARK: - Selection State
 
-        let menuPosition = calculateMenuPosition()
-        let selectedRect = getSelectedTextRect() ?? (messageTextView?.frame ?? .zero)
-
-        actionMenuController.setMenuPosition(
-            top: menuPosition.top,
-            left: menuPosition.left,
-            arrowDirection: menuPosition.arrowDirection,
-            sourceRect: selectedRect
-        )
-    }
-
-    // MARK: - Text Selection Helpers
-
-    /// 获取当前选中的文本
-    private func getSelectedText() -> String? {
-        let selectedRange = messageTextView?.selectedRange
-        guard let selectedRange = selectedRange, selectedRange.length > 0 else { return nil }
-        return messageTextView?.text.substring(withRange: selectedRange)
-    }
-
-    /// 判断是否全选
-    private func isTextFullySelected() -> Bool {
-        return messageTextView?.selectedRange.length == messageTextView?.attributedText.length
-    }
-
-    /// 全选文本
-    private func selectAllText() {
-        messageTextView?.selectedRange = NSRange(location: 0, length: messageTextView?.attributedText.length ?? 0)
-    }
-
-    /// 取消文本选择
+    /// Drop the current menu target state and tear down both highlight mechanisms.
     private func cancelTextSelection() {
-        messageTextView?.selectedRange = NSRange(location: 0, length: 0)
+        activeLinkText = nil
+        linkMenuAnchorRect = nil
+        clearLinkHighlight()
+        tearDownBodyTextSelection()
     }
 
     // MARK: - Forward & Translate
@@ -664,134 +828,56 @@ public class LongMessageViewController: OWSViewController {
         // 使用 PanModal 展示
         presentPanModal(translateVC)
     }
-
-    // MARK: - First Responder
-
-    public override var canBecomeFirstResponder: Bool {
-        return true
-    }
-
-    public override func becomeFirstResponder() -> Bool {
-        super.becomeFirstResponder()
-    }
-
-    public override func resignFirstResponder() -> Bool {
-        super.resignFirstResponder()
-    }
 }
 
 // MARK: - UITextViewDelegate
 
 extension LongMessageViewController: UITextViewDelegate {
-    public func textView(
-        _ textView: UITextView,
-        shouldInteractWith URL: URL,
-        in characterRange: NSRange,
-        interaction: UITextItemInteraction
-    ) -> Bool {
-        // 如果有选中的文本或显示的菜单，点击 link/mention 应该先取消选中
-        if textView.selectedRange.length > 0 || actionMenuController != nil {
-            dismissMenuAndCancelSelection()
-            return false
-        }
-
-        // 过滤掉 @all 的点击
-        let mentionsAll = "\(Self.kVisitingCardScheme)://\(MENTIONS_ALL)"
-        guard !URL.absoluteString.contains(mentionsAll) else { return false }
-
-        // 使用 AppLinkManager 处理 URL（包括普通链接和 mention 点击）
-        _ = AppLinkManager.handle(url: URL, fromExternal: false, sourceVC: self)
-        return false
-    }
 
     // MARK: - Scroll View Delegate (滚动处理)
 
-    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        scrollBeganTouchPoint = scrollView.panGestureRecognizer.location(in: messageTextView)
-
-        // 立即检查：如果触摸点不在选中区域，重置 isAdjustingSelection
-        if let touchPoint = scrollBeganTouchPoint, !isTouchInSelection(touchPoint) {
-            isAdjustingSelection = false
-        }
-    }
-
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        // 如果触摸点不在选中区域，立即隐藏（提高响应速度）
-        if let touchPoint = scrollBeganTouchPoint, !isTouchInSelection(touchPoint) {
-            // 手动滚动：隐藏菜单并取消文本选择
-            if actionMenuController != nil {
-                actionMenuController?.dismiss(animated: false)
-                actionMenuController = nil
-            }
-            cancelTextSelection()
-            isAdjustingSelection = false
-            return
-        }
-
-        // 如果正在调整文本选择（拖拽光标），不隐藏菜单
-        if isAdjustingSelection {
-            return
-        }
-
-        // 其他情况：隐藏菜单并取消文本选择
-        if actionMenuController != nil {
-            actionMenuController?.dismiss(animated: false)
-            actionMenuController = nil
-        }
+        // Dragging a selection knob auto-scrolls the text view; don't treat that as a
+        // user scroll that dismisses the menu mid-adjustment.
+        guard !isAdjustingSelection else { return }
+        // Any scroll dismisses the menu and clears the highlight.
+        guard actionMenuController != nil else { return }
+        actionMenuController?.dismiss(animated: false)
+        actionMenuController = nil
         cancelTextSelection()
     }
+}
 
-    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        scrollBeganTouchPoint = nil
+// MARK: - DTTextSelectionViewDelegate
+
+extension LongMessageViewController: DTTextSelectionViewDelegate {
+
+    func selectionViewDidBeginSelect(_ selectionView: DTTextSelectionView) {
+        // Knob drag started: hide the menu while the user adjusts the selection.
+        isAdjustingSelection = true
+        actionMenuController?.hideMenu(animation: false)
+    }
+
+    func selectionViewDidChangeSelectedRange(_ selectionView: DTTextSelectionView) {}
+
+    func selectionViewDidEndSelect(_ selectionView: DTTextSelectionView) {
         isAdjustingSelection = false
+        guard actionMenuController != nil else { return }
+        // An empty selection collapses the menu; otherwise re-show it so it follows the knobs.
+        guard let range = selectionView.getSelection(), range.length > 0 else {
+            dismissMenuAndCancelSelection()
+            return
+        }
+        // Rebuild so the Select All item appears/disappears as the drag moves between a partial and
+        // a whole-text selection, then refresh the position to follow the knobs.
+        actionMenuController?.update(actions: createMenuActions(), emojiAction: nil)
+        actionMenuController?.isSelectedAll = isSelectionWholeText
+        actionMenuController?.showMenu(animation: true)
     }
 
-    public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+    func selectionViewDidSingleTap(_ selectionView: DTTextSelectionView) {
         isAdjustingSelection = false
-    }
-
-    /// 判断触摸点是否在选中文本区域内
-    private func isTouchInSelection(_ point: CGPoint) -> Bool {
-        guard let range = messageTextView?.selectedTextRange else { return false }
-        let rects = messageTextView?.selectionRects(for: range)
-        guard let rects = rects else { return false }
-        return rects.contains { rect in
-            rect.rect.insetBy(dx: -10, dy: -10).contains(point)
-        }
-    }
-
-    // MARK: - Text View Delegate (文本选择处理)
-
-    public func textViewDidChangeSelection(_ textView: UITextView) {
-        // 标记正在调整文本选择（拖拽光标）
-        if textView.isFirstResponder {
-            isAdjustingSelection = true
-        }
-
-        // 取消之前的延迟菜单显示任务
-        menuPresentWorkItem?.cancel()
-        menuPresentWorkItem = nil
-
-        let selectedRange = textView.selectedRange
-
-        if selectedRange.length > 0 {
-            // 有选中文本：关闭旧菜单，延迟显示新菜单
-            actionMenuController?.dismiss(animated: false)
-            actionMenuController = nil
-
-            let workItem = DispatchWorkItem { [weak self] in
-                guard let self = self,
-                      self.messageTextView?.selectedRange.length ?? 0 > 0 else { return }
-                self.presentActionMenu(at: nil)
-            }
-            menuPresentWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
-        } else {
-            // 无选中文本：关闭菜单并重置状态
-            actionMenuController?.dismiss(animated: true)
-            actionMenuController = nil
-            isAdjustingSelection = false
-        }
+        dismissMenuAndCancelSelection()
     }
 }
 
@@ -819,7 +905,7 @@ extension LongMessageViewController: DTForwardPreviewDelegate {
     func getThreadsToForwarding() -> [TSThread] {
         return self.targetThreads ?? []
     }
-    
+
     func previewView(_ previewView: DTForwardPreviewViewController, sendLeaveMessage leaveMessage: String?) {
         guard let messageSender = Environment.shared?.messageSender else {
             Logger.error("messageSender is nil")
@@ -836,10 +922,15 @@ extension LongMessageViewController: DTForwardPreviewDelegate {
             return
         }
 
+        // A link fragment isn't relaying someone's message content, so it leaves no trace.
+        // Capture both flags up front so they can't be cleared by the async reset below.
+        let suppressTrace = isForwardingLink
+        let isFullText = isForwardingFullText
+
         DispatchQueue.global().async {
             targetThreads.forEach { targetThread in
                 // 判断是否需要带消息来源
-                if self.isForwardingFullText, let viewItem = self.viewItem {
+                if isFullText, let viewItem = self.viewItem {
                     // 全选转发：使用 DTForwardMessageHelper 转发，会自动带上消息来源
                     let message = DTForwardMessageHelper.message(from: viewItem)
                     DispatchQueue.main.sync {
@@ -887,10 +978,23 @@ extension LongMessageViewController: DTForwardPreviewDelegate {
                 Thread.sleep(forTimeInterval: 0.05)
             }
 
+            // Send the forward-trace notice only AFTER the forwarded message(s) are sent. Firing it
+            // concurrently (as it did before) let the notice and the forwarded message grab the same
+            // millisecond timestamp; since both are local-authored, their author_device_timestamp
+            // uniqueIds then collide on the UNIQUE uniqueId column and collapse onto a single DB row,
+            // making one of them vanish from its conversation. Sequencing guarantees the notice gets
+            // a strictly later timestamp, matching the normal-forward path. See issue #531.
+            if !suppressTrace {
+                DispatchQueue.main.async {
+                    self.sendForwardNotice()
+                }
+            }
+
             // 清除转发文本和标记
             DispatchQueue.main.async {
                 self.forwardingText = nil
                 self.isForwardingFullText = false
+                self.isForwardingLink = false
             }
         }
 
@@ -901,6 +1005,36 @@ extension LongMessageViewController: DTForwardPreviewDelegate {
 
     func overviewOfMessage(for previewView: DTForwardPreviewViewController) -> String {
         return self.forwardingText ?? ""
+    }
+
+    private func sendForwardNotice() {
+        guard let message = viewItem?.interaction as? TSMessage,
+              let thread = viewItem?.thread else { return }
+
+        // Gate: trace only when leak-risk rules pass. "from" uses the bubble sender; a single
+        // forwarded message gates on its original content author.
+        let displayAuthorIds = ForwardNoticeBuilder.sourceAuthorIds(for: [message])
+        let triggerAuthorIds = ForwardNoticeBuilder.triggerAuthorIds(for: [message])
+        guard DTNoticeTraceEvaluator.shouldLeaveTrace(
+            sourceThread: thread,
+            targetThreads: self.targetThreads,
+            contentAuthorIds: triggerAuthorIds
+        ) else { return }
+        let fromAuthorIds = DTNoticeTraceEvaluator.orderForDisplay(displayAuthorIds)
+
+        Task {
+            do {
+                try await ForwardNoticeDispatcher.sendNotice(
+                    sourceConversation: thread,
+                    scene: .single,
+                    sourceAuthorIds: fromAuthorIds,
+                    messageCount: 1,
+                    messageSender: SSKEnvironment.shared.messageSenderRef
+                )
+            } catch {
+                Logger.error("[ForwardNotice] long message forward notice failed: \(error)")
+            }
+        }
     }
 }
 
@@ -913,30 +1047,44 @@ extension LongMessageViewController: UIGestureRecognizerDelegate {
     }
 
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        // 如果点击位置在 messageTextView 内部
-        let locationInTextView = touch.location(in: messageTextView)
-        guard let messageTextView = messageTextView else { return true}
-        if messageTextView.bounds.contains(locationInTextView) {
-            // 检查点击位置是否在链接上
-            if isLocationOnLink(locationInTextView) {
-                // 点击的是链接，view 的 tap 手势不响应，避免 dismiss
-                return false
-            }
+        // 点击关闭按钮时，交给按钮自身处理，避免误触发关闭/取消选择手势
+        if let closeButton = closeButton,
+           closeButton.bounds.contains(touch.location(in: closeButton)) {
+            return false
         }
         return true
     }
 
-    /// 判断点击位置是否在链接上
-    private func isLocationOnLink(_ location: CGPoint) -> Bool {
-        guard let messageTextView = messageTextView else { return false }
-        
+    /// Returns the range of the link (URL, mention, or forward source) hit at the given
+    /// location, or nil if none is hit.
+    /// - Parameter strict: when true, the point must fall inside a glyph's bounding rect.
+    ///   Taps use this so that taps in blank areas still dismiss the page (a single long
+    ///   link would otherwise mark the whole screen as a link). Long-press uses `false` to
+    ///   snap to the nearest character, tolerating a finger that lands slightly off the
+    ///   glyph or in the inter-line gap of the large preview font.
+    private func linkRange(at location: CGPoint, strict: Bool) -> NSRange? {
+        guard let messageTextView = messageTextView else { return nil }
+
         let textContainer = messageTextView.textContainer
         let layoutManager = messageTextView.layoutManager
         let textStorage = messageTextView.textStorage
 
+        guard textStorage.length > 0 else { return nil }
+
         var locationInTextContainer = location
         locationInTextContainer.x -= messageTextView.textContainerInset.left
         locationInTextContainer.y -= messageTextView.textContainerInset.top
+
+        if strict {
+            // characterIndex(for:) returns the nearest char even on blank areas, so a single
+            // long link would mark the whole screen as "link" and block tap-to-dismiss.
+            // Verify the tap is actually inside the glyph rect first.
+            let glyphIndex = layoutManager.glyphIndex(for: locationInTextContainer, in: textContainer)
+            let glyphRect = layoutManager
+                .boundingRect(forGlyphRange: NSRange(location: glyphIndex, length: 1), in: textContainer)
+                .insetBy(dx: -2, dy: -6) // expand a bit so links stay tappable between wrapped lines
+            guard glyphRect.contains(locationInTextContainer) else { return nil }
+        }
 
         let characterIndex = layoutManager.characterIndex(
             for: locationInTextContainer,
@@ -944,10 +1092,24 @@ extension LongMessageViewController: UIGestureRecognizerDelegate {
             fractionOfDistanceBetweenInsertionPoints: nil
         )
 
-        guard characterIndex < textStorage.length else { return false }
+        guard characterIndex < textStorage.length else { return nil }
 
-        // 检查该位置的字符是否有 link 属性
-        let attributes = textStorage.attributes(at: characterIndex, effectiveRange: nil)
-        return attributes[.link] != nil
+        // Check whether the character carries a link attribute, returning its full range
+        var effectiveRange = NSRange(location: 0, length: 0)
+        guard textStorage.attribute(.link, at: characterIndex, effectiveRange: &effectiveRange) != nil else {
+            return nil
+        }
+        return effectiveRange
+    }
+
+    /// Resolve the URL stored on the `.link` attribute at `range`. Auto-detected URLs store a
+    /// `URL`; mentions / forward sources store a scheme string (e.g. `personinfocard://uid`).
+    private func linkURL(forRange range: NSRange) -> URL? {
+        guard let textStorage = messageTextView?.textStorage,
+              range.location < textStorage.length else { return nil }
+        let value = textStorage.attribute(.link, at: range.location, effectiveRange: nil)
+        if let url = value as? URL { return url }
+        if let string = value as? String { return URL(string: string) }
+        return nil
     }
 }

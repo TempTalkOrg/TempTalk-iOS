@@ -83,7 +83,8 @@ final class ConversationViewController: OWSViewController {
         
         stopRefreshUITimer()
         stopScrollUpdateTimer()
-        
+        cancelPendingInitialMessagesIfNeeded()
+
         NotificationCenter.default.removeObserver(self)
         
         DTConversationPreviewManager.shared().currentThread = nil
@@ -126,11 +127,15 @@ final class ConversationViewController: OWSViewController {
         hideInputIfNeeded()
         
         isViewVisible = true
-                
+
         updateBarButtonItems()
         updateNavigationTitle()
-        
-        resetContentAndLayoutWithSneakyTransaction()
+
+        // If a pending initial-load snapshot is waiting, refreshing it already runs resetContentAndLayout,
+        // so skip the sneaky reset to avoid two back-to-back resets.
+        if !processPendingInitialMessagesIfNeeded() {
+            resetContentAndLayoutWithSneakyTransaction()
+        }
         
         updateLastVisibleSortIdWithSneakyAsyncTransaction()
         
@@ -259,12 +264,24 @@ final class ConversationViewController: OWSViewController {
         super.viewDidDisappear(animated)
         
         Logger.info("[Conversation] viewDidDisappear threadId=\(thread.uniqueId) isViewVisible is \(isViewVisible) conversation controller \(self)")
-        
+
         userHasScrolled = false
         isViewVisible = false
         shouldAnimateKeyboardChanges = false
         
         stopAudioPlayer()
+
+        // Cancel any in-flight voice-memo recording when the user navigates
+        // away (back button, swipe-to-pop, etc.). Previously the recorder
+        // kept running in the background and the candidate files were
+        // dropped on the floor without releasing the mic; matches Android's
+        // `onDetachedFromWindow` cleanup. Uses the same `voiceMemoIsActive`
+        // accessor as `applicationWillResignActive` so adding new "is
+        // recording?" state in the future only requires one edit.
+        if voiceMemoIsActive {
+            self.inputToolbar.hideVoiceMemoUI(animated: false)
+            cancelRecordingVoiceMemo()
+        }
         
         cancelReadTimer()
         markVisibleMessagesAsRead()
@@ -332,8 +349,7 @@ final class ConversationViewController: OWSViewController {
     }
     
     static func setNeedsRefreshGroupInfo(for serverGroupId: String) {
-        guard !serverGroupId.isEmpty else { return }
-        CVViewState.conversationTagInfo[serverGroupId] = false
+        // No longer needed: getGroupInfo now always fetches and compares.
     }
 
     // MARK: - Confidential Placeholder Management
@@ -456,18 +472,13 @@ extension ConversationViewController {
         guard let serverGroupId, !serverGroupId.isEmpty else {
             return
         }
-        
-        let needSkipUpdateGroupInfo = conversationTagInfo[serverGroupId] ?? false
-        if needSkipUpdateGroupInfo,
-           !TSAccountManager.sharedInstance().isChangeGlobalNotificationType {
-            return
-        }
-        
-        // TODO: Jaymin 待验证
+
+        let oldModel = groupThread.groupModel
+
         getGroupInfoAPI.sendRequest(withGroupId: serverGroupId) { [weak self] entity in
-            
+
             guard let self else { return }
-            
+
             let needSystemMessage = groupThread.recipientIdentifiers.isEmpty
             self.databaseStorage.asyncWrite { transaction in
                 let newThread = self.groupUpdateMessageProcessor.generateOrUpdateConveration(
@@ -485,11 +496,12 @@ extension ConversationViewController {
                         self.navigationController?.popViewController(animated: true)
                         return
                     }
-                    self.thread = newThread
-                    self.updateNavigationTitle()
+                    if !newThread.groupModel.isEqual(to: oldModel) {
+                        self.thread = newThread
+                        self.updateNavigationTitle()
+                    }
                 }
             }
-            self.conversationTagInfo[serverGroupId] = true
             
         } failure: { [weak self] error in
             

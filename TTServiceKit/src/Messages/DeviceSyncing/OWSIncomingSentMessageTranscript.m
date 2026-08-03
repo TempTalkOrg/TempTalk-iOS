@@ -41,7 +41,10 @@ NS_ASSUME_NONNULL_BEGIN
     _notifySequenceId = envelop.notifySequenceID;
     _body = _dataMessage.body;
     _atPersons = _dataMessage.atPersons;
-    
+    if (_dataMessage.mentions != nil && _dataMessage.mentions.count > 0) {
+        _mentions = [DTMention mentionsWithProto:_dataMessage];
+    }
+
     /// MsgExtra 新增conversationId，仅用于private会话同步的Schedule消息处理
     /// message MsgExtra {
     ///   //only for scheduled private message from me

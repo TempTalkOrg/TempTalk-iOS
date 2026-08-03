@@ -518,7 +518,7 @@ public class InteractionFinder: NSObject, InteractionFinderAdapter {
     }
     
     @objc
-    public class func findThreadsWithOnlyArchiveMessages(transaction: SDSAnyReadTransaction) -> [String] {
+    public class func findCleanableVisibleThreadIds(transaction: SDSAnyReadTransaction) -> [String] {
         guard let localNumber = TSAccountManager.shared.localNumber(with: transaction), !localNumber.isEmpty else {
             Logger.info("[Archive] localNumber unavailable (not registered?), skipping visible thread cleanup query")
             return []
@@ -526,7 +526,7 @@ public class InteractionFinder: NSObject, InteractionFinderAdapter {
         let noteToSelfThreadId = TSContactThread.threadId(fromContactId: localNumber)
         switch transaction.readTransaction {
         case .grdbRead(let grdbRead):
-            return GRDBInteractionFinderAdapter.findThreadsWithOnlyArchiveMessages(noteToSelfThreadId: noteToSelfThreadId, transaction: grdbRead)
+            return GRDBInteractionFinderAdapter.findCleanableVisibleThreadIds(noteToSelfThreadId: noteToSelfThreadId, transaction: grdbRead)
         }
     }
 
@@ -1454,7 +1454,14 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
         }
     }
 
-    static func findThreadsWithOnlyArchiveMessages(noteToSelfThreadId: String, transaction: GRDBReadTransaction) -> [String] {
+    /// Visible threads eligible for cleanup:
+    /// (1) no interactions, (2) only a single archiveMessage marker, or
+    /// (3) system/info messages only, no real incoming/outgoing.
+    /// Case (3): the expiry job can't reach these (it needs a read position, which system
+    /// messages never create), so qualify them once their own expiresInSeconds has elapsed;
+    /// threads with expiration off are left untouched.
+    static func findCleanableVisibleThreadIds(noteToSelfThreadId: String, transaction: GRDBReadTransaction) -> [String] {
+        let nowSeconds = Date().timeIntervalSince1970
         let sql = """
         SELECT DISTINCT t.uniqueId
         FROM \(ThreadRecord.databaseTableName) t
@@ -1481,20 +1488,33 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
                     AND i2.\(interactionColumn: .messageType) = ?
                 )
             )
+            OR
+            (
+                (
+                    SELECT COUNT(*)
+                    FROM \(InteractionRecord.databaseTableName) i3
+                    WHERE i3.\(interactionColumn: .threadUniqueId) = t.uniqueId
+                    AND (i3.\(interactionColumn: .recordType) = \(SDSRecordType.incomingMessage.rawValue)
+                      OR i3.\(interactionColumn: .recordType) = \(SDSRecordType.outgoingMessage.rawValue))
+                ) = 0
+                AND \(threadColumn: .expiresInSeconds) > 0
+                AND (\(threadColumn: .creationDate) + \(threadColumn: .expiresInSeconds)) < ?
+            )
         )
         """
 
         let arguments: StatementArguments = [
             noteToSelfThreadId,
             SDSRecordType.infoMessage.rawValue,
-            TSInfoMessageType.archiveMessage.rawValue
+            TSInfoMessageType.archiveMessage.rawValue,
+            nowSeconds
         ]
 
         do {
             let threadIds = try String.fetchAll(transaction.database, sql: sql, arguments: arguments)
             return threadIds
         } catch {
-            owsFailDebug("Failed to find threads with only archive messages: \(error)")
+            owsFailDebug("Failed to find cleanable visible threads: \(error)")
             return []
         }
     }

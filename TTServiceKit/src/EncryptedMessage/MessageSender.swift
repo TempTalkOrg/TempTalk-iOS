@@ -7,6 +7,13 @@
 
 import Foundation
 
+protocol SyncPlainTextBuildable {
+    func buildSyncPlainTextData(_ recipient: SignalRecipient) -> Data?
+}
+
+extension TSOutgoingForwardNoticeMessage: SyncPlainTextBuildable {}
+extension TSOutgoingActivityNoticeMessage: SyncPlainTextBuildable {}
+
 extension MessageSender {
     
     static let senderRetryAttempts = 3
@@ -82,17 +89,12 @@ extension MessageSender {
                             attempts: Int,
                             completion: @escaping () -> Void) async throws -> Void {
         
-        let (plainText, serializedData, ermkeys) = try await getSerializedData(message: message, identifiers: [recipient.recipientId()], recipient: recipient, encryptionType: .private, attempts: attempts)
-        
-        var legacyData: Data?
-        if DTMessageConfig.fetch().tunnelSecurityEnabled || recipient.recipientId().count <= 6 {
-            legacyData = plainText
-        }
+        let (_, serializedData, ermkeys) = try await getSerializedData(message: message, identifiers: [recipient.recipientId()], recipient: recipient, encryptionType: .private, attempts: attempts)
 
         // Generate sync content for non-sync messages
         let syncContent: Data? = try await generateSyncContent(for: message, attempts: attempts)
 
-        let result = try DTMessageParamsBuilder().buildParams(with: message, to: thread, recipient: recipient, messageType: .encryptedMessageType, serializedData: serializedData, legacySerializedData: legacyData, recipientPeerContexts: ermkeys, syncContent: syncContent)
+        let result = try DTMessageParamsBuilder().buildParams(with: message, to: thread, recipient: recipient, messageType: .encryptedMessageType, serializedData: serializedData, legacySerializedData: nil, recipientPeerContexts: ermkeys, syncContent: syncContent)
         
         guard let messageParams = result as? [String: Any] else {
             let errorString = "messageParams convert error."
@@ -220,14 +222,10 @@ extension MessageSender {
             identifiers.append(selfRecipientId)
         }
 
-        let (plainText, serializedData, ermkeys) = try await getSerializedData(message: message, identifiers: identifiers, recipient: recipient, encryptionType: .group, attempts: attempts)
+        let (_, serializedData, ermkeys) = try await getSerializedData(message: message, identifiers: identifiers, recipient: recipient, encryptionType: .group, attempts: attempts)
         
-        var legacyData: Data?
-        if DTMessageConfig.fetch().tunnelSecurityEnabled {
-            legacyData = plainText
-        }
-        
-        let result = try DTMessageParamsBuilder().buildParams(with: message, to: thread, recipient: recipient, messageType: .encryptedMessageType, serializedData: serializedData, legacySerializedData: legacyData, recipientPeerContexts: ermkeys, syncContent: nil)
+        // Group messages are broadcast to human members only; never send legacy plaintext.
+        let result = try DTMessageParamsBuilder().buildParams(with: message, to: thread, recipient: recipient, messageType: .encryptedMessageType, serializedData: serializedData, legacySerializedData: nil, recipientPeerContexts: ermkeys, syncContent: nil)
         
         guard let messageParams = result as? [String: Any] else {
             let errorString = "messageParams convert error."
@@ -373,10 +371,10 @@ extension MessageSender {
             OWSLogger.warn("selfRecipient is nil, cannot generate sync content")
             return nil
         }
-
-        if let forwardNotice = message as? TSOutgoingForwardNoticeMessage {
-            guard let syncPlainText = forwardNotice.buildSyncPlainTextData(selfRecipient) else {
-                OWSLogger.warn("ForwardNotice sync plaintext is nil")
+        if let notice = message as? SyncPlainTextBuildable {
+            let label = String(describing: type(of: message))
+            guard let syncPlainText = notice.buildSyncPlainTextData(selfRecipient) else {
+                OWSLogger.warn("\(label) sync plaintext is nil")
                 return nil
             }
             do {
@@ -384,10 +382,10 @@ extension MessageSender {
                     syncPlainText,
                     recipientId: selfRecipient.recipientId()
                 )
-                OWSLogger.info("Generated ForwardNotice sync content")
+                OWSLogger.info("Generated \(label) sync content")
                 return serializedData
             } catch {
-                OWSLogger.error("ForwardNotice sync encrypt failed (best-effort): \(error)")
+                OWSLogger.error("\(label) sync encrypt failed (best-effort): \(error)")
                 return nil
             }
         }
@@ -412,6 +410,9 @@ extension MessageSender {
                                            attempts: Int,
                                            completion: @escaping () -> Void) async throws -> Void {
         guard message.shouldSyncTranscript(), !message.isKind(of: OWSOutgoingSentMessageTranscript.self) else {
+            // Nothing to sync, but the local send succeeded. Must call completion(), or the send
+            // operation never finishes and deadlocks the per-thread serial send queue.
+            completion()
             return
         }
         var thread: TSThread?
@@ -421,12 +422,44 @@ extension MessageSender {
             selfRecipient = SignalRecipient.selfRecipient(with: transaction)
         }
         
-        let sentMessageTranscript = OWSOutgoingSentMessageTranscript(outgoingMessage: message)
-        sentMessageTranscript.toNote = toNote
         guard let thread, let selfRecipient  else {
+            // No self/thread resolved — still complete so the operation finishes and frees the queue.
+            completion()
             return
         }
-        
+
+        // Notice messages (copy/forward activity notices) carry their sync payload via
+        // syncMessage.activityNoticeSync / forwardNoticeSync, which OWSOutgoingSentMessageTranscript
+        // cannot represent (it only emits syncMessage.sent). Send the notice's own sync payload to
+        // self as the main content instead.
+        if let notice = message as? SyncPlainTextBuildable {
+            let label = String(describing: type(of: message))
+            guard let syncPlainText = notice.buildSyncPlainTextData(selfRecipient) else {
+                OWSLogger.warn("\(label) sync plaintext is nil, nothing to sync to self.")
+                completion()
+                return
+            }
+            let (serializedSync, ermkeys) = try encryptPlainTextWithPeerContexts(syncPlainText, recipientId: selfRecipient.recipientId())
+            do {
+                try await sendSerializedSyncToSelf(label: "e2ee \(label) sync",
+                                                   message: message,
+                                                   thread: thread,
+                                                   selfRecipient: selfRecipient,
+                                                   serializedData: serializedSync,
+                                                   recipientPeerContexts: ermkeys,
+                                                   attempts: attempts)
+                OWSLogger.info("Successfully synced \(label) to self.")
+                completion()
+            } catch {
+                OWSLogger.error("Failed to sync \(label) to self: \(error)")
+                throw error
+            }
+            return
+        }
+
+        let sentMessageTranscript = OWSOutgoingSentMessageTranscript(outgoingMessage: message)
+        sentMessageTranscript.toNote = toNote
+
         do {
             try await sendPrivateMessage(label: "e2ee private sync message",
                                    message: sentMessageTranscript,
@@ -440,10 +473,100 @@ extension MessageSender {
             OWSLogger.error("Failed to sent e2ee sync transcript toNote \(toNote): \(error)")
             throw error
         }
-        
+
+    }
+
+    /// Sends already-encrypted serialized sync content to self as the main payload.
+    /// `syncContent` is nil here — the serialized data already IS the sync form, so the direct
+    /// `content.activityNotice`/`forwardNotice` form is never emitted. Mirrors the request/response
+    /// handling of `sendPrivateMessage`.
+    private func sendSerializedSyncToSelf(label: String,
+                                          message: TSOutgoingMessage,
+                                          thread: TSThread,
+                                          selfRecipient: SignalRecipient,
+                                          serializedData: Data,
+                                          recipientPeerContexts: [DTMsgPeerContextParams],
+                                          attempts: Int) async throws -> Void {
+        if attempts <= 0 {
+            throw OWSAssertionError("\(label) attempts over limit.")
+        }
+
+        // Mirror the private-message path: only bot / service self-recipients get legacy content.
+        var legacyData: Data?
+        if DTBotConfig.isBotId(selfRecipient.recipientId()) {
+            legacyData = serializedData
+        }
+
+        let result = try DTMessageParamsBuilder().buildParams(with: message,
+                                                              to: thread,
+                                                              recipient: selfRecipient,
+                                                              messageType: .encryptedMessageType,
+                                                              serializedData: serializedData,
+                                                              legacySerializedData: legacyData,
+                                                              recipientPeerContexts: recipientPeerContexts,
+                                                              syncContent: nil)
+
+        guard let messageParams = result as? [String: Any] else {
+            throw OWSAssertionError("\(label) messageParams convert error.")
+        }
+
+        let request = TSRequest(url: URL(string: "/v4/messages/\(selfRecipient.recipientId())")!, method: "PUT", parameters: messageParams)
+
+        let sendResult: HTTPResponse
+        if OWSWebSocket.canAppUseSocketsToMakeRequests {
+            sendResult = try await self.networkManager.asyncWebsocketRequest(request: request)
+        } else {
+            sendResult = try await self.networkManager.asyncRequest(request)
+        }
+
+        guard let jsonData = sendResult.responseBodyJson as? [AnyHashable : Any] else {
+            throw OWSAssertionError("\(label) data to json error!")
+        }
+        guard let metaData = try MTLJSONAdapter.model(of: DTAPIMetaEntity.self, fromJSONDictionary: jsonData) as? DTAPIMetaEntity else {
+            throw OWSAssertionError("\(label) json to metaData error!")
+        }
+
+        if metaData.status == DTAPIRequestResponseStatus.OK.rawValue ||
+            metaData.status == DTAPIRequestResponseStatus.unsupportedMsgVersion.rawValue {
+            if metaData.status == DTAPIRequestResponseStatus.unsupportedMsgVersion.rawValue {
+                OWSLogger.error("unsupported \(label) message version!")
+            }
+            return
+        }
+
+        if metaData.status == DTAPIRequestResponseStatus.invalidIdentifier.rawValue {
+            self.databaseStorage.write { wTransaction in
+                SessionStore.deleteSession(identifier: selfRecipient.recipientId(), transaction: wTransaction)
+            }
+        }
+
+        // retry
+        try await sendSerializedSyncToSelf(label: label,
+                                           message: message,
+                                           thread: thread,
+                                           selfRecipient: selfRecipient,
+                                           serializedData: serializedData,
+                                           recipientPeerContexts: recipientPeerContexts,
+                                           attempts: attempts - 1)
     }
     
     func encryptPlainText(_ plainText: Data, recipientId: String) throws -> Data {
+        // Preserve original behavior: serialized ciphertext only, no eRMKeys requirement.
+        return try encryptForRecipient(plainText, recipientId: recipientId).serialized
+    }
+
+    /// Like `encryptPlainText` but also returns the per-recipient peer contexts (eRMKeys) required by
+    /// the v4 message envelope's `recipients` field. Throws if eRMKeys are missing (needed for the
+    /// self-addressed sync send), unlike `encryptPlainText` which tolerates their absence.
+    func encryptPlainTextWithPeerContexts(_ plainText: Data, recipientId: String) throws -> (serialized: Data, ermkeys: [DTMsgPeerContextParams]) {
+        let result = try encryptForRecipient(plainText, recipientId: recipientId)
+        guard let ermkeys = result.ermkeys, !ermkeys.isEmpty else {
+            throw OWSAssertionError("sync ermk error!")
+        }
+        return (result.serialized, ermkeys)
+    }
+
+    private func encryptForRecipient(_ plainText: Data, recipientId: String) throws -> (serialized: Data, ermkeys: [DTMsgPeerContextParams]?) {
         let sessionCipher = DTSessionCipher(recipientId: recipientId, type: .private)
         var encryptedMessage: DTEncryptedMessage?
         var encryptError: Error?
@@ -456,9 +579,9 @@ extension MessageSender {
         }
         if let encryptError { throw encryptError }
         guard let encryptedMessage else {
-            throw OWSAssertionError("ForwardNotice sync encrypt failed")
+            throw OWSAssertionError("sync encrypt failed")
         }
-        return encryptedMessage.serialized
+        return (encryptedMessage.serialized, encryptedMessage.eRMKeys)
     }
 
     public func storeSessions(prekeyBundles: [DTPrekeyBundle], transaction: SDSAnyWriteTransaction) {

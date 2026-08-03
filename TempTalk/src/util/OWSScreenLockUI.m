@@ -130,6 +130,10 @@ NSNotificationName const ScreenLockDidUnlockNotification = @"ScreenLockDidUnlock
                                              selector:@selector(socketStateDidChange)
                                                  name:OWSWebSocket.webSocketStateDidChange
                                                object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(windowManagerCallDidChange:)
+                                                 name:OWSWindowManagerCallDidChangeNotification
+                                               object:nil];
 }
 
 - (void)setupWithRootWindow:(UIWindow *)rootWindow
@@ -193,13 +197,16 @@ NSNotificationName const ScreenLockDidUnlockNotification = @"ScreenLockDidUnlock
     
     BOOL hasMeeting = [self isInAnyMeetingState];
     if (hasMeeting && self.meetingScreenLockBypassed) {
+        // Bypass = meeting started from an unlocked session; nothing to re-assert.
         DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive NO 3 (meeting bypass active)", self.logTag);
         return;
     }
-    
-    if (hasMeeting && [DTMeetingManager shared].isFromCallkit) {
+
+    if (hasMeeting) {
+        // No bypass = the call arrived while backgrounded/locked; force the lock so an
+        // incoming call can never be a path around it. (isFromCallkit was racy here.)
         self.isScreenLockLocked = YES;
-        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive YES 4 (forced lock for CallKit meeting)", self.logTag);
+        DDLogVerbose(@"%@ tryToActivateScreenLockUponBecomingActive YES 4 (forced lock for incoming call)", self.logTag);
         return;
     }
     
@@ -281,9 +288,11 @@ NSNotificationName const ScreenLockDidUnlockNotification = @"ScreenLockDidUnlock
 
     self.didLastUnlockAttemptFail = NO;
     
-    if ([self isInAnyMeetingState] && ![DTMeetingManager shared].isFromCallkit && !self.meetingScreenLockBypassed) {
+    // Only exempt a meeting when the screen is currently UNLOCKED (started from an unlocked
+    // session). If the lock is already latched, going background mid-call must NOT drop it.
+    if ([self isInAnyMeetingState] && !self.isScreenLockLocked && !self.meetingScreenLockBypassed) {
         self.meetingScreenLockBypassed = YES;
-        DDLogVerbose(@"%@ startScreenLockCountdownIfNecessary: set meetingScreenLockBypassed (non-CallKit meeting)", self.logTag);
+        DDLogVerbose(@"%@ startScreenLockCountdownIfNecessary: set meetingScreenLockBypassed (meeting started while unlocked)", self.logTag);
     }
 }
 
@@ -310,18 +319,34 @@ bool bScreenLockDone = false;
         DDLogVerbose(@"%@ ensureUI: reset meetingScreenLockBypassed (no active meeting)", self.logTag);
     }
 
+    ScreenLockUIState previousUIState = self.lastState;
     ScreenLockUIState desiredUIState = self.desiredUIState;
     self.lastState = desiredUIState;
 
     DDLogVerbose(@"%@, ensureUI: %@", self.logTag, NSStringForScreenLockUIState(desiredUIState));
 
+    BOOL wasShowingScreenLockUI = self.isShowingScreenLockUI;
     BOOL isLockActive = (desiredUIState == ScreenLockUIStateScreenLock || desiredUIState == ScreenLockUIStateScreenProtection)
                         && self.isScreenLockLocked;
     if (isLockActive && !self.didLastUnlockAttemptFail) {
         [self tryToPresentAuthUIToUnlockScreenLock];
     }
 
-    [self updateScreenBlockingWindow:desiredUIState animated:YES];
+    BOOL didStartShowingScreenLockUI = !wasShowingScreenLockUI && self.isShowingScreenLockUI;
+    BOOL didTransitionToScreenLock = previousUIState != ScreenLockUIStateScreenLock
+        && desiredUIState == ScreenLockUIStateScreenLock;
+    BOOL shouldAnimateScreenBlockUpdate = !didStartShowingScreenLockUI && !didTransitionToScreenLock;
+    [self updateScreenBlockingWindow:desiredUIState animated:shouldAnimateScreenBlockUpdate];
+
+    // Window is now key & visible; explicitly request focus as a backstop so the
+    // passcode field reliably gets the cursor/keyboard (not just on child-VC appearance forwarding).
+    if (desiredUIState == ScreenLockUIStateScreenLock && self.unlockScreenVc) {
+        if (OWSWindowManager.sharedManager.isCallViewFrontmostAboveScreenLock) {
+            [self.screenBlockingWindow endEditing:YES];
+        } else {
+            [self.unlockScreenVc focusPasscodeFieldIfNeeded];
+        }
+    }
 }
 
 - (void)tryToPresentAuthUIToUnlockScreenLock
@@ -388,9 +413,24 @@ bool bScreenLockDone = false;
         DDLogVerbose(@"%@ desiredUIState: in meeting with bypass active", self.logTag);
         return ScreenLockUIStateNone;
     }
-    
+
+    // A fullscreen call window already occludes the Root/IM content, so a transient inactive
+    // (CallKit handoff, system alert — willResignActive without a real backgrounding) does not
+    // need the privacy cover: the only thing that would show in the app-switcher snapshot is the
+    // call itself, which is acceptable. Skipping the cover here avoids flipping the shared block
+    // window up to ScreenProtection and back, which briefly hides the call (the answer flicker).
+    // On a real backgrounding (appIsInBackground) or when no fullscreen call occludes the IM, the
+    // cover still applies as before so IM content stays protected.
+    BOOL callCoversContent = OWSWindowManager.sharedManager.hasCall
+        && OWSWindowManager.sharedManager.shouldShowCallView
+        && !self.appIsInBackground;
+
     if (self.isScreenLockLocked && [TSAccountManager sharedInstance].isRegistered) {
         if (self.appIsInactiveOrBackground) {
+            if (callCoversContent) {
+                DDLogVerbose(@"%@ desiredUIState: screen lock 1b (transient inactive, call covers IM).", self.logTag);
+                return ScreenLockUIStateScreenLock;
+            }
             DDLogVerbose(@"%@ desiredUIState: screen protection 1.", self.logTag);
             return ScreenLockUIStateScreenProtection;
         } else {
@@ -409,6 +449,10 @@ bool bScreenLockDone = false;
     }
 
     if (Environment.preferences.screenSecurityIsEnabled) {
+        if (callCoversContent) {
+            DDLogVerbose(@"%@ desiredUIState: none 4b (transient inactive, call covers IM).", self.logTag);
+            return ScreenLockUIStateNone;
+        }
         DDLogVerbose(@"%@ desiredUIState: screen protection 4.", self.logTag);
         return ScreenLockUIStateScreenProtection;
     } else {
@@ -467,8 +511,12 @@ bool bScreenLockDone = false;
     OWSAssertIsOnMainThread();
 
     BOOL shouldShowBlockWindow = desiredUIState != ScreenLockUIStateNone;
+    // Only the foreground passcode page lets an active call float above it; every other
+    // block state (background/app-switcher protection, offline) must cover the call.
+    BOOL isForegroundLock = desiredUIState == ScreenLockUIStateScreenLock;
 
-    [OWSWindowManager.sharedManager setIsScreenBlockActive:shouldShowBlockWindow];
+    [OWSWindowManager.sharedManager setIsScreenBlockActive:shouldShowBlockWindow
+                                          isForegroundLock:isForegroundLock];
     [self.screenBlockingViewController updateUIWithState:desiredUIState
                                              isLogoAtTop:self.isShowingScreenLockUI
                                                 animated:animated];
@@ -520,6 +568,10 @@ bool bScreenLockDone = false;
 
 - (void)applicationDidEnterBackground:(NSNotification *)notification
 {
+    // Dismiss any keyboard on the screen-blocking window before the system snapshot,
+    // otherwise UIKit may attach the editing overlay to _UISnapshotWindow and crash.
+    [self.screenBlockingWindow endEditing:YES];
+
     self.appIsInBackground = YES;
 }
 
@@ -547,6 +599,16 @@ bool bScreenLockDone = false;
     // NOTE: this notifications fires _before_ applicationDidBecomeActive,
     // which is desirable.  Don't assume that though; call ensureUI
     // just in case it's necessary.
+    [self ensureUI];
+}
+
+- (void)windowManagerCallDidChange:(NSNotification *)notification
+{
+    // A call floating above the passcode lock doesn't change app active state, so only this
+    // re-runs ensureUI to dismiss/restore the number pad as the call comes and goes.
+    if (!self.isShowingScreenLockUI) {
+        return;
+    }
     [self ensureUI];
 }
 

@@ -38,6 +38,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL privilegeConfidential;
 @property (nonatomic, assign) BOOL archive;
 @property (nonatomic, assign) BOOL privateChat;
+/// Crypto key version (baseline 0). Authoritative copy lives on DTGroupCryptoKeyRecord; this is transient.
+@property (nonatomic, assign) NSInteger groupCryptoKeyVersion;
 ///===========
 
 // --- CODE GENERATION MARKER

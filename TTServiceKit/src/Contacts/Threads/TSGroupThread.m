@@ -432,9 +432,10 @@ static NSString *const kDTOldToNewGroupIdPrefix = @"WEEK";
 {
     if (self.groupModel.isEncryptedGroup) {
         if (transaction) {
+            NSString *cachedEncryptedName = [DTGroupBaseInfoEntity anyFetchWithUniqueId:self.serverThreadId transaction:transaction].encryptedName;
             NSString *displayName = [DTGroupCryptoDisplayHelper.shared displayGroupNameWithGid:self.serverThreadId
                                                                                groupCryptoMode:self.groupModel.groupCryptoMode
-                                                                                 encryptedName:nil
+                                                                                 encryptedName:cachedEncryptedName
                                                                                   originalName:self.groupModel.groupName
                                                                                    transaction:transaction];
             if (displayName.length > 0) {

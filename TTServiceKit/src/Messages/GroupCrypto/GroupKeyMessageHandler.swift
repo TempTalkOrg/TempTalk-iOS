@@ -33,17 +33,32 @@ import Foundation
             Logger.error("[GroupCrypto] GroupKeyMessage groupID is not valid UTF-8")
             return
         }
-        let rGroupBase64 = rGroupData.base64EncodedString()
+        // Missing keyVersion maps to 0 via the proto getter.
+        let keyVersion = Int(groupKeyMessage.keyVersion)
 
-        Logger.info("[GroupCrypto] GroupKeyMessage received, gid: \(gid)")
-        keyStore.updateRGroup(gid: gid, rGroup: rGroupBase64, transaction: transaction)
-        postKeyArrivalNotification(gid: gid, transaction: transaction)
+        Logger.info("[GroupCrypto] GroupKeyMessage received, gid: \(gid), version: \(keyVersion)")
+        let outcome = DTGroupCryptoManager.shared.saveOrRotateRGroup(gid: gid,
+                                                                     rGroup: rGroupData,
+                                                                     version: keyVersion,
+                                                                     transaction: transaction)
+        guard outcome != .skipped else { return }
+        postKeyArrivalNotification(gid: gid, transaction: transaction, shouldFetchGroupInfo: true)
     }
 
 
     // MARK: - Fallback R_group from GroupContext
 
     @objc public func handleFallbackGroupRootKey(groupContext: DSKProtoGroupContext,
+                                                 transaction: SDSAnyWriteTransaction) {
+        handleFallbackGroupRootKey(groupContext: groupContext,
+                                    skipGroupInfoFetch: false,
+                                    transaction: transaction)
+    }
+
+    /// - Parameter skipGroupInfoFetch: 传 true 时跳过内部 `refreshGroupInfoOnRGroupArrival`，
+    ///   用于调用方已自行处理群信息拉取、避免重复请求的场景。
+    @objc public func handleFallbackGroupRootKey(groupContext: DSKProtoGroupContext,
+                                                 skipGroupInfoFetch: Bool,
                                                  transaction: SDSAnyWriteTransaction) {
         guard groupContext.hasGroupRootKey,
               let rGroupData = groupContext.groupRootKey, !rGroupData.isEmpty else {
@@ -55,12 +70,17 @@ import Foundation
         guard let gid = String(data: gidData, encoding: .utf8) else {
             return
         }
-        let rGroupBase64 = rGroupData.base64EncodedString()
-        let saved = keyStore.saveRGroupIfNeeded(gid: gid, rGroup: rGroupBase64, transaction: transaction)
-        Logger.info("[GroupCrypto] Fallback R_group piggybacked, gid: \(gid), saved: \(saved)")
-        if saved {
-            postKeyArrivalNotification(gid: gid, transaction: transaction)
-        }
+        // Missing keyVersion maps to 0 via the proto getter.
+        let keyVersion = Int(groupContext.keyVersion)
+        let outcome = DTGroupCryptoManager.shared.saveOrRotateRGroup(gid: gid,
+                                                                     rGroup: rGroupData,
+                                                                     version: keyVersion,
+                                                                     transaction: transaction)
+        let changed = outcome != .skipped
+        // changed 不可靠时也看本地能否解出群名，ThrottleStore 已按 gid 节流。
+        let needsFetch = !skipGroupInfoFetch
+            && (changed || Self.localGroupNameUnresolved(gid: gid, transaction: transaction))
+        postKeyArrivalNotification(gid: gid, transaction: transaction, shouldFetchGroupInfo: needsFetch)
     }
 
     // MARK: - Attach R_group for Sending
@@ -69,14 +89,18 @@ import Foundation
                                                  gid: String,
                                                  transaction: SDSAnyReadTransaction) {
         guard let rGroupBase64 = keyStore.fetchRGroup(forGid: gid, transaction: transaction) else {
-            Logger.warn("[GroupCrypto] attachRGroupToGroupContext skip: no R_group in store, gid: \(gid)")
             return
         }
         guard let rGroupData = Data(base64Encoded: rGroupBase64) else {
-            Logger.error("[GroupCrypto] attachRGroupToGroupContext skip: R_group base64 decode failed, gid: \(gid), storedLen: \(rGroupBase64.count)")
+            Logger.error("[GroupCrypto] attachRGroupToGroupContext skip: base64 decode failed, gid: \(gid)")
             return
         }
         builder.setGroupRootKey(rGroupData)
+        // Carry the local key version so receivers can drop stale keys (0 = baseline, omit).
+        let version = keyStore.fetchKeyVersion(forGid: gid, transaction: transaction)
+        if version > 0 {
+            builder.setKeyVersion(UInt32(version))
+        }
     }
 
     // MARK: - Send GroupKeyMessage
@@ -84,10 +108,13 @@ import Foundation
     @objc public func sendGroupKeyMessage(thread: TSThread,
                                            groupId: Data,
                                            rGroup: Data) {
+        // Always stamp the currently-stored key version (0 = baseline) so receivers can drop stale keys.
+        let keyVersion = currentKeyVersion(forLocalGroupId: groupId)
         let message = TSOutgoingGroupKeyMessage(thread: thread,
                                                  groupId: groupId,
-                                                 groupRootKey: rGroup)
-        Logger.info("[GroupCrypto] Sending GroupKeyMessage to thread: \(thread.uniqueId)")
+                                                 groupRootKey: rGroup,
+                                                 keyVersion: keyVersion)
+        Logger.info("[GroupCrypto] Sending GroupKeyMessage to thread: \(thread.uniqueId), version: \(keyVersion)")
         SSKEnvironment.shared.messageSender.enqueue(message, success: {
             Logger.info("[GroupCrypto] Sent GroupKeyMessage to thread: \(thread.uniqueId)")
         }, failure: { error in
@@ -95,30 +122,63 @@ import Foundation
         })
     }
 
+    private func currentKeyVersion(forLocalGroupId groupId: Data) -> Int {
+        guard let serverGid = TSGroupThread.transformToServerGroupId(withLocalGroupId: groupId),
+              !serverGid.isEmpty else {
+            return 0
+        }
+        var version = 0
+        SDSDatabaseStorage.shared.read { transaction in
+            version = self.keyStore.fetchKeyVersion(forGid: serverGid, transaction: transaction)
+        }
+        return version
+    }
+
+    // MARK: - Unified Refresh Entry
+
+    /// 刷新加密群群名，幂等。
+    @objc public static func refreshEncryptedGroupNameIfNeeded(gid: String,
+                                                                transaction: SDSAnyWriteTransaction) {
+        guard !gid.isEmpty,
+              let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid) else {
+            return
+        }
+        let threadId = TSGroupThread.threadId(fromGroupId: groupId)
+        guard let groupThread = TSGroupThread.anyFetchGroupThread(uniqueId: threadId, transaction: transaction),
+              groupThread.groupModel.isEncryptedGroup else {
+            return
+        }
+        let cachedEncryptedName = DTGroupBaseInfoEntity.anyFetch(uniqueId: gid, transaction: transaction)?.encryptedName
+        let decryptedName = DTGroupCryptoDisplayHelper.shared.displayGroupName(
+            gid: gid,
+            groupCryptoMode: groupThread.groupModel.groupCryptoMode,
+            encryptedName: cachedEncryptedName,
+            originalName: groupThread.groupModel.groupName,
+            transaction: transaction)
+        let placeholder = DTGroupCryptoDisplayHelper.encryptedGroupNamePlaceholder
+        guard !decryptedName.isEmpty,
+              decryptedName != placeholder,
+              groupThread.groupModel.groupName != decryptedName else {
+            return
+        }
+        groupThread.anyUpdateGroupThread(transaction: transaction) { thread in
+            thread.groupModel.groupName = decryptedName
+        }
+    }
+
+    /// 同步刷新加密群群名 + 头像，保证更新时机一致。
+    @objc public static func refreshEncryptedGroupDisplay(gid: String,
+                                                           transaction: SDSAnyWriteTransaction) {
+        refreshEncryptedGroupNameIfNeeded(gid: gid, transaction: transaction)
+        downloadEncryptedAvatarIfNeeded(gid: gid, transaction: transaction)
+    }
+
     // MARK: - Private
 
-    private func postKeyArrivalNotification(gid: String, transaction: SDSAnyWriteTransaction) {
-        if let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid) {
-            let threadId = TSGroupThread.threadId(fromGroupId: groupId)
-            if let groupThread = TSGroupThread.anyFetchGroupThread(uniqueId: threadId, transaction: transaction),
-               groupThread.groupModel.isEncryptedGroup {
-                let decryptedName = DTGroupCryptoDisplayHelper.shared.displayGroupName(
-                    gid: gid,
-                    groupCryptoMode: groupThread.groupModel.groupCryptoMode,
-                    encryptedName: nil,
-                    originalName: groupThread.groupModel.groupName,
-                    transaction: transaction)
-                groupThread.anyUpdateGroupThread(transaction: transaction) { thread in
-                    if thread.groupModel.groupName != decryptedName {
-                        thread.groupModel.groupName = decryptedName
-                    }
-                }
-            }
-        }
-
-        tryDownloadEncryptedAvatarIfNeeded(gid: gid, transaction: transaction)
-
-        let needsRefresh = Self.needsGroupInfoRefreshForAvatar(gid: gid, transaction: transaction)
+    private func postKeyArrivalNotification(gid: String,
+                                             transaction: SDSAnyWriteTransaction,
+                                             shouldFetchGroupInfo: Bool) {
+        Self.refreshEncryptedGroupDisplay(gid: gid, transaction: transaction)
 
         transaction.addAsyncCompletionOnMain { [gid] in
             NotificationCenter.default.post(
@@ -127,27 +187,42 @@ import Foundation
                 userInfo: [DTGroupCryptoConstants.groupCryptoKeyGidKey: gid]
             )
 
-            if needsRefresh {
-                Self.refreshGroupInfoForEncryptedAvatar(gid: gid)
+            if shouldFetchGroupInfo {
+                Self.refreshGroupInfoOnRGroupArrival(gid: gid)
             }
         }
     }
 
-    private static func needsGroupInfoRefreshForAvatar(gid: String, transaction: SDSAnyReadTransaction) -> Bool {
-        guard let baseInfo = DTGroupBaseInfoEntity.anyFetch(uniqueId: gid, transaction: transaction),
-              baseInfo.groupCryptoMode > 0 else {
-            return true
+    private static let inFlightProcessorsLock = NSLock()
+    private static var inFlightProcessors: [ObjectIdentifier: DTGroupUpdateMessageProcessor] = [:]
+    private static let processorInFlightTTL: TimeInterval = 30
+
+    /// 群信息拉取节流，避免失败重试风暴和同 gid 并发重叠。
+    private static let groupInfoFetchThrottle = ThrottleStore(window: 5.0)
+
+    private static func retainInFlight(_ processor: DTGroupUpdateMessageProcessor) {
+        inFlightProcessorsLock.lock()
+        inFlightProcessors[ObjectIdentifier(processor)] = processor
+        inFlightProcessorsLock.unlock()
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + processorInFlightTTL) {
+            inFlightProcessorsLock.lock()
+            inFlightProcessors.removeValue(forKey: ObjectIdentifier(processor))
+            inFlightProcessorsLock.unlock()
         }
-        return baseInfo.encryptedAvatar == nil || baseInfo.encryptedAvatar?.isEmpty == true
     }
 
-    private static func refreshGroupInfoForEncryptedAvatar(gid: String) {
+    private static func refreshGroupInfoOnRGroupArrival(gid: String) {
         guard let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid) else { return }
+        guard groupInfoFetchThrottle.tryAcquire(gid: gid) else {
+            return
+        }
 
-        Logger.info("[GroupCrypto] R_group arrived but encryptedAvatar missing, refreshing group info for gid: \(gid)")
+        Logger.info("[GroupCrypto] R_group arrived, refreshing group info for gid: \(gid)")
 
+        let processor = DTGroupUpdateMessageProcessor()
+        retainInFlight(processor)
         NSObject.databaseStorage.asyncWrite { writeTransaction in
-            let processor = DTGroupUpdateMessageProcessor()
             processor.requestGroupInfo(withGroupId: groupId,
                                         targetVersion: 0,
                                         needSystemMessage: false,
@@ -158,27 +233,34 @@ import Foundation
         }
     }
 
-    private func tryDownloadEncryptedAvatarIfNeeded(gid: String, transaction: SDSAnyWriteTransaction) {
-        Self.downloadEncryptedAvatarIfNeeded(gid: gid, transaction: transaction)
+    /// 加密群本地能否解出群名：encryptedName 缺失 / 解密失败都视为未解出，触发主动拉群补齐 encryptedName。
+    fileprivate static func localGroupNameUnresolved(gid: String,
+                                                      transaction: SDSAnyReadTransaction) -> Bool {
+        guard let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid),
+              let thread = TSGroupThread.anyFetchGroupThread(
+                  uniqueId: TSGroupThread.threadId(fromGroupId: groupId),
+                  transaction: transaction),
+              thread.groupModel.isEncryptedGroup else {
+            return false
+        }
+        // encryptedName 缺失直接视为未解出，避免在 write transaction 里多走一次 AES。
+        guard let encryptedName = DTGroupBaseInfoEntity.anyFetch(uniqueId: gid, transaction: transaction)?.encryptedName,
+              !encryptedName.isEmpty else {
+            return true
+        }
+        let decrypted = DTGroupCryptoManager.shared.decryptedGroupName(
+            gid: gid, encryptedName: encryptedName, transaction: transaction)
+        return decrypted?.isEmpty != false
     }
 
     @objc public static func downloadEncryptedAvatarIfNeeded(gid: String, transaction: SDSAnyWriteTransaction) {
-        guard let baseInfo = DTGroupBaseInfoEntity.anyFetch(uniqueId: gid, transaction: transaction) else {
-            Logger.info("[GroupCrypto] downloadEncryptedAvatar skip: baseInfo missing, gid: \(gid)")
-            return
-        }
-        guard baseInfo.groupCryptoMode > 0 else {
-            Logger.info("[GroupCrypto] downloadEncryptedAvatar skip: not encrypted group, gid: \(gid)")
-            return
-        }
-
-        guard let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid) else {
-            Logger.info("[GroupCrypto] downloadEncryptedAvatar skip: invalid groupId, gid: \(gid)")
+        guard let baseInfo = DTGroupBaseInfoEntity.anyFetch(uniqueId: gid, transaction: transaction),
+              baseInfo.groupCryptoMode > 0,
+              let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: gid) else {
             return
         }
         let threadId = TSGroupThread.threadId(fromGroupId: groupId)
         guard let groupThread = TSGroupThread.anyFetchGroupThread(uniqueId: threadId, transaction: transaction) else {
-            Logger.info("[GroupCrypto] downloadEncryptedAvatar skip: groupThread missing, gid: \(gid)")
             return
         }
 
@@ -189,62 +271,49 @@ import Foundation
             gid: gid,
             transaction: transaction
         ) else {
-            // prepareAvatarUpdate 里已按分支打了 keep/clear 的 info 日志
             return
         }
 
         let capturedGroupId = groupId
-        // capture 发起下载时的密文作为指纹。异步期间 DB 若被新密文覆盖，
-        // 不能用 DB 最新值回填指纹，否则会污染判定导致新头像被跳过。
         let capturedEncryptedAvatar = baseInfo.encryptedAvatar ?? ""
-
+        // Can't decrypt -> avatarURL is the lock placeholder (plainFallback); don't mark it as "real
+        // avatar downloaded", or it blocks the real avatar from restoring once the key arrives.
+        let isLockPlaceholder = baseInfo.groupCryptoMode > 0
+            && !DTGroupCryptoDisplayHelper.shared.canDecryptAvatar(gid: gid, transaction: transaction)
         transaction.addAsyncCompletionOnMain {
             let processor = DTGroupAvatarUpdateProcessor(groupThread: groupThread)
             processor.handleReceivedGroupAvatarUpdate(withAvatarUpdate: avatarURL, success: { attachmentStream in
                 guard let image = attachmentStream.image() else {
-                    Logger.error("[GroupCrypto] downloadEncryptedAvatar: attachmentStream.image() nil, gid: \(gid)")
+                    Logger.error("[GroupCrypto] downloadEncryptedAvatar: image nil, gid: \(gid)")
                     return
                 }
                 NSObject.databaseStorage.asyncWrite { writeTransaction in
+                    // Race guard 1 (stale): download is async; if encryptedAvatar changed mid-download
+                    // this is an old image — only write it for the current ciphertext.
+                    let currentEnc = DTGroupBaseInfoEntity.anyFetch(uniqueId: gid, transaction: writeTransaction)?.encryptedAvatar ?? ""
+                    guard currentEnc == capturedEncryptedAvatar else {
+                        return
+                    }
+                    // Race guard 2 (lock): lock & real avatar download concurrently; if the lock arrives
+                    // late but we can already decrypt, don't let it overwrite the real avatar.
+                    if isLockPlaceholder,
+                       DTGroupCryptoDisplayHelper.shared.canDecryptAvatar(gid: gid, transaction: writeTransaction) {
+                        return
+                    }
                     let thread = TSGroupThread.getOrCreateThread(withGroupId: capturedGroupId, transaction: writeTransaction)
                     thread.anyUpdateGroupThread(transaction: writeTransaction) { t in
                         t.groupModel.groupImage = image
-                        t.groupModel.groupAvatarVersion = 0
+                        // Don't force groupAvatarVersion=0: that clears the avatarUpdate path's version
+                        // and bypasses its guard. The key path only renders the current ciphertext's image.
                     }
                     thread.fireAvatarChangedNotification()
-                    Logger.info("[GroupCrypto] downloadEncryptedAvatar success, gid: \(gid)")
-                    DTGroupCryptoDisplayHelper.shared.markAvatarDownloaded(gid: gid, encryptedAvatar: capturedEncryptedAvatar)
+                    if !isLockPlaceholder {
+                        DTGroupCryptoDisplayHelper.shared.markAvatarDownloaded(gid: gid, encryptedAvatar: capturedEncryptedAvatar)
+                    }
                 }
             }, failure: { error in
                 Logger.error("[GroupCrypto] downloadEncryptedAvatar failed, gid: \(gid), error: \(error)")
             })
-        }
-    }
-
-    @objc public static func repairMissingGroupCryptoKeys() {
-        let keyStore = DTGroupCryptoKeyStoreImpl()
-        NSObject.databaseStorage.asyncRead { transaction in
-            var missingGids: [(gid: String, localGroupId: Data)] = []
-            Self.enumerateEncryptedGroupThreads(transaction: transaction) { groupThread in
-                let gid = groupThread.serverThreadId
-                if keyStore.fetchRGroup(forGid: gid, transaction: transaction) != nil { return }
-                Logger.warn("[GroupCrypto] Missing R_group for gid: \(gid), will refresh baseInfo")
-                missingGids.append((gid, groupThread.groupModel.groupId))
-            }
-
-            for item in missingGids {
-                NSObject.databaseStorage.asyncWrite { writeTransaction in
-                    let processor = DTGroupUpdateMessageProcessor()
-                    processor.requestGroupInfo(withGroupId: item.localGroupId,
-                                                targetVersion: 0,
-                                                needSystemMessage: false,
-                                                generate: false,
-                                                envelope: nil,
-                                                groupNotifyEntity: nil,
-                                                transaction: writeTransaction,
-                                                completion: { _ in })
-                }
-            }
         }
     }
 

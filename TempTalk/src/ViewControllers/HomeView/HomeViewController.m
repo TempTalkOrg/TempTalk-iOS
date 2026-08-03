@@ -143,18 +143,15 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
     [self updateReminderViews];
     [self applyTheme];
     [self stickNoteToSelfIfNeeded];
-
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        [DTGroupKeyMessageHandler repairMissingGroupCryptoKeys];
-    });
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     
     self.isViewVisible = YES;
-    
+    // Refresh the proxy shield in case the proxy was toggled on the settings page.
+    [self updateBarButtonItems];
+
     OWSLogInfo(@"[homevc] home vc viewWillAppear");
 }
 
@@ -321,7 +318,58 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
                                                                     target:self
                                                                     action:@selector(showActionFloatView:)];
     barAddButton.accessibilityLabel = Localized(@"CREATE_NEW_GROUP", @"Accessibility label for the create group new group button");
-    self.navigationItem.rightBarButtonItem = barAddButton;
+
+    // rightBarButtonItems are laid out right-to-left, so the proxy shield (when shown) sits to
+    // the left of the "+" button (mirrors the Android shield). The shield's horizontal
+    // offset toward the "+" is done via imageInsets in proxyStatusBarButtonItem — negative
+    // fixed-space items are ignored by the Auto Layout nav bar on iOS 11+.
+    NSMutableArray<UIBarButtonItem *> *rightItems = [NSMutableArray arrayWithObject:barAddButton];
+    UIBarButtonItem *proxyShield = [self proxyStatusBarButtonItem];
+    if (proxyShield) {
+        [rightItems addObject:proxyShield];
+    }
+    self.navigationItem.rightBarButtonItems = rightItems;
+}
+
+// Proxy status shield: hidden when the proxy is off; green check when connected through the proxy,
+// gray ✕ otherwise. Two states only — connectivity is derived from the main IM socket:
+// proxy-on means all traffic is tunneled, so "socket open" means "connected through the proxy",
+// and connecting/closed both read as not-yet-connected. Icons are full-color Figma assets, so
+// they render as original (no tint).
+- (nullable UIBarButtonItem *)proxyStatusBarButtonItem {
+    if (![ProxyManager.shared isEnabled]) {
+        return nil;
+    }
+    // Green only when the tunnel is actually running AND the main socket is open. Fail-closed
+    // routing means a socket can only ever open THROUGH the proxy (proxy-on-but-not-ready returns a
+    // fail-closed socket that never connects), so an open socket genuinely means "through the
+    // proxy"; also requiring the running tunnel guards the teardown window (startedPort briefly 0)
+    // from showing a false "protected". Otherwise gray ✕.
+    BOOL tunnelRunning = ([ProxyManager.shared connectionProxyDictionary] != nil);
+    BOOL connected = tunnelRunning && (self.socketManager.socketState == OWSWebSocketStateOpen);
+    NSString *imageName = connected ? @"ic_proxy_shield_connected" : @"ic_proxy_shield_unavailable";
+    UIImage *image = [[UIImage imageNamed:imageName] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    if (!image) {
+        return nil;
+    }
+    // Use a customView button sized tight to the 24pt icon. A plain image bar button reserves a
+    // ~44pt touch slot whose wide white padding pushes the icon left and opens a big gap to "+";
+    // a tight customView removes that padding so the shield sits close to "+".
+    UIButton *shieldButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    [shieldButton setImage:image forState:UIControlStateNormal];
+    shieldButton.frame = CGRectMake(0, 0, 24, 24);
+    shieldButton.adjustsImageWhenHighlighted = NO;   // no dim animation on tap, jump straight in
+    [shieldButton addTarget:self action:@selector(proxyShieldTapped) forControlEvents:UIControlEventTouchUpInside];
+
+    UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithCustomView:shieldButton];
+    item.accessibilityLabel = Localized(@"PROXY_USE_PROXY", @"");
+    return item;
+}
+
+- (void)proxyShieldTapped {
+    DTProxySettingsViewController *proxyVC = [DTProxySettingsViewController new];
+    proxyVC.hidesBottomBarWhenPushed = YES;
+    [self.navigationController pushViewController:proxyVC animated:YES];
 }
 
 - (void)settingsButtonPressed:(id)sender {
@@ -454,6 +502,9 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
 #pragma mark - Socket State
 
 - (void)socketStateDidChange {
+    // Keep the proxy shield in sync with the live connection state.
+    [self updateBarButtonItems];
+
     if (TSAccountManager.sharedInstance.isDeregistered) {
         self.leftTitle = Localized(@"NETWORK_STATUS_DEREGISTERED", @"");
         return;

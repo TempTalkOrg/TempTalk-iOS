@@ -25,6 +25,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 NSString *const kSelectRecipientViewControllerCellIdentifier = @"kSelectRecipientViewControllerCellIdentifier";
 
+CGFloat const kSelectRecipientSearchBarHeight = 56;
+
 #pragma mark -
 
 @interface SelectRecipientViewController () <
@@ -49,6 +51,9 @@ NSString *const kSelectRecipientViewControllerCellIdentifier = @"kSelectRecipien
 
 @property (nonatomic, strong) NSMutableArray <NSString *> *selectedRecipientIds;
 
+@property (nonatomic, strong) UIView *fixedHeaderContainerInternal;
+@property (nonatomic, strong) NSLayoutConstraint *fixedHeaderHeightConstraint;
+
 @end
 
 #pragma mark -
@@ -69,6 +74,7 @@ NSString *const kSelectRecipientViewControllerCellIdentifier = @"kSelectRecipien
 - (void)applyTheme {
     [super applyTheme];
     self.tableView.backgroundColor = Theme.bg1Color;
+    self.fixedHeaderContainerInternal.backgroundColor = Theme.bgpagePrimaryColor;
 }
 
 - (void)loadView
@@ -109,27 +115,50 @@ NSString *const kSelectRecipientViewControllerCellIdentifier = @"kSelectRecipien
 {
     OWSAssertDebug(self.delegate);
 
-    _tableViewController = [OWSTableViewController new];
-    _tableViewController.delegate = self;
-    [self.view addSubview:self.tableViewController.view];
-    [_tableViewController.view autoPinWidthToSuperview];
-    [_tableViewController.view autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
-    [_tableViewController.view autoPinEdgeToSuperviewEdge:ALEdgeBottom];
-    self.tableView.rowHeight = UITableViewAutomaticDimension;
-    self.tableView.estimatedRowHeight = 60;
-    self.tableView.backgroundColor = Theme.bg1Color;
+    // Non-scrolling header above the table; subclasses may add rows below the search bar.
+    UIView *fixedHeaderContainer = [UIView new];
+    _fixedHeaderContainerInternal = fixedHeaderContainer;
+    fixedHeaderContainer.backgroundColor = Theme.bgpagePrimaryColor;
+    fixedHeaderContainer.clipsToBounds = YES;
+    [self.view addSubview:fixedHeaderContainer];
+    [fixedHeaderContainer autoPinWidthToSuperview];
+    [fixedHeaderContainer autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
+    self.fixedHeaderHeightConstraint = [fixedHeaderContainer autoSetDimension:ALDimensionHeight
+                                                                       toSize:kSelectRecipientSearchBarHeight];
+
     OWSSearchBar *searchBar = [OWSSearchBar new];
     _searchBar = searchBar;
     searchBar.customPlaceholder = Localized(@"SEARCH_BYNAMEORNUMBER_PLACEHOLDER_TEXT",
         @"Placeholder text for search bar which filters contacts.");
     searchBar.delegate = self;
-    [searchBar sizeToFit];
+    [fixedHeaderContainer addSubview:searchBar];
+    [searchBar autoPinWidthToSuperview];
+    [searchBar autoPinEdgeToSuperviewEdge:ALEdgeTop];
+    [searchBar autoSetDimension:ALDimensionHeight toSize:kSelectRecipientSearchBarHeight];
 
-    self.tableView.tableHeaderView = searchBar;
-    
+    _tableViewController = [OWSTableViewController new];
+    _tableViewController.delegate = self;
+    [self.view addSubview:self.tableViewController.view];
+    [_tableViewController.view autoPinWidthToSuperview];
+    [_tableViewController.view autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:fixedHeaderContainer];
+    [_tableViewController.view autoPinEdgeToSuperviewEdge:ALEdgeBottom];
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedRowHeight = 60;
+    self.tableView.backgroundColor = Theme.bg1Color;
+
     [self updateTableContents];
 
     [self updatePhoneNumberButtonEnabling];
+}
+
+- (UIView *)fixedHeaderContainer
+{
+    return self.fixedHeaderContainerInternal;
+}
+
+- (void)setFixedHeaderHeight:(CGFloat)height
+{
+    self.fixedHeaderHeightConstraint.constant = height;
 }
 
 - (UILabel *)countryCodeLabel
@@ -455,8 +484,12 @@ NSString *const kSelectRecipientViewControllerCellIdentifier = @"kSelectRecipien
             item.canEdit = NO;
             [contactsSection addItem:item];
         } else {
-            contactsSection.headerTitle = [self.delegate contactsSectionTitle];
-            contactsSection.customHeaderHeight = @(34.f);
+            NSString *contactsSectionTitle = [self.delegate contactsSectionTitle];
+            // Empty title = no section header.
+            if (contactsSectionTitle.length > 0) {
+                contactsSection.headerTitle = contactsSectionTitle;
+                contactsSection.customHeaderHeight = @(34.f);
+            }
             @weakify(self)
             NSArray *memberIds = nil;
             BOOL needFilter = NO;

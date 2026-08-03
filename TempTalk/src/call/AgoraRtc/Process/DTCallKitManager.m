@@ -26,6 +26,7 @@
 #import <LiveKitWebRTC/LiveKitWebRTC.h>
 #import <Foundation/Foundation.h>
 #import <CoreFoundation/CoreFoundation.h>
+#import <UserNotifications/UserNotifications.h>
 
 static dispatch_queue_t callKitQueue(void) {
     static dispatch_queue_t queue;
@@ -36,6 +37,164 @@ static dispatch_queue_t callKitQueue(void) {
     return queue;
 }
 
+static BOOL TTCallKitCriticalFlagValue(id value) {
+    if ([value isKindOfClass:NSNumber.class]) {
+        return [value boolValue];
+    }
+    if ([value isKindOfClass:NSString.class]) {
+        NSString *normalized = [(NSString *)value lowercaseString];
+        return [normalized isEqualToString:@"1"] || [normalized isEqualToString:@"true"] || [normalized isEqualToString:@"yes"];
+    }
+    return NO;
+}
+
+static NSDictionary *TTCallKitDictionary(id value) {
+    return [value isKindOfClass:NSDictionary.class] ? (NSDictionary *)value : nil;
+}
+
+static BOOL TTCallKitCallTypeValue(id value) {
+    NSInteger type = -1;
+    if ([value isKindOfClass:NSNumber.class]) {
+        type = [(NSNumber *)value integerValue];
+    } else if ([value isKindOfClass:NSString.class]) {
+        type = [(NSString *)value integerValue];
+    }
+
+    switch (type) {
+        case 3:  // PERSONAL_CALL
+        case 4:  // PERSONAL_CALL_CANCEL
+        case 5:  // PERSONAL_CALL_TIMEOUT
+        case 13: // GROUP_CALL
+        case 14: // GROUP_CALL_COLSE
+        case 15: // GROUP_CALL_OVER
+        case 22: // ENC_CALL
+            return YES;
+        default:
+            return NO;
+    }
+}
+
+static BOOL TTCallKitUserInfoIsCallNotification(NSDictionary *userInfo) {
+    NSDictionary *aps = TTCallKitDictionary(userInfo[@"aps"]);
+    NSDictionary *alert = TTCallKitDictionary(aps[@"alert"]);
+    NSString *locKey = [alert[@"loc-key"] isKindOfClass:NSString.class] ? alert[@"loc-key"] : nil;
+
+    static NSSet<NSString *> *callLocKeys;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        callLocKeys = [NSSet setWithObjects:@"PERSONAL_CALL",
+                                           @"PERSONAL_CALL_CANCEL",
+                                           @"PERSONAL_CALL_TIMEOUT",
+                                           @"GROUP_CALL",
+                                           @"GROUP_CALL_COLSE",
+                                           @"GROUP_CALL_OVER",
+                                           @"MEETING-POPUPS",
+                                           @"ENC_CALL",
+                                           nil];
+    });
+
+    if (locKey.length > 0 && [callLocKeys containsObject:locKey]) {
+        return YES;
+    }
+
+    return TTCallKitCallTypeValue(aps[@"type"] ?: userInfo[@"type"]);
+}
+
+static BOOL TTCallKitUserInfoHasCriticalAlert(NSDictionary *userInfo) {
+    NSDictionary *aps = TTCallKitDictionary(userInfo[@"aps"]);
+    id interruptionLevel = aps[@"interruption-level"] ?: userInfo[@"interruption-level"] ?: userInfo[@"interruptionLevel"];
+    if ([interruptionLevel isKindOfClass:NSString.class] &&
+        [(NSString *)interruptionLevel caseInsensitiveCompare:@"critical"] == NSOrderedSame) {
+        return YES;
+    }
+
+    id sound = aps[@"sound"] ?: userInfo[@"sound"];
+    NSDictionary *soundDict = TTCallKitDictionary(sound);
+    return TTCallKitCriticalFlagValue(soundDict[@"critical"]);
+}
+
+static BOOL TTCallKitUserInfoHasCallCriticalAlert(NSDictionary *userInfo) {
+    return TTCallKitUserInfoIsCallNotification(userInfo) && TTCallKitUserInfoHasCriticalAlert(userInfo);
+}
+
+static BOOL TTCallKitStringContainsCallHint(NSString *value, NSString *callHint) {
+    return [value isKindOfClass:NSString.class] &&
+           [callHint isKindOfClass:NSString.class] &&
+           value.length > 0 &&
+           callHint.length > 0 &&
+           [value containsString:callHint];
+}
+
+static BOOL TTCallKitNotificationMatchesCallHint(UNNotification *notification, NSString *callHint) {
+    if (TTCallKitStringContainsCallHint(notification.request.identifier, callHint)) {
+        return YES;
+    }
+    if (TTCallKitStringContainsCallHint(notification.request.content.threadIdentifier, callHint)) {
+        return YES;
+    }
+
+    NSDictionary *userInfo = notification.request.content.userInfo;
+    NSDictionary *aps = TTCallKitDictionary(userInfo[@"aps"]);
+    NSString *passthrough = [aps[@"passthrough"] isKindOfClass:NSString.class] ? aps[@"passthrough"] : nil;
+    return TTCallKitStringContainsCallHint(passthrough, callHint);
+}
+
+static BOOL TTCallKitShouldRemoveDeliveredCriticalAlert(UNNotification *notification, NSString *callHint) {
+    NSDictionary *userInfo = notification.request.content.userInfo;
+    if (TTCallKitUserInfoHasCallCriticalAlert(userInfo)) {
+        return YES;
+    }
+
+    if (!TTCallKitUserInfoHasCriticalAlert(userInfo)) {
+        return NO;
+    }
+
+    // Some server-driven critical ring alerts do not carry call metadata in the
+    // delivered notification. Remove only the currently ringing/recent alert when
+    // it can be correlated to the caller, instead of leaving it to compete with
+    // CallKit audio.
+    NSTimeInterval age = [[NSDate date] timeIntervalSinceDate:notification.date];
+    return age >= 0 && age <= 90 && TTCallKitNotificationMatchesCallHint(notification, callHint);
+}
+
+static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uuidString, NSString *callHint) {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+
+    [center getDeliveredNotificationsWithCompletionHandler:^(NSArray<UNNotification *> *notifications) {
+        NSMutableArray<NSString *> *identifiers = [NSMutableArray array];
+        for (UNNotification *notification in notifications) {
+            if (TTCallKitShouldRemoveDeliveredCriticalAlert(notification, callHint)) {
+                [identifiers addObject:notification.request.identifier];
+            }
+        }
+        if (identifiers.count > 0) {
+            OWSLogInfo(@"[call][callkit] removing delivered critical notifications, reason=%@, uuid=%@, callHint=%@, ids=%@",
+                       reason,
+                       uuidString,
+                       callHint,
+                       identifiers);
+            [center removeDeliveredNotificationsWithIdentifiers:identifiers];
+        }
+    }];
+
+    [center getPendingNotificationRequestsWithCompletionHandler:^(NSArray<UNNotificationRequest *> *requests) {
+        NSMutableArray<NSString *> *identifiers = [NSMutableArray array];
+        for (UNNotificationRequest *request in requests) {
+            if (TTCallKitUserInfoHasCallCriticalAlert(request.content.userInfo)) {
+                [identifiers addObject:request.identifier];
+            }
+        }
+        if (identifiers.count > 0) {
+            OWSLogInfo(@"[call][callkit] removing pending critical notifications, reason=%@, uuid=%@, ids=%@",
+                       reason,
+                       uuidString,
+                       identifiers);
+            [center removePendingNotificationRequestsWithIdentifiers:identifiers];
+        }
+    }];
+}
+
+/// How long to hold a CXAnswerCallAction waiting for the LiveKit room to connect.
 @interface DTCallKitManager () <CXCallObserverDelegate, CXProviderDelegate>
 
 @property (nonatomic, strong) CXProvider *provider;
@@ -159,7 +318,7 @@ static dispatch_queue_t callKitQueue(void) {
     NSUInteger activeCount = [self getActiveCallsCountFromCallerMap];
     if (activeCount >= 2) {
         [self.callerMapLock unlock];
-        OWSLogInfo(@"[CALLKIT_DEBUG] didReceiveCall - already %lu active calls, rejecting", activeCount);
+        OWSLogInfo(@"%@ didReceiveCall rejected: activeCalls=%lu", self.logTag, activeCount);
         if (preReportedUUID) {
             [self endPlaceholderCall:preReportedUUID completion:completion];
         } else {
@@ -191,8 +350,7 @@ static dispatch_queue_t callKitQueue(void) {
         }
     }
 
-    OWSLogInfo(@"[CALLKIT_DEBUG] didReceiveCall - processing call, current callerMap count: %lu, keys: %@",
-               self.callerMap.count, [self.callerMap allKeys]);
+    OWSLogInfo(@"%@ didReceiveCall processing: callerMapCount=%lu", self.logTag, self.callerMap.count);
 
     NSUUID *uuid = preReportedUUID ?: [NSUUID UUID];
     NSString *uuidString = uuid.UUIDString;
@@ -220,14 +378,11 @@ static dispatch_queue_t callKitQueue(void) {
         NSString *serverGid = [TSGroupThread transformToServerGroupIdWithLocalGroupId:calling.conversationID.groupID];
         __block NSString *resolvedName = nil;
         [SDSDatabaseStorage.shared readWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
-            resolvedName = [DTGroupCryptoDisplayHelper.shared resolveGroupDisplayNameWithServerGroupId:serverGid
-                                                                                          fallbackName:meetingName
-                                                                                           transaction:transaction];
+            resolvedName = [DTGroupCryptoDisplayHelper.shared resolveGroupCallDisplayNameWithTrustedPlaintextName:meetingName
+                                                                                                   serverGroupId:serverGid
+                                                                                                     transaction:transaction];
         }];
         nameForDisplay = resolvedName;
-        if (!DTParamsUtils.validateString(nameForDisplay)) {
-            nameForDisplay = meetingName;
-        }
     } else {
         value = [NSString stringWithFormat:@"instant.%@.%@", callerID, meetingVersion];
         nameForDisplay = [NSString stringWithFormat:@"%@'s instant call", [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerID]];
@@ -275,8 +430,7 @@ static dispatch_queue_t callKitQueue(void) {
         WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
         caller.systemState = CKCallSystemStateReported;
 
-        OWSLogInfo(@"[CALLKIT_DEBUG] didReceiveCall - call data set, callerMap.count: %lu",
-                   self.callerMap.count);
+        OWSLogInfo(@"%@ didReceiveCall data ready: callerMapCount=%lu", self.logTag, self.callerMap.count);
 
         if (completion) { completion(); }
 
@@ -302,12 +456,12 @@ static dispatch_queue_t callKitQueue(void) {
                 return;
             }
 
-            OWSLogError(@"[CALLKIT_DEBUG] didReceiveCall - reportNewIncomingCall error: %@ (code: %ld, domain: %@)",
-                        error.localizedDescription, (long)error.code, error.domain);
+            OWSLogError(@"%@ reportNewIncomingCall failed: %@ (code=%ld, domain=%@)",
+                        self.logTag, error.localizedDescription, (long)error.code, error.domain);
             if (completion) { completion(); }
 
             if (calling && [self getActiveCallsCountFromCallerMap] > 0) {
-                OWSLogWarn(@"[CALLKIT_DEBUG] didReceiveCall - report rejected with active call, forwarding to in-app UI");
+                OWSLogWarn(@"%@ report rejected with active call, forwarding to in-app UI", self.logTag);
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [[DTMeetingManager shared] handleIncomingCallRejectedByCallKit:calling];
                 });
@@ -422,10 +576,27 @@ static dispatch_queue_t callKitQueue(void) {
     }];
 }
 
+- (nullable NSNumber *)callKitMuteIntentForUUID:(NSString *)uuidString
+{
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    BOOL callerExists = caller != nil;
+    BOOL hasIntent = caller.hasCallKitMuteIntent;
+    BOOL isMuted = caller.isMuted;
+    [self.callerMapLock unlock];
+
+    if (!callerExists || !hasIntent) { return nil; }
+    return @(isMuted);
+}
+
 #pragma mark - End Call
 
 - (void)endCallAction:(NSString *)uuidString onlyForCallKit:(BOOL)onlyForCallKit
 {
+    if (onlyForCallKit) {
+        [self removeCallKitUIOnly:uuidString];
+        return;
+    }
     [self.callerMapLock lock];
     WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
     [self.callerMapLock unlock];
@@ -482,6 +653,80 @@ static dispatch_queue_t callKitQueue(void) {
     [_provider reportOutgoingCallWithUUID:caller.uuid connectedAtDate:nil];
 }
 
+#pragma mark - Pending Answer Action (delayed fulfill)
+
+- (void)fulfillPendingAnswerAction:(NSString *)uuidString {
+    [self resolvePendingAnswerActionForUUID:uuidString fulfilled:YES];
+}
+
+/// Resolve a held CXAnswerCallAction exactly once: fulfill on connect success, fail
+/// when the call is torn down before it connected. Idempotent and thread-safe; a
+/// no-op when nothing is being held (caller side / non-CallKit answer / already resolved).
+- (void)resolvePendingAnswerActionForUUID:(NSString *)uuidString fulfilled:(BOOL)fulfilled {
+    if (uuidString.length == 0) { return; }
+
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    CXAnswerCallAction *action = caller.pendingAnswerAction;
+    NSString *callerAccount = [caller.callerAccount copy];
+    caller.pendingAnswerAction = nil;
+    [self.callerMapLock unlock];
+
+    if (!action) { return; }
+
+    if (fulfilled) {
+        OWSLogInfo(@"%@ fulfilling held answer action (connected), uuid: %@", self.logTag, uuidString);
+        TTCallKitRemoveCriticalNotifications(@"before fulfill answer", uuidString, callerAccount);
+        [action fulfill];
+    } else {
+        OWSLogInfo(@"%@ failing held answer action (torn down before connect), uuid: %@", self.logTag, uuidString);
+        [action fail];
+    }
+}
+
+/// End a call that was answered via CallKit but never finished connecting. Fails the
+/// held answer action, dismisses the system UI, and tears down the in-flight LiveKit
+/// connect via the normal end path. Idempotent. Only reached when CallKit times out
+/// its own held answer action; the normal connect-failure give-up goes through the
+/// app's connection-phase timeout + caller teardown, which resolves the held action.
+- (void)endHeldAnswerConnectForUUID:(NSString *)uuidString reason:(NSString *)reason {
+    if (uuidString.length == 0) { return; }
+
+    WeaCallKitCaller *caller = [self callerForUUID:uuidString];
+    // Guard on pendingAnswerAction: a fast .connected may have already resolved
+    // (fulfilled) the action, so bail rather than tearing down a live call.
+    // Read pendingAnswerAction under the lock: this method runs on callKitQueue()
+    // (via provider:timedOutPerformingAction:), concurrently with
+    // resolvePendingAnswerActionForUUID: nil-ing the same nonatomic strong property
+    // from the main queue — an unguarded read here would be a data race.
+    [self.callerMapLock lock];
+    BOOL hasPendingAnswerAction = caller.pendingAnswerAction != nil;
+    [self.callerMapLock unlock];
+    if (!caller || caller.isEnded || !hasPendingAnswerAction) {
+        // Already resolved/torn down elsewhere (or never held); nothing to end.
+        [self resolvePendingAnswerActionForUUID:uuidString fulfilled:NO];
+        return;
+    }
+    OWSLogError(@"%@ ending held answer before connect, reason=%@ uuid=%@", self.logTag, reason, uuidString);
+    caller.isEnded = YES;
+    caller.hungup = YES;
+    caller.systemState = CKCallSystemStateRemoved;
+    NSUUID *currentUUID = caller.uuid;
+
+    // Fail the held answer action (resolves the outstanding CXAction), then report the
+    // call ended so the system UI is dismissed even if failing alone didn't remove it.
+    [self resolvePendingAnswerActionForUUID:uuidString fulfilled:NO];
+    if (currentUUID) {
+        [_provider reportCallWithUUID:currentUUID endedAtDate:nil reason:CXCallEndedReasonFailed];
+    }
+
+    // Tear down the in-flight LiveKit connect + app state via the normal end handling.
+    if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallStatus:uuidString:)]) {
+        [self.delegate refreshCurrentCallStatus:CallStatusEnd uuidString:uuidString];
+    }
+    [self finalizeCallerCleanupForUUID:uuidString];
+}
+
 #pragma mark - CXCallObserverDelegate
 
 - (void)callObserver:(CXCallObserver *)callObserver callChanged:(CXCall *)call {
@@ -505,6 +750,9 @@ static dispatch_queue_t callKitQueue(void) {
     for (NSString *uuidString in allUUIDs) {
         WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
         caller.backgroundTask = nil;
+        // Provider is gone; drop the held action reference (do not fulfill/fail — the
+        // action is already invalid) so it doesn't outlive the reset.
+        caller.pendingAnswerAction = nil;
         [self.callerMap removeObjectForKey:uuidString];
     }
     [self.callerMapLock unlock];
@@ -516,7 +764,7 @@ static dispatch_queue_t callKitQueue(void) {
         [DTMeetingManager shared].currentCall.callKitUUID = nil;
         [[DTMeetingManager shared] syncServerCalls];
     });
-    OWSLogInfo(@"[CALLKIT_DEBUG] providerDidReset completed");
+    OWSLogInfo(@"%@ providerDidReset completed", self.logTag);
 }
 
 - (void)providerDidBegin:(CXProvider *)provider
@@ -543,29 +791,42 @@ static dispatch_queue_t callKitQueue(void) {
 
 - (void)provider:(CXProvider *)provider performAnswerCallAction:(CXAnswerCallAction *)action {
     NSString *uuidString = action.callUUID.UUIDString;
-    OWSLogInfo(@"[CALLKIT_DEBUG] performAnswerCallAction - UUID: %@", uuidString);
+    OWSLogInfo(@"%@ performAnswerCallAction uuid=%@", self.logTag, uuidString);
     [self.callerMapLock lock];
     WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    NSString *callerAccount = [caller.callerAccount copy];
     [self.callerMapLock unlock];
     if (!caller) {
-        OWSLogError(@"[CALLKIT_DEBUG] performAnswerCallAction - caller not found");
+        OWSLogError(@"%@ performAnswerCallAction caller not found", self.logTag);
         [action fulfill];
         return;
     }
     caller.isAccepted = YES;
     caller.answered = YES;
+    TTCallKitRemoveCriticalNotifications(@"answer action", uuidString, callerAccount);
     [DTRTCAudioSession.shared callkitHandleCall:YES];
     [self stopTimeoutTimerForUUID:uuidString];
-    [action fulfill];
+
+    // Do NOT fulfill yet. Hold the answer action so the system call UI stays in the
+    // "Connecting…" state until LiveKit actually connects; -fulfillPendingAnswerAction:
+    // (driven by the .connected lifecycle transition) resolves it. Principle: connect →
+    // answered, can't connect → cancelled. If the room never connects, the app's own
+    // connection-phase timeout ends the call and the caller teardown resolves the held
+    // action (fail), so we never present a fake connected state.
+    [self.callerMapLock lock];
+    caller.pendingAnswerAction = action;
+    [self.callerMapLock unlock];
+
+    OWSLogInfo(@"%@ answer held (not fulfilled), waiting for room connect, uuid=%@", self.logTag, uuidString);
+
     if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallStatus:uuidString:)]) {
         [self.delegate refreshCurrentCallStatus:CallStatusAccept uuidString:uuidString];
     }
-    OWSLogInfo(@"[CALLKIT_DEBUG] performAnswerCallAction - done, uuid: %@", uuidString);
 }
 
 - (void)provider:(CXProvider *)provider performEndCallAction:(CXEndCallAction *)action {
     NSString *uuidString = action.callUUID.UUIDString;
-    OWSLogInfo(@"[CALLKIT_DEBUG] performEndCallAction - UUID: %@", uuidString);
+    OWSLogInfo(@"%@ performEndCallAction uuid=%@", self.logTag, uuidString);
 
     [self.callerMapLock lock];
     WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
@@ -576,30 +837,20 @@ static dispatch_queue_t callKitQueue(void) {
         return;
     }
     if (caller.isEnded) {
-        OWSLogInfo(@"[CALLKIT_DEBUG] performEndCallAction - already handled for %@, cleanup only", uuidString);
-        [self stopTimeoutTimerForUUID:uuidString];
-        [self resetVariableData:uuidString];
-        NSUInteger activeCallCount = [self getActiveCallsCountFromCallerMap];
-        if (activeCallCount == 0) {
-            [DTRTCAudioSession.shared callkitHandleCall:NO];
-        }
+        OWSLogInfo(@"%@ performEndCallAction already handled, cleanup only uuid=%@", self.logTag, uuidString);
+        [self finalizeCallerCleanupForUUID:uuidString];
         [action fulfill];
         return;
     }
     caller.isEnded = YES;
     caller.hungup = YES;
     caller.systemState = CKCallSystemStateRemoved;
-    [self stopTimeoutTimerForUUID:uuidString];
     if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallStatus:uuidString:)]) {
         [self.delegate refreshCurrentCallStatus:CallStatusEnd uuidString:uuidString];
     }
-    [self resetVariableData:uuidString];
-    NSUInteger activeCallCount = [self getActiveCallsCountFromCallerMap];
-    if (activeCallCount == 0) {
-        [DTRTCAudioSession.shared callkitHandleCall:NO];
-    }
+    [self finalizeCallerCleanupForUUID:uuidString];
     [action fulfill];
-    OWSLogInfo(@"[CALLKIT_DEBUG] performEndCallAction - done, uuid: %@, remaining: %lu", uuidString, [self getActiveCallsCount]);
+    OWSLogInfo(@"%@ performEndCallAction done: uuid=%@, remaining=%lu", self.logTag, uuidString, [self getActiveCallsCount]);
 }
 
 - (void)provider:(CXProvider *)provider performSetMutedCallAction:(CXSetMutedCallAction *)action {
@@ -617,6 +868,7 @@ static dispatch_queue_t callKitQueue(void) {
         caller.isMutedByApp = NO;
         return;
     }
+    caller.hasCallKitMuteIntent = YES;
     caller.isMuted = action.muted;
     if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallMuteState:uuidString:)]) {
         [self.delegate refreshCurrentCallMuteState:action.muted uuidString:uuidString];
@@ -633,6 +885,15 @@ static dispatch_queue_t callKitQueue(void) {
             [action fulfill];
             return;
         }
+    }
+    if ([action isKindOfClass:[CXAnswerCallAction class]]) {
+        // CallKit timed out our held answer action. Principle: never show in-call
+        // unless connected — end the call (which fails this action) instead of
+        // fulfilling into a fake connected state.
+        NSString *uuidString = ((CXAnswerCallAction *)action).callUUID.UUIDString;
+        OWSLogError(@"%@ answer action timed out (CallKit) before connect, ending call, uuid: %@", self.logTag, uuidString);
+        [self endHeldAnswerConnectForUUID:uuidString reason:@"callkit-action-timeout"];
+        return;
     }
     OWSLogWarn(@"%@ CallKit action timed out, fulfilling: %@", self.logTag, action);
     [action fulfill];
@@ -659,6 +920,7 @@ static dispatch_queue_t callKitQueue(void) {
 
     BOOL speaker = [DTRTCAudioSession.shared shouldUseSpeaker:!isPrivate];
     [DTRTCAudioSession.shared callkitDidActivateAudioSession:audioSession speaker:speaker];
+    [[DTMeetingManager shared] callKitAudioSessionDidActivate];
 }
 
 - (void)provider:(CXProvider *)provider didDeactivateAudioSession:(AVAudioSession *)audioSession
@@ -669,10 +931,60 @@ static dispatch_queue_t callKitQueue(void) {
 
 #pragma mark - Private
 
+/// Shared local-state teardown for a caller: stop its timeout timer, drop it
+/// from the callerMap, and restore the audio route when no active call remains.
+/// Intentionally excludes UI dismissal (reportCallWithUUID:) and the
+/// refreshCurrentCallStatus: delegate hop — callers decide those per semantics.
+- (void)finalizeCallerCleanupForUUID:(NSString *)uuidString {
+    [self stopTimeoutTimerForUUID:uuidString];
+    [self resetVariableData:uuidString];
+    if ([self getActiveCallsCountFromCallerMap] == 0) {
+        [DTRTCAudioSession.shared callkitHandleCall:NO];
+    }
+}
+
+/// Remove only the system CallKit UI for a placeholder/stale incoming call.
+/// Reports the call ended to CXProvider (idempotent, no-op if system no longer
+/// tracks it) WITHOUT issuing a CXEndCallAction, so performEndCallAction —
+/// and therefore handleCallKitEnd's reject path — is never triggered.
+- (void)removeCallKitUIOnly:(NSString *)uuidString {
+    [self.callerMapLock lock];
+    WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+    if (caller == nil) {
+        [self.callerMapLock unlock];
+        OWSLogInfo(@"%@ removeCallKitUIOnly - no caller for uuid: %@", self.logTag, uuidString);
+        return;
+    }
+    if (caller.uuid == nil) {
+        [self.callerMapLock unlock];
+        OWSLogWarn(@"%@ removeCallKitUIOnly - caller has no uuid: %@", self.logTag, uuidString);
+        return;
+    }
+    if (caller.isEnded) {
+        [self.callerMapLock unlock];
+        OWSLogInfo(@"%@ removeCallKitUIOnly - already ended, cleanup only: %@", self.logTag, uuidString);
+        [self finalizeCallerCleanupForUUID:uuidString];
+        return;
+    }
+    caller.isEnded = YES;
+    caller.hungup = YES;
+    caller.systemState = CKCallSystemStateRemoved;
+    NSUUID *currentUUID = caller.uuid;
+    [self.callerMapLock unlock];
+
+    [_provider reportCallWithUUID:currentUUID endedAtDate:nil reason:CXCallEndedReasonRemoteEnded];
+    [self finalizeCallerCleanupForUUID:uuidString];
+    OWSLogInfo(@"%@ removed callkit UI uuid: %@", self.logTag, currentUUID.UUIDString);
+}
+
 - (void)resetVariableData:(NSString *)uuidString {
     if (uuidString) {
         // Always stop the timeout timer when cleaning up a caller (F3 fix)
         [self stopTimeoutTimerForUUID:uuidString];
+
+        // Resolve any held answer action so we never leak an un-fulfilled CXAction when
+        // the caller is torn down before the room connected. No-op if already fulfilled.
+        [self resolvePendingAnswerActionForUUID:uuidString fulfilled:NO];
 
         [self.callerMapLock lock];
         WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];

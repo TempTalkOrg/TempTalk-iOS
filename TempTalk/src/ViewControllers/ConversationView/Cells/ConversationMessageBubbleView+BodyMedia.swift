@@ -159,14 +159,61 @@ extension ConversationMessageBubbleView {
     }
     
     private func createAnimatedImageView(viewItem: ConversationViewItem) -> UIView {
+        let uniqueId = viewItem.attachmentStream()?.uniqueId
+
+        // Reuse the SAME view within THIS cell when the attachment is unchanged. A message
+        // status change (sending -> sent) or a neighbor's grouping change rebuilds this cell;
+        // creating a fresh YYAnimatedImageView would restart the animation from frame 0 (the
+        // flash). YYAnimatedImageView pauses when removed from window and resumes from its
+        // current frame when re-added, so re-adding the kept instance is seamless.
+        if let reused = reusableAnimatedView, let uniqueId, reusableAnimatedAttachmentId == uniqueId {
+            // The upload/status overlay was torn down in prepareForReuse; re-add so a
+            // sending -> sent transition still refreshes (overlay drops once uploaded).
+            addAttachmentUploadViewIfNecessary(viewItem: viewItem)
+
+            // Keep the current frame: only reload if the image was genuinely dropped (e.g.
+            // cold media cache after leaving/re-entering the conversation). Never reset an
+            // already-set image — that would reintroduce the restart.
+            let reloadBlock: () -> Void = { [weak self, weak reused] in
+                guard let self, let reused else { return }
+                guard reused.image == nil else { return }
+                guard let attachmentStream = viewItem.attachmentStream(),
+                      let filePath = attachmentStream.filePath() else {
+                    return
+                }
+                reused.image = self.tryToLoadMedia(
+                    viewItem: viewItem,
+                    loadMedia: {
+                        if attachmentStream.isValidImage() {
+                            return YYImage(contentsOfFile: filePath)
+                        }
+                        return nil
+                    },
+                    mediaView: reused,
+                    cache: self.mediaCache,
+                    cacheKey: attachmentStream.uniqueId,
+                    shouldSkipCache: false
+                )
+            }
+            self.loadCellContentBlock = reloadBlock
+            // Do NOT nil the image on unload: keep the frame so re-adding resumes cleanly.
+            self.unloadCellContentBlock = { }
+            return reused
+        }
+
         let animatedImageView = YYAnimatedImageView()
         animatedImageView.contentMode = .scaleAspectFill
-        animatedImageView.backgroundColor = .white
-        
+        // Neutral placeholder while the GIF decodes (e.g. re-entering with a fresh
+        // media cache) — not white (harsh) or clear (invisible/looks broken).
+        animatedImageView.backgroundColor = Theme.isDarkThemeEnabled ? .ows_gray75 : .ows_gray05
+
         addAttachmentUploadViewIfNecessary(viewItem: viewItem)
-        
-        self.loadCellContentBlock = { [weak self] in
-            guard let self else { return }
+
+        // A message update (upload state / read receipt) rebuilds this view. Show frame 0 immediately
+        // (synchronous cache hit) and play from the start — do NOT seek to a saved frame index: for
+        // animated WebP a mid-frame seek forces an inter-frame decode and flashes the placeholder.
+        let loadBlock: () -> Void = { [weak self, weak animatedImageView] in
+            guard let self, let animatedImageView else { return }
             guard animatedImageView.image == nil else { return }
             guard let attachmentStream = viewItem.attachmentStream(),
                   let filePath = attachmentStream.filePath() else {
@@ -186,11 +233,22 @@ extension ConversationMessageBubbleView {
                 shouldSkipCache: false
             )
         }
-        
-        self.unloadCellContentBlock = {
-            animatedImageView.image = nil
-        }
-        
+
+        self.loadCellContentBlock = loadBlock
+
+        // Keep the image on unload so the frame survives a reconfigure/off-screen cycle; the
+        // decoded YYImage also lives in mediaCache (keyed by uniqueId) and live cells are bounded.
+        self.unloadCellContentBlock = { }
+
+        // Load now (image cache hit is instant) so a reconfigure shows the first frame
+        // immediately instead of an empty/placeholder gap.
+        loadBlock()
+
+        // Remember this instance for seamless reuse within THIS cell. On recycle for a
+        // different attachment the id mismatches, so we build fresh and overwrite here.
+        reusableAnimatedView = animatedImageView
+        reusableAnimatedAttachmentId = uniqueId
+
         return animatedImageView
     }
     

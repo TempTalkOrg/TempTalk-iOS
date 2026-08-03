@@ -87,6 +87,13 @@ NS_ASSUME_NONNULL_BEGIN
 
     [self.databaseStorage appendDatabaseChangeDelegate:self];
 
+    // Rebuild the table when the in-app text size changes so rows re-read the
+    // current scale factor (consistent with the applyTheme -> updateTableContents hook).
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(textSizeDidChange)
+                                                 name:NSNotification.TextSizeDidChange
+                                               object:nil];
+
     [self createViews];
     [self updateTableContents];
     
@@ -98,6 +105,31 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)applyTheme {
     [super applyTheme];
     [self updateTableContents];
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSNotification.TextSizeDidChange object:nil];
+}
+
+- (void)textSizeDidChange {
+    OWSAssertIsOnMainThread();
+    [self updateTableContents];
+}
+
+// Bar button titles are plain (string) items, so they don't pick up the in-app
+// text size on their own. Apply a scaled font that tracks TextSizeManager.
+- (void)applyBarButtonItemFontScale {
+    OWSAssertIsOnMainThread();
+    NSDictionary<NSAttributedStringKey, id> *attributes = @{ NSFontAttributeName : [UIFont ows_regularFontWithSize:17.0] };
+    UIControlState states[] = { UIControlStateNormal, UIControlStateHighlighted };
+    for (NSUInteger i = 0; i < sizeof(states) / sizeof(states[0]); i++) {
+        [self.navigationItem.leftBarButtonItem setTitleTextAttributes:attributes forState:states[i]];
+        [self.navigationItem.rightBarButtonItem setTitleTextAttributes:attributes forState:states[i]];
+    }
+    // The multi-select "done" custom button is created once; refresh it on live changes.
+    if (_btnSelectDone) {
+        _btnSelectDone.titleLabel.font = [UIFont ows_regularFontWithSize:15.0];
+    }
 }
 
 - (void)createViews
@@ -245,6 +277,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)updateTableContents
 {
+    [self applyBarButtonItemFontScale];
+
     ContactsViewHelper *helper = self.contactsViewHelper;
     OWSTableContents *contents = [OWSTableContents new];
     // Existing threads are listed first, ordered by most recently active

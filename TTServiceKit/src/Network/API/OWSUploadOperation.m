@@ -17,7 +17,6 @@
 #import "DTFileRequestHandler.h"
 #import <SignalCoreKit/SignalCoreKit-Swift.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
-#import <AFNetworking/AFURLSessionManager.h>
 #import "OWSAttachmentsProcessor.h"
 
 @class Environment;
@@ -114,60 +113,56 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
     
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:location]];
     request.HTTPMethod = @"PUT";
-    
-    // some oss servers require "Content-Type: Data" whoes value is MIME Type usually.
-    // donot set this header maybe ok, so, just comment this.
-    //[request setValue:OWSMimeTypeApplicationOctetStream forHTTPHeaderField:@"Content-Type"];
-    
-    AFURLSessionManager *manager = [[AFURLSessionManager alloc]
-                                    initWithSessionConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
-    
-    NSURLSessionUploadTask *uploadTask;
-    uploadTask = [manager uploadTaskWithRequest:request
-                                       fromData:attachmentData
-                                       progress:^(NSProgress *_Nonnull uploadProgress) {
-        [self fireNotificationWithProgress:uploadProgress.fractionCompleted];
-    }
-                              completionHandler:^(NSURLResponse *_Nonnull response, id _Nullable responseObject, NSError *_Nullable error) {
-        OWSAssertIsOnMainThread();
-        if (error) {
-            error.isRetryable = YES;
-            [self reportError:error];
+    [request setValue:[NSString stringWithFormat:@"%lu", (unsigned long)attachmentData.length]
+   forHTTPHeaderField:@"Content-Length"];
+
+    OWSURLSession *urlSession = OWSSignalService.sharedInstance.urlSessionForNoneService;
+
+    __weak typeof(self) weakSelf = self;
+    [urlSession performUploadRequest:request
+                                data:attachmentData
+                             success:^(id<HTTPResponse> response) {
+        NSInteger statusCode = response.responseStatusCode;
+        BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
+        if (!isValidResponse) {
+            OWSLogError(@"%@ Unexpected server response: %d", weakSelf.logTag, (int)statusCode);
+            NSError *invalidResponseError = OWSErrorMakeUnableToProcessServerResponseError();
+            invalidResponseError.isRetryable = YES;
+            [weakSelf reportError:invalidResponseError];
             if (completionHandler) {
-                completionHandler(response,responseObject,error);
+                completionHandler(nil, nil, invalidResponseError);
             }
             return;
         }
-        
-        NSInteger statusCode = ((NSHTTPURLResponse *)response).statusCode;
-        BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
-        if (!isValidResponse) {
-            OWSLogError(@"%@ Unexpected server response: %d", self.logTag, (int)statusCode);
-            NSError *invalidResponseError = OWSErrorMakeUnableToProcessServerResponseError();
-            invalidResponseError.isRetryable = YES;
-            [self reportError:invalidResponseError];
-            return;
-        }
-        
-        OWSLogInfo(@"%@ Uploaded avatar: %p.", self.logTag, avatarStream.uniqueId);
-        
-        DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+
+        OWSLogInfo(@"%@ Uploaded avatar: %p.", weakSelf.logTag, avatarStream.uniqueId);
+
+        DatabaseStorageAsyncWrite(weakSelf.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
             [avatarStream anyUpdateAttachmentStreamWithTransaction:transaction
-                                                                 block:^(TSAttachmentStream * instance) {
+                                                             block:^(TSAttachmentStream *instance) {
                 instance.serverId = serverId;
                 instance.isUploaded = YES;
             }];
             [transaction addAsyncCompletionOnMain:^{
-                [self reportSuccess];
+                [weakSelf reportSuccess];
             }];
         });
-        
+
         if (completionHandler) {
-            completionHandler(response,responseObject,error);
+            completionHandler(nil, nil, nil);
+        }
+    }
+                            progress:^(NSURLSessionTask *task, NSProgress *progress) {
+        [weakSelf fireNotificationWithProgress:progress.fractionCompleted];
+    }
+                             failure:^(OWSHTTPErrorWrapper *errorWrapper) {
+        NSError *err = errorWrapper.asNSError;
+        err.isRetryable = YES;
+        [weakSelf reportError:err];
+        if (completionHandler) {
+            completionHandler(nil, nil, err);
         }
     }];
-    
-    [uploadTask resume];
 }
 
 - (void)syncrunWithProfileName:(NSString *)profileName profileKey:(SSKAES256Key*)profileKey {
@@ -222,7 +217,7 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
         [self uploadAvatarWithServerId:serverId location:location avatarStream:attachmentStream completionHandler:^(NSURLResponse * _Nonnull response, id  _Nonnull responseObject, NSError * _Nonnull error) {
             OWSLogInfo(@"profile -> uploadAvatarWithServerId:%@",response);
             if (!error){
-                //上传传数据到本地服务器
+                // Upload data to server
                 self.isPutProfileSucess = false;
                 [self putV1ProfileWithResponse:response error:error avatarStream:attachmentStream profileName:profileName profileKey:profileKey];
             }else {
@@ -447,12 +442,15 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
         attachmentStream = [TSAttachmentStream anyFetchAttachmentStreamWithUniqueId:self.attachmentId transaction:transaction];
     }];
     
+    // Fetch can transiently miss a freshly-inserted attachment. Fall back to the in-memory one;
+    // if still missing, report a terminal error below. Never return silently here, or the
+    // operation stays Executing forever and blocks the per-thread serial send queue.
     if (![attachmentStream isKindOfClass:[TSAttachmentStream class]]) {
-        return;
+        attachmentStream = nil;
     }
-    
-    if(self.attachment && [self.attachment isKindOfClass:TSAttachmentStream.class]){
-        attachmentStream = self.attachment;
+
+    if (!attachmentStream && [self.attachment isKindOfClass:[TSAttachmentStream class]]) {
+        attachmentStream = (TSAttachmentStream *)self.attachment;
     }
 
     if (!attachmentStream) {
@@ -491,7 +489,7 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
         return;
     }
     
-    // 若附件的 encryptionKey 不为空（说明之前上传过），需要校验 encryptionKey 与当前文件的 hash 是否一致，如果不一致取消上传流程
+    // If encryptionKey exists (previously uploaded), verify it matches the current file hash; cancel upload on mismatch.
     NSData *originKey = [SSKCryptography computeSHA512Digest:attachmentData];
     if (attachmentStream.encryptionKey && attachmentStream.encryptionKey.length > 0) {
         NSString *fileHash = [originKey base64EncodedString];
@@ -532,11 +530,17 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
             }
             
         }else{
-            if(!DTParamsUtils.validateString(entity.attachmentId) ||
-               !DTParamsUtils.validateString(entity.url)){
-                OWSLogError(@"%@ checkFileExistsWithFileHash: attachmentId or url == nil", self.logTag);
-                error.isRetryable = YES;
-                [self reportError:error];
+            // Server may return multiple URLs (urls array) or single URL (url field)
+            NSArray<NSString *> *uploadUrls = entity.urls;
+            if (!uploadUrls.count) {
+                uploadUrls = DTParamsUtils.validateString(entity.url) ? @[entity.url] : @[];
+            }
+
+            if(!DTParamsUtils.validateString(entity.attachmentId) || uploadUrls.count == 0){
+                OWSLogError(@"%@ checkFileExistsWithFileHash: attachmentId or urls == nil", self.logTag);
+                NSError *missingInfoError = OWSErrorMakeFailedToSendOutgoingMessageError();
+                missingInfoError.isRetryable = YES;
+                [self reportError:missingInfoError];
                 return;
             }
             
@@ -570,22 +574,28 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
             
             //upload
             if(!(attachmentStream.isUploaded &&
-                 DTParamsUtils.validateString(attachmentStream.serverAttachmentId))){
+                DTParamsUtils.validateString(attachmentStream.serverAttachmentId))){
+                // Use urls array if available, otherwise fallback to single url
                 dispatch_async([OWSDispatch attachmentsQueue], ^{
-                    [self uploadWithUrl:entity.url
-                       attachmentStream:attachmentStream
-                         attachmentData:attachmentData
-                                   eKey:eKey
-                                hmacKey:hmacKey
-                     serverAttachmentId:entity.attachmentId
-                                success:^(NSData * digest){
+                    NSArray<NSString *> *uploadUrls = entity.urls;
+                    if (!uploadUrls || uploadUrls.count == 0) {
+                        // Fallback to legacy single url field for backward compatibility
+                        uploadUrls = entity.url ? @[entity.url] : @[];
+                    }
+                    
+                    [self uploadWithUrls:uploadUrls
+                        attachmentStream:attachmentStream
+                          attachmentData:attachmentData
+                                    eKey:eKey
+                                 hmacKey:hmacKey
+                      serverAttachmentId:entity.attachmentId
+                                 success:^(NSData * digest){
                         [self reportToServerWithFileHash:[keyHash base64EncodedString]
                                             attachmentId:entity.attachmentId
                                           attachmentType:attachmentStream.isVoiceMessage ? 1 : 0
                                                 fileSize:attachmentStream.encryptedDatalength
                                                   digest:digest completion:^(DTFileDataEntity *entity) {
                             reportToServerCompletion(entity);
-                            
                         }];
                     }];
                 });
@@ -595,8 +605,9 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
                    attachmentStream.encryptedDatalength <= 0){
                     attachmentStream.isUploaded = NO;
                     OWSLogError(@"%@ attachmentStream.digest or encryptedDatalength == nil", self.logTag);
-                    error.isRetryable = YES;
-                    [self reportError:error];
+                    NSError *invalidStreamError = OWSErrorMakeFailedToSendOutgoingMessageError();
+                    invalidStreamError.isRetryable = YES;
+                    [self reportError:invalidStreamError];
                     return;
                 }
                 
@@ -672,18 +683,61 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
     
 }
 
+- (BOOL)isSecureURL:(NSString *)urlString {
+    if (!urlString || urlString.length == 0) {
+        return NO;
+    }
+
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (!url || !url.scheme) {
+        return NO;
+    }
+
+    return [url.scheme.lowercaseString isEqualToString:@"https"];
+}
+
 - (void)uploadWithUrl:(NSString *)url
      attachmentStream:(TSAttachmentStream *)attachmentStream
        attachmentData:(NSData *)attachmentData
                  eKey:(NSData *)eKey
               hmacKey:(NSData *)hmacKey
    serverAttachmentId:(NSString *)serverAttachmentId
-           success:(void(^)(NSData *digest))success{
+              success:(void(^)(NSData *digest))success {
+    // Legacy method - convert single URL to array and call new method
+    NSArray *urls = url.length > 0 ? @[url] : @[];
+    [self uploadWithUrls:urls
+        attachmentStream:attachmentStream
+          attachmentData:attachmentData
+                    eKey:eKey
+                 hmacKey:hmacKey
+      serverAttachmentId:serverAttachmentId
+                 success:success];
+}
+
+- (void)uploadWithUrls:(NSArray<NSString *> *)urls
+      attachmentStream:(TSAttachmentStream *)attachmentStream
+        attachmentData:(NSData *)attachmentData
+                  eKey:(NSData *)eKey
+               hmacKey:(NSData *)hmacKey
+    serverAttachmentId:(NSString *)serverAttachmentId
+               success:(void(^)(NSData *digest))success {
     
+    if (!urls || urls.count == 0) {
+        OWSLogError(@"%@ No upload URLs provided", self.logTag);
+        NSError *error = OWSErrorMakeFailedToSendOutgoingMessageError();
+        error.isRetryable = YES;
+        [self reportError:error];
+        return;
+    }
+
     NSData *encryptionKey;
     NSData *digest;
-    NSData *encryptedAttachmentData = [SSKCryptography encryptAttachmentData:attachmentData eKey:eKey hmacKey:hmacKey outKey:&encryptionKey outDigest:&digest useMd5Hash:YES];
-    
+    NSData *encryptedAttachmentData = [SSKCryptography encryptAttachmentData:attachmentData
+                                                                         eKey:eKey
+                                                                      hmacKey:hmacKey
+                                                                       outKey:&encryptionKey
+                                                                    outDigest:&digest
+                                                                   useMd5Hash:YES];
     NSError *error;
     if (!encryptedAttachmentData) {
         OWSFailDebug(@"%@ could not encrypt attachment data.", self.logTag);
@@ -692,174 +746,183 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
         [self reportError:error];
         return;
     }
+
+    // Create error accumulator for tracking all failures
+    __block NSMutableArray *urlErrors = [NSMutableArray array];
     
+    // Try uploading with fallback mechanism
+    [self attemptUploadWithUrls:urls
+                       urlIndex:0
+                      urlErrors:urlErrors
+               attachmentStream:attachmentStream
+        encryptedAttachmentData:encryptedAttachmentData
+                  encryptionKey:encryptionKey
+                         digest:digest
+             serverAttachmentId:serverAttachmentId
+                        success:success];
+}
+
+- (void)attemptUploadWithUrls:(NSArray<NSString *> *)urls
+                      urlIndex:(NSUInteger)urlIndex
+                     urlErrors:(NSMutableArray<NSError *> *)urlErrors
+              attachmentStream:(TSAttachmentStream *)attachmentStream
+       encryptedAttachmentData:(NSData *)encryptedAttachmentData
+                 encryptionKey:(NSData *)encryptionKey
+                        digest:(NSData *)digest
+            serverAttachmentId:(NSString *)serverAttachmentId
+                       success:(void(^)(NSData *digest))success {
+    
+    // Check if operation was cancelled before attempting upload
+    if (self.isCancelled) {
+        OWSLogInfo(@"%@ Upload operation cancelled, aborting URL attempts", self.logTag);
+        return;
+    }
+
+    if (urlIndex >= urls.count) {
+        // Log all accumulated errors for debugging
+        OWSLogError(@"%@ All upload URLs failed. Errors:", self.logTag);
+        for (NSUInteger i = 0; i < urlErrors.count; i++) {
+            OWSLogError(@"  URL %lu: %@", (unsigned long)(i + 1), urlErrors[i]);
+        }
+        
+        NSError *error = OWSErrorMakeFailedToSendOutgoingMessageError();
+        error.isRetryable = YES;
+        [self reportError:error];
+        return;
+    }
+
+    NSString *url = urls[urlIndex];
+
+    // Validate URL is HTTPS for security
+    if (![self isSecureURL:url]) {
+        NSError *urlError = [NSError errorWithDomain:@"OWSUploadOperation"
+                                                 code:1001
+                                             userInfo:@{NSLocalizedDescriptionKey: @"Non-HTTPS URL rejected"}];
+        [urlErrors addObject:urlError];
+        
+        OWSLogError(@"%@ Rejecting non-HTTPS URL %lu: %@",
+                    self.logTag, (unsigned long)(urlIndex + 1), url);
+        // Try next URL
+        [self attemptUploadWithUrls:urls
+                           urlIndex:urlIndex + 1
+                          urlErrors:urlErrors
+                   attachmentStream:attachmentStream
+            encryptedAttachmentData:encryptedAttachmentData
+                      encryptionKey:encryptionKey
+                             digest:digest
+                 serverAttachmentId:serverAttachmentId
+                            success:success];
+        return;
+    }
+
+    OWSLogInfo(@"%@ Attempting upload to URL %lu/%lu: %@",
+               self.logTag, (unsigned long)(urlIndex + 1), (unsigned long)urls.count, url);
+
+    // Create NSMutableURLRequest directly for file upload
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:url]];
     request.HTTPMethod = @"PUT";
-    
-    // some oss servers require "Content-Type: Data" whoes value is MIME Type usually.
-    // maybe donot set this header is ok, so, just comment this.
-    //[request setValue:OWSMimeTypeApplicationOctetStream forHTTPHeaderField:@"Content-Type"];
+    // Set required headers
+    [request setValue:[NSString stringWithFormat:@"%lu", (unsigned long)encryptedAttachmentData.length]
+   forHTTPHeaderField:@"Content-Length"];
 
-    AFURLSessionManager *manager = [[AFURLSessionManager alloc]
-        initWithSessionConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
+    OWSURLSession *urlSession = OWSSignalService.sharedInstance.urlSessionForNoneService;
 
-    NSURLSessionUploadTask *uploadTask;
-    uploadTask = [manager uploadTaskWithRequest:request
-        fromData:encryptedAttachmentData
-        progress:^(NSProgress *_Nonnull uploadProgress) {
-            [self fireNotificationWithProgress:uploadProgress.fractionCompleted];
-        }
-        completionHandler:^(NSURLResponse *_Nonnull response, id _Nullable responseObject, NSError *_Nullable error) {
-            OWSAssertIsOnMainThread();
-            if (error) {
-                OWSLogError(@"%@ upload network error: %@", self.logTag, error);
-                error.isRetryable = YES;
-                [self reportError:error];
-                return;
-            }
-
-            NSInteger statusCode = ((NSHTTPURLResponse *)response).statusCode;
-            BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
-            if (!isValidResponse) {
-                OWSLogError(@"%@ Unexpected server response: %d", self.logTag, (int)statusCode);
-                NSError *invalidResponseError = OWSErrorMakeUnableToProcessServerResponseError();
-                invalidResponseError.isRetryable = YES;
-                [self reportError:invalidResponseError];
-                return;
-            }
-
-            OWSLogInfo(@"%@ Uploaded attachment: %p.", self.logTag, attachmentStream.uniqueId);
-
-//            attachmentStream.serverId = serverId;
-        
-            AudioWaveform *waveform = nil;
-            if (attachmentStream.isVoiceMessage) {
-                NSError *writeError;
-                [attachmentStream writeEncryptedData:encryptedAttachmentData error:&writeError];
-                if (writeError) {
-                    DDLogError(@"%@ send voice Failed writing voice stream with error: %@", self.logTag, writeError);
-                    error.isRetryable = YES;
-                    [self reportError:error];
-                    return;
-                }
-                
-                NSError *error;
-                waveform = [AudioWaveformManagerImpl.shared audioWaveformSyncForAudioPath:[attachmentStream filePath] error:&error];
-                OWSLogInfo(@"send voice get attachmentStream file path: %@", [attachmentStream filePath]);
-                OWSLogInfo(@"send voice get attachmentStream file byteCount: %llu", [attachmentStream byteCount]);
-                if (error) {
-                    OWSLogError(@"send voice draw error:%@.", error);
-                    error.isRetryable = YES;
-                    [self reportError:error];
-                    return;
-                }
-                
-            }
-        
+    __weak typeof(self) weakSelf = self;
+    [urlSession performUploadRequest:request
+                                data:encryptedAttachmentData
+                             success:^(id<HTTPResponse> response) {
+        NSInteger statusCode = response.responseStatusCode;
+        BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
+        if (!isValidResponse) {
+            NSError *statusError = [NSError errorWithDomain:@"OWSUploadOperation"
+                                                       code:statusCode
+                                                   userInfo:@{NSLocalizedDescriptionKey:
+                                                                  [NSString stringWithFormat:@"HTTP %ld", (long)statusCode]}];
+            [urlErrors addObject:statusError];
             
-            DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
-                [attachmentStream anyUpdateAttachmentStreamWithTransaction:transaction
-                                                                     block:^(TSAttachmentStream * instance) {
-                    instance.encryptionKey = encryptionKey;
-                    instance.digest = digest;
-                    instance.encryptedDatalength = encryptedAttachmentData.length;
-                    
-                    instance.isUploaded = YES;
-                    instance.serverAttachmentId = serverAttachmentId;
-                    if (instance.isVoiceMessage) {
-                        instance.decibelSamples = waveform.decibelSamples;
-                        instance.cachedAudioDurationSeconds = @([AudioWaveformManagerImpl.shared audioDurationFrom:attachmentStream.filePath]);
-                    }
-                }];
-                [transaction addAsyncCompletionOnMain:^{
-                    success(digest);
-                    [attachmentStream removeVoicePlaintextFile];
-                }];
-                
-            });
-        }];
-
-    [uploadTask resume];
-    
-    
-}
-
-/*
-- (void)uploadWithServerId:(UInt64)serverId
-                  location:(NSString *)location
-          attachmentStream:(TSAttachmentStream *)attachmentStream
-{
-    OWSLogDebug(@"%@ started uploading data for attachment: %@", self.logTag, self.attachmentId);
-    NSError *error;
-    NSData *attachmentData = [attachmentStream readDataFromFileWithError:&error];
-    if (error) {
-        OWSLogError(@"%@ Failed to read attachment data with error: %@", self.logTag, error);
-        error.isRetryable = YES;
-        [self reportError:error];
-        return;
-    }
-
-    NSData *encryptionKey;
-    NSData *digest;
-    NSData *_Nullable encryptedAttachmentData =
-        [Cryptography encryptAttachmentData:attachmentData outKey:&encryptionKey outDigest:&digest];
-    if (!encryptedAttachmentData) {
-        OWSFailDebug(@"%@ could not encrypt attachment data.", self.logTag);
-        error = OWSErrorMakeFailedToSendOutgoingMessageError();
-        error.isRetryable = YES;
-        [self reportError:error];
-        return;
-    }
-    attachmentStream.encryptionKey = encryptionKey;
-    attachmentStream.digest = digest;
-
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:location]];
-    request.HTTPMethod = @"PUT";
-    
-    // some oss servers require "Content-Type: Data" whoes value is MIME Type usually.
-    // maybe donot set this header is ok, so, just comment this.
-    //[request setValue:OWSMimeTypeApplicationOctetStream forHTTPHeaderField:@"Content-Type"];
-
-    AFURLSessionManager *manager = [[AFURLSessionManager alloc]
-        initWithSessionConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
-
-    NSURLSessionUploadTask *uploadTask;
-    uploadTask = [manager uploadTaskWithRequest:request
-        fromData:encryptedAttachmentData
-        progress:^(NSProgress *_Nonnull uploadProgress) {
-            [self fireNotificationWithProgress:uploadProgress.fractionCompleted];
+            OWSLogError(@"%@ URL %lu failed with status: %ld",
+                        weakSelf.logTag, (unsigned long)(urlIndex + 1), (long)statusCode);
+            
+            // Try next URL
+            [weakSelf attemptUploadWithUrls:urls
+                                   urlIndex:urlIndex + 1
+                                  urlErrors:urlErrors
+                           attachmentStream:attachmentStream
+                    encryptedAttachmentData:encryptedAttachmentData
+                              encryptionKey:encryptionKey
+                                     digest:digest
+                         serverAttachmentId:serverAttachmentId
+                                    success:success];
+            return;
         }
-        completionHandler:^(NSURLResponse *_Nonnull response, id _Nullable responseObject, NSError *_Nullable error) {
-            OWSAssertIsOnMainThread();
-            if (error) {
-                error.isRetryable = YES;
-                [self reportError:error];
+
+        OWSLogInfo(@"%@ Successfully uploaded attachment to URL %lu: %@",
+                   weakSelf.logTag, (unsigned long)(urlIndex + 1), attachmentStream.uniqueId);
+
+        AudioWaveform *waveform = nil;
+        if (attachmentStream.isVoiceMessage) {
+            NSError *writeError;
+            [attachmentStream writeEncryptedData:encryptedAttachmentData error:&writeError];
+            if (writeError) {
+                DDLogError(@"%@ send voice Failed writing voice stream with error: %@",
+                           weakSelf.logTag, writeError);
+                writeError.isRetryable = YES;
+                [weakSelf reportError:writeError];
                 return;
             }
 
-            NSInteger statusCode = ((NSHTTPURLResponse *)response).statusCode;
-            BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
-            if (!isValidResponse) {
-                OWSLogError(@"%@ Unexpected server response: %d", self.logTag, (int)statusCode);
-                NSError *invalidResponseError = OWSErrorMakeUnableToProcessServerResponseError();
-                invalidResponseError.isRetryable = YES;
-                [self reportError:invalidResponseError];
+            NSError *waveformError;
+            waveform = [AudioWaveformManagerImpl.shared audioWaveformSyncForAudioPath:[attachmentStream filePath] error:&waveformError];
+            OWSLogInfo(@"send voice get attachmentStream file path: %@", [attachmentStream filePath]);
+            OWSLogInfo(@"send voice get attachmentStream file byteCount: %llu", [attachmentStream byteCount]);
+            if (waveformError) {
+                OWSLogError(@"send voice draw error:%@.", waveformError);
+                waveformError.isRetryable = YES;
+                [weakSelf reportError:waveformError];
                 return;
             }
+        }
 
-            OWSLogInfo(@"%@ Uploaded attachment: %p.", self.logTag, attachmentStream.uniqueId);
-            attachmentStream.serverId = serverId;
-            attachmentStream.isUploaded = YES;
-            [attachmentStream saveAsyncWithCompletionBlock:^{
-                [self reportSuccess];
+        DatabaseStorageAsyncWrite(weakSelf.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+            [attachmentStream anyUpdateAttachmentStreamWithTransaction:transaction
+                                                                 block:^(TSAttachmentStream *instance) {
+                instance.encryptionKey = encryptionKey;
+                instance.digest = digest;
+                instance.encryptedDatalength = encryptedAttachmentData.length;
+                instance.isUploaded = YES;
+                instance.serverAttachmentId = serverAttachmentId;
+                if (instance.isVoiceMessage) {
+                    instance.decibelSamples = waveform.decibelSamples;
+                    instance.cachedAudioDurationSeconds = @([AudioWaveformManagerImpl.shared audioDurationFrom:attachmentStream.filePath]);
+                }
             }];
-        }];
-
-    [uploadTask resume];
+            [transaction addAsyncCompletionOnMain:^{
+                success(digest);
+                [attachmentStream removeVoicePlaintextFile];
+            }];
+        });
+    }
+                            progress:^(NSURLSessionTask *task, NSProgress *progress) {
+        [weakSelf fireNotificationWithProgress:progress.fractionCompleted];
+    }
+                             failure:^(OWSHTTPErrorWrapper *errorWrapper) {
+        NSError *err = errorWrapper.asNSError;
+        [urlErrors addObject:err];
+        OWSLogError(@"%@ URL %lu upload error: %@",
+                    weakSelf.logTag, (unsigned long)(urlIndex + 1), err);
+        // Try next URL
+        [weakSelf attemptUploadWithUrls:urls
+                               urlIndex:urlIndex + 1
+                              urlErrors:urlErrors
+                       attachmentStream:attachmentStream
+                encryptedAttachmentData:encryptedAttachmentData
+                          encryptionKey:encryptionKey
+                                 digest:digest
+                     serverAttachmentId:serverAttachmentId
+                                success:success];
+    }];
 }
 
- */
- 
 - (void)uploadLogFileServerId:(UInt64)serverId
                      location:(NSString *)location
                     logStream:(TSAttachmentStream *)logStream
@@ -878,57 +941,47 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
     
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:location]];
     request.HTTPMethod = @"PUT";
-    
-    // some oss servers require "Content-Type: Data" whoes value is MIME Type usually.
-    // donot set this header maybe ok, so, just comment this.
-    //[request setValue:OWSMimeTypeApplicationOctetStream forHTTPHeaderField:@"Content-Type"];
-    
-    AFURLSessionManager *manager = [[AFURLSessionManager alloc]
-                                    initWithSessionConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
-    
-    NSURLSessionUploadTask *uploadTask;
-    uploadTask = [manager uploadTaskWithRequest:request
-                                       fromData:attachmentData
-                                       progress:^(NSProgress *_Nonnull uploadProgress) {
-                                           [self fireNotificationWithProgress:uploadProgress.fractionCompleted];
-                                       }
-                              completionHandler:^(NSURLResponse *_Nonnull response, id _Nullable responseObject, NSError *_Nullable error) {
-        OWSAssertIsOnMainThread();
-        if (error) {
-            
-            !uploadFailure ?: uploadFailure(error);
-            return;
-        }
-        
-        NSInteger statusCode = ((NSHTTPURLResponse *)response).statusCode;
+    [request setValue:[NSString stringWithFormat:@"%lu", (unsigned long)attachmentData.length]
+   forHTTPHeaderField:@"Content-Length"];
+
+    OWSURLSession *urlSession = OWSSignalService.sharedInstance.urlSessionForNoneService;
+
+    __weak typeof(self) weakSelf = self;
+    [urlSession performUploadRequest:request
+                                data:attachmentData
+                             success:^(id<HTTPResponse> response) {
+        NSInteger statusCode = response.responseStatusCode;
         BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
         if (!isValidResponse) {
-            OWSLogError(@"%@ Unexpected server response: %d", self.logTag, (int)statusCode);
+            OWSLogError(@"%@ Unexpected server response: %d", weakSelf.logTag, (int)statusCode);
             NSError *invalidResponseError = OWSErrorMakeUnableToProcessServerResponseError();
             
             !uploadFailure ?: uploadFailure(invalidResponseError);
             return;
         }
-        
-        OWSLogInfo(@"%@ Uploaded debuglog files success: %@.", self.logTag, logStream.uniqueId);
-        
+
+        OWSLogInfo(@"%@ Uploaded debuglog files success: %@.", weakSelf.logTag, logStream.uniqueId);
+
         !uploadSuccess ?: uploadSuccess();
-        
-        DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+
+        DatabaseStorageAsyncWrite(weakSelf.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
             [logStream anyUpdateAttachmentStreamWithTransaction:transaction
-                                                          block:^(TSAttachmentStream * instance) {
+                                                          block:^(TSAttachmentStream *instance) {
                 instance.serverId = serverId;
                 instance.isUploaded = YES;
             }];
             [transaction addAsyncCompletionOnMain:^{
-                [self reportSuccess];
+                [weakSelf reportSuccess];
             }];
-            
         });
-        
+    }
+                            progress:^(NSURLSessionTask *task, NSProgress *progress) {
+        [weakSelf fireNotificationWithProgress:progress.fractionCompleted];
+    }
+                             failure:^(OWSHTTPErrorWrapper *errorWrapper) {
+        NSError *err = errorWrapper.asNSError;
+        !uploadFailure ?: uploadFailure(err);
     }];
-    
-    [uploadTask resume];
 }
 
 - (void)fireNotificationWithProgress:(CGFloat)aProgress

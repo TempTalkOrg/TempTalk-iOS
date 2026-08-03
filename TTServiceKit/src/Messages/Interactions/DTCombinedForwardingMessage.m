@@ -481,6 +481,9 @@
         return nil;
     }
     
+    // Canonicalize the forward text so it renders consistently across platforms.
+    body = [body dt_normalizedNewlines];
+
     DTCombinedForwardingMessage * forwardingMessage = [[DTCombinedForwardingMessage alloc] initWithTimestamp:timestamp
                                                                                              serverTimestamp:forwardProto.serverTimestamp
                                                                                                     authorId:authorId

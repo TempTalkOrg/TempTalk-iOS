@@ -126,6 +126,7 @@ typedef NS_ENUM(NSInteger, DTGroupNotifyDetailType) {
     DTGroupNotifyDetailTypePrivateChatChange = 41,
     DTGroupNotifyDetailTypeCriticalAlertChange = 47,
     DTGroupNotifyDetailTypeUpgradeGroupCrypto = 48,
+    DTGroupNotifyDetailTypeRotateGroupCrypto = 49,
     DTGroupNotifyDetailTypeGroupAccountInvalid = 999
 };
 

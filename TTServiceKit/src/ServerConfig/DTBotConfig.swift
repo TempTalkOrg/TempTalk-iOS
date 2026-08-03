@@ -86,4 +86,16 @@ public class DTBotConfig: NSObject {
         "+22435"
     }
 
+    /// Returns true when `recipientId` belongs to a bot / service account.
+    ///
+    /// Bot and service accounts (official, meeting, critical, spooky, translate-cache, ...)
+    /// use short E.164-style ids ("+10000", "+21163", ...) and do not run E2E encryption,
+    /// so messages to them must carry legacy plaintext content. Real users have full-length
+    /// phone numbers (> 6 chars).
+    ///
+    /// Note: broader than `SignalAccount.isBot`, which only matches `officialBotId`.
+    public class func isBotId(_ recipientId: String) -> Bool {
+        return !recipientId.isEmpty && recipientId.count <= 6
+    }
+
 }

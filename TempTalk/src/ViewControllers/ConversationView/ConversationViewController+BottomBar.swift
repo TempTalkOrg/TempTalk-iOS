@@ -529,6 +529,13 @@ extension ConversationViewController: InputAccessoryViewPlaceholderDelegate {
         updateBottomBarPosition()
         updateContentInsets(animated: false)
 
+        // A GIF was just sent from the keyboard panel: the inset is now final, so scroll to bottom
+        // deterministically (the message-insert scroll may have raced the keyboard and fallen short).
+        if viewState.scrollToBottomOnKeyboardSettle {
+            viewState.scrollToBottomOnKeyboardSettle = false
+            scrollToBottom(animated: false)
+        }
+
         // 键盘完全显示后，清除搜索跳转的焦点保护
         let hasFocusMessage = conversationViewModel.viewState.focusItemIndex != nil
         let justCompletedInitialScroll = viewState.hasCompletedInitialScroll && !viewState.userHasScrolled

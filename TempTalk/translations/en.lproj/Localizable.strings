@@ -81,7 +81,7 @@
 "APP_UPDATE_NAG_ALERT_MESSAGE_FORMAT" = "Version %@ is now available in the App Store.";
 
 /* Title for the 'new app version available' alert. */
-"APP_UPDATE_NAG_ALERT_TITLE" = "A new version of Yelling is available now";
+"APP_UPDATE_NAG_ALERT_TITLE" = "A new version of Quicall is available now";
 
 /* Label for the 'update' button in the 'new app version available' alert. */
 "APP_UPDATE_NAG_ALERT_UPDATE_BUTTON" = "Update";
@@ -1139,23 +1139,37 @@
 /* Toast message when group crypto key is still syncing */
 "GROUP_CRYPTO_KEY_SYNCING" = "Group encryption key is syncing, please try again later";
 
-"GROUP_CRYPTO_UPGRADE_TITLE" = "Enhance Encryption";
+"GROUP_CRYPTO_UPGRADE_TITLE" = "Enhance encryption";
 
 "GROUP_CRYPTO_UPGRADE_DESC" = "Group info will be upgraded from in-transit encryption to end-to-end encryption.";
 
-"GROUP_CRYPTO_UPGRADE_BUTTON" = "Turn On";
+"GROUP_CRYPTO_UPGRADE_BUTTON" = "Turn on";
 
-"GROUP_CRYPTO_INFO_TITLE" = "Encryption Enhanced";
+"GROUP_CRYPTO_INFO_TITLE" = "Encryption enhanced";
 
 "GROUP_CRYPTO_INFO_DESC" = "Group info has been upgraded from in-transit encryption to end-to-end encryption.";
 
-"GROUP_CRYPTO_ENCRYPTED_SUBTITLE" = "Encryption Enhanced";
+"GROUP_CRYPTO_ENCRYPTED_SUBTITLE" = "Encryption enhanced";
 
 "GROUP_CRYPTO_NOT_AVAILABLE_YET" = "This feature is not available yet";
 "GROUP_CRYPTO_UPGRADE_FAILED" = "Upgrade failed";
 "GROUP_CRYPTO_NO_KEY_TOAST" = "Can't make changes right now";
 "GROUP_CRYPTO_DEFAULT_NAME" = "🔒 Group";
 "GROUP_CRYPTO_INFO_DISMISS" = "OK";
+
+"GROUP_CRYPTO_RESET_KEY_ENTRY" = "Reset encryption key";
+"GROUP_CRYPTO_RESET_TITLE" = "Reset encryption key";
+"GROUP_CRYPTO_RESET_BUTTON" = "Reset";
+"GROUP_CRYPTO_RESET_SYSTEM_MSG" = "🔒 Group info encryption key has been reset";
+"GROUP_CRYPTO_RESET_FAILED" = "Couldn't reset. Try again later.";
+"GROUP_CRYPTO_RESET_CONFIRM_BODY" = "After reset, group info will use a new encryption key. Confirm the group photo and name.";
+"GROUP_CRYPTO_RESET_SUCCESS_TOAST" = "Encryption key reset";
+"GROUP_CRYPTO_RESET_NO_PERMISSION" = "Only group owners and admins can reset the key.";
+"GROUP_CRYPTO_RESET_FILL_HINT" = "Some group info can't be shown. Fill in the missing info to reset the encryption key.";
+"GROUP_CRYPTO_RESET_NAME_PLACEHOLDER" = "Enter a group name";
+"GROUP_CRYPTO_RESET_NAME_EMPTY" = "Enter a group name";
+"GROUP_CRYPTO_RESET_AVATAR_LABEL" = "Group photo";
+"GROUP_CRYPTO_RESET_NAME_LABEL" = "Group name";
 
 /* No comment provided by engineer. */
 "GROUP_UPDATED" = "Group updated.";
@@ -2129,6 +2143,47 @@
 /* Generic text for button that retries whatever the last action was. */
 "RETRY_BUTTON_TEXT" = "Retry";
 
+/* GIF picker: search field placeholder */
+"GIF_SEARCH_PLACEHOLDER" = "Search GIFs";
+
+/* GIF picker: empty search results */
+"GIF_SEARCH_NO_RESULTS" = "No GIFs found";
+
+/* GIF picker: search request failed */
+"GIF_SEARCH_ERROR" = "Couldn't load GIFs. Try again later.";
+
+/* GIF picker: empty favorites tab */
+"GIF_FAVORITES_EMPTY" = "No favorites yet";
+
+/* GIF: neutral toast when a selected GIF can't be sent */
+"GIF_SEARCH_FAILURE_ALERT_TITLE" = "Couldn't send. Try again later.";
+
+/* Message action: add a GIF to favorites */
+"MESSAGE_ACTION_ADD_TO_FAVORITE" = "Add to Favorites";
+
+/* GIF favorite: added toast */
+"GIF_FAVORITE_ADDED" = "Added to Favorites";
+
+/* GIF favorite: add failed toast */
+"GIF_FAVORITE_FAILED" = "Couldn't add. Try again later.";
+
+/* GIF favorite: long-press action to remove a favorite */
+"GIF_FAVORITE_REMOVE" = "Remove from Favorites";
+
+/* GIF favorite: title when the 200-favorite limit is reached */
+"gif_favorites_cap_title" = "Favorites Limit Reached";
+
+/* GIF favorite: message when the 200-favorite limit is reached */
+"gif_favorites_cap_message" = "You can save up to 200 favorites. Replace the oldest one or remove some favorites first.";
+
+/* GIF favorite: confirm button — replace the oldest favorite with the current GIF */
+"gif_favorites_cap_confirm" = "Replace Oldest";
+
+/* GIF favorite: secondary button — dismiss the limit prompt */
+"gif_favorites_cap_cancel" = "Cancel";
+"gif_favorites_add_size_limit" = "This GIF is too large to add to Favorites.";
+
+/* GIF favorite: shown when a favorite couldn't be synced to the server after retries */
 /* button title to confirm adding a recipient to a group when their safety number has recently changed */
 "SAFETY_NUMBER_CHANGED_CONFIRM_ADD_TO_GROUP_ACTION" = "Add to Group Anyway";
 
@@ -2157,7 +2212,7 @@
 "INVITE_SCAN" = "Scan";
 "INVITE_SHARE" = "Share";
 "INVITE_ENTER_CODE" = "Add Contact";
-"INVITE_DESC" = "Chat with me on Yelling";
+"INVITE_DESC" = "Chat with me on Quicall";
 "INVITE_CANCEL" = "Cancel";
 "INVITE_REGENERATE_ACTION" = "Regenerate";
 "INVITE_LINK_TITLE" = "Invite Link";
@@ -2216,7 +2271,7 @@
 "SCREEN_LOCK_UNLOCK_FAILED" = "Authentication Failed";
 
 /* Label for button on lock screen that lets users unlock Signal. */
-"SCREEN_LOCK_UNLOCK_SIGNAL" = "Unlock Yelling";
+"SCREEN_LOCK_UNLOCK_SIGNAL" = "Unlock Quicall";
 
 /* No comment provided by engineer. */
 "SEARCH_BYNAMEORNUMBER_PLACEHOLDER_TEXT" = "Search by name or number";
@@ -2503,11 +2558,11 @@
 "SETTINGS_SCREEN_LOCK_ACTIVITY_TIMEOUT" = "Screen Lock Timeout";
 
 /* Footer for the 'screen lock' section of the privacy settings. */
-"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "Unlock Yelling's screen using a passcode or pattern. The passcode can be different from system's passcode. So if somebody manage to get access to your system, he still has no access to Yelling. It also prevents content previews from appearing in the app switcher.";
+"SETTINGS_SCREEN_LOCK_SECTION_FOOTER" = "Unlock Quicall's screen using a passcode or pattern. The passcode can be different from system's passcode. So if somebody manage to get access to your system, he still has no access to Quicall. It also prevents content previews from appearing in the app switcher.";
 
 "UNLOCKSCREEN_TITLE" = "Passcode";
 "UNLOCKSCREEN_DONE" = "Done";
-"SCREENLOCK_SETPASSCODE_TIPS" = "Enter a passcode (4-10 digits). You will be asked to enter this passcode the next time you unlock Yelling.";
+"SCREENLOCK_SETPASSCODE_TIPS" = "Enter a passcode (4-10 digits). You will be asked to enter this passcode the next time you unlock Quicall.";
 "SCREENLOCK_SETPASSCODE_EXCLAMATION" = "If you forget your passcode, you’ll need to log out or reinstall the app.";
 "SCREENLOCK_SETPASSCODE_FORGOT_TIPS" = "Forgot passcode?";
 "SCREENLOCK_SETPASSCODE_FORGOT_Alert_CONTENT" = "Please delete and reinstall the app.";
@@ -2521,7 +2576,7 @@
 "SCREENLOCK_PASSCODESUCCESS_TITLE" = "Success!";
 "SCREENLOCK_PASSCODESUCCESS_TIPS" = "Safely save this code. If you forget your passcode, you’ll need to log out or reinstall the app.";
 "SCREENLOCK_PASSCODESUCCESS_CONFIRM" = "I understand";
-"SCREENLOCK_PASSCODESUCCESS_ATTEMPTS" = "Yelling Unavailable. Try again in %ds.";
+"SCREENLOCK_PASSCODESUCCESS_ATTEMPTS" = "Quicall Unavailable. Try again in %ds.";
 "LOGIN_SUBIT_TOO_MANY_ATTEMPTS" = "Too many attempts. Please try again later.";
 
 "SCREENLOCK_UPGRADE_TITLE" = "Feature Update";
@@ -2910,6 +2965,9 @@
 /* Title for the alert indicating the 'voice message' needs to be held to be held down to record. */
 "VOICE_MESSAGE_TOO_SHORT_ALERT_TITLE" = "Voice Message";
 
+/* Toast shown when user tries to record a voice message during an active call */
+"VOICE_MESSAGE_IN_CALL_TOAST" = "In a call, please try again later";
+
 /* Activity indicator title, shown upon returning to the device manager, until you complete the provisioning process on desktop */
 "WAITING_TO_COMPLETE_DEVICE_LINK_TEXT" = "Complete setup on Chative Desktop.";
 
@@ -3180,11 +3238,31 @@
 "FORWARD_MESSAGE_SINGLE_TITLE" = "Forwarded Message %@\nFrom: ";
 
 "FORWARD_MESSAGE_CONFIDENTIAL" = "Confidential messages can not be selected.";
-"FORWARD_NOTICE_SINGLE" = "%1$@ forwarded a message from %2$@.";
-"FORWARD_NOTICE_PLURAL" = "%1$@ forwarded %2$u messages from %3$@.";
-"FORWARD_NOTICE_SINGLE_NO_FROM" = "%1$@ forwarded a message.";
-"FORWARD_NOTICE_PLURAL_NO_FROM" = "%1$@ forwarded %2$u messages.";
+"FORWARD_NOTICE_SINGLE" = "%1$@ forwarded a message from %2$@";
+"FORWARD_NOTICE_PLURAL" = "%1$@ forwarded %2$u messages from %3$@";
+"FORWARD_NOTICE_SINGLE_NO_FROM" = "%1$@ forwarded a message";
+"FORWARD_NOTICE_PLURAL_NO_FROM" = "%1$@ forwarded %2$u messages";
+"FORWARD_NOTICE_CHAT_HISTORY_SINGLE" = "%1$@ forwarded a chat history from %2$@";
+"FORWARD_NOTICE_CHAT_HISTORY_SINGLE_NO_FROM" = "%1$@ forwarded a chat history";
+"FORWARD_NOTICE_CHAT_HISTORY_PLURAL" = "%1$@ forwarded %2$u chat histories from %3$@";
+"FORWARD_NOTICE_CHAT_HISTORY_PLURAL_NO_FROM" = "%1$@ forwarded %2$u chat histories";
+"FORWARD_NOTICE_PLURAL_MIXED" = "%1$@ forwarded %2$u messages (including chat history) from %3$@";
+"FORWARD_NOTICE_PLURAL_MIXED_NO_FROM" = "%1$@ forwarded %2$u messages (including chat history)";
+"FORWARD_NOTICE_FROM_CHAT_HISTORY_SINGLE" = "%1$@ forwarded a message from %2$@'s chat history";
+"FORWARD_NOTICE_FROM_CHAT_HISTORY_SINGLE_NO_FROM" = "%1$@ forwarded a message from a chat history";
 "FORWARD_NOTICE_YOU" = "You";
+"FORWARD_NOTICE_AND_N_OTHERS" = "and %u others";
+
+"COPY_NOTICE_SINGLE" = "%1$@ copied a message from %2$@";
+"COPY_NOTICE_PLURAL" = "%1$@ copied %2$u messages from %3$@";
+"COPY_NOTICE_SINGLE_NO_FROM" = "%1$@ copied a message";
+"COPY_NOTICE_PLURAL_NO_FROM" = "%1$@ copied %2$u messages";
+"COPY_NOTICE_FROM_CHAT_HISTORY_SINGLE" = "%1$@ copied a message from %2$@'s chat history";
+"COPY_NOTICE_FROM_CHAT_HISTORY_SINGLE_NO_FROM" = "%1$@ copied a message from a chat history";
+"COPY_NOTICE_FROM_CHAT_HISTORY_PLURAL" = "%1$@ copied %3$u messages from %2$@'s chat history";
+"COPY_NOTICE_FROM_CHAT_HISTORY_PLURAL_NO_FROM" = "%1$@ copied %2$u messages from a chat history";
+"MESSAGE_ACTION_COPY" = "Copy";
+"COPY_SUCCESS_TOAST" = "Copied";
 
 /* The title for the theme section in the appearance settings. */
 "SETTINGS_APPEARANCE_THEME_TITLE" = "Theme";
@@ -3765,6 +3843,9 @@
 /* input bar action button title when send File */
 "INPUTTOOL_ATTACHMENT_FILE_BUTTON" = "File";
 
+/* input bar action button title when open GIF picker */
+"INPUTTOOL_ATTACHMENT_GIF_BUTTON" = "GIF";
+
 /* input bar action button title when open Confidential Mode */
 "INPUTTOOL_ATTACHMENT_CONFIDENTIAL_BUTTON" = "Confidential Mode";
 
@@ -3775,7 +3856,13 @@
 
 "INPUTTOOL_VOICE_RELEASE_TO_SEND" = "Release to send";
 
-"INPUTTOOL_VOICE_RELEASE_TO_CANCEL" = "Release to Cancel";
+"INPUTTOOL_VOICE_RELEASE_TO_CANCEL" = "Release to cancel";
+
+"INPUTTOOL_VOICE_RELEASE_TO_SEND_WITH_EFFECT" = "Release to send";
+
+"INPUTTOOL_VOICE_CANCEL_BUTTON" = "Cancel";
+
+"INPUTTOOL_VOICE_EFFECT_BUTTON" = "Voice Effect";
 
 "MENU_ACTION_MORE_ACTION" = "More";
 
@@ -3799,7 +3886,7 @@
 "IMAGE_PREVIEW_ADD_MESSAGE" = "Add Message";
 "CONFIRM_DISBAND_GROUP_DESCRIPTION" = "This group will be permanently deleted and all members will be removed";
 "MESSAGE_ACTION_COMBINE_FORWARD" = "Combine & Forward";
-"MESSAGE_ACTION_SAVE" = "Save";
+"MESSAGE_ACTION_SAVE" = "Add to Saved";
 "MESSAGE_ACTION_BATCH_RECALL" = "Recall";
 "BATCH_RECALL_CONFIRM_TITLE" = "Recall %d selected messages?";
 
@@ -3842,7 +3929,7 @@
 "SPEECHTOTEXT_CONVERT_TIP_MESSAGE" = "Converting...";
 "SPEECHTOTEXT_CONVERT_TIP_MESSAGE_FAILED" = "Unable to convert to text";
 
-"CONVERT_SOURCE_TEXT" = "Voice-to-Text converted by Yelling server";
+"CONVERT_SOURCE_TEXT" = "Voice-to-Text converted by Quicall server";
 
 "SPEECHTOTEXT_NO_TEXT_RECOGNIZE" = "No text recognized";
 
@@ -3855,7 +3942,7 @@
 "SETTINGS_CHAT_VOICE_PLAYBACK_SPEED_DESCRIPTION" = "Set the default playback speed for voice messages.";
 
 "SETTINGS_CHAT_VOICE_CHANGER" = "Voice Changer";
-"SETTINGS_CHAT_VOICE_CHANGER_DESCRIPTION" = "Set the default voice changer for calls.";
+"SETTINGS_CHAT_VOICE_CHANGER_DESCRIPTION" = "Set voice effects for calls";
 
 "MEETING_NAVAGATION_RECONNECTING_FAILURE" = "Reconnection failed";
 "MEETING_NAVAGATION_CONNECTING" = "connecting...";
@@ -3890,7 +3977,7 @@
 "CALLING_VOICE_PRESET_DEEPER" = "Deeper";
 
 "BLOCK_USER_TITLE" = "Block user";
-"BLOCK_USER_DESCRIPTION" = "Block this user from messaging and calling you on Yelling?";
+"BLOCK_USER_DESCRIPTION" = "Block this user from messaging and calling you on Quicall?";
 "BLOCK_USER_CONFIRM" = "Block";
 "BLOCK_USER_CANCEL" = "Cancel";
 "BLOCK_USER_UNBLOCK" = "Unblock";
@@ -3998,11 +4085,11 @@
 "NOTIFICATIONS_CRITICAL_ALERT" = "Critical Alerts";
 "NOTIFICATIONS_CRITICAL_SWITCH_ON" = "On";
 "NOTIFICATIONS_CRITICAL_SWITCH_OFF" = "Off";
-"NOTIFICATIONS_CRITICAL_DESCRIPTION" = "Go to Settings > Notifications > Yelling > Critical Alerts, and turn it on. When enabled, Critical Alerts break through Silent Mode and Do Not Disturb.";
+"NOTIFICATIONS_CRITICAL_DESCRIPTION" = "Go to Settings > Notifications > Quicall > Critical Alerts, and turn it on. When enabled, Critical Alerts break through Silent Mode and Do Not Disturb.";
 "NOTIFICATIONS_CRITICAL_ALERT_TITLE_ON" = "Turn on Critical Alerts";
 "NOTIFICATIONS_CRITICAL_ALERT_TITLE_OFF" = "Turn off Critical Alerts";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "Go to Settings - Notification - Yelling - Critical Alerts, and turn it on.";
-"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "Go to Settings - Notification - Yelling - Critical Alerts, and turn it off.";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_ON" = "Go to Settings - Notification - Quicall - Critical Alerts, and turn it on.";
+"NOTIFICATIONS_CRITICAL_ALERT_DESCRIPTION_OFF" = "Go to Settings - Notification - Quicall - Critical Alerts, and turn it off.";
 "NOTIFICATIONS_CRITICAL_ALERT_CANCEL" = "Cancel";
 "NOTIFICATIONS_CRITICAL_ALERT_SETTING" = "Go to Setting";
 "NOTIFICATIONS_CRITICAL_EXTENSION_TITLE" = "Missed Call from %@";
@@ -4019,6 +4106,8 @@
 "SOMEONE_CRITICAL_ALERT_ALL_TEXT" = "[🚨 Critical Alert] ";
 
 "ROOM_CONNECT_FAILED" = "Connection Failed";
+
+"CALL_PROXY_TURN_REQUIRED_TIP" = "This proxy doesn't support calls through the proxy. Turn off \"Protect IP address in calls\", or update the proxy address.";
 
 "CALL_NO_CONNECT_ENDED" = "The call has ended";
 
@@ -4069,3 +4158,61 @@
 "GLOBAL_CONFIG_ERROR_CIPHERTEXT_TOO_SHORT" = "Ciphertext data too short";
 
 "CALL_MIC_QUEUE_TITLE" = "Waiting to speak";
+
+"ONBOARDING_TUTORIAL_MESSAGES_DISAPPEAR_TITLE" = "Messages disappear";
+"ONBOARDING_TUTORIAL_MESSAGES_DISAPPEAR_DESC" = "Either side can recall or leave — it's gone from both sides. No trace, no recovery. Keep a copy of anything that matters.";
+"ONBOARDING_TUTORIAL_E2E_TITLE" = "Only both sides can see it";
+"ONBOARDING_TUTORIAL_E2E_DESC" = "End-to-end encryption. No one except you and the other side can view chat content.";
+"ONBOARDING_TUTORIAL_NEXT" = "Next";
+"ONBOARDING_TUTORIAL_SKIP" = "Skip";
+"SHORT_FOR_IMAGE" = "Image";
+"SHORT_FOR_VIDEO" = "Video";
+"SHORT_FOR_ATTACHMENT" = "Attachment";
+"SHORT_FOR_CONTACT_MESSAGE" = "Contact Card";
+"PLACEHOLDER_WRAPPER_FOR_CHAT_HISTORY" = "Chat History";
+"SHORT_FOR_MESSAGE" = "Message";
+"WEAK_CONTACT_PENDING_SECTION_TITLE" = "Removing Soon";
+"WEAK_CONTACT_REMOVE_IN_DAYS" = "Removed in %ld days";
+"WEAK_CONTACT_REMOVE_TODAY" = "Removed today";
+"WEAK_CONTACT_REMOVE_NOW" = "Delete Contact";
+"WEAK_CONTACT_REMOVE_NOW_CONFIRM" = "Delete this contact? This cannot be undone.";
+"PERSONAL_CARD_ACCOUNT_UNAVAILABLE_TITLE" = "Account unavailable";
+"PERSONAL_CARD_ACCOUNT_UNAVAILABLE_MESSAGE" = "This account doesn't exist or is unavailable.";
+"PERSONAL_CARD_ACCOUNT_UNAVAILABLE_DELETE" = "Delete Contact";
+
+// MARK: - Self-hosted proxy settings
+"PROXY_SETTINGS_TITLE" = "Use proxy";
+"PROXY_USE_PROXY" = "Use proxy";
+"PROXY_USE_PROXY_DESC" = "Connect to Quicall through a proxy you trust to hide your real IP from Quicall and improve connectivity on restricted networks.";
+"PROXY_USE_PROXY_DESC_DETAIL" = "Connect to Quicall through a proxy you trust to hide your real IP from Quicall and improve connectivity on restricted networks. Call IP protection needs to be turned on separately.";
+"PROXY_LEARN_MORE" = "Learn more";
+"PROXY_ADDRESS_LABEL" = "Proxy address";
+"PROXY_ADDRESS_HINT" = "Enter proxy address";
+"PROXY_SAVE" = "Save address";
+"PROXY_STATUS_ON" = "On";
+"PROXY_STATUS_OFF" = "Off";
+"PROXY_ENTRY_UNAVAILABLE" = "Unavailable";
+"PROXY_SAVED" = "Proxy settings saved";
+"PROXY_INVALID_ADDRESS" = "Invalid proxy address.";
+"PROXY_UNSUPPORTED_VERSION" = "This proxy address isn't supported by this version.";
+"PROXY_ENTER_ADDRESS" = "Enter a proxy address.";
+"PROXY_SAVE_FIRST" = "Save the proxy address first.";
+"PROXY_NO_TURN_WARNING" = "This proxy doesn't support calls through the proxy. Turn off \"Protect IP address in calls\", or update the proxy address.";
+"PROXY_STATUS_CHECKING" = "Checking proxy…";
+"PROXY_STATUS_AVAILABLE" = "Proxy available";
+"PROXY_STATUS_UNAVAILABLE" = "Proxy unavailable. Check the proxy address and try again.";
+"PROXY_VERIFY_FAILED" = "Unable to verify proxy. Make sure the proxy address is from a trusted source.";
+"PROXY_RECHECK" = "Recheck";
+"PROXY_CALL_IN_PROGRESS" = "Proxy settings can't be changed during a call.";
+"PROXY_PASSPHRASE_TITLE" = "Enter passphrase";
+"PROXY_PASSPHRASE_DESC" = "This proxy address is protected by a passphrase. Enter the passphrase provided by the proxy provider.";
+"PROXY_PASSPHRASE_HINT" = "Passphrase";
+"PROXY_PASSPHRASE_WRONG" = "Incorrect passphrase. Try again.";
+"PROXY_PASSPHRASE_CONFIRM" = "OK";
+"PROXY_PASSPHRASE_CANCEL" = "Cancel";
+"PROXY_E2E_CHECKING" = "Verifying connection to Quicall…";
+"PROXY_E2E_OK" = "Connected to Quicall through the proxy.";
+"PROXY_E2E_FAILED" = "Unable to connect to Quicall through the proxy.";
+"PROXY_PROTECT_CALL_TITLE" = "Protect IP address in calls";
+"PROXY_PROTECT_CALL_DESC" = "When on, calls are also routed through the proxy to hide your real IP from Quicall. This may reduce call quality.";
+"PROXY_PROTECT_NEED_PROXY" = "Turn on Use proxy first.";

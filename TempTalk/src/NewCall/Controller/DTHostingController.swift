@@ -36,6 +36,19 @@ class DTHostingController<Content: View>: UIHostingController<Content> {
         additionalSafeAreaInsets = .zero
         navigationController?.setNavigationBarHidden(true, animated: false)
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard isBeingPresented == false else { return }
+        let bounds = view.bounds
+        Logger.info("[DTHosting] viewDidAppear frame=\(bounds), forcing layout refresh")
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        let newBounds = view.bounds
+        if newBounds != bounds {
+            Logger.info("[DTHosting] layout changed after refresh: \(bounds) -> \(newBounds)")
+        }
+    }
         
     @objc
     func themeDidChange() {

@@ -92,3 +92,4 @@ firebase-debug.log
 
 # GitHub
 .github/
+tmp/

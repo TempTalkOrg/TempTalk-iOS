@@ -9,9 +9,12 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol HTTPResponse;
 
 @class OWSHTTPErrorWrapper;
+@class OWSUrlDownloadResponse;
 
 typedef void (^RESTNetworkManagerSuccess)(id<HTTPResponse> response);
+typedef void (^RESTNetworkManagerDownloadSuccess)(OWSUrlDownloadResponse *response);
 typedef void (^RESTNetworkManagerFailure)(OWSHTTPErrorWrapper *error);
+typedef void (^RESTNetworkManagerProgress)(NSURLSessionTask *task, NSProgress *progress);
 
 #pragma mark -
 

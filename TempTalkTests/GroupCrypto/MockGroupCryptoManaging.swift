@@ -64,6 +64,16 @@ final class MockGroupCryptoManaging: GroupCryptoManaging {
     func getRGroupData(gid: String,
                        transaction: SDSAnyReadTransaction) -> Data? { nil }
 
+    private(set) var deleteRGroupCallCount = 0
+    private(set) var lastDeletedGid: String?
+
+    @discardableResult
+    func deleteRGroup(gid: String, transaction: SDSAnyWriteTransaction) -> Bool {
+        deleteRGroupCallCount += 1
+        lastDeletedGid = gid
+        return true
+    }
+
     func verifyMember(gid: String,
                       uid: String,
                       uidSignature: String,
@@ -83,5 +93,7 @@ final class MockGroupCryptoManaging: GroupCryptoManaging {
         isEncryptedCallCount = 0
         hasRGroupCallCount = 0
         decryptedNameCallCount = 0
+        deleteRGroupCallCount = 0
+        lastDeletedGid = nil
     }
 }

@@ -37,7 +37,7 @@ import TTMessaging
     /// 多选模式下,是否已经选中了 message
     func isSelectedViewItemInMultiSelectMode(_ viewItem: ConversationViewItem) -> Bool {
         guard isMultiSelectMode else { return false }
-        return viewState.forwardMessageItems.first(where: { $0.isEqual(to: viewItem) }) != nil
+        return viewState.selectedMessageItems.first(where: { $0.isEqual(to: viewItem) }) != nil
     }
 
     /// 多选模式下,选中或取消选中 message
@@ -59,7 +59,7 @@ import TTMessaging
         // 超过最大转发数量
         let isSelected = isSelectedViewItemInMultiSelectMode(viewItem)
         let maxMsgCount = 50
-        if viewState.forwardMessageItems.count == maxMsgCount, !isSelected {
+        if viewState.selectedMessageItems.count == maxMsgCount, !isSelected {
             DTToastHelper.toast(
                 withText: String(format: Localized("FORWARD_MESSAGE_SELECT_MESSAGE_MAX_COUNT"), maxMsgCount),
                 durationTime: 1
@@ -76,16 +76,16 @@ import TTMessaging
         }
 
         if !isSelected {
-            addForwardMessage(viewItem)
+            addSelectedMessage(viewItem)
         } else {
-            removeForwardMessage(viewItem)
+            removeSelectedMessage(viewItem)
         }
 
         let recallableCount = countRecallableMessages()
         forwardToolbar.updateActionItemsSelectedCount(
-            UInt(viewState.forwardMessageItems.count),
+            UInt(viewState.selectedMessageItems.count),
             maxCount: 50,
-            enableCounts: [1, 2, 1, NSNumber(value: recallableCount > 0 ? 1 : UInt.max)],
+            enableCounts: [1, 1, 1, NSNumber(value: recallableCount > 0 ? 1 : UInt.max)],
             recallableCount: UInt(recallableCount)
         )
         if let cell = collectionView.cellForItem(at: indexPath) as? ConversationMessageCell {
@@ -93,24 +93,45 @@ import TTMessaging
         }
     }
 
-    func addForwardMessage(_ forwardMessage: ConversationViewItem) {
-        viewState.forwardMessageItems.append(forwardMessage)
+    func addSelectedMessage(_ item: ConversationViewItem) {
+        viewState.selectedMessageItems.append(item)
     }
 
-    func removeForwardMessage(_ forwardMessage: ConversationViewItem) {
-        let newForwardMessages = viewState.forwardMessageItems.filter { !$0.isEqual(to: forwardMessage) }
-        viewState.forwardMessageItems = newForwardMessages
+    func removeSelectedMessage(_ item: ConversationViewItem) {
+        let remaining = viewState.selectedMessageItems.filter { !$0.isEqual(to: item) }
+        viewState.selectedMessageItems = remaining
     }
 
-    func clearAllForwardMessages() {
-        viewState.forwardMessageItems.removeAll()
+    func clearSelectedMessages() {
+        viewState.selectedMessageItems.removeAll()
+    }
+
+    /// Remove stale items from the selection after a data reload
+    /// (e.g. a message was recalled by the sender while multi-select is active).
+    func pruneSelectedMessagesIfNeeded() {
+        guard isMultiSelectMode else { return }
+
+        let currentIds = Set(viewItems.map { $0.interaction.uniqueId })
+        let before = viewState.selectedMessageItems.count
+        viewState.selectedMessageItems.removeAll { !currentIds.contains($0.interaction.uniqueId) }
+
+        guard viewState.selectedMessageItems.count != before else { return }
+
+        let recallableCount = countRecallableMessages()
+        forwardToolbar.updateActionItemsSelectedCount(
+            UInt(viewState.selectedMessageItems.count),
+            maxCount: 50,
+            enableCounts: [1, 1, 1, NSNumber(value: recallableCount > 0 ? 1 : UInt.max)],
+            recallableCount: UInt(recallableCount)
+        )
+        collectionView.reloadData()
     }
 
     func countRecallableMessages() -> Int {
         let currentTimestamp = NSDate.ows_millisecondTimeStamp()
         let recallThreshold = DTRecallConfig.fetch().timeoutInterval
 
-        return viewState.forwardMessageItems.filter { viewItem in
+        return viewState.selectedMessageItems.filter { viewItem in
             guard viewItem.interaction is TSOutgoingMessage else { return false }
             let msgTimestamp = viewItem.interaction.timestamp
             guard currentTimestamp >= msgTimestamp else { return false }
@@ -130,12 +151,20 @@ import TTMessaging
 
 extension ConversationViewController: DTMultiSelectToolbarDelegate {
     func multiSelectToolbar(_: DTMultiSelectToolbar, didSelectIndex index: Int) {
-        let forwardType: DTForwardMessageType = .init(rawValue: index) ?? .oneByOne
-
-        if forwardType == .batchRecall {
+        // Index mapping: 0=Forward, 1=Copy, 2=Save, 3=Recall
+        switch index {
+        case 0:
+            // Forward style is decided by selection count:
+            // exactly 1 selected -> one-by-one forward; >= 2 selected -> combined forward.
+            forwardMessages(forwardType: viewState.selectedMessageItems.count > 1 ? .combined : .oneByOne)
+        case 1:
+            copySelectedMessages()
+        case 2:
+            forwardMessages(forwardType: .note)
+        case 3:
             batchRecallMessages()
-        } else {
-            forwardMessages(forwardType: forwardType)
+        default:
+            break
         }
     }
 
@@ -143,8 +172,8 @@ extension ConversationViewController: DTMultiSelectToolbarDelegate {
         [
             .init(imageName: "toolbar-forward",
                   title: Localized("MESSAGE_ACTION_FORWARD")),
-            .init(imageName: "toolbar-combine-forward",
-                  title: Localized("MESSAGE_ACTION_COMBINE_FORWARD")),
+            .init(imageName: "conversation_muti_tabler_copy",
+                  title: Localized("MESSAGE_ACTION_COPY")),
             .init(imageName: "toolbar-save",
                   title: Localized("MESSAGE_ACTION_SAVE")),
             .init(imageName: "toolbar-combine-recalled",

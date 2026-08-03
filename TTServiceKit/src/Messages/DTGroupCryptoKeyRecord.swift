@@ -6,13 +6,26 @@
 import Foundation
 import GRDB
 
+// MARK: - Rotate Outcome
+
+/// Result of routing an incoming R_group through the version-aware write funnel.
+@objc public enum DTGroupKeyRotateOutcome: Int {
+    case inserted  // no local key before (all-lost / freshly joined)
+    case rotated   // a higher-version key replaced the local one
+    case skipped   // version <= local; ignored to block old-key reflood
+}
+
 // MARK: - Protocol
 
 public protocol GroupCryptoKeyStore {
     func fetchRGroup(forGid gid: String, transaction: SDSAnyReadTransaction) -> String?
+    func fetchKeyVersion(forGid gid: String, transaction: SDSAnyReadTransaction) -> Int
     @discardableResult
     func saveRGroupIfNeeded(gid: String, rGroup: String, transaction: SDSAnyWriteTransaction) -> Bool
     func updateRGroup(gid: String, rGroup: String, transaction: SDSAnyWriteTransaction)
+    /// Version-aware funnel: insert when absent, overwrite when version is higher, skip otherwise.
+    @discardableResult
+    func saveOrRotateRGroup(gid: String, rGroup: String, version: Int, transaction: SDSAnyWriteTransaction) -> DTGroupKeyRotateOutcome
     func deleteRGroup(forGid gid: String, transaction: SDSAnyWriteTransaction)
 }
 
@@ -30,6 +43,7 @@ public final class DTGroupCryptoKeyRecord: NSObject, SDSCodableModel {
         case uniqueId
         case gid
         case rGroup
+        case keyVersion
     }
 
     public var id: Int64?
@@ -43,11 +57,16 @@ public final class DTGroupCryptoKeyRecord: NSObject, SDSCodableModel {
     @objc
     public let rGroup: String
 
+    /// Monotonic crypto key version. Baseline 0 = original/never-rotated.
     @objc
-    public init(gid: String, rGroup: String) {
+    public let keyVersion: Int
+
+    @objc
+    public init(gid: String, rGroup: String, keyVersion: Int = 0) {
         self.uniqueId = gid
         self.gid = gid
         self.rGroup = rGroup
+        self.keyVersion = keyVersion
     }
 
     // MARK: - Codable
@@ -62,6 +81,7 @@ public final class DTGroupCryptoKeyRecord: NSObject, SDSCodableModel {
         uniqueId = try container.decode(String.self, forKey: .uniqueId)
         gid = try container.decode(String.self, forKey: .gid)
         rGroup = try container.decode(String.self, forKey: .rGroup)
+        keyVersion = try container.decodeIfPresent(Int.self, forKey: .keyVersion) ?? 0
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -72,6 +92,7 @@ public final class DTGroupCryptoKeyRecord: NSObject, SDSCodableModel {
         try container.encode(uniqueId, forKey: .uniqueId)
         try container.encode(gid, forKey: .gid)
         try container.encode(rGroup, forKey: .rGroup)
+        try container.encode(keyVersion, forKey: .keyVersion)
     }
 
     // MARK: - CRUD
@@ -112,6 +133,10 @@ public final class DTGroupCryptoKeyStoreImpl: GroupCryptoKeyStore {
         DTGroupCryptoKeyRecord.fetch(forGid: gid, transaction: transaction)?.rGroup
     }
 
+    public func fetchKeyVersion(forGid gid: String, transaction: SDSAnyReadTransaction) -> Int {
+        DTGroupCryptoKeyRecord.fetch(forGid: gid, transaction: transaction)?.keyVersion ?? 0
+    }
+
     @discardableResult
     public func saveRGroupIfNeeded(gid: String, rGroup: String, transaction: SDSAnyWriteTransaction) -> Bool {
         if DTGroupCryptoKeyRecord.fetch(forGid: gid, transaction: transaction) != nil {
@@ -129,9 +154,24 @@ public final class DTGroupCryptoKeyStoreImpl: GroupCryptoKeyStore {
         Logger.info("[GroupCrypto] R_group upserted, gid: \(gid)")
     }
 
+    @discardableResult
+    public func saveOrRotateRGroup(gid: String, rGroup: String, version: Int, transaction: SDSAnyWriteTransaction) -> DTGroupKeyRotateOutcome {
+        guard let existing = DTGroupCryptoKeyRecord.fetch(forGid: gid, transaction: transaction) else {
+            DTGroupCryptoKeyRecord(gid: gid, rGroup: rGroup, keyVersion: version).anyInsert(transaction: transaction)
+            Logger.info("[GroupCrypto] R_group inserted, gid: \(gid), version: \(version)")
+            return .inserted
+        }
+        // Missing/absent version maps to 0; only a strictly higher version overwrites.
+        guard version > existing.keyVersion else {
+            Logger.info("[GroupCrypto] R_group skip stale key, gid: \(gid), incoming: \(version), local: \(existing.keyVersion)")
+            return .skipped
+        }
+        DTGroupCryptoKeyRecord(gid: gid, rGroup: rGroup, keyVersion: version).anyUpsert(transaction: transaction)
+        Logger.info("[GroupCrypto] R_group rotated, gid: \(gid), \(existing.keyVersion) -> \(version)")
+        return .rotated
+    }
+
     public func deleteRGroup(forGid gid: String, transaction: SDSAnyWriteTransaction) {
-        let existed = DTGroupCryptoKeyRecord.fetch(forGid: gid, transaction: transaction) != nil
         DTGroupCryptoKeyRecord.delete(forGid: gid, transaction: transaction)
-        Logger.info("[GroupCrypto] deleteRGroup gid: \(gid), existed: \(existed)")
     }
 }

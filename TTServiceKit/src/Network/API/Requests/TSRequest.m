@@ -73,10 +73,7 @@
                         method:(NSString *)method
                     parameters:(nullable NSDictionary<NSString *, id> *)parameters
 {
-    NSString *absoluteString = [url.absoluteString stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
-    NSURL *finalURL = [NSURL URLWithString:absoluteString];
-    
-    return [[TSRequest alloc] initWithURL:finalURL method:method parameters:parameters];
+    return [[TSRequest alloc] initWithURL:url method:method parameters:parameters];
 }
 
 #pragma mark - Authorization

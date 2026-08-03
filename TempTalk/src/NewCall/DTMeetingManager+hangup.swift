@@ -91,16 +91,6 @@ extension DTMeetingManager {
         )
     }
 
-    // MARK: - clearDisconnectErrorData
-
-    func clearDisconnectErrorData() async {
-        Logger.info("\(logTag) clearDisconnectErrorData trigger")
-        await hangupCoordinator.terminate(
-            reason: .connectError,
-            options: TerminationOptions(roomId: currentCall.roomId)
-        )
-    }
-
     // MARK: - meetingNotificationEndAllClearData
 
     func meetingNotificationEndAllClearData(roomId: String? = nil) async {
@@ -239,12 +229,32 @@ extension DTMeetingManager {
 
     func syncCallKitState(needSyncCallKit: Bool) {
         Logger.info("\(logTag) syncCallKitState needSyncCallKit: \(needSyncCallKit)")
-        if needSyncCallKit, let callKitUUID = currentCall.callKitUUID {
-            Task { @MainActor in
-                Logger.info("\(logTag) syncCallKitState uuid: \(callKitUUID)")
-                DTCallKitManager.shared().endCallAction(callKitUUID, onlyForCallKit: true)
-            }
+        guard needSyncCallKit else { return }
+
+        // Fallback to roomId lookup: for incoming calls not yet answered,
+        // currentCall.callKitUUID is never bound (refreshCurrentCallStatus(.none) no-op),
+        // so ask DTCallKitManager which UUID is active for this roomId.
+        let ckManager = DTCallKitManager.shared()
+        let resolvedUUID = currentCall.callKitUUID
+            ?? currentCall.roomId.flatMap { ckManager.uuidString(fromRoomId: $0) }
+
+        guard let callKitUUID = resolvedUUID else {
+            Logger.warn("\(logTag) syncCallKitState no UUID, roomId: \(currentCall.roomId ?? "nil")")
+            return
         }
+
+        // Inline call: already on @MainActor; avoid Task hop so endCallAction
+        // runs synchronously inside phase6 before phase7 cleanup proceeds.
+        Logger.info("\(logTag) syncCallKitState uuid: \(callKitUUID)")
+        ckManager.endCallAction(callKitUUID, onlyForCallKit: true)
+    }
+
+    // Single owner of CallKit-ring dismissal, keyed on the stable roomId (not currentCall). Idempotent.
+    func endCallKitRing(roomId: String) {
+        guard !roomId.isEmpty else { return }
+        let ckManager = DTCallKitManager.shared()
+        guard let uuidString = ckManager.uuidString(fromRoomId: roomId) else { return }
+        ckManager.endCallAction(uuidString, onlyForCallKit: true)
     }
 }
 
@@ -260,6 +270,8 @@ extension DTMeetingManager {
         callAlertManager.bringLiveKitAlertCalls(to: rootWindow)
         await OWSWindowManager.shared().endCall(nil)
         answerVC = nil
+        deferredIncomingCall = nil
+        dismissIncomingCallBanner()
     }
 
     @MainActor

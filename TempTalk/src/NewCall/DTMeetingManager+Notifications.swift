@@ -8,6 +8,7 @@
 
 import Foundation
 import TTServiceKit
+import TTMessaging
 
 extension DTMeetingManager {
     
@@ -49,9 +50,65 @@ extension DTMeetingManager {
             name: .ScreenLockDidUnlock,
             object: nil
         )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(userDidTakeScreenshotInMeeting(_:)),
+            name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
+    }
+
+    /// Full-screen meeting screenshots: route to the call's conversation. Instant call has none, so skip.
+    /// Minimized meetings are handled by the visible ConversationViewController.
+    @objc func userDidTakeScreenshotInMeeting(_ notification: Notification) {
+        guard hasMeeting else { return }
+        // Minimized meeting is handled by the visible ConversationViewController.
+        guard !isMinimize else { return }
+        guard !OWSScreenLockUI.sharedManager().isShowingScreenLockUI else {
+            Logger.info("\(logTag) screenshot while screen lock is showing, ignoring")
+            return
+        }
+
+        let call = currentCall
+        Logger.info("\(logTag) screenshot in meeting. callType=\(call.callType.rawValue), conversationId=\(call.conversationId ?? "nil"), isMinimize=\(isMinimize)")
+
+        guard let conversationId = call.conversationId, !conversationId.isEmpty else {
+            Logger.info("\(logTag) screenshot during instant call, skip sending system message")
+            return
+        }
+
+        var targetThread: TSThread?
+        SDSDatabaseStorage.shared.read { transaction in
+            if call.callType == .private {
+                targetThread = TSContactThread.getThread(contactId: conversationId, transaction: transaction)
+            } else if let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId) {
+                targetThread = TSGroupThread.getWithGroupId(localGroupId, transaction: transaction)
+            }
+        }
+
+        guard let targetThread else {
+            Logger.info("\(logTag) screenshot in meeting but thread not found for \(conversationId), skip")
+            return
+        }
+
+        Logger.info("\(logTag) screenshot in meeting, send system message to \(targetThread.uniqueId)")
+        ThreadUtil.sendScreenShotMessage(in: targetThread) {} failure: { _ in }
     }
 
     @objc func screenLockDidUnlock(_ notification: Notification) {
+        // If the call was minimized while the screen was locked, the floating pill was
+        // attached to a hidden root window and won't be visible after unlock. Re-attach
+        // it to the now-visible root window. Deferred to the next runloop so it runs
+        // after the root window has been shown and its root VC laid out.
+        if hasMeeting, isMinimize {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.hasMeeting, self.isMinimize else { return }
+                Logger.info("\(self.logTag) screenLockDidUnlock: re-attaching floating call pill to root window")
+                OWSWindowManager.shared().showFloatingCall(self.floatingView)
+            }
+        }
+
         // Show deferred rating after screen unlock
         guard hasPendingRating else { return }
 
@@ -156,7 +213,16 @@ extension DTMeetingManager {
                 Logger.warn("\(logTag) appWillTerminate: cleanup timed out after 3s")
                 break
             }
-            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.05))
+            // Pumping the run loop may run leftover UIKit teardown work, which can
+            // raise NSException on iOS 26. We're terminating anyway — catch and stop.
+            do {
+                try DTExceptionCatcher.catchException {
+                    RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.05))
+                }
+            } catch {
+                Logger.error("\(logTag) appWillTerminate: exception while pumping run loop: \(error)")
+                break
+            }
         }
     }
     

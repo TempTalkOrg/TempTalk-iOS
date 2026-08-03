@@ -29,6 +29,9 @@ import TTServiceKit
 
     func voiceMemoGestureWasInterrupted()
 
+    /// Optional. Skipping it falls back to `voiceMemoGestureDidComplete()`.
+    @objc optional func voiceMemoGestureDidComplete(withMode mode: VoiceMessageSendMode)
+
     // MARK: Attachments
     
     func photosButtonPressed()
@@ -42,7 +45,9 @@ import TTServiceKit
     func contactButtonPressed()
 
     func fileButtonPressed()
-    
+
+    func gifButtonPressed()
+
     func confideButtonPressed()
     
     func mentionButtonPressed()
@@ -55,6 +60,12 @@ import TTServiceKit
 @objc public enum InputToolbarState: Int {
     case normal
     case confidential
+}
+
+/// Picks the candidate (`denoised` vs `denoised+<effect>`) on release.
+@objc public enum VoiceMessageSendMode: Int {
+    case original
+    case effected
 }
 
 @objc public enum InputToolbarRelationship: Int {
@@ -151,6 +162,19 @@ import TTServiceKit
             name: UIResponder.keyboardDidChangeFrameNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardInputModeDidChange),
+            name: UITextInputMode.currentInputModeDidChangeNotification,
+            object: nil
+        )
+        // Refresh font & height immediately when the in-app text size changes.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(updateFontSizes),
+            name: .textSizeDidChange,
+            object: nil
+        )
     }
 
     required init?(coder: NSCoder) {
@@ -200,9 +224,12 @@ import TTServiceKit
     private var receivedSafeAreaInsets = UIEdgeInsets.zero
 
     private enum LayoutMetrics {
+        // Keep min fixed: content grows it naturally at larger fonts. Scaling min past
+        // minToolbarItemHeight(52) makes textViewVInset negative and overflows the top separator.
         static let minTextViewHeight: CGFloat = 40
-        static let maxTextViewHeight: CGFloat = 118
-        static let maxIPadTextViewHeight: CGFloat = 142
+        // Cap the text view to a whole number of lines (not a fixed point height), so the
+        // last visible line is never half-clipped at any font size.
+        static let maxVisibleLines = 5
         static let minToolbarItemHeight: CGFloat = 52
     }
     
@@ -227,6 +254,18 @@ import TTServiceKit
         )
         button.accessibilityIdentifier = UIView.accessibilityIdentifier(in: self, name: "attachmentButton")
         button.addTarget(self, action: #selector(addOrCancelButtonPressed), for: .touchUpInside)
+        button.setContentHuggingHorizontalHigh()
+        button.setCompressionResistanceHorizontalHigh()
+        return button
+    }()
+
+    // Standalone GIF entry, sits to the right of the + attachment button (see Figma 16746-18110).
+    private lazy var gifButton: UIButton = {
+        let button = UIButton(type: .custom)
+        button.tintColor = Theme.iconColor
+        button.accessibilityIdentifier = UIView.accessibilityIdentifier(in: self, name: "gifButton")
+        button.addTarget(self, action: #selector(gifButtonTapped), for: .touchUpInside)
+        button.setImage(UIImage(named: "input_attachment_gif")?.withRenderingMode(.alwaysTemplate), for: .normal)
         button.setContentHuggingHorizontalHigh()
         button.setCompressionResistanceHorizontalHigh()
         return button
@@ -260,7 +299,8 @@ import TTServiceKit
     
     private lazy var voiceMemoView: VoiceMemoView = {
         let voiceMemoView = VoiceMemoView()
-                    
+        voiceMemoView.accessibilityIdentifier = DTConversationAccessibilityID.voiceRecord
+
         // We want to be permissive about the voice message gesture, so we hang
         // the long press GR on the button's wrapper, not the button itself.
         let longPressGestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleVoiceMemoLongPress(gesture:)))
@@ -295,6 +335,8 @@ import TTServiceKit
     private var confideButtonConstraints: [NSLayoutConstraint] = []
 
     private var addOrCancelButtonConstraints: [NSLayoutConstraint] = []
+
+    private var gifButtonConstraints: [NSLayoutConstraint] = []
 
     private var lastNumberOflines = 0
     
@@ -402,6 +444,16 @@ import TTServiceKit
         let heightConstraint = addOrCancelButton.autoSetDimension(.height, toSize: addOrCancelButtonSize.height)
         addOrCancelButtonConstraints = [leftConstraint, bottomConstraint, widthConstraint, heightConstraint]
 
+        // GIF button: pinned to the right of the + attachment button (collapsed when not a friend).
+        mainPanelView.addSubview(gifButton)
+        let gifLeftConstraint = gifButton.autoPinEdge(.left, to: .right, of: addOrCancelButton, withOffset: -10)
+        let gifBottomConstraint = gifButton.autoPinEdge(toSuperviewEdge: .bottom)
+        let gifButtonSize = isFriend ? LayoutMetrics.minToolbarItemHeight : CGFLOAT_MIN
+        let gifWidthConstraint = gifButton.autoSetDimension(.width, toSize: gifButtonSize)
+        let gifHeightConstraint = gifButton.autoSetDimension(.height, toSize: gifButtonSize)
+        gifButton.isHidden = !isFriend
+        gifButtonConstraints = [gifLeftConstraint, gifBottomConstraint, gifWidthConstraint, gifHeightConstraint]
+
         // Voice Message | Keyboard | Send: pinned to the bottom right corner.
         mainPanelView.addSubview(rightEdgeControlsView)
         rightEdgeControlsView.autoPinEdge(toSuperviewMargin: .right)
@@ -412,7 +464,7 @@ import TTServiceKit
         mainPanelView.addSubview(messageContentView)
         messageContentView.autoPinHeightToSuperview()
         messageContentView.autoPinEdge(.right, to: .left, of: rightEdgeControlsView)
-        messageContentView.autoPinEdge(.left, to: .right, of: addOrCancelButton)
+        messageContentView.autoPinEdge(.left, to: .right, of: gifButton)
 
         // Put main panel view into a wrapper view that would also contain background view.
         mainPanelWrapperView.addSubview(mainPanelView)
@@ -568,7 +620,9 @@ import TTServiceKit
         
         var memoGestureState = voiceMemoView.gestureState
         if .recording == voiceMemoRecordingState {
-            memoGestureState = true == inCancleRecordCircle ? .releaseToCancel : .releaseToSend
+            // Releasing over the effect button sends (with effect), so only the
+            // cancel button should show the cancel state; effect hover stays in send state.
+            memoGestureState = inCancelButton ? .releaseToCancel : .releaseToSend
         } else {
             memoGestureState = .holdToTalk
         }
@@ -588,6 +642,14 @@ import TTServiceKit
             addOrCancelButtonConstraints[3].constant = addOrCancelButtonSize.height
         }
         addOrCancelButton.isHidden = !isFriend
+
+        // GIF button mirrors the + attachment button's friend/not-friend state.
+        if gifButtonConstraints.count >= 4 {
+            let gifButtonSize = isFriend ? LayoutMetrics.minToolbarItemHeight : CGFLOAT_MIN
+            gifButtonConstraints[2].constant = gifButtonSize
+            gifButtonConstraints[3].constant = gifButtonSize
+        }
+        gifButton.isHidden = !isFriend
 
         // Hide text input field if Voice Message UI is presented or make it visible otherwise.
         // Do not change "isHidden" because that'll cause inputTextView to lose focus.
@@ -659,6 +721,8 @@ import TTServiceKit
 
     @objc func updateFontSizes() {
         inputTextView.font = .ows_dynamicTypeBodyFont()
+        // Recompute height: the scaled max changes with the font, so re-clamp.
+        ensureTextViewHeight()
     }
 
     // MARK: hold to talk Button
@@ -738,7 +802,7 @@ import TTServiceKit
             switch gestureState {
             case .holdToTalk:
                 tipLable.textColor = ConversationStyle.bubbleTextColorIncoming
-                tipLable.text = OWSLocalizedString("INPUTTOOL_VOICE_HOLD_TO_TALK", comment: "")
+                tipLable.text = Localized("INPUTTOOL_VOICE_HOLD_TO_TALK")
 
                 waveView.stopAnimation()
                 waveView.isHidden = true
@@ -747,7 +811,7 @@ import TTServiceKit
 
             case .releaseToSend:
                 tipLable.textColor = .white
-                tipLable.text = OWSLocalizedString("INPUTTOOL_VOICE_RELEASE_TO_SEND", comment: "")
+                tipLable.text = Localized("INPUTTOOL_VOICE_RELEASE_TO_SEND")
 
                 waveView.isHidden = false
                 waveView.setBarColor(color: .white)
@@ -756,7 +820,7 @@ import TTServiceKit
                 backgroundColor = .ows_themeBlue
             case .releaseToCancel:
                 tipLable.textColor = Theme.tdisableColor
-                tipLable.text = OWSLocalizedString("INPUTTOOL_VOICE_RELEASE_TO_SEND", comment: "")
+                tipLable.text = Localized("INPUTTOOL_VOICE_RELEASE_TO_SEND")
 
                 waveView.isHidden = false
                 waveView.setBarColor(color: Theme.tdisableColor)
@@ -769,7 +833,46 @@ import TTServiceKit
             waveView.stopAnimation()
         }
     }
-    
+
+    /// "Add effect" pill — swaps to blue→teal gradient on hover.
+    fileprivate final class VoiceMemoEffectButton: UIButton {
+
+        private let selectedGradientLayer: CAGradientLayer = {
+            let layer = CAGradientLayer()
+            layer.colors = [
+                UIColor(rgbHex: 0x328AFD).cgColor,
+                UIColor(rgbHex: 0x00BDB6).cgColor
+            ]
+            layer.locations = [0.15, 0.856]
+            // Approximates Figma's 155.77° gradient.
+            layer.startPoint = CGPoint(x: 0.2, y: 0)
+            layer.endPoint = CGPoint(x: 0.8, y: 1)
+            layer.isHidden = true
+            return layer
+        }()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            layer.insertSublayer(selectedGradientLayer, at: 0)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override var isSelected: Bool {
+            didSet { selectedGradientLayer.isHidden = !isSelected }
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            selectedGradientLayer.frame = bounds
+            if let titleLabel = titleLabel {
+                bringSubviewToFront(titleLabel)
+            }
+        }
+    }
+
     // MARK: Right Edge Buttons
 
     private class RightEdgeControlsView: UIView {
@@ -1088,6 +1191,9 @@ import TTServiceKit
             return
         }
 
+        // Replace any existing preview so switching quotes doesn't stack/overlap them.
+        quotedReplyWrapper.removeAllSubviews()
+
         let quotedMessagePreview = DTInputReplyPreview(quotedReply: quotedReplyDraft, conversationStyle: conversationStyle)
 
         quotedMessagePreview.delegate = self
@@ -1102,7 +1208,10 @@ import TTServiceKit
 
     private func hideQuotedReplyView(animated: Bool) {
         owsAssertDebug(quotedReplyDraft == nil)
-        toggleMessageComponentVisibility(hide: true, component: quotedReplyWrapper, animated: animated) { _ in
+        toggleMessageComponentVisibility(hide: true, component: quotedReplyWrapper, animated: animated) { [weak self] _ in
+            // Only clear if the draft is still nil: a new quote may have arrived
+            // before this hide animation finished, and clearing would wipe its preview.
+            guard let self, self.quotedReplyDraft == nil else { return }
             self.quotedReplyWrapper.removeAllSubviews()
         }
     }
@@ -1158,31 +1267,53 @@ import TTServiceKit
         }
     }
 
-    private var inCancleRecordCircle: Bool? = false {
+    private var inCancelButton: Bool = false {
         didSet {
-            guard oldValue != inCancleRecordCircle else { return }
+            guard oldValue != inCancelButton else { return }
             updateVoiceMemoTipState()
         }
     }
-    
+
+    private var inEffectButton: Bool = false {
+        didSet {
+            guard oldValue != inEffectButton else { return }
+            updateVoiceMemoTipState()
+        }
+    }
+
     private var inContainerView: Bool? = false
 
-    private var voiceMemoCancelLabel: UILabel?
-    private var voiceMemoCancleCircle: UIButton?
+    private var voiceMemoCancelHintLabel: UILabel?
+    private var voiceMemoEffectHintLabel: UILabel?
+    private var voiceMemoCancelButton: UIButton?
+    private var voiceMemoEffectButton: VoiceMemoEffectButton?
     private var voiceMemoGradientContainerView: UIView?
-    
+
+    /// Random effect for the current recording, fixed once at gesture `.began`.
+    /// Shared by the effect-button label and the recorder recipes so the shown
+    /// emoji always matches the sound that gets sent.
+    private(set) var voiceMemoEffect: VoiceMessageEffect = .higher
+
     private let countdownBubbleView = RecordingCountdownBubbleView()
     private let recordingProcessor = RecordingLimitProcessor()
-    
+
     private let voiceMemoBGHeight: CGFloat = 196 + 20
-    private let voiceMemoCancelBtnHeight: CGFloat = 72 + 10
+    private let voiceMemoActionButtonWidth: CGFloat = 140
+    private let voiceMemoActionButtonHeight: CGFloat = 72
+    private let voiceMemoActionRowSpacing: CGFloat = 32
+    private let voiceMemoActionLabelGap: CGFloat = 20
+    // Figma `py-[48px]`.
+    private let voiceMemoActionRowBottomInset: CGFloat = 48
+    // Figma X icon = 17pt; raw asset is bigger.
+    private let voiceMemoCancelIconSize: CGFloat = 17
     
     @objc func showVoiceMemoUI() {
         AssertIsOnMainThread()
 
         isShowingVoiceMemoUI = true
 
-        voiceMemoCancleCircle?.removeFromSuperview()
+        voiceMemoCancelButton?.removeFromSuperview()
+        voiceMemoEffectButton?.removeFromSuperview()
 
         let gradientContainerView: UIView = {
             let gradientLayer = CAGradientLayer()
@@ -1197,7 +1328,7 @@ import TTServiceKit
                     UIColor.white.cgColor
                 ]
             }
-            
+
             let view = OWSLayerView(frame: .zero) { view in
                 gradientLayer.frame = view.bounds
             }
@@ -1208,47 +1339,104 @@ import TTServiceKit
         gradientContainerView.autoPinWidthToSuperview()
         gradientContainerView.autoPinEdge(.bottom, to: .top, of: self)
         gradientContainerView.autoSetDimension(.height, toSize: voiceMemoBGHeight)
-                
-        let cancelLabel = UILabel()
-        cancelLabel.textColor = Theme.tprimaryColor
-        cancelLabel.font = .systemFont(ofSize: 14)
-        cancelLabel.text = OWSLocalizedString("Release to Cancel", comment: "")
-        cancelLabel.numberOfLines = 1
-        cancelLabel.alpha = 0
-        self.voiceMemoCancelLabel = cancelLabel
-        
-        let redCircleView = UIButton()
-        redCircleView.layer.cornerRadius = voiceMemoCancelBtnHeight / 2
-        redCircleView.layer.masksToBounds = true
-        redCircleView.setBackgroundColor(Theme.tdisableColor, for: .normal)
-        redCircleView.setImage((UIImage(named: "inputtoolbar_voice_close")), for: .normal)
-        redCircleView.setBackgroundColor(Theme.errorColor, for: .selected)
-        redCircleView.setImage((UIImage(named: "inputtoolbar_voice_close")), for: .selected)
-        redCircleView.autoSetDimensions(to: CGSize(square: voiceMemoCancelBtnHeight))
-        self.voiceMemoCancleCircle = redCircleView
-        
-        let voicememoCancelVStack = UIStackView(arrangedSubviews: [
-            cancelLabel,
-            redCircleView
-        ])
-        voicememoCancelVStack.axis = .vertical
-        voicememoCancelVStack.alignment = .center
-        voicememoCancelVStack.distribution = .fill
-        voicememoCancelVStack.spacing = 12 + 6
-        gradientContainerView.addSubview(voicememoCancelVStack)
-        voicememoCancelVStack.autoCenterInSuperview()
-        
+
+        let cancelColumn = makeVoiceMemoActionColumn(
+            button: makeVoiceMemoCancelButton(),
+            hintText: Localized("INPUTTOOL_VOICE_RELEASE_TO_CANCEL")
+        )
+        let effectColumn = makeVoiceMemoActionColumn(
+            button: makeVoiceMemoEffectButton(),
+            hintText: Localized("INPUTTOOL_VOICE_RELEASE_TO_SEND_WITH_EFFECT")
+        )
+        voiceMemoCancelHintLabel = cancelColumn.hintLabel
+        voiceMemoEffectHintLabel = effectColumn.hintLabel
+        voiceMemoCancelButton = cancelColumn.button
+        voiceMemoEffectButton = effectColumn.button as? VoiceMemoEffectButton
+
+        let actionsRow = UIStackView(arrangedSubviews: [cancelColumn.stack, effectColumn.stack])
+        actionsRow.axis = .horizontal
+        actionsRow.alignment = .bottom
+        actionsRow.distribution = .fill
+        actionsRow.spacing = voiceMemoActionRowSpacing
+        gradientContainerView.addSubview(actionsRow)
+        actionsRow.autoAlignAxis(toSuperviewAxis: .vertical)
+        actionsRow.autoPinEdge(toSuperviewEdge: .bottom, withInset: voiceMemoActionRowBottomInset)
+
         addSubview(countdownBubbleView)
         countdownBubbleView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            countdownBubbleView.bottomAnchor.constraint(equalTo: cancelLabel.topAnchor, constant: -8),
-            countdownBubbleView.centerXAnchor.constraint(equalTo: cancelLabel.centerXAnchor),
+            countdownBubbleView.bottomAnchor.constraint(equalTo: actionsRow.topAnchor, constant: -8),
+            countdownBubbleView.centerXAnchor.constraint(equalTo: actionsRow.centerXAnchor),
             countdownBubbleView.widthAnchor.constraint(greaterThanOrEqualToConstant: 140),
             countdownBubbleView.heightAnchor.constraint(equalToConstant: 38)
         ])
-        
+
         self.voiceMemoGradientContainerView = gradientContainerView
-        
+    }
+
+    private func makeVoiceMemoCancelButton() -> UIButton {
+        let button = UIButton(type: .custom)
+        button.layer.cornerRadius = voiceMemoActionButtonHeight / 2
+        button.layer.masksToBounds = true
+        button.setBackgroundColor(Theme.tdisableColor, for: .normal)
+        button.setBackgroundColor(Theme.errorColor, for: .selected)
+
+        let iconSize = CGSize(square: voiceMemoCancelIconSize)
+        let icon = resizedCancelIcon(named: "inputtoolbar_voice_close", to: iconSize)
+        button.setImage(icon, for: .normal)
+        button.setImage(icon, for: .selected)
+        button.setTitle(Localized("INPUTTOOL_VOICE_CANCEL_BUTTON"), for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 14)
+        // 8pt visual gap (4pt each side).
+        let iconTitleGap: CGFloat = 4
+        button.imageEdgeInsets = UIEdgeInsets(top: 0, left: -iconTitleGap, bottom: 0, right: iconTitleGap)
+        button.titleEdgeInsets = UIEdgeInsets(top: 0, left: iconTitleGap, bottom: 0, right: -iconTitleGap)
+        button.autoSetDimensions(to: CGSize(width: voiceMemoActionButtonWidth, height: voiceMemoActionButtonHeight))
+        return button
+    }
+
+    private func makeVoiceMemoEffectButton() -> VoiceMemoEffectButton {
+        let button = VoiceMemoEffectButton(type: .custom)
+        button.layer.cornerRadius = voiceMemoActionButtonHeight / 2
+        button.layer.masksToBounds = true
+        button.setBackgroundColor(Theme.tdisableColor, for: .normal)
+        // Fixed sparkle prefix: the button is a neutral "voice effect" entry and
+        // must not follow the call voice-changer preset (design §3.2).
+        let baseLabel = Localized("INPUTTOOL_VOICE_EFFECT_BUTTON")
+        button.setTitle("✨ \(baseLabel)", for: .normal)
+        button.setTitleColor(.white, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 14)
+        button.autoSetDimensions(to: CGSize(width: voiceMemoActionButtonWidth, height: voiceMemoActionButtonHeight))
+        return button
+    }
+
+    private func resizedCancelIcon(named: String, to size: CGSize) -> UIImage? {
+        guard let original = UIImage(named: named) else { return nil }
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            original.draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+
+    private func makeVoiceMemoActionColumn(
+        button: UIButton,
+        hintText: String
+    ) -> (stack: UIStackView, hintLabel: UILabel, button: UIButton) {
+        let hintLabel = UILabel()
+        // `.white` would vanish on the light-mode gradient.
+        hintLabel.textColor = Theme.tprimaryColor
+        hintLabel.font = .systemFont(ofSize: 13, weight: .regular)
+        hintLabel.text = hintText
+        hintLabel.alpha = 0
+        hintLabel.numberOfLines = 1
+
+        let column = UIStackView(arrangedSubviews: [hintLabel, button])
+        column.axis = .vertical
+        column.alignment = .center
+        column.distribution = .fill
+        column.spacing = voiceMemoActionLabelGap
+        return (column, hintLabel, button)
     }
 
     @objc func hideVoiceMemoUI(animated: Bool) {
@@ -1258,27 +1446,34 @@ import TTServiceKit
 
         voiceMemoRecordingState = .idle
 
-        let oldVoiceMemoGradientContainerView = voiceMemoGradientContainerView
-        let oldVoiceMemoRedRecordingCircle = voiceMemoCancleCircle
+        let oldGradient = voiceMemoGradientContainerView
+        let oldCancel = voiceMemoCancelButton
+        let oldEffect = voiceMemoEffectButton
 
-        voiceMemoCancelLabel = nil
-        voiceMemoCancleCircle = nil
+        voiceMemoCancelHintLabel = nil
+        voiceMemoEffectHintLabel = nil
+        voiceMemoCancelButton = nil
+        voiceMemoEffectButton = nil
+        voiceMemoGradientContainerView = nil
 
         if animated {
             UIView.animate(
                 withDuration: 0.2,
                 animations: {
-                    oldVoiceMemoRedRecordingCircle?.alpha = 0
-                    oldVoiceMemoGradientContainerView?.alpha = 0
+                    oldCancel?.alpha = 0
+                    oldEffect?.alpha = 0
+                    oldGradient?.alpha = 0
                 },
                 completion: { _ in
-                    oldVoiceMemoRedRecordingCircle?.removeFromSuperview()
-                    oldVoiceMemoGradientContainerView?.removeFromSuperview()
+                    oldCancel?.removeFromSuperview()
+                    oldEffect?.removeFromSuperview()
+                    oldGradient?.removeFromSuperview()
                 }
             )
         } else {
-            oldVoiceMemoRedRecordingCircle?.removeFromSuperview()
-            oldVoiceMemoGradientContainerView?.removeFromSuperview()
+            oldCancel?.removeFromSuperview()
+            oldEffect?.removeFromSuperview()
+            oldGradient?.removeFromSuperview()
         }
     }
     
@@ -1289,14 +1484,19 @@ import TTServiceKit
         animator.startAnimation()
     }
     
-    // 更新放大圆圈
+    // Sync button highlight + hint label visibility with current hover state.
     private func updateVoiceMemoTipState() {
         AssertIsOnMainThread()
 
-        ConversationInputToolbar.makeView {
-            self.voiceMemoCancleCircle?.transform = true == self.inCancleRecordCircle ? .scale(1.2) : .identity
-            self.voiceMemoCancleCircle?.isSelected = self.inCancleRecordCircle ?? false
-            self.voiceMemoCancelLabel?.alpha = true == self.inCancleRecordCircle ? 1 : 0
+        ConversationInputToolbar.makeView { [weak self] in
+            guard let self else { return }
+            voiceMemoCancelButton?.transform = inCancelButton ? .scale(1.2) : .identity
+            voiceMemoCancelButton?.isSelected = inCancelButton
+            voiceMemoCancelHintLabel?.alpha = inCancelButton ? 1 : 0
+
+            voiceMemoEffectButton?.transform = inEffectButton ? .scale(1.2) : .identity
+            voiceMemoEffectButton?.isSelected = inEffectButton
+            voiceMemoEffectHintLabel?.alpha = inEffectButton ? 1 : 0
         }
 
         ensureButtonVisibility(withAnimation: true, doLayout: true)
@@ -1315,6 +1515,7 @@ import TTServiceKit
             Logger.debug("[keyboard] gesture state: began.")
             voiceMemoRecordingState = .recording
             voiceMemoGestureStartLocation = gesture.location(in: self)
+            voiceMemoEffect = .randomForRecording
 
             ImpactHapticFeedback.impactOccurred(style: .light)
             inputToolbarDelegate?.voiceMemoGestureDidStart()
@@ -1326,28 +1527,36 @@ import TTServiceKit
                 return
             }
 
-            let point = gesture.location(in: voiceMemoCancleCircle)
-            inCancleRecordCircle = voiceMemoCancleCircle?.point(inside: point, with: nil)
+            let cancelPoint = gesture.location(in: voiceMemoCancelButton)
+            let effectPoint = gesture.location(in: voiceMemoEffectButton)
+            let isInCancel = voiceMemoCancelButton?.point(inside: cancelPoint, with: nil) ?? false
+            let isInEffect = voiceMemoEffectButton?.point(inside: effectPoint, with: nil) ?? false
+            inCancelButton = isInCancel
+            // Cancel wins ties.
+            inEffectButton = !isInCancel && isInEffect
 
-            Logger.debug("[keyboard] gesture state: changed, point: \(point), inCircle: \(inCancleRecordCircle ?? false)")
+            Logger.debug("[keyboard] gesture state: changed, inCancel: \(isInCancel), inEffect: \(isInEffect)")
         case .ended:
-            
+
             switch voiceMemoRecordingState {
             case .idle:
-                if inCancleRecordCircle == true {
+                if inCancelButton {
                     cancelRecording()
                 }
             case .recording:
                 voiceMemoRecordingState = .idle
-                if inCancleRecordCircle == true {
+                if inCancelButton {
                     cancelRecording()
+                } else if inEffectButton {
+                    stopRecording(mode: .effected)
                 } else {
                     stopRecording()
                 }
             @unknown default: break
             }
-            
-            inCancleRecordCircle = false
+
+            inCancelButton = false
+            inEffectButton = false
             voiceMemoGestureStartLocation = nil
             Logger.debug("[keyboard] gesture state: end")
         @unknown default:
@@ -1363,10 +1572,15 @@ import TTServiceKit
         inputToolbarDelegate?.voiceMemoGestureDidCancel()
     }
     
-    func stopRecording() {
+    func stopRecording(mode: VoiceMessageSendMode = .original) {
         recordingProcessor.stop()
         countdownBubbleView.hide()
         ImpactHapticFeedback.impactOccurred(style: .medium)
+
+        // Prefer effect-aware delegate; fall back to mode-agnostic for legacy hosts.
+        if inputToolbarDelegate?.voiceMemoGestureDidComplete?(withMode: mode) != nil {
+            return
+        }
         inputToolbarDelegate?.voiceMemoGestureDidComplete()
     }
 
@@ -1374,6 +1588,15 @@ import TTServiceKit
 
     private(set) var isMeasuringKeyboardHeight = false
     private var hasMeasuredKeyboardHeight = false
+
+    // Measured system-keyboard content height (excludes the toolbar accessory).
+    // Custom panels (attachment / GIF) adopt it so switching keyboard ⇄ panel
+    // keeps the same total height. Falls back before the first measurement.
+    private var measuredSystemKeyboardHeight: CGFloat?
+    private var pendingKeyboardHeight: CGFloat = 0
+    private var customKeyboardHeight: CGFloat {
+        measuredSystemKeyboardHeight ?? (128 * 2 + 21 * 2)
+    }
 
     // Workaround for keyboard & chat flashing when switching between keyboards on iOS 17.
     // When swithing keyboards sometimes! we get "keyboard will show" notification
@@ -1390,6 +1613,7 @@ import TTServiceKit
     @objc enum KeyboardType: Int {
         case system
         case attachment
+        case gif
     }
 
     private var _desiredKeyboardType: KeyboardType = .system
@@ -1407,8 +1631,7 @@ import TTServiceKit
         }
         let keyboard = AttachmentKeyboard(inputToolbarState: inputToolbarState, relationship: relationship, threadType: threadType, delegate: self)
         keyboard.registerWithView(self)
-        let height: CGFloat = 128*2 + 21*2
-        keyboard.updateSystemKeyboardHeight(height)
+        keyboard.updateSystemKeyboardHeight(customKeyboardHeight)
         _attachmentKeyboard = keyboard
         return keyboard
     }
@@ -1419,6 +1642,42 @@ import TTServiceKit
         AssertIsOnMainThread()
         guard desiredKeyboardType != .attachment else { return }
         toggleKeyboardType(.attachment, animated: false)
+    }
+
+    private var _gifKeyboard: DTGifKeyboard?
+
+    // GIF picker hosted as a keyboard-height panel: the input toolbar stays
+    // visible above it. Search is handed off to a modal (see the picker's
+    // gifPickerViewControllerDidRequestSearch), since an inputView panel can't
+    // coexist with the system keyboard needed for typing.
+    private var gifKeyboard: DTGifKeyboard {
+        if let gifKeyboard = _gifKeyboard {
+            return gifKeyboard
+        }
+        let picker = DTGIFPickerViewController()
+        picker.isHostedInKeyboard = true
+        picker.delegate = inputToolbarDelegate as? DTGIFPickerViewControllerDelegate
+        let keyboard = DTGifKeyboard(picker: picker, host: inputToolbarDelegate as? UIViewController)
+        keyboard.registerWithView(self)
+        keyboard.updateSystemKeyboardHeight(customKeyboardHeight)
+        _gifKeyboard = keyboard
+        return keyboard
+    }
+
+    private var gifKeyboardIfLoaded: DTGifKeyboard? { _gifKeyboard }
+
+    func showGifKeyboard() {
+        AssertIsOnMainThread()
+        guard desiredKeyboardType != .gif else { return }
+        toggleKeyboardType(.gif, animated: false)
+    }
+
+    func dismissGifKeyboard() {
+        AssertIsOnMainThread()
+        // Switch back to the system keyboard AND focus the input (like closing the "+" panel),
+        // so sending / closing the GIF panel returns to the keyboard page.
+        setDesiredKeyboardType(.system, animated: true)
+        beginEditingMessage()
     }
 
     private func toggleKeyboardType(_ keyboardType: KeyboardType, animated: Bool) {
@@ -1503,6 +1762,7 @@ import TTServiceKit
     @objc var isInputViewFirstResponder: Bool {
         return inputTextView.isFirstResponder
             || attachmentKeyboardIfLoaded?.isFirstResponder == true
+            || gifKeyboardIfLoaded?.isFirstResponder == true
     }
 
     /// 用户正在使用输入区域（多维度判断：first responder + 非测量状态）
@@ -1521,6 +1781,8 @@ import TTServiceKit
             return inputTextView
         case .attachment:
             return attachmentKeyboard
+        case .gif:
+            return gifKeyboard
         }
     }
 
@@ -1533,6 +1795,7 @@ import TTServiceKit
     @objc func endEditingMessage() {
         _ = inputTextView.resignFirstResponder()
         _ = attachmentKeyboardIfLoaded?.resignFirstResponder()
+        _ = gifKeyboardIfLoaded?.resignFirstResponder()
     }
 
     @objc func viewDidAppear() {
@@ -1555,10 +1818,46 @@ import TTServiceKit
 
         guard inputTextView.isFirstResponder || isMeasuringKeyboardHeight else { return }
         let newHeight = keyboardEndFrame.size.height - frame.size.height
-        
+
         guard newHeight > 0 else { return }
         isMeasuringKeyboardHeight = false
         hasMeasuredKeyboardHeight = true
+
+        // Size the custom panels (attachment / GIF) to the system keyboard, ONCE.
+        // The keyboard height isn't stable: on show it briefly includes an extra
+        // bar (QuickType / autofill) then settles lower, and it jitters while
+        // rapidly switching panels. So we only measure from the real text keyboard,
+        // debounce until the frame stops changing (settled), and lock the first
+        // settled value — the panels then stay fixed and match the resting keyboard.
+        guard inputTextView.isFirstResponder, measuredSystemKeyboardHeight == nil else { return }
+        // The panel is a UIInputView: iOS re-adds the home-indicator safe area
+        // below its height constraint, so the constraint must exclude BOTH the
+        // toolbar (accessory) and that safe area, or the panel renders taller than
+        // the keyboard by the safe-area block.
+        let panelHeight = newHeight - (window?.safeAreaInsets.bottom ?? 0)
+        let maxReasonable = UIScreen.main.bounds.height * 0.55
+        guard panelHeight > 0, panelHeight <= maxReasonable else { return }
+        pendingKeyboardHeight = panelHeight
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(lockKeyboardHeight), object: nil)
+        perform(#selector(lockKeyboardHeight), with: nil, afterDelay: 0.4)
+    }
+
+    @objc
+    private func lockKeyboardHeight() {
+        guard measuredSystemKeyboardHeight == nil, pendingKeyboardHeight > 0 else { return }
+        measuredSystemKeyboardHeight = pendingKeyboardHeight
+        attachmentKeyboardIfLoaded?.updateSystemKeyboardHeight(pendingKeyboardHeight)
+        gifKeyboardIfLoaded?.updateSystemKeyboardHeight(pendingKeyboardHeight)
+    }
+
+    // A different keyboard (language switch, third-party keyboard) can be a
+    // different height, so drop the lock and let the next keyboard appearance
+    // re-measure it. The text keyboard is up when this fires, so the panels are
+    // hidden and the re-measure is invisible.
+    @objc
+    private func keyboardInputModeDidChange() {
+        measuredSystemKeyboardHeight = nil
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(lockKeyboardHeight), object: nil)
     }
     
     @objc func startGroupAt() {
@@ -1628,8 +1927,17 @@ extension ConversationInputToolbar {
     @objc
     private func addOrCancelButtonPressed() {
         ImpactHapticFeedback.impactOccurred(style: .light)
-        
-        toggleKeyboardType(.attachment, animated: true)
+
+        // No animation: the animated path morphs the +⇄close icon and cross-fades
+        // toolbar buttons, which reads as an extra jump when switching to/from the
+        // keyboard. Switch instantly, matching the GIF panel.
+        toggleKeyboardType(.attachment, animated: false)
+    }
+
+    @objc
+    private func gifButtonTapped() {
+        ImpactHapticFeedback.impactOccurred(style: .light)
+        toggleKeyboardType(.gif, animated: false)
     }
 
     @objc
@@ -1692,6 +2000,39 @@ extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
         // Required by protocol
     }
 
+    /// Max text view height, capped to a whole number of lines so the last visible line
+    /// is never half-clipped at any font size. Measures the actual laid-out line fragments
+    /// (not `font.lineHeight`) so the cap matches what's rendered exactly.
+    ///
+    /// Only the bottom inset is added — NOT the top inset. When the content scrolls to the
+    /// bottom (the common case while typing), a top inset would be filled by the tail of the
+    /// line above, leaving a partial sliver. Anchoring on the bottom inset makes the top edge
+    /// land on a line boundary, so the top line stays complete.
+    private func maxTextViewHeight(for textView: UITextView) -> CGFloat {
+        let bottomInset = textView.textContainerInset.bottom
+        let lineHeight = (textView.font ?? .ows_dynamicTypeBodyFont()).lineHeight
+        // Fallback used until there are enough lines to measure.
+        var maxLinesHeight = lineHeight * CGFloat(LayoutMetrics.maxVisibleLines)
+
+        let layoutManager = textView.layoutManager
+        let glyphRange = layoutManager.glyphRange(for: textView.textContainer)
+        var index = glyphRange.location
+        var lineCount = 0
+        while index < glyphRange.upperBound {
+            var lineRange = NSRange()
+            let fragmentRect = layoutManager.lineFragmentRect(forGlyphAt: index, effectiveRange: &lineRange)
+            lineCount += 1
+            if lineCount == LayoutMetrics.maxVisibleLines {
+                // maxY of the Nth fragment == cumulative height of exactly N rendered lines.
+                maxLinesHeight = fragmentRect.maxY
+                break
+            }
+            index = NSMaxRange(lineRange)
+        }
+
+        return maxLinesHeight + bottomInset
+    }
+
     private func updateHeightWithTextView(_ textView: UITextView) {
         var maxLines = 4
         if !expandButton.isHidden {
@@ -1714,10 +2055,28 @@ extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
             let newHeight = CGFloat.clamp(
                 contentSize.height,
                 min: LayoutMetrics.minTextViewHeight,
-                max: UIDevice.current.isIPad ? LayoutMetrics.maxIPadTextViewHeight : LayoutMetrics.maxTextViewHeight
+                max: self.maxTextViewHeight(for: textView)
             )
 
             self.inputTextView.contentSize = CGSize(width: .zero, height: contentSize.height)
+
+            // Once the text exceeds the line cap, pin the scroll to the bottom so the latest
+            // line / caret stays visible AND the top edge lands exactly on a line boundary
+            // (no partial line peeking above). Runs before the height guard below, because
+            // when the height is already saturated newHeight stops changing yet new lines
+            // still need to be scrolled into view.
+            if contentSize.height > newHeight {
+                let caretAtEnd = textView.selectedRange.location + textView.selectedRange.length >= (textView.text as NSString).length
+                if caretAtEnd {
+                    // Appending at the tail: pin to bottom so the latest line stays visible and
+                    // the top edge lands on a line boundary (no partial line peeking above).
+                    textView.contentOffset = CGPoint(x: 0, y: contentSize.height - newHeight)
+                } else {
+                    // Editing above the tail: keep the caret's line visible instead of snapping
+                    // to the bottom, which would scroll the line being edited off screen.
+                    textView.scrollRangeToVisible(textView.selectedRange)
+                }
+            }
 
             Logger.debug("\(self.logTag) newHeight: \(newHeight)")
 
@@ -1818,6 +2177,10 @@ extension ConversationInputToolbar: AttachmentKeyboardDelegate {
 
     func didTapFile() {
         inputToolbarDelegate?.fileButtonPressed()
+    }
+
+    func didTapGif() {
+        inputToolbarDelegate?.gifButtonPressed()
     }
 
     func didTapContact() {

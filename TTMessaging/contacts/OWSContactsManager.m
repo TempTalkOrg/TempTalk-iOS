@@ -298,14 +298,20 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     newMap[newSignalAccount.recipientId] = newSignalAccount;
     self.signalAccountMap = newMap.copy;
     
+    BOOL didReplace = NO;
     NSMutableArray *signalAccountMutableArr = [NSMutableArray array];
     NSArray *tmpSignalAccounts = self.signalAccounts.copy;
     for (SignalAccount *tmpSignalAccount in tmpSignalAccounts) {
         if ([tmpSignalAccount.uniqueId isEqual:newSignalAccount.uniqueId] && newSignalAccount) {
             [signalAccountMutableArr addObject:newSignalAccount];
+            didReplace = YES;
         }else {
             [signalAccountMutableArr addObject:tmpSignalAccount];
         }
+    }
+    // Not in the array yet (e.g. weak demote re-add after action=2 delete) — append so it shows in the list.
+    if (!didReplace && newSignalAccount) {
+        [signalAccountMutableArr addObject:newSignalAccount];
     }
     self.signalAccounts = [signalAccountMutableArr copy];
     
@@ -320,7 +326,11 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     }
     SignalAccount *oldSignalAccount = [SignalAccount anyFetchWithUniqueId:recipientId transaction:transaction ignoreCache:YES];
     if (!oldSignalAccount) return;
-    
+
+    // Delete the persisted row too; in-memory removal alone leaves an orphan that
+    // loadSignalAccountsFromCache resurrects on next launch.
+    [oldSignalAccount anyRemoveWithTransaction:transaction];
+
     if(!self.signalAccountMap){
         self.signalAccountMap = @{};
     }
@@ -377,7 +387,10 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
     [self userRequestedSystemContactsRefreshWithIsUserRequested:NO completion:^(NSError * _Nullable error)  {
         if (error) {
             OWSLogError(@"Notify Full Update contacts failed with error: %@", error);
+            return;
         }
+        // Friend store refreshed — reconcile weak contacts.
+        [[DTWeakContactManager shared] reconcileFromServer];
     }];
 }
 
@@ -513,6 +526,18 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
                     if(DTParamsUtils.validateString(signalAccount.contact.remark) && [[DTConversationSettingHelper sharedInstance] isEncryptedRemarkString:signalAccount.contact.remark]){
                         signalAccount.contact.remark = [[DTConversationSettingHelper sharedInstance] decryptRemarkString:signalAccount.contact.remark receptid:signalAccount.recipientId];
                     }
+                    // Remark/remarkAvatar live in conversation config, not the contacts directory, so a
+                    // notify-driven rebuild omits them. Preserve the locally-cached values when the server
+                    // contact carries none, otherwise re-adding a weak contact as a friend wipes the remark.
+                    SignalAccount *existingAccount = [self signalAccountForRecipientId:rId transaction:transaction];
+                    if (existingAccount.contact) {
+                        if (!DTParamsUtils.validateString(signalAccount.contact.remark) && DTParamsUtils.validateString(existingAccount.contact.remark)) {
+                            signalAccount.contact.remark = existingAccount.contact.remark;
+                        }
+                        if (!signalAccount.contact.remarkAvatar && existingAccount.contact.remarkAvatar) {
+                            signalAccount.contact.remarkAvatar = existingAccount.contact.remarkAvatar;
+                        }
+                    }
                     if (abPhoneNumbers.count > 1) {
                         signalAccount.hasMultipleAccountContact = YES;
                         signalAccount.multipleAccountLabelText =
@@ -529,8 +554,10 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
                     case DTContactNotifyActionAdd:
                     {
                         for (SignalAccount *signalAccount in signalAccounts) {
-                            
+
                             [signalAccount anyInsertWithTransaction:transaction];
+                            // Re-friended via notify: clear any weak placeholder so the countdown clears now (no-op when not weak).
+                            [[DTWeakContactManager shared] clearWeakPlaceholderWithUid:signalAccount.recipientId transaction:transaction];
                             [allSignalAccounts addObject:signalAccount];
                         }
                         
@@ -546,6 +573,8 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
                     {
                         for (SignalAccount *signalAccount in signalAccounts) {
                             [signalAccount anyUpsertWithTransaction:transaction];
+                            // Re-friended via notify: clear any weak placeholder (no-op when not weak).
+                            [[DTWeakContactManager shared] clearWeakPlaceholderWithUid:signalAccount.recipientId transaction:transaction];
                             [allSignalAccounts addObject:signalAccount];
                         }
                         
@@ -560,9 +589,16 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
                     case DTContactNotifyActionPermanentDelete:
                     {
                         for (SignalAccount *signalAccount in signalAccounts) {
-                            
+
+                            // Weak removal is owned by notify 25 — skip legacy action=2/3 delete (own active unfriend isn't weak, stays immediate).
+                            if ([[DTWeakContactManager shared] isWeakContactWithRecipientId:signalAccount.recipientId
+                                                                                transaction:transaction]) {
+                                OWSLogInfo(@"[WeakContact] skip legacy action=%ld delete, owned by notify25", (long)contactActionEntity.action);
+                                continue;
+                            }
+
                             [signalAccount anyRemoveWithTransaction:transaction];
-                            
+
                             OWSLogInfo(@"contactsUpdateNotifyIncrement remove signalAccount %@", signalAccount.recipientId);
                             ///删除联系人的时候静默删除这个人所有的聊天记录
                             [self deleteThreads:@[signalAccount.recipientId] transaction:transaction];
@@ -775,6 +811,19 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
                 SignalAccount *signalAccount = [[SignalAccount alloc] initWithRecipientId:rId];
                 signalAccount.contact = contact;
                 signalAccount.contact.external = NO;
+                // Preserve locally-cached remark/remarkAvatar (conversation-config owned, absent from
+                // the directory contact) across a full rebuild — mirrors the notify path at ~line 526.
+                SignalAccount *existingAccount = [self signalAccountForRecipientId:rId];
+                if (existingAccount.contact) {
+                    if (!DTParamsUtils.validateString(signalAccount.contact.remark) && DTParamsUtils.validateString(existingAccount.contact.remark)) {
+                        signalAccount.contact.remark = existingAccount.contact.remark;
+                    }
+                    // remarkAvatar is an NSDictionary, so use validateDictionary (validateString would
+                    // always fail the kind check) — keeps the empty-value handling consistent with remark.
+                    if (!DTParamsUtils.validateDictionary(signalAccount.contact.remarkAvatar) && DTParamsUtils.validateDictionary(existingAccount.contact.remarkAvatar)) {
+                        signalAccount.contact.remarkAvatar = existingAccount.contact.remarkAvatar;
+                    }
+                }
                 if (abPhoneNumbers.count > 1) {
                     signalAccount.hasMultipleAccountContact = YES;
                     signalAccount.multipleAccountLabelText =
@@ -1497,6 +1546,17 @@ static const NSUInteger kFullUpdateContactsBatch = 30;
 {
     SignalAccount *signalAccount = self.signalAccountMap[recipientId];
     return signalAccount;
+}
+
+- (void)warmCacheWithSignalAccount:(SignalAccount *)signalAccount
+{
+    NSString *recipientId = signalAccount.recipientId;
+    if (recipientId.length == 0 || self.signalAccountMap[recipientId]) {
+        return;
+    }
+    NSMutableDictionary *map = self.signalAccountMap.mutableCopy ?: [NSMutableDictionary new];
+    map[recipientId] = signalAccount;
+    self.signalAccountMap = map.copy;
 }
 
 - (nullable SignalAccount *)signalAccountForRecipientId:(NSString *)recipientId transaction:(SDSAnyReadTransaction *)transaction

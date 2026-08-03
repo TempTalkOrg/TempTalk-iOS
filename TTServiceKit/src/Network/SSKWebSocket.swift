@@ -151,17 +151,33 @@ public class SSKWebSocketNative: SSKWebSocket {
     public let id = SSKWebSocketNative.idCounter.increment()
     private var webSocketTask = AtomicOptional<URLSessionWebSocketTask>(nil, lock: .sharedGlobal)
     private let request: URLRequest
-    private let session = OWSURLSession(
-        securityPolicy: OWSURLSession.signalServiceSecurityPolicy,
-        configuration: OWSURLSession.defaultConfigurationWithoutCaching
-    )
+    private let session: OWSURLSession
     private let callbackQueue: DispatchQueue
 
+    /// `proxyDictionary` is decided by the caller (`WebSocketFactoryHybrid`) from a single atomic
+    /// `ProxyManager.urlSessionRouting()` snapshot and passed in, so this transport never re-reads
+    /// the proxy state itself — a second read could race a tunnel start/teardown and silently build
+    /// a DIRECT session (IP leak). Non-nil → the IM WSS rides the loopback CONNECT proxy; nil →
+    /// direct (proxy off). The fail-closed case never reaches here (the factory returns a
+    /// fail-closed socket instead).
     public init(request: URLRequest,
-                callbackQueue: DispatchQueue? = nil) {
+                callbackQueue: DispatchQueue? = nil,
+                proxyDictionary: [AnyHashable: Any]? = nil) {
 
         self.request = request
         self.callbackQueue = callbackQueue ?? .main
+
+        let configuration = OWSURLSession.defaultConfigurationWithoutCaching
+        if let proxyDictionary {
+            configuration.connectionProxyDictionary = proxyDictionary
+            Logger.info("[Proxy] IM WSS routing: VIA PROXY")
+        } else {
+            Logger.info("[Proxy] IM WSS routing: DIRECT")
+        }
+        self.session = OWSURLSession(
+            securityPolicy: OWSURLSession.signalServiceSecurityPolicy,
+            configuration: configuration
+        )
     }
 
     // MARK: - SSKWebSocket

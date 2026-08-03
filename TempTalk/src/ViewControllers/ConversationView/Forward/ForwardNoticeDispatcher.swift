@@ -2,7 +2,6 @@
 //  ForwardNoticeDispatcher.swift
 //  Difft
 //
-//
 
 import Foundation
 import TTServiceKit
@@ -14,10 +13,11 @@ enum ForwardNoticeDispatcher {
         scene: DTForwardNoticeScene,
         sourceAuthorIds: [String],
         messageCount: UInt32,
-        messageSender: MessageSender
+        messageSender: MessageSender,
+        combinedForwardMode: DTForwardNoticeCombinedForwardMode = .unknown
     ) async throws {
         let noticeScope = makeNoticeConversation(for: sourceConversation)
-        Logger.info("[ForwardNotice] send thread=\(sourceConversation.uniqueId) scope=\(noticeScope.scope.rawValue) scene=\(scene.rawValue) count=\(messageCount) authors=\(sourceAuthorIds.count)")
+        Logger.info("[ForwardNotice] send thread=\(sourceConversation.uniqueId) scope=\(noticeScope.scope.rawValue) scene=\(scene.rawValue) count=\(messageCount) authors=\(sourceAuthorIds.count) mode=\(combinedForwardMode.rawValue)")
 
         let messageTimestamp = try await sendPrimary(
             primaryThread: sourceConversation,
@@ -25,13 +25,15 @@ enum ForwardNoticeDispatcher {
             scene: scene,
             sourceAuthorIds: sourceAuthorIds,
             messageCount: messageCount,
-            messageSender: messageSender
+            messageSender: messageSender,
+            combinedForwardMode: combinedForwardMode
         )
 
         insertLocalNotice(
             sourceConversation: sourceConversation,
             sourceAuthorIds: sourceAuthorIds,
             messageCount: messageCount,
+            combinedForwardMode: combinedForwardMode,
             timestamp: messageTimestamp
         )
     }
@@ -40,6 +42,7 @@ enum ForwardNoticeDispatcher {
         sourceConversation: TSThread,
         sourceAuthorIds: [String],
         messageCount: UInt32,
+        combinedForwardMode: DTForwardNoticeCombinedForwardMode,
         timestamp: UInt64
     ) {
         let operatorId = TSAccountManager.localNumber()
@@ -48,6 +51,7 @@ enum ForwardNoticeDispatcher {
                 operatorId: operatorId,
                 messageCount: messageCount,
                 sourceAuthorIds: sourceAuthorIds,
+                combinedForwardMode: combinedForwardMode,
                 transaction: transaction
             )
             let info = TSInfoMessage(
@@ -58,6 +62,7 @@ enum ForwardNoticeDispatcher {
             )
             info.serverTimestamp = timestamp
             info.authorId = operatorId ?? ""
+            info.isShouldAffectThreadSorting = true
             info.anyInsert(transaction: transaction)
             Logger.info("[ForwardNotice] local inserted thread=\(sourceConversation.uniqueId) ts=\(timestamp)")
         }
@@ -72,14 +77,16 @@ enum ForwardNoticeDispatcher {
         scene: DTForwardNoticeScene,
         sourceAuthorIds: [String],
         messageCount: UInt32,
-        messageSender: MessageSender
+        messageSender: MessageSender,
+        combinedForwardMode: DTForwardNoticeCombinedForwardMode
     ) async throws -> UInt64 {
         let notice = TSOutgoingForwardNoticeMessage(
             thread: primaryThread,
             scene: scene,
             sourceAuthorIds: sourceAuthorIds,
             messageCount: messageCount,
-            sourceConversation: scope
+            sourceConversation: scope,
+            combinedForwardMode: combinedForwardMode
         )
         let messageTimestamp = notice.timestamp
 
@@ -108,14 +115,12 @@ enum ForwardNoticeDispatcher {
             }
             return .oneOnOne(number: peer)
         }
-        // Defensive: unknown thread type — fall back to 1v1 shape using whatever id we can find.
         return .oneOnOne(number: thread.contactIdentifier ?? "")
     }
 
 }
 
 private extension TSThread {
-    /// Safe peer-id read for non-contact threads.
     var contactIdentifier: String? {
         (self as? TSContactThread)?.contactIdentifier()
     }

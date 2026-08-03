@@ -528,6 +528,9 @@ const InfoMessageUserInfoKey InfoMessageUserInfoKeyChangePhoneNumberNew = @"Info
         case TSInfoMessageForwardNotice: {
             return _customMessage;
         }
+        case TSInfoMessageCopyNotice: {
+            return _customMessage;
+        }
         default:
             break;
     }

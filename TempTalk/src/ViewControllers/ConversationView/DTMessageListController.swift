@@ -686,6 +686,10 @@ extension DTMessageListController: ConversationMessageCellDelegate {
             copyItems.append(jsonMentions)
         }
         DTSecurePasteboard.setStrings(copyItems)
+
+        if let message = viewItem.interaction as? TSMessage, let thread = currentThread {
+            CopyNoticeDispatcher.sendNotice(for: message, in: thread)
+        }
     }
 }
 
@@ -758,6 +762,19 @@ extension DTMessageListController: ConversationMessageBubbleViewDelegate {
         owsAssertDebug(viewItem.interaction is TSMessage)
         let longTextVC = LongTextViewController(viewItem: viewItem)
         navigationController?.pushViewController(longTextVC, animated: true)
+    }
+
+    // Tap "read more" button or double tap the bubble to enter the long message page.
+    func messageBubbleView(
+        _ bubbleView: ConversationMessageBubbleView,
+        didTapReadMoreMessageWith viewItem: any ConversationViewItem
+    ) {
+        owsAssertDebug(Thread.isMainThread)
+
+        let longMessageVC = LongMessageViewController(viewItem: viewItem)
+        longMessageVC.modalPresentationStyle = .overFullScreen
+        longMessageVC.modalTransitionStyle = .crossDissolve
+        present(longMessageVC, animated: true)
     }
     
     func messageBubbleView(

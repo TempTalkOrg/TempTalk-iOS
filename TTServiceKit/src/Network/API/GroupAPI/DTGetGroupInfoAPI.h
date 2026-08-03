@@ -34,6 +34,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString *encryptedName;
 @property (nonatomic, copy, nullable) NSString *encryptedAvatar;
 @property (nonatomic, copy, nullable) NSString *groupMemberVerifyPublicKey;
+@property (nonatomic, assign) NSInteger groupCryptoKeyVersion;
 
 @end
 

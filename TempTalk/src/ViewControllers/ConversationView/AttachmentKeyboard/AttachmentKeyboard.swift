@@ -13,6 +13,7 @@ protocol AttachmentKeyboardDelegate: AnyObject {
     func didTapVideoCall()
     func didTapContact()
     func didTapFile()
+    func didTapGif()
     func didTapConfidentialMode()
     func didTapMention()
     var isGroup: Bool { get }
@@ -66,15 +67,8 @@ class AttachmentKeyboard: CustomKeyboard {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func willPresent() {
-        super.willPresent()
-        moreAttachmentCollectionView.prepareForPresentation()
-    }
-
-    override func wasPresented() {
-        super.wasPresented()
-        moreAttachmentCollectionView.performPresentationAnimation()
-    }
+    // No fade-in on present: it read as a flash/"bounce" when switching
+    // keyboard ⇄ attachment. Match the GIF panel, which appears solid.
 }
 
 extension AttachmentKeyboard: MoreAttachmentDelegate {
@@ -93,6 +87,8 @@ extension AttachmentKeyboard: MoreAttachmentDelegate {
             delegate?.didTapContact()
         case DTToolBarMoreItemTypeFile:
             delegate?.didTapFile()
+        case DTToolBarMoreItemTypeGif:
+            delegate?.didTapGif()
         case DTToolBarMoreItemTypeConfide:
             delegate?.didTapConfidentialMode()
         case DTToolBarMoreItemTypeMention:

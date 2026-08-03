@@ -758,6 +758,7 @@ public enum DSKProtoEnvelopeMsgType: Int32 {
     case msgEncCall = 12
     case msgGroupKey = 13
     case msgForwardNotice = 14
+    case msgActivityNotice = 15
 }
 
 private func DSKProtoEnvelopeMsgTypeWrap(_ value: DifftServiceProtos_Envelope.MsgType) -> DSKProtoEnvelopeMsgType {
@@ -777,6 +778,7 @@ private func DSKProtoEnvelopeMsgTypeWrap(_ value: DifftServiceProtos_Envelope.Ms
     case .msgEncCall: return .msgEncCall
     case .msgGroupKey: return .msgGroupKey
     case .msgForwardNotice: return .msgForwardNotice
+    case .msgActivityNotice: return .msgActivityNotice
     }
 }
 
@@ -797,6 +799,7 @@ private func DSKProtoEnvelopeMsgTypeUnwrap(_ value: DSKProtoEnvelopeMsgType) -> 
     case .msgEncCall: return .msgEncCall
     case .msgGroupKey: return .msgGroupKey
     case .msgForwardNotice: return .msgForwardNotice
+    case .msgActivityNotice: return .msgActivityNotice
     }
 }
 
@@ -1407,6 +1410,9 @@ public class DSKProtoContent: NSObject, Codable, NSSecureCoding {
         if let _value = forwardNotice {
             builder.setForwardNotice(_value)
         }
+        if let _value = activityNotice {
+            builder.setActivityNotice(_value)
+        }
         if let _value = unknownFields {
             builder.setUnknownFields(_value)
         }
@@ -1520,6 +1526,17 @@ public class DSKProtoContent: NSObject, Codable, NSSecureCoding {
             proto.forwardNotice = valueParam.proto
         }
 
+        @objc
+        @available(swift, obsoleted: 1.0)
+        public func setActivityNotice(_ valueParam: DSKProtoMessageActivityNotice?) {
+            guard let valueParam = valueParam else { return }
+            proto.activityNotice = valueParam.proto
+        }
+
+        public func setActivityNotice(_ valueParam: DSKProtoMessageActivityNotice) {
+            proto.activityNotice = valueParam.proto
+        }
+
         public func setUnknownFields(_ unknownFields: SwiftProtobuf.UnknownStorage) {
             proto.unknownFields = unknownFields
         }
@@ -1564,6 +1581,9 @@ public class DSKProtoContent: NSObject, Codable, NSSecureCoding {
     @objc
     public let forwardNotice: DSKProtoForwardNoticeMessage?
 
+    @objc
+    public let activityNotice: DSKProtoMessageActivityNotice?
+
     public var hasUnknownFields: Bool {
         return !proto.unknownFields.data.isEmpty
     }
@@ -1581,7 +1601,8 @@ public class DSKProtoContent: NSObject, Codable, NSSecureCoding {
                  notifyMessage: DSKProtoNotifyMessage?,
                  callMessage: DSKProtoCallMessage?,
                  groupKeyMessage: DSKProtoGroupKeyMessage?,
-                 forwardNotice: DSKProtoForwardNoticeMessage?) {
+                 forwardNotice: DSKProtoForwardNoticeMessage?,
+                 activityNotice: DSKProtoMessageActivityNotice?) {
         self.proto = proto
         self.dataMessage = dataMessage
         self.syncMessage = syncMessage
@@ -1592,6 +1613,7 @@ public class DSKProtoContent: NSObject, Codable, NSSecureCoding {
         self.callMessage = callMessage
         self.groupKeyMessage = groupKeyMessage
         self.forwardNotice = forwardNotice
+        self.activityNotice = activityNotice
     }
 
     @objc
@@ -1651,6 +1673,11 @@ public class DSKProtoContent: NSObject, Codable, NSSecureCoding {
             forwardNotice = try DSKProtoForwardNoticeMessage(proto.forwardNotice)
         }
 
+        var activityNotice: DSKProtoMessageActivityNotice?
+        if proto.hasActivityNotice {
+            activityNotice = try DSKProtoMessageActivityNotice(proto.activityNotice)
+        }
+
         // MARK: - Begin Validation Logic for DSKProtoContent -
 
         // MARK: - End Validation Logic for DSKProtoContent -
@@ -1664,7 +1691,8 @@ public class DSKProtoContent: NSObject, Codable, NSSecureCoding {
                   notifyMessage: notifyMessage,
                   callMessage: callMessage,
                   groupKeyMessage: groupKeyMessage,
-                  forwardNotice: forwardNotice)
+                  forwardNotice: forwardNotice,
+                  activityNotice: activityNotice)
     }
 
     public required convenience init(from decoder: Swift.Decoder) throws {
@@ -1743,6 +1771,9 @@ public class DSKProtoGroupKeyMessage: NSObject, Codable, NSSecureCoding {
         if let _value = groupRootKey {
             builder.setGroupRootKey(_value)
         }
+        if hasKeyVersion {
+            builder.setKeyVersion(keyVersion)
+        }
         if let _value = unknownFields {
             builder.setUnknownFields(_value)
         }
@@ -1777,6 +1808,11 @@ public class DSKProtoGroupKeyMessage: NSObject, Codable, NSSecureCoding {
 
         public func setGroupRootKey(_ valueParam: Data) {
             proto.groupRootKey = valueParam
+        }
+
+        @objc
+        public func setKeyVersion(_ valueParam: UInt32) {
+            proto.keyVersion = valueParam
         }
 
         public func setUnknownFields(_ unknownFields: SwiftProtobuf.UnknownStorage) {
@@ -1818,6 +1854,15 @@ public class DSKProtoGroupKeyMessage: NSObject, Codable, NSSecureCoding {
     @objc
     public var hasGroupRootKey: Bool {
         return proto.hasGroupRootKey
+    }
+
+    @objc
+    public var keyVersion: UInt32 {
+        return proto.keyVersion
+    }
+    @objc
+    public var hasKeyVersion: Bool {
+        return proto.hasKeyVersion
     }
 
     public var hasUnknownFields: Bool {
@@ -1962,6 +2007,9 @@ public class DSKProtoForwardNoticeMessage: NSObject, Codable, NSSecureCoding {
         if let _value = conversation {
             builder.setConversation(_value)
         }
+        if let _value = combinedForwardMode {
+            builder.setCombinedForwardMode(_value)
+        }
         if let _value = unknownFields {
             builder.setUnknownFields(_value)
         }
@@ -2005,6 +2053,11 @@ public class DSKProtoForwardNoticeMessage: NSObject, Codable, NSSecureCoding {
 
         public func setConversation(_ valueParam: DSKProtoConversationId) {
             proto.conversation = valueParam.proto
+        }
+
+        @objc
+        public func setCombinedForwardMode(_ valueParam: DSKProtoMessageActivityNoticeCombinedForwardMode) {
+            proto.combinedForwardMode = DSKProtoMessageActivityNoticeCombinedForwardModeUnwrap(valueParam)
         }
 
         public func setUnknownFields(_ unknownFields: SwiftProtobuf.UnknownStorage) {
@@ -2059,6 +2112,26 @@ public class DSKProtoForwardNoticeMessage: NSObject, Codable, NSSecureCoding {
     @objc
     public var hasMessageCount: Bool {
         return proto.hasMessageCount
+    }
+
+    public var combinedForwardMode: DSKProtoMessageActivityNoticeCombinedForwardMode? {
+        guard hasCombinedForwardMode else {
+            return nil
+        }
+        return DSKProtoMessageActivityNoticeCombinedForwardModeWrap(proto.combinedForwardMode)
+    }
+    // This "unwrapped" accessor should only be used if the "has value" accessor has already been checked.
+    @objc
+    public var unwrappedCombinedForwardMode: DSKProtoMessageActivityNoticeCombinedForwardMode {
+        if !hasCombinedForwardMode {
+            // TODO: We could make this a crashing assert.
+            owsFailDebug("Unsafe unwrap of missing optional: ForwardNoticeMessage.combinedForwardMode.")
+        }
+        return DSKProtoMessageActivityNoticeCombinedForwardModeWrap(proto.combinedForwardMode)
+    }
+    @objc
+    public var hasCombinedForwardMode: Bool {
+        return proto.hasCombinedForwardMode
     }
 
     public var hasUnknownFields: Bool {
@@ -2148,6 +2221,445 @@ extension DSKProtoForwardNoticeMessage {
 extension DSKProtoForwardNoticeMessage.DSKProtoForwardNoticeMessageBuilder {
     @objc
     public func buildIgnoringErrors() -> DSKProtoForwardNoticeMessage? {
+        return try! self.build()
+    }
+}
+
+#endif
+
+// MARK: - DSKProtoMessageActivityNoticeCombinedForwardMode
+
+@objc
+public enum DSKProtoMessageActivityNoticeCombinedForwardMode: Int32 {
+    case unknown = 0
+    case containsCombinedForward = 1
+    case allCombinedForward = 2
+    case subCombinedForward = 3
+}
+
+private func DSKProtoMessageActivityNoticeCombinedForwardModeWrap(_ value: DifftServiceProtos_MessageActivityNotice.CombinedForwardMode) -> DSKProtoMessageActivityNoticeCombinedForwardMode {
+    switch value {
+    case .unknown: return .unknown
+    case .containsCombinedForward: return .containsCombinedForward
+    case .allCombinedForward: return .allCombinedForward
+    case .subCombinedForward: return .subCombinedForward
+    }
+}
+
+private func DSKProtoMessageActivityNoticeCombinedForwardModeUnwrap(_ value: DSKProtoMessageActivityNoticeCombinedForwardMode) -> DifftServiceProtos_MessageActivityNotice.CombinedForwardMode {
+    switch value {
+    case .unknown: return .unknown
+    case .containsCombinedForward: return .containsCombinedForward
+    case .allCombinedForward: return .allCombinedForward
+    case .subCombinedForward: return .subCombinedForward
+    }
+}
+
+// MARK: - DSKProtoMessageActivityNoticeOneOfTypeData
+
+public enum DSKProtoMessageActivityNoticeOneOfTypeData {
+    case copyData(DSKProtoCopyData)
+}
+
+private func DSKProtoMessageActivityNoticeOneOfTypeDataWrap(_ value: DifftServiceProtos_MessageActivityNotice.OneOf_TypeData) throws -> DSKProtoMessageActivityNoticeOneOfTypeData {
+    switch value {
+    case .copyData(let value): return .copyData(try DSKProtoCopyData(value))
+    }
+}
+
+private func DSKProtoMessageActivityNoticeOneOfTypeDataUnwrap(_ value: DSKProtoMessageActivityNoticeOneOfTypeData) -> DifftServiceProtos_MessageActivityNotice.OneOf_TypeData {
+    switch value {
+    case .copyData(let value): return .copyData(value.proto)
+    }
+}
+
+// MARK: - DSKProtoMessageActivityNotice
+
+@objc
+public class DSKProtoMessageActivityNotice: NSObject, Codable, NSSecureCoding {
+
+    // MARK: - DSKProtoMessageActivityNoticeBuilder
+
+    @objc
+    public static func builder() -> DSKProtoMessageActivityNoticeBuilder {
+        return DSKProtoMessageActivityNoticeBuilder()
+    }
+
+    // asBuilder() constructs a builder that reflects the proto's contents.
+    @objc
+    public func asBuilder() -> DSKProtoMessageActivityNoticeBuilder {
+        let builder = DSKProtoMessageActivityNoticeBuilder()
+        if let _value = conversation {
+            builder.setConversation(_value)
+        }
+        if let _value = typeData {
+            builder.setTypeData(_value)
+        }
+        if let _value = unknownFields {
+            builder.setUnknownFields(_value)
+        }
+        return builder
+    }
+
+    @objc
+    public class DSKProtoMessageActivityNoticeBuilder: NSObject {
+
+        private var proto = DifftServiceProtos_MessageActivityNotice()
+
+        @objc
+        fileprivate override init() {}
+
+        @objc
+        @available(swift, obsoleted: 1.0)
+        public func setConversation(_ valueParam: DSKProtoConversationId?) {
+            guard let valueParam = valueParam else { return }
+            proto.conversation = valueParam.proto
+        }
+
+        public func setConversation(_ valueParam: DSKProtoConversationId) {
+            proto.conversation = valueParam.proto
+        }
+
+        @available(swift, obsoleted: 1.0)
+        public func setTypeData(_ valueParam: DSKProtoMessageActivityNoticeOneOfTypeData?) {
+            guard let valueParam = valueParam else { return }
+            proto.typeData = DSKProtoMessageActivityNoticeOneOfTypeDataUnwrap(valueParam)
+        }
+
+        public func setTypeData(_ valueParam: DSKProtoMessageActivityNoticeOneOfTypeData) {
+            proto.typeData = DSKProtoMessageActivityNoticeOneOfTypeDataUnwrap(valueParam)
+        }
+
+        @objc
+        public func setCopyData(_ valueParam: DSKProtoCopyData) {
+            proto.typeData = .copyData(valueParam.proto)
+        }
+
+        public func setUnknownFields(_ unknownFields: SwiftProtobuf.UnknownStorage) {
+            proto.unknownFields = unknownFields
+        }
+
+        @objc
+        public func build() throws -> DSKProtoMessageActivityNotice {
+            return try DSKProtoMessageActivityNotice(proto)
+        }
+
+        @objc
+        public func buildSerializedData() throws -> Data {
+            return try DSKProtoMessageActivityNotice(proto).serializedData()
+        }
+    }
+
+    fileprivate let proto: DifftServiceProtos_MessageActivityNotice
+
+    @objc
+    public let conversation: DSKProtoConversationId?
+
+    public var typeData: DSKProtoMessageActivityNoticeOneOfTypeData? {
+        guard hasTypeData else {
+            return nil
+        }
+        guard let typeData = proto.typeData else {
+            owsFailDebug("typeData was unexpectedly nil")
+            return nil
+        }
+        guard let unwrappedTypeData = try? DSKProtoMessageActivityNoticeOneOfTypeDataWrap(typeData) else {
+            owsFailDebug("failed to unwrap typeData")
+            return nil
+        }
+        return unwrappedTypeData
+    }
+    @objc
+    public var hasTypeData: Bool {
+        return proto.typeData != nil
+    }
+
+    @objc
+    public var copyData: DSKProtoCopyData? {
+        guard case .copyData(let inner) = proto.typeData else { return nil }
+        return try? DSKProtoCopyData(inner)
+    }
+
+    public var hasUnknownFields: Bool {
+        return !proto.unknownFields.data.isEmpty
+    }
+    public var unknownFields: SwiftProtobuf.UnknownStorage? {
+        guard hasUnknownFields else { return nil }
+        return proto.unknownFields
+    }
+
+    private init(proto: DifftServiceProtos_MessageActivityNotice,
+                 conversation: DSKProtoConversationId?) {
+        self.proto = proto
+        self.conversation = conversation
+    }
+
+    @objc
+    public func serializedData() throws -> Data {
+        return try self.proto.serializedData()
+    }
+
+    @objc
+    public convenience init(serializedData: Data) throws {
+        let proto = try DifftServiceProtos_MessageActivityNotice(serializedData: serializedData)
+        try self.init(proto)
+    }
+
+    fileprivate convenience init(_ proto: DifftServiceProtos_MessageActivityNotice) throws {
+        var conversation: DSKProtoConversationId?
+        if proto.hasConversation {
+            conversation = try DSKProtoConversationId(proto.conversation)
+        }
+
+        // MARK: - Begin Validation Logic for DSKProtoMessageActivityNotice -
+
+        // MARK: - End Validation Logic for DSKProtoMessageActivityNotice -
+
+        self.init(proto: proto,
+                  conversation: conversation)
+    }
+
+    public required convenience init(from decoder: Swift.Decoder) throws {
+        let singleValueContainer = try decoder.singleValueContainer()
+        let serializedData = try singleValueContainer.decode(Data.self)
+        try self.init(serializedData: serializedData)
+    }
+    public func encode(to encoder: Swift.Encoder) throws {
+        var singleValueContainer = encoder.singleValueContainer()
+        try singleValueContainer.encode(try serializedData())
+    }
+
+    public static var supportsSecureCoding: Bool { true }
+
+    public required convenience init?(coder: NSCoder) {
+        guard let serializedData = coder.decodeData() else { return nil }
+        do {
+            try self.init(serializedData: serializedData)
+        } catch {
+            owsFailDebug("Failed to decode serialized data \(error)")
+            return nil
+        }
+    }
+
+    public func encode(with coder: NSCoder) {
+        do {
+            coder.encode(try serializedData())
+        } catch {
+            owsFailDebug("Failed to encode serialized data \(error)")
+        }
+    }
+
+    @objc
+    public override var debugDescription: String {
+        return "\(proto)"
+    }
+}
+
+#if TESTABLE_BUILD
+
+extension DSKProtoMessageActivityNotice {
+    @objc
+    public func serializedDataIgnoringErrors() -> Data? {
+        return try! self.serializedData()
+    }
+}
+
+extension DSKProtoMessageActivityNotice.DSKProtoMessageActivityNoticeBuilder {
+    @objc
+    public func buildIgnoringErrors() -> DSKProtoMessageActivityNotice? {
+        return try! self.build()
+    }
+}
+
+#endif
+
+// MARK: - DSKProtoCopyData
+
+@objc
+public class DSKProtoCopyData: NSObject, Codable, NSSecureCoding {
+
+    // MARK: - DSKProtoCopyDataBuilder
+
+    @objc
+    public static func builder() -> DSKProtoCopyDataBuilder {
+        return DSKProtoCopyDataBuilder()
+    }
+
+    // asBuilder() constructs a builder that reflects the proto's contents.
+    @objc
+    public func asBuilder() -> DSKProtoCopyDataBuilder {
+        let builder = DSKProtoCopyDataBuilder()
+        builder.setSourceAuthorIds(sourceAuthorIds)
+        if hasMessageCount {
+            builder.setMessageCount(messageCount)
+        }
+        if let _value = combinedForwardMode {
+            builder.setCombinedForwardMode(_value)
+        }
+        if let _value = unknownFields {
+            builder.setUnknownFields(_value)
+        }
+        return builder
+    }
+
+    @objc
+    public class DSKProtoCopyDataBuilder: NSObject {
+
+        private var proto = DifftServiceProtos_CopyData()
+
+        @objc
+        fileprivate override init() {}
+
+        @objc
+        public func addSourceAuthorIds(_ valueParam: String) {
+            proto.sourceAuthorIds.append(valueParam)
+        }
+
+        @objc
+        public func setSourceAuthorIds(_ wrappedItems: [String]) {
+            proto.sourceAuthorIds = wrappedItems
+        }
+
+        @objc
+        public func setMessageCount(_ valueParam: UInt32) {
+            proto.messageCount = valueParam
+        }
+
+        @objc
+        public func setCombinedForwardMode(_ valueParam: DSKProtoMessageActivityNoticeCombinedForwardMode) {
+            proto.combinedForwardMode = DSKProtoMessageActivityNoticeCombinedForwardModeUnwrap(valueParam)
+        }
+
+        public func setUnknownFields(_ unknownFields: SwiftProtobuf.UnknownStorage) {
+            proto.unknownFields = unknownFields
+        }
+
+        @objc
+        public func build() throws -> DSKProtoCopyData {
+            return try DSKProtoCopyData(proto)
+        }
+
+        @objc
+        public func buildSerializedData() throws -> Data {
+            return try DSKProtoCopyData(proto).serializedData()
+        }
+    }
+
+    fileprivate let proto: DifftServiceProtos_CopyData
+
+    @objc
+    public var sourceAuthorIds: [String] {
+        return proto.sourceAuthorIds
+    }
+
+    @objc
+    public var messageCount: UInt32 {
+        return proto.messageCount
+    }
+    @objc
+    public var hasMessageCount: Bool {
+        return proto.hasMessageCount
+    }
+
+    public var combinedForwardMode: DSKProtoMessageActivityNoticeCombinedForwardMode? {
+        guard hasCombinedForwardMode else {
+            return nil
+        }
+        return DSKProtoMessageActivityNoticeCombinedForwardModeWrap(proto.combinedForwardMode)
+    }
+    // This "unwrapped" accessor should only be used if the "has value" accessor has already been checked.
+    @objc
+    public var unwrappedCombinedForwardMode: DSKProtoMessageActivityNoticeCombinedForwardMode {
+        if !hasCombinedForwardMode {
+            // TODO: We could make this a crashing assert.
+            owsFailDebug("Unsafe unwrap of missing optional: CopyData.combinedForwardMode.")
+        }
+        return DSKProtoMessageActivityNoticeCombinedForwardModeWrap(proto.combinedForwardMode)
+    }
+    @objc
+    public var hasCombinedForwardMode: Bool {
+        return proto.hasCombinedForwardMode
+    }
+
+    public var hasUnknownFields: Bool {
+        return !proto.unknownFields.data.isEmpty
+    }
+    public var unknownFields: SwiftProtobuf.UnknownStorage? {
+        guard hasUnknownFields else { return nil }
+        return proto.unknownFields
+    }
+
+    private init(proto: DifftServiceProtos_CopyData) {
+        self.proto = proto
+    }
+
+    @objc
+    public func serializedData() throws -> Data {
+        return try self.proto.serializedData()
+    }
+
+    @objc
+    public convenience init(serializedData: Data) throws {
+        let proto = try DifftServiceProtos_CopyData(serializedData: serializedData)
+        try self.init(proto)
+    }
+
+    fileprivate convenience init(_ proto: DifftServiceProtos_CopyData) throws {
+        // MARK: - Begin Validation Logic for DSKProtoCopyData -
+
+        // MARK: - End Validation Logic for DSKProtoCopyData -
+
+        self.init(proto: proto)
+    }
+
+    public required convenience init(from decoder: Swift.Decoder) throws {
+        let singleValueContainer = try decoder.singleValueContainer()
+        let serializedData = try singleValueContainer.decode(Data.self)
+        try self.init(serializedData: serializedData)
+    }
+    public func encode(to encoder: Swift.Encoder) throws {
+        var singleValueContainer = encoder.singleValueContainer()
+        try singleValueContainer.encode(try serializedData())
+    }
+
+    public static var supportsSecureCoding: Bool { true }
+
+    public required convenience init?(coder: NSCoder) {
+        guard let serializedData = coder.decodeData() else { return nil }
+        do {
+            try self.init(serializedData: serializedData)
+        } catch {
+            owsFailDebug("Failed to decode serialized data \(error)")
+            return nil
+        }
+    }
+
+    public func encode(with coder: NSCoder) {
+        do {
+            coder.encode(try serializedData())
+        } catch {
+            owsFailDebug("Failed to encode serialized data \(error)")
+        }
+    }
+
+    @objc
+    public override var debugDescription: String {
+        return "\(proto)"
+    }
+}
+
+#if TESTABLE_BUILD
+
+extension DSKProtoCopyData {
+    @objc
+    public func serializedDataIgnoringErrors() -> Data? {
+        return try! self.serializedData()
+    }
+}
+
+extension DSKProtoCopyData.DSKProtoCopyDataBuilder {
+    @objc
+    public func buildIgnoringErrors() -> DSKProtoCopyData? {
         return try! self.build()
     }
 }
@@ -14712,6 +15224,9 @@ public class DSKProtoSyncMessage: NSObject, Codable, NSSecureCoding {
         if let _value = forwardNoticeSync {
             builder.setForwardNoticeSync(_value)
         }
+        if let _value = activityNoticeSync {
+            builder.setActivityNoticeSync(_value)
+        }
         if let _value = unknownFields {
             builder.setUnknownFields(_value)
         }
@@ -14915,6 +15430,17 @@ public class DSKProtoSyncMessage: NSObject, Codable, NSSecureCoding {
             proto.forwardNoticeSync = valueParam.proto
         }
 
+        @objc
+        @available(swift, obsoleted: 1.0)
+        public func setActivityNoticeSync(_ valueParam: DSKProtoMessageActivityNotice?) {
+            guard let valueParam = valueParam else { return }
+            proto.activityNoticeSync = valueParam.proto
+        }
+
+        public func setActivityNoticeSync(_ valueParam: DSKProtoMessageActivityNotice) {
+            proto.activityNoticeSync = valueParam.proto
+        }
+
         public func setUnknownFields(_ unknownFields: SwiftProtobuf.UnknownStorage) {
             proto.unknownFields = unknownFields
         }
@@ -14981,6 +15507,9 @@ public class DSKProtoSyncMessage: NSObject, Codable, NSSecureCoding {
     public let forwardNoticeSync: DSKProtoForwardNoticeMessage?
 
     @objc
+    public let activityNoticeSync: DSKProtoMessageActivityNotice?
+
+    @objc
     public var padding: Data? {
         guard hasPadding else {
             return nil
@@ -15025,7 +15554,8 @@ public class DSKProtoSyncMessage: NSObject, Codable, NSSecureCoding {
                  topicMark: DSKProtoTopicMark?,
                  topicAction: DSKProtoTopicAction?,
                  criticalRead: [DSKProtoSyncMessageRead],
-                 forwardNoticeSync: DSKProtoForwardNoticeMessage?) {
+                 forwardNoticeSync: DSKProtoForwardNoticeMessage?,
+                 activityNoticeSync: DSKProtoMessageActivityNotice?) {
         self.proto = proto
         self.sent = sent
         self.contacts = contacts
@@ -15043,6 +15573,7 @@ public class DSKProtoSyncMessage: NSObject, Codable, NSSecureCoding {
         self.topicAction = topicAction
         self.criticalRead = criticalRead
         self.forwardNoticeSync = forwardNoticeSync
+        self.activityNoticeSync = activityNoticeSync
     }
 
     @objc
@@ -15131,6 +15662,11 @@ public class DSKProtoSyncMessage: NSObject, Codable, NSSecureCoding {
             forwardNoticeSync = try DSKProtoForwardNoticeMessage(proto.forwardNoticeSync)
         }
 
+        var activityNoticeSync: DSKProtoMessageActivityNotice?
+        if proto.hasActivityNoticeSync {
+            activityNoticeSync = try DSKProtoMessageActivityNotice(proto.activityNoticeSync)
+        }
+
         // MARK: - Begin Validation Logic for DSKProtoSyncMessage -
 
         // MARK: - End Validation Logic for DSKProtoSyncMessage -
@@ -15151,7 +15687,8 @@ public class DSKProtoSyncMessage: NSObject, Codable, NSSecureCoding {
                   topicMark: topicMark,
                   topicAction: topicAction,
                   criticalRead: criticalRead,
-                  forwardNoticeSync: forwardNoticeSync)
+                  forwardNoticeSync: forwardNoticeSync,
+                  activityNoticeSync: activityNoticeSync)
     }
 
     public required convenience init(from decoder: Swift.Decoder) throws {
@@ -15213,17 +15750,23 @@ extension DSKProtoSyncMessage.DSKProtoSyncMessageBuilder {
 @objc
 public enum DSKProtoAttachmentPointerFlags: Int32 {
     case voiceMessage = 1
+    case borderless = 2
+    case gif = 4
 }
 
 private func DSKProtoAttachmentPointerFlagsWrap(_ value: DifftServiceProtos_AttachmentPointer.Flags) -> DSKProtoAttachmentPointerFlags {
     switch value {
     case .voiceMessage: return .voiceMessage
+    case .borderless: return .borderless
+    case .gif: return .gif
     }
 }
 
 private func DSKProtoAttachmentPointerFlagsUnwrap(_ value: DSKProtoAttachmentPointerFlags) -> DifftServiceProtos_AttachmentPointer.Flags {
     switch value {
     case .voiceMessage: return .voiceMessage
+    case .borderless: return .borderless
+    case .gif: return .gif
     }
 }
 
@@ -15637,6 +16180,9 @@ public class DSKProtoGroupContext: NSObject, Codable, NSSecureCoding {
         if let _value = groupRootKey {
             builder.setGroupRootKey(_value)
         }
+        if hasKeyVersion {
+            builder.setKeyVersion(keyVersion)
+        }
         if let _value = unknownFields {
             builder.setUnknownFields(_value)
         }
@@ -15708,6 +16254,11 @@ public class DSKProtoGroupContext: NSObject, Codable, NSSecureCoding {
 
         public func setGroupRootKey(_ valueParam: Data) {
             proto.groupRootKey = valueParam
+        }
+
+        @objc
+        public func setKeyVersion(_ valueParam: UInt32) {
+            proto.keyVersion = valueParam
         }
 
         public func setUnknownFields(_ unknownFields: SwiftProtobuf.UnknownStorage) {
@@ -15789,6 +16340,15 @@ public class DSKProtoGroupContext: NSObject, Codable, NSSecureCoding {
     @objc
     public var hasGroupRootKey: Bool {
         return proto.hasGroupRootKey
+    }
+
+    @objc
+    public var keyVersion: UInt32 {
+        return proto.keyVersion
+    }
+    @objc
+    public var hasKeyVersion: Bool {
+        return proto.hasKeyVersion
     }
 
     public var hasUnknownFields: Bool {

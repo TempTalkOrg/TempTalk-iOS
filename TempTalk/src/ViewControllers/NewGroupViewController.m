@@ -28,11 +28,19 @@
 #import <TTServiceKit/TSOutgoingMessage.h>
 #import "DTCreateANewGroupAPI.h"
 #import <TTServiceKit/DTGroupConfig.h>
+#import "DTSelectedAccountToolView.h"
+#import "DTAddToGroupItem.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 const NSUInteger kNewGroupViewControllerAvatarWidth = 58;
 const NSUInteger kNewGroupTitleMaxLength = 64;
+
+// Selected-members row height.
+static CGFloat const kSelectedRowHeight = 100;
+// Divider under the selected-members row.
+static CGFloat const kHeaderDividerHeight = 1;
+static CGFloat const kHeaderDividerInset = 16;
 
 @interface NewGroupViewController () <UIImagePickerControllerDelegate,
     UITextFieldDelegate,
@@ -42,6 +50,7 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     OWSTableViewControllerDelegate,
     UINavigationControllerDelegate,
     OWSNavigationChildController,
+    DTSelectedAccountToolViewDelegate,
     UISearchBarDelegate>
 
 @property (nonatomic, readonly) OWSMessageSender *messageSender;
@@ -58,11 +67,21 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
 @property (nonatomic, nullable) UIImage *groupAvatar;
 @property (nonatomic) NSMutableSet<NSString *> *memberRecipientIds;
 @property (nonatomic) NSMutableArray<NSString *> *memberIds;
+// Ordered, removable selection shown in the selected-members row (see isNonRemovableRecipientId:).
+@property (nonatomic) NSMutableArray<NSString *> *selectedMemberOrder;
 
 @property (nonatomic) BOOL hasUnsavedChanges;
 @property (nonatomic) BOOL hasAppeared;
 @property (nonatomic, strong) DTCreateANewGroupAPI *createANewGroupAPI;
 @property (nonatomic, strong) DTGroupAvatarUpdateProcessor *groupAvatarUpdateProcessor;
+
+// Non-scrolling header between the group-name section and the table:
+// search bar + selected-members row + divider.
+@property (nonatomic, strong) DTSelectedAccountToolView *selectedAccountToolView;
+@property (nonatomic, strong) UIView *fixedHeaderContainer;
+@property (nonatomic, strong) NSLayoutConstraint *fixedHeaderHeightConstraint;
+@property (nonatomic, strong) UIView *headerDivider;
+@property (nonatomic, assign) BOOL selectedRowVisible;
 
 @end
 
@@ -105,6 +124,7 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     _avatarViewHelper.delegate = self;
     self.memberRecipientIds = [NSMutableSet new];
     self.memberIds = @[self.contactsViewHelper.localNumber].mutableCopy;
+    self.selectedMemberOrder = [NSMutableArray array];
 }
 
 #pragma mark - View Lifecycle
@@ -139,23 +159,51 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     [firstSection autoPinWidthToSuperview];
     [firstSection autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
 
-    _tableViewController = [OWSTableViewController new];
-    _tableViewController.delegate = self;
-    [self.view addSubview:self.tableViewController.view];
-    [_tableViewController.view autoPinWidthToSuperview];
-    [_tableViewController.view autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:firstSection];
-    [self autoPinViewToBottomOfViewControllerOrKeyboard:self.tableViewController.view avoidNotch:NO];
-    self.tableViewController.tableView.rowHeight = UITableViewAutomaticDimension;
-    self.tableViewController.tableView.estimatedRowHeight = 70;
-    
+    // Non-scrolling header: search bar + selected-members row + divider.
+    UIView *fixedHeader = [UIView new];
+    _fixedHeaderContainer = fixedHeader;
+    fixedHeader.backgroundColor = Theme.bgpagePrimaryColor;
+    fixedHeader.clipsToBounds = YES;
+    [self.view addSubview:fixedHeader];
+    [fixedHeader autoPinWidthToSuperview];
+    [fixedHeader autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:firstSection];
+    _fixedHeaderHeightConstraint = [fixedHeader autoSetDimension:ALDimensionHeight
+                                                          toSize:kSelectRecipientSearchBarHeight];
+
     OWSSearchBar *searchBar = [OWSSearchBar new];
     _searchBar = searchBar;
     searchBar.customPlaceholder = Localized(@"SEARCH_BYNAMEORNUMBER_PLACEHOLDER_TEXT",
         @"Placeholder text for search bar which filters contacts.");
     searchBar.delegate = self;
-    [searchBar sizeToFit];
+    [fixedHeader addSubview:searchBar];
+    [searchBar autoPinWidthToSuperview];
+    [searchBar autoPinEdgeToSuperviewEdge:ALEdgeTop];
+    [searchBar autoSetDimension:ALDimensionHeight toSize:kSelectRecipientSearchBarHeight];
 
-    self.tableViewController.tableView.tableHeaderView = searchBar;
+    [fixedHeader addSubview:self.selectedAccountToolView];
+    [self.selectedAccountToolView autoPinEdgeToSuperviewEdge:ALEdgeTop withInset:kSelectRecipientSearchBarHeight];
+    [self.selectedAccountToolView autoPinWidthToSuperviewWithMargin:kHeaderDividerInset];
+    [self.selectedAccountToolView autoSetDimension:ALDimensionHeight toSize:kSelectedRowHeight];
+
+    [fixedHeader addSubview:self.headerDivider];
+    [self.headerDivider autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.selectedAccountToolView];
+    [self.headerDivider autoPinWidthToSuperviewWithMargin:kHeaderDividerInset];
+    [self.headerDivider autoSetDimension:ALDimensionHeight toSize:kHeaderDividerHeight];
+
+    self.selectedAccountToolView.hidden = YES;
+    self.headerDivider.hidden = YES;
+    self.selectedRowVisible = NO;
+
+    _tableViewController = [OWSTableViewController new];
+    _tableViewController.delegate = self;
+    [self.view addSubview:self.tableViewController.view];
+    [_tableViewController.view autoPinWidthToSuperview];
+    [_tableViewController.view autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:fixedHeader];
+    [self autoPinViewToBottomOfViewControllerOrKeyboard:self.tableViewController.view avoidNotch:NO];
+    self.tableViewController.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableViewController.tableView.estimatedRowHeight = 70;
+    self.tableViewController.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    self.tableViewController.tableView.backgroundColor = Theme.bgpagePrimaryColor;
 
     [self updateTableContents];
 }
@@ -163,7 +211,8 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
 - (UIView *)firstSectionHeader
 {
     UIView *firstSectionHeader = [UIView new];
-    firstSectionHeader.backgroundColor = Theme.bg1Color;
+    // Match the contact cells' background (design spec).
+    firstSectionHeader.backgroundColor = Theme.bgpagePrimaryColor;
     firstSectionHeader.userInteractionEnabled = YES;
     [firstSectionHeader
         addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(headerWasTapped:)]];
@@ -243,6 +292,53 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     if (sender.state == UIGestureRecognizerStateRecognized) {
         [self showChangeAvatarUI];
     }
+}
+
+#pragma mark - Selected-members header
+
+// Reloads the selected-members row; toggles its visibility and the header height on empty <-> non-empty.
+- (void)refreshSelectedRow {
+    [self.selectedAccountToolView reloadWithData:self.selectedMemberOrder];
+    BOOL hasSelection = self.selectedMemberOrder.count > 0;
+    if (hasSelection == self.selectedRowVisible) {
+        return;
+    }
+    self.selectedRowVisible = hasSelection;
+    self.selectedAccountToolView.hidden = !hasSelection;
+    self.headerDivider.hidden = !hasSelection;
+    self.fixedHeaderHeightConstraint.constant = hasSelection
+        ? kSelectRecipientSearchBarHeight + kSelectedRowHeight + kHeaderDividerHeight
+        : kSelectRecipientSearchBarHeight;
+}
+
+- (UIView *)headerDivider {
+    if (!_headerDivider) {
+        _headerDivider = [[UIView alloc] init];
+        _headerDivider.backgroundColor = Theme.dividerColor;
+    }
+    return _headerDivider;
+}
+
+- (DTSelectedAccountToolView *)selectedAccountToolView {
+    if (!_selectedAccountToolView) {
+        _selectedAccountToolView = [[DTSelectedAccountToolView alloc] initWithDataSource:@[]];
+        _selectedAccountToolView.toolViewDelegate = self;
+    }
+    return _selectedAccountToolView;
+}
+
+#pragma mark - DTSelectedAccountToolViewDelegate
+
+// Tapping a selected avatar's ✕ removes that member from the selection.
+- (void)dtSelectedAccountToolView:(DTSelectedAccountToolView *)toolView collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
+    if (!indexPath || indexPath.row >= (NSInteger)self.selectedMemberOrder.count) {
+        return;
+    }
+    NSString *recipientId = [self.selectedMemberOrder objectAtIndex:(NSUInteger)indexPath.row];
+    if (!recipientId.length) {
+        return;
+    }
+    [self removeRecipientId:recipientId];
 }
 
 #pragma mark - Table Contents
@@ -345,14 +441,11 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
             }
         }
         
-        // Contacts
+        // Contacts (no section header per the redesigned selector)
 
         OWSTableSection *signalAccountSection = [OWSTableSection new];
-        signalAccountSection.headerTitle = Localized(
-            @"EDIT_GROUP_CONTACTS_SECTION_TITLE", @"a title for the contacts section of the 'new/update group' view.");
-        signalAccountSection.customHeaderHeight = @(34.f);
         if (signalAccounts.count > 0) {
-            
+
             // modified: disable invite friends by system contacts and phone sms.
             if (nonContactMemberRecipientIds.count < 1) {
                 // If the group contains any non-contacts or has not contacts,
@@ -361,11 +454,11 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
                 // for the common case where people want to create a group from just
                 // their contacts.  Therefore, when that section is hidden, we want
                 // to allow people to add non-contacts.
-                
+
                 //[signalAccountSection addItem:[self createAddNonContactItem]];
             }
-            
-            
+
+
             __block NSArray<SignalAccount *> *filtedSignalAccounts = nil;
             [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
 //                filtedSignalAccounts = [self.fullTextSearcher filterSignalAccounts:signalAccounts withSearchText:searchText transaction:transaction];
@@ -513,12 +606,9 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
             [contents addSection:nonContactsSection];
         }
 
-        // Contacts
+        // Contacts (no section header per the redesigned selector)
 
         OWSTableSection *signalAccountSection = [OWSTableSection new];
-        signalAccountSection.headerTitle = Localized(
-            @"EDIT_GROUP_CONTACTS_SECTION_TITLE", @"a title for the contacts section of the 'new/update group' view.");
-        signalAccountSection.customHeaderHeight = @(34.f);
         if (signalAccounts.count > 0) {
             
             // modified: disable invite friends by system contacts and phone sms.
@@ -627,17 +717,20 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     BOOL isContainMember = [self.memberRecipientIds containsObject:recipientId];
     BOOL isBlocked = [self.contactsViewHelper isRecipientIdBlocked:recipientId];
     if (isContainMember) {
-        // In the "contacts" section, we label members as such when editing an existing
-        // group.
-        cell.accessoryType = UITableViewCellAccessoryCheckmark;
-        
-        if ((self.createType == DTCreateGroupTypeContact && [recipientId isEqualToString:self.thread.contactIdentifier]) || (self.createType == DTCreateGroupTypeByMeeting && [self.meetingMemberIds containsObject:recipientId])) {
+        // Pre-seeded, non-removable members show the gray DisabledSelected box.
+        BOOL nonRemovable = [self isNonRemovableRecipientId:recipientId];
+        if (nonRemovable) {
+            cell.selectionStatus = ContactCellSelectionStatusDisabledSelected;
             cell.userInteractionEnabled = NO;
-            cell.backgroundColor = cell.contentView.backgroundColor = cell.cellView.backgroundColor = Theme.lineColor;
+        } else {
+            cell.selectionStatus = ContactCellSelectionStatusSelected;
         }
     } else if (isBlocked) {
+        cell.selectionStatus = ContactCellSelectionStatusUnselected;
         cell.accessoryMessage = Localized(
             @"CONTACT_CELL_IS_BLOCKED", @"An indicator that a contact has been blocked.");
+    } else {
+        cell.selectionStatus = ContactCellSelectionStatusUnselected;
     }
 
     if (signalAccount) {
@@ -651,14 +744,52 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     return cell;
 }
 
+// Re-assert the checkbox after UITableView's setSelected: flips it on display.
+- (void)originalTableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (![cell isKindOfClass:ContactTableViewCell.class]) {
+        return;
+    }
+    ContactTableViewCell *contactCell = (ContactTableViewCell *)cell;
+    NSString *recipientId = contactCell.signalAccount.recipientId;
+    if (!recipientId.length) {
+        return;
+    }
+    if ([self.memberRecipientIds containsObject:recipientId]) {
+        BOOL nonRemovable = [self isNonRemovableRecipientId:recipientId];
+        contactCell.selectionStatus = nonRemovable ? ContactCellSelectionStatusDisabledSelected : ContactCellSelectionStatusSelected;
+    } else {
+        contactCell.selectionStatus = ContactCellSelectionStatusUnselected;
+    }
+}
+
+// Non-removable: the local user, the contact a group is created with, or pre-seeded meeting members.
+- (BOOL)isNonRemovableRecipientId:(NSString *)recipientId
+{
+    if (!recipientId.length) {
+        return YES;
+    }
+    if ([recipientId isEqualToString:[TSAccountManager localNumber]]) {
+        return YES;
+    }
+    if (self.createType == DTCreateGroupTypeContact && [recipientId isEqualToString:self.thread.contactIdentifier]) {
+        return YES;
+    }
+    if (self.createType == DTCreateGroupTypeByMeeting && [self.meetingMemberIds containsObject:recipientId]) {
+        return YES;
+    }
+    return NO;
+}
+
 - (void)removeRecipientId:(NSString *)recipientId
 {
     OWSAssertDebug(recipientId.length > 0);
 
     [self.memberRecipientIds removeObject:recipientId];
     [self.memberIds removeObject:recipientId];
+    [self.selectedMemberOrder removeObject:recipientId];
     [self updateTableContents];
     [self generateNewGroupAvatar];
+    [self refreshSelectedRow];
 }
 
 - (void)addRecipientId:(NSString *)recipientId
@@ -667,9 +798,13 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
 
     [self.memberRecipientIds addObject:recipientId];
     [self.memberIds addObject:recipientId];
+    if (![self isNonRemovableRecipientId:recipientId] && ![self.selectedMemberOrder containsObject:recipientId]) {
+        [self.selectedMemberOrder addObject:recipientId];
+    }
     self.hasUnsavedChanges = YES;
     [self updateTableContents];
     [self generateNewGroupAvatar];
+    [self refreshSelectedRow];
 }
 
 - (void)generateNewGroupAvatar {
@@ -780,13 +915,36 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
     [self presentViewController:controller animated:YES completion:nil];
 }
 
-- (void)uploadGroupAvatarSuccess:(void (^)(NSString * _Nullable))successHandler{
-    
+- (void)uploadGroupAvatarSuccess:(void (^)(NSString * _Nullable))successHandler
+                         failure:(void (^)(NSError *error))failureHandler{
+
     if (!self.groupAvatar) {
+        // No avatar selected: create without avatar (not a failure).
         successHandler(nil);
         return;
     }
-    
+
+    // OWSUploadToOSSOperation retries internally and OWSOperation fires the failure
+    // callback once per attempt (OWSOperation.reportError:), so the handler can be
+    // invoked many times for one upload. Run it at most once, otherwise group
+    // creation would fire repeatedly (duplicate groups / stacked error toasts).
+    __block BOOL handlerCalled = NO;
+    void (^finishOnce)(NSString * _Nullable, NSError * _Nullable) = ^(NSString * _Nullable avatar, NSError * _Nullable error) {
+        @synchronized (self) {
+            if (handlerCalled) {
+                return;
+            }
+            handlerCalled = YES;
+        }
+        if (error) {
+            if (failureHandler) {
+                failureHandler(error);
+            }
+        } else if (successHandler) {
+            successHandler(avatar);
+        }
+    };
+
     NSData *data = UIImagePNGRepresentation(self.groupAvatar);
     id <DataSource> _Nullable dataSource = [DataSourceValue dataSourceWithData:data fileExtension:@"png"];
     [self.groupAvatarUpdateProcessor uploadAttachment:dataSource
@@ -796,15 +954,11 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
         if (!DTParamsUtils.validateString(avatar)) {
             OWSLogError(@"uploadGroupAvatar avatar is empty!");
         }
-        if (successHandler) {
-            successHandler(avatar);
-        }
+        finishOnce(avatar, nil);
     } failure:^(NSError * _Nonnull error) {
-        [DTToastHelper hide];
-        OWSLogError(@"uploadGroupAvatar error: %@!", error.localizedDescription);
-        if(DTParamsUtils.validateString(error.localizedDescription)){
-            [DTToastHelper toastWithText:error.localizedDescription durationTime:2];
-        }
+        // Avatar upload failed: abort creation; caller shows a single toast.
+        OWSLogError(@"uploadGroupAvatar failed, abort group creation. error: %@", error.localizedDescription);
+        finishOnce(nil, error);
     }];
 }
 
@@ -885,6 +1039,9 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
             } else {
                 [self createPlainGroupWithName:groupName avatar:avatar members:members];
             }
+        } failure:^(NSError *error) {
+            // Avatar upload failed: abort creation. finishOnce dedups retries, so one toast.
+            [DTToastHelper dismissWithInfo:error.localizedDescription];
         }];
     }
 }
@@ -898,10 +1055,11 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
                                          numbers:members
                                          success:^(DTCreateANewGroupDataEntity * _Nonnull entity) {
 
+        __block TSGroupThread *thread = nil;
         DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
 
             TSGroupModel *model = [self makeGroupWithId:entity.gid groupName:groupName transaction:writeTransaction];
-            TSGroupThread *thread = [TSGroupThread getOrCreateThreadWithGroupModel:model transaction:writeTransaction];
+            thread = [TSGroupThread getOrCreateThreadWithGroupModel:model transaction:writeTransaction];
             [thread anyInsertWithTransaction:writeTransaction];
             [OWSProfileManager.sharedManager addThreadToProfileWhitelist:thread transaction:writeTransaction];
 
@@ -920,32 +1078,41 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
             groupBaseInfo.gid = entity.gid;
             groupBaseInfo.avatar = avatar ?: @"";
             [DTGroupUtils addGroupBaseInfo:groupBaseInfo transaction:writeTransaction];
+        });
 
-            DispatchMainThreadSafe(^{
-                if (self.createType == DTCreateGroupTypeConvenient) {
-                    DTInviteToGroupAPI *inviteCodeApi = [DTInviteToGroupAPI new];
-                    [inviteCodeApi getInviteCodeWithGId:entity.gid success:^(NSString * _Nonnull inviteCode) {
-                        [DTToastHelper dismiss];
-                        [self.navigationController dismissViewControllerAnimated:YES completion:^{
+        if (!thread) {
+            OWSLogError(@"[group] create plain group: thread is nil after write, abort entering conversation");
+            [DTToastHelper dismiss];
+            return;
+        }
 
-                        }];
-                    } failure:^(NSError * _Nonnull error) {
-                        [DTToastHelper dismissWithInfo:error.localizedDescription delay:0.2];
-                    }];
-                } else {
+        // Enter the conversation only after the write has committed. Otherwise the VC is created
+        // inside the open transaction and its initial load reads a pre-commit snapshot, so the
+        // just-inserted group-created info message is missing until the conversation is re-entered.
+        DispatchMainThreadSafe(^{
+            if (self.createType == DTCreateGroupTypeConvenient) {
+                DTInviteToGroupAPI *inviteCodeApi = [DTInviteToGroupAPI new];
+                [inviteCodeApi getInviteCodeWithGId:entity.gid success:^(NSString * _Nonnull inviteCode) {
                     [DTToastHelper dismiss];
-                    ConversationViewController *conversationVC = [[ConversationViewController alloc] initWithThread:thread
-                                                                                                             action:ConversationViewActionNone
-                                                                                                     focusMessageId:nil
-                                                                                                        botViewItem:nil
-                                                                                                           viewMode:ConversationViewMode_Main isFromPersonalCard:false];
-                    OWSNavigationController *nav = (OWSNavigationController *)self.navigationController;
+                    [self.navigationController dismissViewControllerAnimated:YES completion:^{
 
-                    [nav pushViewController:conversationVC animated:YES completion:^{
-                        [nav removeToViewController:@"HomeViewController"];
                     }];
-                }
-            });
+                } failure:^(NSError * _Nonnull error) {
+                    [DTToastHelper dismissWithInfo:error.localizedDescription delay:0.2];
+                }];
+            } else {
+                [DTToastHelper dismiss];
+                ConversationViewController *conversationVC = [[ConversationViewController alloc] initWithThread:thread
+                                                                                                         action:ConversationViewActionNone
+                                                                                                 focusMessageId:nil
+                                                                                                    botViewItem:nil
+                                                                                                       viewMode:ConversationViewMode_Main isFromPersonalCard:false];
+                OWSNavigationController *nav = (OWSNavigationController *)self.navigationController;
+
+                [nav pushViewController:conversationVC animated:YES completion:^{
+                    [nav removeToViewController:@"HomeViewController"];
+                }];
+            }
         });
 
     } failure:^(NSError * _Nonnull error) {
@@ -990,11 +1157,14 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
                                          success:^(DTCreateANewGroupDataEntity * _Nonnull entity) {
         OWSLogInfo(@"[GroupCrypto] createEncryptedGroup server ok, gid: %@", entity.gid);
 
+        __block TSGroupThread *thread = nil;
+        __block NSData *groupId = nil;
         DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
 
             TSGroupModel *model = [self makeGroupWithId:entity.gid groupName:groupName transaction:writeTransaction];
             model.groupCryptoMode = params.groupCryptoMode;
-            TSGroupThread *thread = [TSGroupThread getOrCreateThreadWithGroupModel:model transaction:writeTransaction];
+            groupId = model.groupId;
+            thread = [TSGroupThread getOrCreateThreadWithGroupModel:model transaction:writeTransaction];
             if (thread.groupModel.groupCryptoMode != params.groupCryptoMode) {
                 [thread anyUpdateWithTransaction:writeTransaction block:^(TSThread * _Nonnull t) {
                     ((TSGroupThread *)t).groupModel.groupCryptoMode = params.groupCryptoMode;
@@ -1028,36 +1198,45 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
 
             [DTGroupKeyMessageHandler downloadEncryptedAvatarIfNeededWithGid:entity.gid
                                                                   transaction:writeTransaction];
+        });
 
-            DispatchMainThreadSafe(^{
-                [DTGroupKeyMessageHandler.shared sendGroupKeyMessageWithThread:thread
-                                                                       groupId:model.groupId
-                                                                        rGroup:params.rGroup];
+        if (!thread) {
+            OWSLogError(@"[group] create encrypted group: thread is nil after write, abort entering conversation");
+            [DTToastHelper dismiss];
+            return;
+        }
 
-                if (self.createType == DTCreateGroupTypeConvenient) {
-                    DTInviteToGroupAPI *inviteCodeApi = [DTInviteToGroupAPI new];
-                    [inviteCodeApi getInviteCodeWithGId:entity.gid success:^(NSString * _Nonnull inviteCode) {
-                        [DTToastHelper dismiss];
-                        [self.navigationController dismissViewControllerAnimated:YES completion:^{
+        // Enter the conversation only after the write has committed (see plain-group path):
+        // creating the VC inside the open transaction makes its initial load miss the
+        // just-inserted group-created info message until the conversation is re-entered.
+        DispatchMainThreadSafe(^{
+            [DTGroupKeyMessageHandler.shared sendGroupKeyMessageWithThread:thread
+                                                                   groupId:groupId
+                                                                    rGroup:params.rGroup];
 
-                        }];
-                    } failure:^(NSError * _Nonnull error) {
-                        [DTToastHelper dismissWithInfo:error.localizedDescription delay:0.2];
-                    }];
-                } else {
+            if (self.createType == DTCreateGroupTypeConvenient) {
+                DTInviteToGroupAPI *inviteCodeApi = [DTInviteToGroupAPI new];
+                [inviteCodeApi getInviteCodeWithGId:entity.gid success:^(NSString * _Nonnull inviteCode) {
                     [DTToastHelper dismiss];
-                    ConversationViewController *conversationVC = [[ConversationViewController alloc] initWithThread:thread
-                                                                                                             action:ConversationViewActionNone
-                                                                                                     focusMessageId:nil
-                                                                                                        botViewItem:nil
-                                                                                                           viewMode:ConversationViewMode_Main isFromPersonalCard:false];
-                    OWSNavigationController *nav = (OWSNavigationController *)self.navigationController;
+                    [self.navigationController dismissViewControllerAnimated:YES completion:^{
 
-                    [nav pushViewController:conversationVC animated:YES completion:^{
-                        [nav removeToViewController:@"HomeViewController"];
                     }];
-                }
-            });
+                } failure:^(NSError * _Nonnull error) {
+                    [DTToastHelper dismissWithInfo:error.localizedDescription delay:0.2];
+                }];
+            } else {
+                [DTToastHelper dismiss];
+                ConversationViewController *conversationVC = [[ConversationViewController alloc] initWithThread:thread
+                                                                                                         action:ConversationViewActionNone
+                                                                                                 focusMessageId:nil
+                                                                                                    botViewItem:nil
+                                                                                                       viewMode:ConversationViewMode_Main isFromPersonalCard:false];
+                OWSNavigationController *nav = (OWSNavigationController *)self.navigationController;
+
+                [nav pushViewController:conversationVC animated:YES completion:^{
+                    [nav removeToViewController:@"HomeViewController"];
+                }];
+            }
         });
 
     } failure:^(NSError * _Nonnull error) {
@@ -1110,7 +1289,14 @@ const NSUInteger kNewGroupTitleMaxLength = 64;
 
 - (void)applyTheme {
     [super applyTheme];
-    self.firstSection.backgroundColor = Theme.bg1Color;
+    self.firstSection.backgroundColor = Theme.bgpagePrimaryColor;
+    self.tableViewController.tableView.backgroundColor = Theme.bgpagePrimaryColor;
+    if (_headerDivider) {
+        _headerDivider.backgroundColor = Theme.dividerColor;
+    }
+    if (_fixedHeaderContainer) {
+        _fixedHeaderContainer.backgroundColor = Theme.bgpagePrimaryColor;
+    }
 }
 
 #pragma mark - Event Handling

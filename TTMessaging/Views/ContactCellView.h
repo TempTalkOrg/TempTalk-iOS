@@ -10,7 +10,9 @@ extern const CGFloat kContactCellAvatarTextMargin;
 typedef NS_ENUM(NSUInteger, ContactCellSelectionStatus){
     ContactCellSelectionStatusNone,
     ContactCellSelectionStatusSelected,
-    ContactCellSelectionStatusUnselected
+    ContactCellSelectionStatusUnselected,
+    ContactCellSelectionStatusDisabled,          // not selectable: dimmed empty square
+    ContactCellSelectionStatusDisabledSelected   // already a member: gray filled square + check
 };
 typedef NS_ENUM(NSUInteger, UserOfSelfIconType){
     UserOfSelfIconTypeNoteToSelf,
@@ -59,6 +61,14 @@ typedef NS_ENUM(NSUInteger, UserOfSelfIconType){
 - (BOOL)hasAccessoryText;
 
 - (void)setAccessoryView:(UIView *)accessoryView;
+
+/// Weak contact (pending removal): show "Removed today" when removingToday, else
+/// "Removed in X days" when days > 0, hide otherwise. Call after a configure... method.
+- (void)applyWeakRemovalDays:(NSInteger)days removingToday:(BOOL)removingToday;
+
+/// Disambiguation: show a base58 ID suffix under the name when two candidates
+/// share the same display name. Call after a configure... method.
+- (void)applyIdSuffix:(nullable NSString *)suffix;
 
 @end
 

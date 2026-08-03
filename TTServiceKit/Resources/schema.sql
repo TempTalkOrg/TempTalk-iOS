@@ -228,6 +228,8 @@ CREATE
             ,"cardVersion" INTEGER NOT NULL DEFAULT 0
             ,"messageModeType" INTEGER
             ,"translateMessage" BLOB
+            ,"callState" INTEGER
+            ,"roomId" TEXT
         )
 ;
 
@@ -712,11 +714,47 @@ CREATE
                 ON CONFLICT FAIL
             ,"gid" TEXT NOT NULL
             ,"rGroup" TEXT NOT NULL
+            ,"keyVersion" INTEGER NOT NULL DEFAULT 0
         )
 ;
 
 CREATE
     INDEX "index_model_DTGroupCryptoKeyRecord_on_uniqueId"
         ON "model_DTGroupCryptoKeyRecord"("uniqueId"
+)
+;
+
+CREATE
+    TABLE
+        IF NOT EXISTS "model_SSKJobRecord" (
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL
+            ,"recordType" INTEGER NOT NULL
+            ,"uniqueId" TEXT NOT NULL UNIQUE
+                ON CONFLICT FAIL
+            ,"failureCount" INTEGER NOT NULL
+            ,"label" TEXT NOT NULL
+            ,"status" INTEGER NOT NULL
+            ,"attachmentIdMap" BLOB
+            ,"contactThreadId" TEXT
+            ,"envelopeData" BLOB
+            ,"invisibleMessage" BLOB
+            ,"messageId" TEXT
+            ,"removeMessageAfterSending" INTEGER
+            ,"threadId" TEXT
+            ,"exclusiveProcessIdentifier" TEXT
+            ,"isHighPriority" INTEGER NOT NULL DEFAULT 0
+            ,"isMediaMessage" INTEGER NOT NULL DEFAULT 0
+        )
+;
+
+CREATE
+    INDEX "index_model_SSKJobRecord_on_label_and_status"
+        ON "model_SSKJobRecord"("label", "status"
+)
+;
+
+CREATE
+    INDEX "index_model_SSKJobRecord_on_exclusiveProcessIdentifier"
+        ON "model_SSKJobRecord"("exclusiveProcessIdentifier"
 )
 ;

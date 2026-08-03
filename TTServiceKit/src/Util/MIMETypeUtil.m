@@ -291,6 +291,13 @@ NSString *const kLottieStickerFileExtension = @"lottiesticker";
     return [MIMETypeUtil isSupportedAnimatedMIMEType:contentType];
 }
 
+// WebP shares image/webp for BOTH static and animated, so MIME alone can't tell them apart — animated
+// WebP relies on the GIF proto flag. GIF/APNG are unambiguously animated by MIME. Use this (not
+// isAnimated:) for the flag's MIME fallback so a static WebP without the flag isn't treated as animated.
++ (BOOL)isMimeUnambiguouslyAnimated:(NSString *)contentType {
+    return [MIMETypeUtil isAnimated:contentType] && ![contentType isEqualToString:OWSMimeTypeImageWebp];
+}
+
 + (BOOL)isBinaryData:(NSString *)contentType
 {
     return [MIMETypeUtil isSupportedBinaryDataMIMEType:contentType];
@@ -2701,8 +2708,13 @@ NSString *const kLottieStickerFileExtension = @"lottiesticker";
             return YES;
         }
     }
-    
+
     return NO;
+}
+
++ (BOOL)isAnimatedGifFlag:(DSKProtoAttachmentPointer *)attachmentProto {
+    return [attachmentProto hasFlags]
+        && (attachmentProto.flags & (UInt32)DSKProtoAttachmentPointerFlagsGif) > 0;
 }
 
 @end

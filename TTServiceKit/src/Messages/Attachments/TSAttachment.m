@@ -246,12 +246,12 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
                 attachmentString = Localized(@"QUOTED_REPLY_TYPE_AUDIO", @"");
             }
         }
+    } else if (self.isAnimatedImageAttachment) {
+        attachmentString = Localized(@"QUOTED_REPLY_TYPE_GIF", @"");
     } else if ([MIMETypeUtil isImage:self.contentType]) {
         attachmentString = Localized(@"QUOTED_REPLY_TYPE_IMAGE", @"");
     } else if ([MIMETypeUtil isVideo:self.contentType]) {
         attachmentString = Localized(@"QUOTED_REPLY_TYPE_VIDEO", @"");
-    } else if ([MIMETypeUtil isAnimated:self.contentType]) {
-        attachmentString = Localized(@"QUOTED_REPLY_TYPE_GIF", @"");
     } else {
         attachmentString = Localized(@"QUOTED_REPLY_TYPE_ATTACHMENT", @"");
     }
@@ -261,7 +261,10 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
 
 + (NSString *)emojiForMimeType:(NSString *)contentType
 {
-    if ([MIMETypeUtil isImage:contentType]) {
+    // MIME-only (no attachment/flag here) — exclude ambiguous WebP so a static WebP isn't 🎡.
+    if ([MIMETypeUtil isMimeUnambiguouslyAnimated:contentType]) {
+        return @"🎡";
+    } else if ([MIMETypeUtil isImage:contentType]) {
         return @"📷";
     } else if ([MIMETypeUtil isVideo:contentType]) {
         return @"🎥";
@@ -271,8 +274,6 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
         } else {
             return @"📻";
         }
-    } else if ([MIMETypeUtil isAnimated:contentType]) {
-        return @"🎡";
     } else {
         return @"📎";
     }
@@ -289,6 +290,13 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
 - (BOOL)isVoiceMessage
 {
     return self.attachmentType == TSAttachmentTypeVoiceMessage;
+}
+
+- (BOOL)isAnimatedImageAttachment
+{
+    // Flag-first (precise). MIME fallback excludes WebP: a static WebP without the GIF flag must NOT
+    // be treated as animated — only the flag distinguishes animated vs static WebP.
+    return self.attachmentType == TSAttachmentTypeGif || [MIMETypeUtil isMimeUnambiguouslyAnimated:self.contentType];
 }
 
 - (nullable NSString *)sourceFilename
@@ -313,6 +321,14 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
 {
     [super anyDidInsertWithTransaction:transaction];
 
+    // Never cache an instance without a row id: TSAttachment.deepCopy() requires grdbId,
+    // and a poisoned cache entry is fatal in Debug (OWSAssertionError construction calls
+    // owsFailDebug before ModelReadCache.copyValue's catch can run). Log (not assert) so
+    // the offending save path stays visible.
+    if (self.grdbId == nil) {
+        OWSLogError(@"[attach-cache] skip caching grdbId-nil attachment on insert, uniqueId=%@", self.uniqueId);
+        return;
+    }
     [self.modelReadCaches.attachmentReadCache didInsertOrUpdateAttachment:self transaction:transaction];
 }
 
@@ -320,6 +336,13 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
 {
     [super anyDidUpdateWithTransaction:transaction];
 
+    // See anyDidInsertWithTransaction: — an update on an instance whose grdbId was never
+    // backfilled (SDSRecord.sdsUpdate only sets it on a record copy) must not poison the
+    // read cache.
+    if (self.grdbId == nil) {
+        OWSLogError(@"[attach-cache] skip caching grdbId-nil attachment on update, uniqueId=%@", self.uniqueId);
+        return;
+    }
     [self.modelReadCaches.attachmentReadCache didInsertOrUpdateAttachment:self transaction:transaction];
 }
 

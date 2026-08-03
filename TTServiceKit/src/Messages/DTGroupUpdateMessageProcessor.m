@@ -140,12 +140,6 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                                                        groupInfo:entity
                                                groupNotifyEntity:groupNotifyEntity
                                                      transaction:writeTransaction];
-
-                    if (entity.groupCryptoMode > 0 && entity.members.count > 0) {
-                        [DTGroupCryptoManager.shared verifyMembersForGid:serverGId
-                                                                 members:entity.members
-                                                             transaction:writeTransaction];
-                    }
                 })
             });
         }else{
@@ -291,15 +285,13 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
         [self.contactsManager updateWithSignalAccounts:signalAccounts];
     }
     
-    NSString *resolvedGroupName = groupInfo.name;
-    if (groupInfo.groupCryptoMode > 0 && DTParamsUtils.validateString(groupInfo.encryptedName)) {
-        NSString *decryptedName = [DTGroupCryptoManager.shared decryptedGroupNameWithGid:newGroupThread.serverThreadId
-                                                                           encryptedName:groupInfo.encryptedName
-                                                                             transaction:transaction];
-        if (DTParamsUtils.validateString(decryptedName)) {
-            resolvedGroupName = decryptedName;
-        }
-    }
+    OWSLogInfo(@"[GroupCrypto] resolveGroupName getGroupInfo");
+    NSString *resolvedGroupName = [DTGroupCryptoManager.shared resolveGroupNameWithGid:newGroupThread.serverThreadId
+                                                                            cryptoMode:groupInfo.groupCryptoMode
+                                                                         encryptedName:groupInfo.encryptedName
+                                                                               oldName:oldGroupModel.groupName
+                                                                            serverName:groupInfo.name
+                                                                           transaction:transaction];
 
     TSGroupModel *newGroupModel = [[TSGroupModel alloc] initWithTitle:resolvedGroupName
                                                             memberIds:newMemberIds.copy
@@ -308,6 +300,8 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                                                            groupOwner:groupOwner
                                                            groupAdmin:groupAdmin
                                                           transaction:transaction];
+    newGroupModel.verifiedMemberUids = oldGroupModel.verifiedMemberUids ?: [NSSet new];
+    [newGroupModel intersectVerifiedMembersWithCurrentGroupMembers];
     newGroupModel.notificationType = notificationType;
     newGroupModel.useGlobal = useGlobal;
     newGroupModel.version = groupInfo.version;
@@ -363,6 +357,9 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
             baseInfo.groupCryptoMode = existingBaseInfo.groupCryptoMode;
             baseInfo.encryptedName = existingBaseInfo.encryptedName;
             baseInfo.encryptedAvatar = existingBaseInfo.encryptedAvatar;
+            OWSLogInfo(@"[GroupCrypto] baseInfo carry-over(getGroupInfo) gid=...%@ hasEncryptedName=%d",
+                       [newGroupThread.serverThreadId substringFromIndex:MAX(0, (NSInteger)newGroupThread.serverThreadId.length - 6)],
+                       existingBaseInfo.encryptedName.length > 0);
         }
     }
 
@@ -372,7 +369,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                                                  expireTime:groupNotifyEntity.group.messageExpiry
                                          messageClearAnchor:@(groupNotifyEntity.group.messageClearAnchor)
                                                 transaction:transaction];
-    
+
     [DTGroupUtils upsertGroupBaseInfo:baseInfo transaction:transaction];
         
     OWSLogInfo(@"%@ 主动拉取 ------ invitationRule=%@",groupInfo.name, groupInfo.invitationRule);
@@ -447,7 +444,18 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
             isPlainFallback:isPlainFallback
            completionBlock:^{}];
     }
-    
+
+    if (groupInfo.groupCryptoMode > 0 && groupInfo.members.count > 0) {
+        NSString *serverGid = newGroupThread.serverThreadId;
+        NSArray<DTGroupMemberEntity *> *members = groupInfo.members;
+        OWSLogInfo(@"[GroupCrypto] fullSync trigger gid=...%@ members=%lu",
+                   [serverGid substringFromIndex:MAX(0, (NSInteger)serverGid.length - 6)], (unsigned long)members.count);
+        [transaction addAsyncCompletionOffMain:^{
+            [DTGroupCryptoManager.shared runFullSyncVerificationForGid:serverGid
+                                                               members:members];
+        }];
+    }
+
     return newGroupThread;
 }
 
@@ -459,9 +467,8 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                                  transaction:(SDSAnyWriteTransaction *)transaction {
     
     NSString *localNumber = [self localNumber:transaction];
-    
+
     if(!groupNotifyEntity.gid.length){
-        OWSProdError(@"groupNotifyEntity.gid.length <= 0")
         return;
     }
     
@@ -470,7 +477,6 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
         groupNotifyEntity.sourceDeviceId == OWSDevice.currentDeviceId) {
         if (groupNotifyEntity.groupNotifyDetailedType == DTGroupNotifyDetailTypeLeaveGroup ||
             groupNotifyEntity.groupNotifyDetailedType == DTGroupNotifyDetailTypeDismissGroup) {
-            OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: skip local leave/dismiss");
             return;
         }
     }
@@ -483,7 +489,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     
     if ([groupNotifyEntity.source isEqualToString:localNumber] &&
         groupNotifyEntity.sourceDeviceId == OWSDevice.currentDeviceId) {
-        OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: selfHandler path (source==local && deviceId==current)");
+        
         
         uint64_t timestamp = [NSDate ows_millisecondTimeStamp];
         TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:oldGroupModel];
@@ -508,7 +514,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     //  DTGroupNotifyDetailTypeArchive
     
     if (![self isNeedTrackVersionWithGroupNotifyEntity:groupNotifyEntity]) {
-        OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: doNotTrackVersion path");
+        
         [self handleDonotTrackVersioWithEnvelope:envelope
                                groupNotifyEntity:groupNotifyEntity
                                    oldGroupModel:oldGroupModel
@@ -520,10 +526,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     // 2.依赖群组版本号变更
     if(groupNotifyEntity.groupNotifyType != DTGroupNotifyTypePersonalConfig){
         NSInteger diff = groupNotifyEntity.groupVersion - oldGroupModel.version;
-        OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: versionCheck diff=%ld (notify=%ld - local=%ld)",
-                   (long)diff, (long)groupNotifyEntity.groupVersion, (long)oldGroupModel.version);
         if(diff > 1){
-            OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: fullSync path (diff > 1)");
             // 全量更新
             [self requestGroupInfoWithGroupId:groupId
                                 targetVersion:groupNotifyEntity.groupVersion
@@ -563,19 +566,15 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                                                                        customMessage:Localized(@"GROUP_CRYPTO_UPGRADE_SYSTEM_MSG", @"")];
                 upgradeMsg.shouldAffectThreadSorting = YES;
                 [upgradeMsg anyInsertWithTransaction:transaction];
-                OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: fullSync inserted upgrade system message, gid=%@", groupNotifyEntity.gid);
-            } else {
-                OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: fullSync skipped upgrade msg, detailedType=%lu, display=%d, oldCryptoMode=%ld",
-                           (unsigned long)groupNotifyEntity.groupNotifyDetailedType, display, (long)oldGroupModel.groupCryptoMode);
             }
 
             return;
         }else if (diff < 1){
-            OWSLogInfo(@"[GroupCrypto] handleGroupUpdate: dropped (diff < 1)");
             //drop
             return;
         }
     }
+
     
     TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:oldGroupModel];
     newGroupModel.version = groupNotifyEntity.groupVersion;
@@ -648,7 +647,8 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     NSString *updateGroupInfo = [DTGroupUtils getBaseInfoStringWithOldGroupModel:oldGroupModel
                                                                         newModel:newGroupModel
                                                                           source:groupNotifyEntity.source
-                                                       shouldAffectThreadSorting:&tmpShouldAffectSorting];
+                                                       shouldAffectThreadSorting:&tmpShouldAffectSorting
+                                                                     transaction:transaction];
     *shouldAffectThreadSorting = tmpShouldAffectSorting;
     
     return updateGroupInfo;
@@ -688,6 +688,10 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                         OWSLogInfo(@"[GroupAvatar] avatarUpdate skip: older version %ld < local %ld, gid: %@", (long)version, (long)newGroupThread.groupModel.groupAvatarVersion, gidForLog);
                         return;
                     }
+                    if (isPlainFallback && [DTGroupCryptoDisplayHelper.shared hasGroupKeyWithGid:gidForLog transaction:writeTransaction]) {
+                        OWSLogInfo(@"[GroupAvatar] avatarUpdate skip: plain fallback superseded, R_group exists, gid: %@", gidForLog);
+                        return;
+                    }
                     BOOL tmpShouldAffectSorting = NO;
                     TSGroupModel *newGroupModel = [TSGroupModel new];
                     newGroupModel.groupImage = image;
@@ -695,7 +699,8 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                     NSString *updateGroupSting = [DTGroupUtils getBaseInfoStringWithOldGroupModel:newGroupThread.groupModel
                                                                                          newModel:newGroupModel
                                                                                            source:@""
-                                                                        shouldAffectThreadSorting:&tmpShouldAffectSorting];
+                                                                        shouldAffectThreadSorting:&tmpShouldAffectSorting
+                                                                                      transaction:writeTransaction];
                     [newGroupThread anyUpdateGroupThreadWithTransaction:writeTransaction
                                                                   block:^(TSGroupThread * instance) {
                         instance.groupModel.groupImage = image;
@@ -999,8 +1004,9 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
 - (NSString *)dismissGroupWithGroupNotifyEntity:(DTGroupNotifyEntity *)groupNotifyEntity
                                   oldGroupModel:(TSGroupModel *)oldGroupModel
                                   newGroupModel:(TSGroupModel *)newGroupModel{
-    
+
     newGroupModel.groupMemberIds = @[];
+    newGroupModel.verifiedMemberUids = [NSSet new];
 //    newGroupModel.memberJoinDateMap = @{};
     return Localized(@"GROUP_DISMISSED", nil);
 }

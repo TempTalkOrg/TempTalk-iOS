@@ -974,7 +974,8 @@ NS_ASSUME_NONNULL_BEGIN
     builder.size = self.byteCount;
     builder.key = self.encryptionKey;
     builder.digest = self.digest;
-    builder.flags = self.isVoiceMessage ? DSKProtoAttachmentPointerFlagsVoiceMessage : 0;
+    builder.flags = (self.isVoiceMessage ? DSKProtoAttachmentPointerFlagsVoiceMessage : 0)
+        | (self.attachmentType == TSAttachmentTypeGif ? DSKProtoAttachmentPointerFlagsGif : 0);
 
     if (self.shouldHaveImageSize) {
         CGSize imageSize = self.imageSize;

@@ -13,7 +13,6 @@
 #import "TSAttachmentStream.h"
 #import <SignalCoreKit/SignalCoreKit-Swift.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
-#import <AFNetworking/AFURLSessionManager.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -39,7 +38,7 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
         return self;
     }
 
-    self.remainingRetries = 4;
+    self.remainingRetries = 2;
     _attachmentId = attachmentId;
     _attachment = nil;
 
@@ -52,11 +51,23 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
     if (!self) {
         return self;
     }
-    
-    self.remainingRetries = 4;
+
+    self.remainingRetries = 2;
     _attachment = attachment;
-    
+
     return self;
+}
+
+// Retry only transient failures (transport errors, 5xx); fail fast on 4xx.
+- (BOOL)shouldRetryUploadForError:(NSError *)error
+{
+    NSNumber *statusCode = error.httpStatusCode;
+    if (statusCode != nil) {
+        // Don't retry 4xx; retry everything else (5xx, etc.).
+        return !(statusCode.integerValue >= 400 && statusCode.integerValue <= 499);
+    }
+    // No HTTP status = transport error: retry.
+    return YES;
 }
 
 - (void)uploadAvatarWithServerId:(UInt64)serverId
@@ -75,52 +86,44 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
     
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:location]];
     request.HTTPMethod = @"PUT";
-    
-    // some oss servers require "Content-Type: Data" whoes value is MIME Type usually.
-    // donot set this header maybe ok, so, just comment this.
-    //[request setValue:OWSMimeTypeApplicationOctetStream forHTTPHeaderField:@"Content-Type"];
-    
-    AFURLSessionManager *manager = [[AFURLSessionManager alloc]
-                                    initWithSessionConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
-    
-    NSURLSessionUploadTask *uploadTask;
-    uploadTask = [manager uploadTaskWithRequest:request
-                                       fromData:attachmentData
-                                       progress:^(NSProgress *_Nonnull uploadProgress) {
-                                           [self fireNotificationWithProgress:uploadProgress.fractionCompleted];
-                                       }
-                              completionHandler:^(NSURLResponse *_Nonnull response, id _Nullable responseObject, NSError *_Nullable error) {
-        OWSAssertIsOnMainThread();
-        if (error) {
-            error.isRetryable = YES;
-            [self reportError:error];
-            return;
-        }
-        
-        NSInteger statusCode = ((NSHTTPURLResponse *)response).statusCode;
+    [request setValue:[NSString stringWithFormat:@"%lu", (unsigned long)attachmentData.length]
+   forHTTPHeaderField:@"Content-Length"];
+
+    OWSURLSession *urlSession = OWSSignalService.sharedInstance.urlSessionForNoneService;
+
+    __weak typeof(self) weakSelf = self;
+    [urlSession performUploadRequest:request
+                                data:attachmentData
+                             success:^(id<HTTPResponse> response) {
+        NSInteger statusCode = response.responseStatusCode;
         BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
         if (!isValidResponse) {
-            DDLogError(@"%@ Unexpected server response: %d", self.logTag, (int)statusCode);
+            DDLogError(@"%@ Unexpected server response: %d", weakSelf.logTag, (int)statusCode);
             NSError *invalidResponseError = OWSErrorMakeUnableToProcessServerResponseError();
-            invalidResponseError.isRetryable = YES;
-            [self reportError:invalidResponseError];
+            // Retry 5xx only; don't retry 4xx.
+            invalidResponseError.isRetryable = (statusCode >= 500);
+            [weakSelf reportError:invalidResponseError];
             return;
         }
-        
-        DDLogInfo(@"%@ Uploaded avatar: %p.", self.logTag, avatarStream.uniqueId);
+
+        DDLogInfo(@"%@ Uploaded avatar: %p.", weakSelf.logTag, avatarStream.uniqueId);
         avatarStream.serverId = serverId;
         avatarStream.isUploaded = YES;
-        DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+        DatabaseStorageAsyncWrite(weakSelf.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
             [avatarStream anyInsertWithTransaction:transaction];
             [transaction addAsyncCompletionOnMain:^{
-                [self reportSuccess];
+                [weakSelf reportSuccess];
             }];
-            
         });
-        
+    }
+                            progress:^(NSURLSessionTask *task, NSProgress *progress) {
+        [weakSelf fireNotificationWithProgress:progress.fractionCompleted];
+    }
+                             failure:^(OWSHTTPErrorWrapper *errorWrapper) {
+        NSError *err = errorWrapper.asNSError;
+        err.isRetryable = [weakSelf shouldRetryUploadForError:err];
+        [weakSelf reportError:err];
     }];
-    
-    [uploadTask resume];
 }
 
 - (void)syncrun
@@ -192,6 +195,12 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
 
 - (void)run
 {
+    // Retries re-enter run() via runAnyQueuedRetry, bypassing main()'s cancel check,
+    // so honor cancellation here to stop retrying and free the queue promptly.
+    if (self.isCancelled) {
+        [self reportCancelled];
+        return;
+    }
     __block TSAttachmentStream *attachmentStream;
     [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *_Nonnull transaction) {
         attachmentStream = [TSAttachmentStream anyFetchAttachmentStreamWithUniqueId:self.attachmentId
@@ -281,50 +290,44 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
 
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:location]];
     request.HTTPMethod = @"PUT";
-    
-    // some oss servers require "Content-Type: Data" whoes value is MIME Type usually.
-    // maybe donot set this header is ok, so, just comment this.
-    //[request setValue:OWSMimeTypeApplicationOctetStream forHTTPHeaderField:@"Content-Type"];
+    [request setValue:[NSString stringWithFormat:@"%lu", (unsigned long)encryptedAttachmentData.length]
+   forHTTPHeaderField:@"Content-Length"];
 
-    AFURLSessionManager *manager = [[AFURLSessionManager alloc]
-        initWithSessionConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
+    OWSURLSession *urlSession = OWSSignalService.sharedInstance.urlSessionForNoneService;
 
-    NSURLSessionUploadTask *uploadTask;
-    uploadTask = [manager uploadTaskWithRequest:request
-        fromData:encryptedAttachmentData
-        progress:^(NSProgress *_Nonnull uploadProgress) {
-            [self fireNotificationWithProgress:uploadProgress.fractionCompleted];
-        }
-                              completionHandler:^(NSURLResponse *_Nonnull response, id _Nullable responseObject, NSError *_Nullable error) {
-        OWSAssertIsOnMainThread();
-        if (error) {
-            error.isRetryable = YES;
-            [self reportError:error];
-            return;
-        }
-        
-        NSInteger statusCode = ((NSHTTPURLResponse *)response).statusCode;
+    __weak typeof(self) weakSelf = self;
+    [urlSession performUploadRequest:request
+                                data:encryptedAttachmentData
+                             success:^(id<HTTPResponse> response) {
+        NSInteger statusCode = response.responseStatusCode;
         BOOL isValidResponse = (statusCode >= 200) && (statusCode < 400);
         if (!isValidResponse) {
-            DDLogError(@"%@ Unexpected server response: %d", self.logTag, (int)statusCode);
+            DDLogError(@"%@ Unexpected server response: %d", weakSelf.logTag, (int)statusCode);
             NSError *invalidResponseError = OWSErrorMakeUnableToProcessServerResponseError();
-            invalidResponseError.isRetryable = YES;
-            [self reportError:invalidResponseError];
+            // Retry 5xx only; don't retry 4xx.
+            invalidResponseError.isRetryable = (statusCode >= 500);
+            [weakSelf reportError:invalidResponseError];
             return;
         }
-        
-        DDLogInfo(@"%@ Uploaded attachment: %p.", self.logTag, attachmentStream.uniqueId);
+
+        DDLogInfo(@"%@ Uploaded attachment: %p.", weakSelf.logTag, attachmentStream.uniqueId);
         attachmentStream.serverId = serverId;
         attachmentStream.isUploaded = YES;
-        DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+        DatabaseStorageAsyncWrite(weakSelf.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
             [attachmentStream anyInsertWithTransaction:transaction];
             [transaction addAsyncCompletionOnMain:^{
-                [self reportSuccess];
+                [weakSelf reportSuccess];
             }];
         });
+    }
+                            progress:^(NSURLSessionTask *task, NSProgress *progress) {
+        [weakSelf fireNotificationWithProgress:progress.fractionCompleted];
+    }
+                             failure:^(OWSHTTPErrorWrapper *errorWrapper) {
+        NSError *err = errorWrapper.asNSError;
+        err.isRetryable = [weakSelf shouldRetryUploadForError:err];
+        [weakSelf reportError:err];
     }];
-
-    [uploadTask resume];
 }
 
 - (void)fireNotificationWithProgress:(CGFloat)aProgress

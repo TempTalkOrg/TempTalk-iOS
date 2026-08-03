@@ -9,6 +9,7 @@ NS_ASSUME_NONNULL_BEGIN
 typedef NS_ENUM(NSUInteger, TSAttachmentType) {
     TSAttachmentTypeDefault = 0,
     TSAttachmentTypeVoiceMessage = 1,
+    TSAttachmentTypeGif = 2,
 };
 
 @class DSKProtoAttachmentPointer;
@@ -104,6 +105,9 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessag
 - (void)upgradeFromAttachmentSchemaVersion:(NSUInteger)attachmentSchemaVersion;
 
 - (BOOL)isVoiceMessage;
+
+// Flag-first (GIF bit) with MIME fallback: animated image (GIF/animated-WebP/APNG).
+@property (nonatomic, readonly) BOOL isAnimatedImageAttachment;
 
 + (NSString *)emojiForMimeType:(NSString *)contentType;
 

@@ -65,6 +65,7 @@ message Envelope {
     MSG_ENC_CALL          = 12;
     MSG_GROUP_KEY         = 13;
     MSG_FORWARD_NOTICE    = 14;
+    MSG_ACTIVITY_NOTICE   = 15;
   }
 
   enum CriticalLevel {
@@ -107,6 +108,7 @@ message Content {
   optional CallMessage     callMessage   = 8; // Enc Call 消息
   optional GroupKeyMessage groupKeyMessage = 9;
   optional ForwardNoticeMessage forwardNotice = 10;
+  optional MessageActivityNotice activityNotice = 11;
 }
 
 message GroupKeyMessage {
@@ -123,10 +125,32 @@ message ForwardNoticeMessage {
     SAVE_TO_NOTES = 4;
   }
 
-  optional ForwardScene   scene           = 1;
-  repeated string         sourceAuthorIds = 2;
-  optional uint32         messageCount    = 3;
-  optional ConversationId conversation    = 4; // v3: notice 所属"原消息会话"身份(group: groupId / 1v1+NTS: number)
+  optional ForwardScene                              scene               = 1;
+  repeated string                                    sourceAuthorIds     = 2;
+  optional uint32                                    messageCount        = 3;
+  optional ConversationId                            conversation        = 4;
+  optional MessageActivityNotice.CombinedForwardMode combinedForwardMode = 5;
+}
+
+message MessageActivityNotice {
+  enum CombinedForwardMode {
+    UNKNOWN                   = 0;
+    CONTAINS_COMBINED_FORWARD = 1; // mixed: regular + combined-forward bubbles
+    ALL_COMBINED_FORWARD      = 2; // all selected are combined-forward bubbles
+    SUB_COMBINED_FORWARD      = 3; // target is sub message of combined-forward (detail view)
+  }
+
+  optional ConversationId conversation = 1;
+
+  oneof typeData {
+    CopyData copyData = 2;
+  }
+}
+
+message CopyData {
+  repeated string                                    sourceAuthorIds     = 1;
+  optional uint32                                    messageCount        = 2;
+  optional MessageActivityNotice.CombinedForwardMode combinedForwardMode = 3;
 }
 
 message CallMessage {
@@ -284,6 +308,7 @@ message DataMessage {
     message QuotedAttachment {
       enum Flags {
         VOICE_MESSAGE = 1;
+        GIF           = 4;
       }
 
       optional string            contentType = 1;
@@ -691,11 +716,15 @@ message SyncMessage {
   optional uint64        serverTimestamp             = 16; // 操作時間
   repeated Read          criticalRead                = 17;
   optional ForwardNoticeMessage forwardNoticeSync    = 18; // v3: 直接引用 ForwardNoticeMessage(去 wrapper)
+  optional MessageActivityNotice activityNoticeSync  = 19;
 }
 
 message AttachmentPointer {
   enum Flags {
     VOICE_MESSAGE = 1;
+    BORDERLESS    = 2;
+    reserved        3;
+    GIF           = 4;
   }
 
   optional fixed64 id          = 1;

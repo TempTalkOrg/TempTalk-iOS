@@ -210,9 +210,10 @@ const CGFloat kIconViewLength = 24;
 
         if (groupThread.groupModel.isEncryptedGroup) {
             [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                NSString *cachedEncryptedName = [DTGroupBaseInfoEntity anyFetchWithUniqueId:groupThread.serverThreadId transaction:transaction].encryptedName;
                 groupName = [DTGroupCryptoDisplayHelper.shared displayGroupNameWithGid:groupThread.serverThreadId
                                                                        groupCryptoMode:groupThread.groupModel.groupCryptoMode
-                                                                         encryptedName:nil
+                                                                         encryptedName:cachedEncryptedName
                                                                           originalName:groupThread.groupModel.groupName
                                                                            transaction:transaction];
             }];
@@ -1651,6 +1652,9 @@ const CGFloat kIconViewLength = 24;
 }
 
 - (void)conversationBlockUserDidChange:(NSNotification *)notify {
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
+        [self.thread anyReloadWithTransaction:readTransaction];
+    }];
     [self updateTableContents];
 }
 

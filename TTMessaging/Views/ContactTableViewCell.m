@@ -39,7 +39,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)setSelected:(BOOL)selected animated:(BOOL)animated {
     [super setSelected:selected animated:animated];
-    if (self.selectionStatus != ContactCellSelectionStatusNone) {
+    // Only toggle user-selectable states; never overwrite Disabled / DisabledSelected.
+    if (self.selectionStatus == ContactCellSelectionStatusSelected ||
+        self.selectionStatus == ContactCellSelectionStatusUnselected) {
         self.selectionStatus = selected ? ContactCellSelectionStatusSelected : ContactCellSelectionStatusUnselected;
     }
 }
@@ -91,6 +93,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)configureWithSignalAccount:(SignalAccount *)signalAccount contactsManager:(OWSContactsManager *)contactsManager
 {
+    // use for shareExtension 。
+    [contactsManager warmCacheWithSignalAccount:signalAccount];
     [self configureWithThread:nil signalAccount:signalAccount contactsManager:contactsManager];
 }
 

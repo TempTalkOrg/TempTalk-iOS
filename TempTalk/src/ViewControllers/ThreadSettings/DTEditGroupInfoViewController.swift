@@ -82,6 +82,10 @@ import SignalCoreKit
         super.init()
     }
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
     // MARK: - Lifecycle
 
     public override func viewDidLoad() {
@@ -90,6 +94,37 @@ import SignalCoreKit
         setupView()
         applyTheme()
         reloadData()
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(groupCryptoKeyDidArrive(_:)),
+            name: DTGroupCryptoConstants.groupCryptoKeyDidArriveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(groupAvatarDidChange(_:)),
+            name: .TSGroupThreadAvatarChanged,
+            object: nil
+        )
+    }
+
+    @objc private func groupCryptoKeyDidArrive(_ notification: Notification) {
+        guard let gid = notification.userInfo?[DTGroupCryptoConstants.groupCryptoKeyGidKey] as? String,
+              !gid.isEmpty,
+              gid == groupThread.serverThreadId else {
+            return
+        }
+        // InfoEditingView 按 isEditingField 保留用户输入，直接刷新即可
+        reloadData(reloadThread: true)
+    }
+
+    @objc private func groupAvatarDidChange(_ notification: Notification) {
+        guard let threadId = notification.userInfo?[TSGroupThread_NotificationKey_UniqueId] as? String,
+              threadId == groupThread.uniqueId else {
+            return
+        }
+        reloadData(reloadThread: true)
     }
 
     private func setupView() {
@@ -166,10 +201,11 @@ import SignalCoreKit
         }
         var result: String?
         databaseStorage.read { transaction in
+            let cachedEncryptedName = DTGroupBaseInfoEntity.anyFetch(uniqueId: self.groupThread.serverThreadId, transaction: transaction)?.encryptedName
             result = DTGroupCryptoDisplayHelper.shared.displayGroupName(
                 gid: self.groupThread.serverThreadId,
                 groupCryptoMode: groupModel.groupCryptoMode,
-                encryptedName: nil,
+                encryptedName: cachedEncryptedName,
                 originalName: groupModel.groupName,
                 transaction: transaction
             )
@@ -240,6 +276,8 @@ extension DTEditGroupInfoViewController: InfoEditingViewDelegate {
                     durationTime: 3,
                     afterDelay: 0.2
                 )
+                // 缺 R_group，input 还原成当前群名
+                reloadData()
                 return
             }
             updateInfo = ["encryptedName": encryptedName]

@@ -17,7 +17,7 @@ import SignalCoreKit
 
     /// 长按单条消息 → 转发到其他会话(走 select-thread 流程)
     func forwardSingleMessage(_ viewItem: ConversationViewItem) {
-        addForwardMessage(viewItem)
+        addSelectedMessage(viewItem)
         viewState.forwardType = .oneByOne
 
         showSelectThreadViewController()
@@ -33,17 +33,21 @@ import SignalCoreKit
             OWSAttachmentsProcessor.decryptVoiceAttachment(attachmentStream)
         }
 
+        let combinedForwardMode = ForwardNoticeBuilder.combinedForwardMode(for: [message])
         let request = ForwardMessageService.Request(
             messages: [message],
             targets: [noteThread],
             type: .note,
             sourceConversation: self.thread,
-            leaveMessage: nil
+            leaveMessage: nil,
+            combinedForwardMode: combinedForwardMode
         )
 
+        DTToastHelper.show()
         Task { [weak self] in
             let result = await ForwardMessageService.shared.forward(request)
             await MainActor.run {
+                DTToastHelper.hide()
                 self?.handleForwardResult(result)
                 if let stream = viewItem.attachmentStream(), stream.isVoiceMessage() {
                     stream.removeVoicePlaintextFile()
@@ -69,9 +73,9 @@ extension ConversationViewController: SelectThreadViewControllerDelegate {
 
         owsAssertDebug(!threads.isEmpty)
         owsAssertDebug(presentedViewController != nil)
-        owsAssertDebug(!viewState.forwardMessageItems.isEmpty)
+        owsAssertDebug(!viewState.selectedMessageItems.isEmpty)
 
-        if viewState.forwardMessageItems.isEmpty {
+        if viewState.selectedMessageItems.isEmpty {
             Logger.info("forwardMessageItem is nil")
         }
 
@@ -99,7 +103,7 @@ extension ConversationViewController: DTForwardPreviewDelegate {
         DTForwardMessageHelper.previewOfMessageText(
             withForwardType: viewState.forwardType,
             thread: self.thread,
-            viewItems: viewState.forwardMessageItems
+            viewItems: viewState.selectedMessageItems
         )
     }
 }
@@ -112,10 +116,10 @@ extension ConversationViewController {
         viewState.forwardType = forwardType
 
         // 按时间增序,保证合并/逐条转发的顺序与用户选择时一致
-        let sortedForwardMessages = viewState.forwardMessageItems.sorted(by: {
+        let sorted = viewState.selectedMessageItems.sorted(by: {
             $0.interaction.compare(forSorting: $1.interaction) != .orderedDescending
         })
-        viewState.forwardMessageItems = sortedForwardMessages
+        viewState.selectedMessageItems = sorted
 
         if forwardType == .note {
             forwardMessagesToNode()
@@ -133,20 +137,24 @@ private extension ConversationViewController {
     func forwardMessagesToNode() {
         guard let localNumber = TSAccountManager.localNumber() else { return }
 
-        let messages = DTForwardMessageHelper.messages(from: viewState.forwardMessageItems)
+        let messages = DTForwardMessageHelper.messages(from: viewState.selectedMessageItems)
         let noteThread = TSContactThread.getOrCreateThread(contactId: localNumber)
+        let combinedForwardMode = ForwardNoticeBuilder.combinedForwardMode(for: messages)
 
         let request = ForwardMessageService.Request(
             messages: messages,
             targets: [noteThread],
             type: .note,
             sourceConversation: self.thread,
-            leaveMessage: nil
+            leaveMessage: nil,
+            combinedForwardMode: combinedForwardMode
         )
 
+        DTToastHelper.show()
         Task { [weak self] in
             let result = await ForwardMessageService.shared.forward(request)
             await MainActor.run {
+                DTToastHelper.hide()
                 self?.handleForwardResult(result)
             }
         }
@@ -154,19 +162,23 @@ private extension ConversationViewController {
 
     /// 多选 → 逐条/合并转发到若干目标会话(附 leaveMessage)
     func forwardMultipleMessages(leaveMessage: String?) {
-        let messages = DTForwardMessageHelper.messages(from: viewState.forwardMessageItems)
+        let messages = DTForwardMessageHelper.messages(from: viewState.selectedMessageItems)
+        let combinedForwardMode = ForwardNoticeBuilder.combinedForwardMode(for: messages)
 
         let request = ForwardMessageService.Request(
             messages: messages,
             targets: viewState.targetThreads,
             type: viewState.forwardType,
             sourceConversation: self.thread,
-            leaveMessage: leaveMessage?.ows_stripped()
+            leaveMessage: leaveMessage?.ows_stripped(),
+            combinedForwardMode: combinedForwardMode
         )
 
+        DTToastHelper.show()
         Task { [weak self] in
             let result = await ForwardMessageService.shared.forward(request)
             await MainActor.run {
+                DTToastHelper.hide()
                 self?.handleForwardResult(result)
             }
         }

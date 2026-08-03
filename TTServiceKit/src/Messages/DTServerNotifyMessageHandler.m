@@ -18,6 +18,7 @@
 #import "DTCoWorkerApprovedNotifyEntity.h"
 #import "DTScreenLockEntity.h"
 #import "DTAddContactsEntity.h"
+#import "DTFriendWeakRelationNotifyEntity.h"
 
 NSNotificationName const NSNotificationNameNotifyScheduleListRefresh = @"NSNotificationNameNotifyScheduleListRefresh";
 NSNotificationName const NSNotificationNameNotifyCallEnd = @"NSNotificationNameNotifyCallEnd";
@@ -100,15 +101,10 @@ NSString * const NotifyCallEndRoomIdKey = @"roomId";
                                                                              error:&error];
             
             if(groupNotifyEntity && ![self needIgnoreSourceOfServer:serverNotifyEntity groupNotify:groupNotifyEntity transaction:transaction]){
-                
-                OWSLogInfo(@"handle notify groupNotifyType: %lu, groupVersion:%ld", (unsigned long)groupNotifyEntity.groupNotifyType, (long)groupNotifyEntity.groupVersion);
-                
                 [self.groupUpdateMessageProcessor handleGroupUpdateMessageWithEnvelope:envelope
                                                                                display:serverNotifyEntity.display
                                                                      groupNotifyEntity:groupNotifyEntity
                                                                            transaction:transaction];
-            }else{
-                OWSProdError(@"groupNotifyEntity == nil!");
             }
         }
             break;
@@ -175,6 +171,32 @@ NSString * const NotifyCallEndRoomIdKey = @"roomId";
                 [self.contactsUpdateMessageProcessor handleAddContactMessageWithEnvelope:envelope contactsNotifyEntity:addContactsEntity transaction:transaction];
             }else{
                 OWSProdError(@"addContactsEntity == nil!");
+            }
+        }
+            break;
+        case DTServerNotifyTypeFriendWeakRelation:
+        {
+            DTFriendWeakRelationNotifyEntity *weakNotifyEntity = [MTLJSONAdapter modelOfClass:[DTFriendWeakRelationNotifyEntity class]
+                                                                           fromJSONDictionary:serverNotifyEntity.data
+                                                                                        error:&error];
+            if (weakNotifyEntity && weakNotifyEntity.uid.length) {
+                OWSLogInfo(@"[WeakContact] notify25 changeType=%ld reason=%ld hasAvatar=%d", (long)weakNotifyEntity.changeType, (long)weakNotifyEntity.reason, weakNotifyEntity.avatar.length > 0);
+                if (weakNotifyEntity.changeType == 0) {
+                    // entered pending-removal set
+                    [[DTWeakContactManager shared] enterWeakStateWithUid:weakNotifyEntity.uid
+                                                                  reason:weakNotifyEntity.reason
+                                                                    name:weakNotifyEntity.name
+                                                                  avatar:weakNotifyEntity.avatar
+                                                              expireTime:weakNotifyEntity.expireTime
+                                                              deleteTime:weakNotifyEntity.deleteTime
+                                                         serverTimestamp:weakNotifyEntity.serverTimestamp
+                                                             transaction:transaction];
+                } else if (weakNotifyEntity.changeType == 1) {
+                    // removed from pending-removal set (expired or removed)
+                    [[DTWeakContactManager shared] removeFromWeakStateWithUid:weakNotifyEntity.uid transaction:transaction];
+                }
+            } else {
+                OWSProdError(@"weakNotifyEntity invalid!");
             }
         }
             break;

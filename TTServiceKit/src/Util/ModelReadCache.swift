@@ -940,9 +940,16 @@ public class AttachmentReadCache: NSObject {
 
     private class Adapter: ModelCacheAdapter<KeyType, ValueType> {
         override func read(key: KeyType, transaction: SDSAnyReadTransaction) -> ValueType? {
-            return TSAttachment.anyFetch(uniqueId: key,
-                                         transaction: transaction,
-                                         ignoreCache: true)
+            guard let value = TSAttachment.anyFetch(uniqueId: key,
+                                                    transaction: transaction,
+                                                    ignoreCache: true),
+                  value.grdbId != nil else {
+                // deepCopy() requires grdbId; in Debug a grdbId-nil value is fatal at
+                // OWSAssertionError construction. A DB-backed row always has one, so
+                // this only filters anomalous instances — treat as a cache miss.
+                return nil
+            }
+            return value
         }
 
         override func key(forValue value: ValueType) -> KeyType {

@@ -92,6 +92,16 @@ NSString *envelopeAddress(DSKProtoEnvelope *envelope)
         return [NSString stringWithFormat:@"<GroupKeyMessage: groupID=%lu bytes, groupRootKey=%lu bytes />",
                 (unsigned long)content.groupKeyMessage.groupID.length,
                 (unsigned long)content.groupKeyMessage.groupRootKey.length];
+    } else if (content.activityNotice) {
+        DSKProtoConversationId *payloadConv = content.activityNotice.conversation;
+        NSString *convDesc = payloadConv.groupID.length > 0
+            ? [NSString stringWithFormat:@"group=%lu bytes", (unsigned long)payloadConv.groupID.length]
+            : (payloadConv.number.length > 0 ? [NSString stringWithFormat:@"peer=%@", payloadConv.number] : @"conv=<none>");
+        DSKProtoCopyData *copyData = content.activityNotice.copyData;
+        return [NSString stringWithFormat:@"<ActivityNotice(COPY): count=%u, sourceAuthors=%lu, %@ />",
+                copyData.messageCount,
+                (unsigned long)copyData.sourceAuthorIds.count,
+                convDesc];
     } else if (content.forwardNotice) {
         DSKProtoConversationId *payloadConv = content.forwardNotice.conversation;
         NSString *convDesc = payloadConv.groupID.length > 0
@@ -200,6 +210,8 @@ NSString *envelopeAddress(DSKProtoEnvelope *envelope)
         [description appendString:@"Task Notify"];
     } else if (syncMessage.markAsUnread) {
         [description appendString:@"Mark As Read"];
+    } else if (syncMessage.activityNoticeSync) {
+        [description appendString:@"Activity Notice Sync"];
     } else if (syncMessage.forwardNoticeSync) {
         [description appendString:@"Forward Notice Sync"];
     } else if (syncMessage.hasPadding) {

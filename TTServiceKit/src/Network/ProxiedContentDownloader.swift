@@ -5,6 +5,7 @@
 
 import Foundation
 import ObjectiveC
+import CryptoKit
 
 // Stills should be loaded before full GIFs.
 public enum ProxiedContentRequestPriority {
@@ -40,6 +41,15 @@ open class ProxiedContentAssetDescription: NSObject {
             }
             self.fileExtension = pathExtension
         }
+    }
+
+    /// A deterministic, filesystem-safe file name derived from the asset URL, so the same asset
+    /// maps to the same on-disk file across launches — the basis of the persistent cache.
+    fileprivate func persistentCacheFileName() -> String {
+        let urlString = url.absoluteString ?? UUID().uuidString
+        let digest = SHA256.hash(data: Data(urlString.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return (hex as NSString).appendingPathExtension(fileExtension) ?? hex
     }
 }
 
@@ -299,7 +309,7 @@ public class ProxiedContentAssetRequest: NSObject {
         return true
     }
 
-    public func writeAssetToFile(downloadFolderPath: String) -> ProxiedContentAsset? {
+    public func writeAssetToFile(downloadFolderPath: String, isPersistent: Bool = false) -> ProxiedContentAsset? {
 
         var assetData = Data()
         for segment in segments {
@@ -327,13 +337,16 @@ public class ProxiedContentAssetRequest: NSObject {
             return nil
         }
 
-        let fileExtension = assetDescription.fileExtension
-        let fileName = (NSUUID().uuidString as NSString).appendingPathExtension(fileExtension)!
+        // Persistent assets use a URL-derived name so a later launch finds the same file; ephemeral
+        // assets keep a random name (deleted when evicted anyway).
+        let fileName = isPersistent
+            ? assetDescription.persistentCacheFileName()
+            : (NSUUID().uuidString as NSString).appendingPathExtension(assetDescription.fileExtension)!
         let filePath = (downloadFolderPath as NSString).appendingPathComponent(fileName)
 
         do {
             try assetData.write(to: NSURL.fileURL(withPath: filePath), options: .atomicWrite)
-            let asset = ProxiedContentAsset(assetDescription: assetDescription, filePath: filePath)
+            let asset = ProxiedContentAsset(assetDescription: assetDescription, filePath: filePath, isPersistent: isPersistent)
             return asset
         } catch let error as NSError {
             owsFailDebug("file write failed: \(filePath), \(error)")
@@ -398,13 +411,20 @@ public class ProxiedContentAsset: NSObject {
     @objc
     public let filePath: String
 
+    // Persistent assets survive relaunches and are NOT deleted on dealloc; the cache prunes them
+    // by size/age instead. Ephemeral assets keep the original delete-on-dealloc behavior.
+    private let isPersistent: Bool
+
     init(assetDescription: ProxiedContentAssetDescription,
-         filePath: String) {
+         filePath: String,
+         isPersistent: Bool = false) {
         self.assetDescription = assetDescription
         self.filePath = filePath
+        self.isPersistent = isPersistent
     }
 
     deinit {
+        guard !isPersistent else { return }
         // Clean up on the asset on disk.
         let filePathCopy = filePath
         DispatchQueue.global().async {
@@ -462,17 +482,27 @@ open class ProxiedContentDownloader: NSObject, URLSessionTaskDelegate, URLSessio
 
     private var downloadFolderPath: String?
 
+    // When true, downloads are cached persistently across launches (see ensureDownloadFolder /
+    // loadPersistedAssetIfAvailable / pruneCacheFolderAsync). When false, the original ephemeral
+    // behavior applies: the folder is wiped on launch and files are deleted when evicted.
+    private let isPersistent: Bool
+
     // Force usage as a singleton
-    public init(downloadFolderName: String) {
+    public init(downloadFolderName: String, isPersistent: Bool = false) {
         AssertIsOnMainThread()
 
         self.downloadFolderName = downloadFolderName
+        self.isPersistent = isPersistent
 
         super.init()
 
         SwiftSingletons.register(self)
 
         ensureDownloadFolder()
+
+        if isPersistent {
+            pruneCacheFolderAsync()
+        }
     }
 
     private lazy var downloadSession: URLSession = {
@@ -516,6 +546,14 @@ open class ProxiedContentDownloader: NSObject, URLSessionTaskDelegate, URLSessio
 
         if let asset = assetMap.get(key: assetDescription.url) {
             // Synchronous cache hit.
+            success(nil, asset)
+            return nil
+        }
+
+        // Persistent disk-cache hit: a prior launch already downloaded this asset, so serve it from
+        // disk instead of re-downloading.
+        if isPersistent, let asset = loadPersistedAssetIfAvailable(assetDescription) {
+            assetMap.set(key: assetDescription.url, value: asset)
             success(nil, asset)
             return nil
         }
@@ -573,7 +611,7 @@ open class ProxiedContentDownloader: NSObject, URLSessionTaskDelegate, URLSessio
                 owsFailDebug("Missing downloadFolderPath")
                 return
             }
-            guard let asset = assetRequest.writeAssetToFile(downloadFolderPath: downloadFolderPath) else {
+            guard let asset = assetRequest.writeAssetToFile(downloadFolderPath: downloadFolderPath, isPersistent: self.isPersistent) else {
                 self.segmentRequestDidFail(assetRequest: assetRequest)
                 return
             }
@@ -790,8 +828,11 @@ open class ProxiedContentDownloader: NSObject, URLSessionTaskDelegate, URLSessio
     private func popNextAssetRequest() -> ProxiedContentAssetRequest? {
         AssertIsOnMainThread()
 
-        let kMaxAssetRequestCount: UInt = 3
-        let kMaxAssetRequestsPerAssetCount: UInt = kMaxAssetRequestCount - 1
+        // A grid shows ~12-16 GIFs at once; a global cap of 3 left most cells queued. Allow more
+        // concurrent downloads, but keep per-asset segments low so bandwidth spreads across cells
+        // (one large GIF can't monopolize all slots) and the grid fills evenly.
+        let kMaxAssetRequestCount: UInt = 8
+        let kMaxAssetRequestsPerAssetCount: UInt = 2
 
         // Prefer the first "high" priority request;
         // fall back to the first "low" priority request.
@@ -911,32 +952,94 @@ open class ProxiedContentDownloader: NSObject, URLSessionTaskDelegate, URLSessio
     // MARK: Temp Directory
 
     public func ensureDownloadFolder() {
-        // We write assets to the temporary directory so that iOS can clean them up.
-        // We try to eagerly clean up these assets when they are no longer in use.
-
-        let tempDirPath = OWSTemporaryDirectory()
-        let dirPath = (tempDirPath as NSString).appendingPathComponent(downloadFolderName)
+        // Persistent caches live in Caches (survive relaunch; iOS may reclaim under storage
+        // pressure). Ephemeral downloads live in the temporary directory so iOS can clean them up.
+        let baseDirPath = isPersistent
+            ? (NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first ?? OWSTemporaryDirectory())
+            : OWSTemporaryDirectory()
+        let dirPath = (baseDirPath as NSString).appendingPathComponent(downloadFolderName)
         do {
             let fileManager = FileManager.default
 
-            // Try to delete existing folder if necessary.
-            if fileManager.fileExists(atPath: dirPath) {
+            // Only the ephemeral variant is wiped on launch; the persistent cache is kept.
+            if !isPersistent, fileManager.fileExists(atPath: dirPath) {
                 try fileManager.removeItem(atPath: dirPath)
-                downloadFolderPath = dirPath
             }
-            // Try to create folder if necessary.
             if !fileManager.fileExists(atPath: dirPath) {
                 try fileManager.createDirectory(atPath: dirPath,
                                                 withIntermediateDirectories: true,
                                                 attributes: nil)
-                downloadFolderPath = dirPath
             }
+            downloadFolderPath = dirPath
 
             // Don't back up ProxiedContent downloads.
             OWSFileSystem.protectFileOrFolder(atPath: dirPath)
         } catch let error as NSError {
-            owsFailDebug("ensureTempFolder failed: \(dirPath), \(error)")
-            downloadFolderPath = tempDirPath
+            // Never fall back to the shared temp root: prune would then evict unrelated files, and
+            // downloads would litter it. A nil path makes prune/load/write safely no-op instead.
+            owsFailDebug("ensureDownloadFolder failed: \(dirPath), \(error)")
+            downloadFolderPath = nil
+        }
+    }
+
+    // Serializes cache-folder mutations (hit-mtime touches and prune evictions) so an eviction can
+    // never race a concurrent load that is about to use the same file.
+    private let cacheQueue = DispatchQueue(label: "org.difft.proxied-content-cache")
+
+    // Returns a persisted asset for this description if its file is already on disk, else nil.
+    private func loadPersistedAssetIfAvailable(_ assetDescription: ProxiedContentAssetDescription) -> ProxiedContentAsset? {
+        guard let downloadFolderPath else { return nil }
+        let filePath = (downloadFolderPath as NSString).appendingPathComponent(assetDescription.persistentCacheFileName())
+        // Check-and-touch atomically against prune (both run on cacheQueue): if the file is present
+        // we bump its mtime so a serialized prune re-stat then skips it; if prune already removed it
+        // we report a miss and the caller re-downloads. No asset is returned for a file prune deletes.
+        let isAvailable: Bool = cacheQueue.sync {
+            let fileManager = FileManager.default
+            guard let size = (try? fileManager.attributesOfItem(atPath: filePath))?[.size] as? UInt64,
+                  size > 0 else {
+                return false
+            }
+            try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: filePath)
+            return true
+        }
+        guard isAvailable else { return nil }
+        return ProxiedContentAsset(assetDescription: assetDescription, filePath: filePath, isPersistent: true)
+    }
+
+    // Bounds the persistent cache: when the folder exceeds the size cap, evict oldest files first.
+    // Each eviction is serialized on cacheQueue with hit-mtime touches and re-stats the file, so a
+    // load that just touched (or a download that just wrote) it is never evicted from under an
+    // in-use asset. The scan is a plain read; only the delete decisions are serialized.
+    private func pruneCacheFolderAsync() {
+        guard let folderPath = downloadFolderPath else { return }
+        DispatchQueue.global(qos: .utility).async {
+            let maxBytes: UInt64 = 256 * 1024 * 1024
+            let fileManager = FileManager.default
+            guard let names = try? fileManager.contentsOfDirectory(atPath: folderPath) else { return }
+
+            var files: [(path: String, size: UInt64, date: Date)] = []
+            var totalBytes: UInt64 = 0
+            for name in names {
+                let path = (folderPath as NSString).appendingPathComponent(name)
+                guard let attrs = try? fileManager.attributesOfItem(atPath: path) else { continue }
+                let size = attrs[.size] as? UInt64 ?? 0
+                let date = attrs[.modificationDate] as? Date ?? Date.distantPast
+                files.append((path, size, date))
+                totalBytes += size
+            }
+
+            guard totalBytes > maxBytes else { return }
+            for file in files.sorted(by: { $0.date < $1.date }) {
+                guard totalBytes > maxBytes else { break }
+                self.cacheQueue.sync {
+                    // Skip if a concurrent load touched (or removed) it since the scan above.
+                    let currentDate = (try? fileManager.attributesOfItem(atPath: file.path))?[.modificationDate] as? Date
+                    guard currentDate == file.date else { return }
+                    if (try? fileManager.removeItem(atPath: file.path)) != nil {
+                        totalBytes -= file.size
+                    }
+                }
+            }
         }
     }
 }

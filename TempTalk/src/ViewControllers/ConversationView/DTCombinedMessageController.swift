@@ -23,6 +23,10 @@ class DTCombinedMessageController: DTMessageListController {
 
     // Store the text being forwarded (for partial text selection)
     private var forwardingText: String?
+
+    // Store the inner item the forwarded text was selected from, so the trace can
+    // attribute to that inner item's author (the text itself carries no source info).
+    private var forwardingTextSourceMessage: TSMessage?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -219,6 +223,64 @@ class DTCombinedMessageController: DTMessageListController {
             presentActionSheet(actionSheet)
         }
     }
+
+    /// Copy of an INNER item inside the Chat History detail view. The trace DECISION uses the
+    /// inner item's own author (PRD §B), but the "from" display uses the outer Chat History
+    /// bubble sender (PRD: CH's from = the combined-forward bubble sender, not inner authors).
+    func sendCopyNoticeFromCombinedForwardDetail(thread: TSThread, sourceMessage: TSMessage) {
+        let displayAuthorIds = currentCombinedMessage.map { CopyNoticeDispatcher.sourceAuthorIds(for: [$0]) } ?? []
+        let triggerAuthorIds = CopyNoticeDispatcher.triggerAuthorIds(for: [sourceMessage])
+        guard DTNoticeTraceEvaluator.shouldLeaveTrace(
+            sourceThread: thread,
+            targetThreads: nil,
+            contentAuthorIds: triggerAuthorIds
+        ) else { return }
+        let fromAuthorIds = DTNoticeTraceEvaluator.orderForDisplay(displayAuthorIds)
+        CopyNoticeDispatcher.sendNotice(
+            sourceConversation: thread,
+            sourceAuthorIds: fromAuthorIds,
+            messageCount: 1,
+            combinedForwardMode: .subCombinedForward
+        )
+    }
+
+    /// Forward of INNER content inside the Chat History detail view. Attribute the trace to
+    /// the inner content's author (the original content author), not the outer forwarder.
+    /// `sourceMessage` is the resolved inner author source (text's origin item / single inner
+    /// message / whole CH message); it must be captured BEFORE the async send clears state.
+    func sendForwardNoticeFromCombinedForwardDetail(
+        thread: TSThread,
+        targetThreads: [TSThread],
+        messageCount: UInt32,
+        sourceMessage: TSMessage?
+    ) {
+        guard let sourceMessage else { return }
+        // The trace DECISION recurses the inner content's original authors (PRD §B), but the
+        // "from" display uses the outer Chat History bubble sender (PRD: CH's from = the
+        // combined-forward bubble sender, not inner authors).
+        let displayAuthorIds = currentCombinedMessage.map { ForwardNoticeBuilder.sourceAuthorIds(for: [$0]) } ?? []
+        let triggerAuthorIds = ForwardNoticeBuilder.triggerAuthorIds(for: [sourceMessage])
+        guard DTNoticeTraceEvaluator.shouldLeaveTrace(
+            sourceThread: thread,
+            targetThreads: targetThreads,
+            contentAuthorIds: triggerAuthorIds
+        ) else { return }
+        let fromAuthorIds = DTNoticeTraceEvaluator.orderForDisplay(displayAuthorIds)
+        Task {
+            do {
+                try await ForwardNoticeDispatcher.sendNotice(
+                    sourceConversation: thread,
+                    scene: messageCount <= 1 ? .single : .oneByOne,
+                    sourceAuthorIds: fromAuthorIds,
+                    messageCount: messageCount,
+                    messageSender: SSKEnvironment.shared.messageSenderRef,
+                    combinedForwardMode: .subCombinedForward
+                )
+            } catch {
+                Logger.error("[ForwardNotice] combined forward detail notice failed: \(error)")
+            }
+        }
+    }
 }
 
 extension DTCombinedMessageController: SelectThreadViewControllerDelegate {
@@ -256,6 +318,18 @@ extension DTCombinedMessageController: DTForwardPreviewDelegate {
         guard let targetThreads = self.targetThreads, !targetThreads.isEmpty else {
             OWSLogger.error("targetThreads is nil or empty")
             return
+        }
+
+        // Resolve the inner author source BEFORE the async send clears forwardingText /
+        // forwardingMessage. Text path -> the item the text was selected from; single message
+        // path -> that inner message; whole CH path -> the combined message (recurses).
+        let noticeSourceMessage: TSMessage?
+        if self.forwardingText != nil {
+            noticeSourceMessage = self.forwardingTextSourceMessage
+        } else if let forwardingMessage = self.forwardingMessage {
+            noticeSourceMessage = forwardingMessage
+        } else {
+            noticeSourceMessage = self.currentCombinedMessage
         }
 
         // Check what we're forwarding: text, single message, or entire combined message
@@ -298,6 +372,7 @@ extension DTCombinedMessageController: DTForwardPreviewDelegate {
                 // Clear the forwarding text after async operation completes
                 DispatchQueue.main.async {
                     self.forwardingText = nil
+                    self.forwardingTextSourceMessage = nil
                 }
             }
         } else if let forwardingMessage = self.forwardingMessage {
@@ -367,6 +442,16 @@ extension DTCombinedMessageController: DTForwardPreviewDelegate {
             }
         }
 
+        // 发送转发留痕（Chat History 详情视图内转发）
+        if let thread = self.currentThread {
+            sendForwardNoticeFromCombinedForwardDetail(
+                thread: thread,
+                targetThreads: targetThreads,
+                messageCount: 1,
+                sourceMessage: noticeSourceMessage
+            )
+        }
+
         self.dismiss(animated: true) {
             DTToastHelper.toast(withText: Localized("MESSAGE_METADATA_VIEW_MESSAGE_STATUS_SENT", comment: "Sent"), durationTime: 1.5)
         }
@@ -410,6 +495,13 @@ extension DTCombinedMessageController {
         viewItem: ConversationViewItem,
         bubbleView: ConversationMessageBubbleView
     ) {
+        // Confidential Chat History is view-only: forbid copy / forward of the whole
+        // inner item AND of selected text. The inner items are rebuilt as plain
+        // TSIncomingMessages (no confidential flag), so gate on the outer combined
+        // message's confidential state. Returning here means no menu is presented and
+        // text selection is never armed.
+        if currentCombinedMessage?.isConfidentialMessage() == true { return }
+
         // 防止非 TSIncomingMessage/TSOutgoingMessage 乱入造成 reaction crash
         let interaction = viewItem.interaction
         guard interaction.isKind(of: TSOutgoingMessage.self) || interaction.isKind(of: TSIncomingMessage.self) else {
@@ -473,6 +565,9 @@ extension DTCombinedMessageController {
                    let messageBody = message.body, !messageBody.isEmpty {
                     DTSecurePasteboard.setString(messageBody)
                     DTToastHelper.show(withInfo: Localized("MESSAGE_ACTION_COPY_TEXT", comment: ""))
+                    if let thread = self.currentThread {
+                        self.sendCopyNoticeFromCombinedForwardDetail(thread: thread, sourceMessage: message)
+                    }
                 }
             }
         )
@@ -487,7 +582,15 @@ extension DTCombinedMessageController {
             }
         )
 
-        let actions = [copyAction, forwardAction]
+        // A nested Chat History item doesn't support copy — keep it consistent with the
+        // outer level (forward only, no copy).
+        let isNestedChatHistory = (viewItem.interaction as? TSMessage)?.combinedForwardingMessage != nil
+        var actions: [MenuAction] = isNestedChatHistory ? [forwardAction] : [copyAction, forwardAction]
+
+        // Animated images (GIF/animated-WebP/APNG) can be saved to favorites, same as the main conversation.
+        if let stream = viewItem.attachmentStream(), stream.isAnimatedImageAttachment {
+            actions.append(MenuActionBuilder.addToFavorite(conversationViewItem: viewItem, delegate: self))
+        }
 
         // 不显示 emoji reaction
         let emojiAction: MenuEmojiAction? = nil
@@ -588,11 +691,16 @@ extension DTCombinedMessageController: ConversationMessageBubbleViewTextDelegate
             image: #imageLiteral(resourceName: "ic_longpress_copy"),
             title: Localized("MESSAGE_ACTION_COPY_TEXT", comment: "Action sheet button title"),
             subtitle: nil,
-            block: { _ in
-                if let selectedRange = selectionView.getSelection() {
+            block: { [weak self] _ in
+                guard let self else { return }
+                if let selectedRange = selectionView.getSelection(), selectedRange.length > 0 {
                     let selectedString = textView.text.substring(withRange: selectedRange)
                     DTSecurePasteboard.setString(selectedString)
                     DTToastHelper.show(withInfo: Localized("MESSAGE_ACTION_COPY_TEXT", comment: ""))
+                    if let thread = self.currentThread,
+                       let sourceMessage = viewItem.interaction as? TSMessage {
+                        self.sendCopyNoticeFromCombinedForwardDetail(thread: thread, sourceMessage: sourceMessage)
+                    }
                 }
             }
         )
@@ -607,8 +715,8 @@ extension DTCombinedMessageController: ConversationMessageBubbleViewTextDelegate
                 guard let self else { return }
                 if let selectedRange = selectionView.getSelection() {
                     let selectedString = textView.text.substring(withRange: selectedRange)
-                    // 转发选中的文本（不添加来源信息）
-                    self.forwardSelectedText(selectedString)
+                    // 转发选中的文本（不添加来源信息），但留痕归属到该内层条目作者
+                    self.forwardSelectedText(selectedString, sourceMessage: viewItem.interaction as? TSMessage)
                 }
             }
         )
@@ -634,11 +742,16 @@ extension DTCombinedMessageController: ConversationMessageBubbleViewTextDelegate
                         image: #imageLiteral(resourceName: "ic_longpress_copy"),
                         title: Localized("MESSAGE_ACTION_COPY_TEXT", comment: "Action sheet button title"),
                         subtitle: nil,
-                        block: { _ in
-                            if let selectedRange = selectionView.getSelection() {
+                        block: { [weak self] _ in
+                            guard let self else { return }
+                            if let selectedRange = selectionView.getSelection(), selectedRange.length > 0 {
                                 let selectedString = textView.text.substring(withRange: selectedRange)
                                 DTSecurePasteboard.setString(selectedString)
                                 DTToastHelper.show(withInfo: Localized("MESSAGE_ACTION_COPY_TEXT", comment: ""))
+                                if let thread = self.currentThread,
+                                   let sourceMessage = viewItem.interaction as? TSMessage {
+                                    self.sendCopyNoticeFromCombinedForwardDetail(thread: thread, sourceMessage: sourceMessage)
+                                }
                             }
                         }
                     )
@@ -668,11 +781,13 @@ extension DTCombinedMessageController: ConversationMessageBubbleViewTextDelegate
     }
 
     // 转发选中的文本
-    private func forwardSelectedText(_ text: String) {
+    private func forwardSelectedText(_ text: String, sourceMessage: TSMessage?) {
         guard !text.isEmpty else { return }
 
         // Store the text to be forwarded (without source info)
         self.forwardingText = text
+        // Capture the inner item the text was selected from for trace attribution.
+        self.forwardingTextSourceMessage = sourceMessage
 
         let selectThreadVC = SelectThreadViewController()
         selectThreadVC.selectThreadViewDelegate = self
@@ -716,6 +831,10 @@ extension DTCombinedMessageController: MessageActionsDelegate {
 
     func messageActionsForwardItemToNote(_ conversationViewItem: ConversationViewItem) {
         // Combined message controller 中不支持转发到备忘录
+    }
+
+    func messageActionsAddToFavorite(_ conversationViewItem: ConversationViewItem) {
+        DTGifFavoriteMessageAction.addToFavorite(conversationViewItem, presenter: self)
     }
 
     func messageActionsMultiSelectItem(_ conversationViewItem: ConversationViewItem) {

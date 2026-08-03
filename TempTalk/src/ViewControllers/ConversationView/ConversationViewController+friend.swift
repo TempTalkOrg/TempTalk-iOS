@@ -32,6 +32,9 @@ extension ConversationViewController: DTRequestBarDelegate {
                 DTToastHelper.hide()
                 // Remove warning header when friend request is accepted
                 self.removeWarningHeaderIfNeeded(force: true)
+            } catch AddFriendHandler.AddFriendError.accountUnavailable {
+                // Unified account-unavailable UI already shown by AddFriendHandler.
+                OWSLogger.info("accept friend: account unavailable (19009), handled by AddFriendHandler")
             } catch {
                 DTToastHelper.hide()
                 let errorString = (error as NSError).localizedDescription
@@ -188,6 +191,9 @@ extension ConversationViewController: DTRequestBarDelegate {
                     source: source
                 )
                 self.markSendAddFriendAction()
+            } catch AddFriendHandler.AddFriendError.accountUnavailable {
+                // Unified account-unavailable UI already shown by AddFriendHandler.
+                OWSLogger.info("requestAddFriend after message: account unavailable (19009), handled by AddFriendHandler")
             } catch {
                 OWSLogger.error("requestAddFriend after message error: \((error as NSError).localizedDescription)!")
             }

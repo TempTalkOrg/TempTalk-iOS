@@ -5,6 +5,21 @@
 import Foundation
 import SignalCoreKit
 
+/// Identifies which service a URL session is configured for.
+/// This allows baseUrl to be computed dynamically from TSConstants,
+/// so domain switches are automatically reflected without manual updates.
+public enum OWSURLSessionServiceType {
+    case mainSignalService
+    case storageService
+    case fileShareService
+    case callService
+    case speech2TextService
+    case rootService
+    case gifService
+    case noneService
+    case custom(URL?)
+}
+
 @objc
 public enum HTTPMethod: UInt {
     case get
@@ -59,17 +74,31 @@ extension HTTPMethod: CustomStringConvertible {
 
 // MARK: -
 
-public struct OWSUrlDownloadResponse {
+@objc
+public class OWSUrlDownloadResponse: NSObject {
+    @objc
     public let task: URLSessionTask
+    @objc
     public let httpUrlResponse: HTTPURLResponse
+    @objc
     public let downloadUrl: URL
 
+    @objc
     public var statusCode: Int {
         httpUrlResponse.statusCode
     }
 
+    @objc
     public var allHeaderFields: [AnyHashable: Any] {
         httpUrlResponse.allHeaderFields
+    }
+
+    @objc
+    public init(task: URLSessionTask, httpUrlResponse: HTTPURLResponse, downloadUrl: URL) {
+        self.task = task
+        self.httpUrlResponse = httpUrlResponse
+        self.downloadUrl = downloadUrl
+        super.init()
     }
 }
 
@@ -89,8 +118,49 @@ public class OWSURLSession: NSObject {
         return queue
     }()
 
-    // 适配域名切换, 改为可变，需要进一步优化
-    public var baseUrl: URL?
+    // MARK: - Service Type & Base URL
+
+    /// The service type this session is configured for
+    /// Used to compute the current baseUrl from TSConstants
+    internal let serviceType: OWSURLSessionServiceType?
+
+    /// Custom base URL storage for non-service-type sessions
+    private var _customBaseUrl: URL?
+
+    /// Base URL for this session.
+    /// - For service-type sessions: Computed dynamically from TSConstants so
+    ///   domain switches are automatically reflected.
+    /// - For custom/legacy sessions (serviceType == nil): Returns stored URL.
+    public var baseUrl: URL? {
+        get {
+            guard let serviceType = serviceType else {
+                return _customBaseUrl
+            }
+            switch serviceType {
+            case .mainSignalService:
+                return URL(string: TSConstants.mainServiceURL)
+            case .storageService:
+                return URL(string: TSConstants.avatarStorageServerURL)
+            case .fileShareService:
+                return URL(string: TSConstants.fileShareServiceURL)
+            case .callService:
+                return URL(string: TSConstants.callServerURL)
+            case .speech2TextService:
+                return URL(string: TSConstants.speechToTextServerURL)
+            case .rootService:
+                return URL(string: TSConstants.rootServiceURL)
+            case .gifService:
+                return URL(string: TSConstants.gifServiceURL)
+            case .noneService:
+                return nil
+            case .custom(let url):
+                return url
+            }
+        }
+        set {
+            _customBaseUrl = newValue
+        }
+    }
     
     private static let timeout: TimeInterval = 30
 
@@ -223,13 +293,15 @@ public class OWSURLSession: NSObject {
 
     private let maxResponseSize: Int?
 
-    public init(baseUrl: URL? = nil,
+    public init(serviceType: OWSURLSessionServiceType? = nil,
+                baseUrl: URL? = nil,
                 frontingInfo: FrontingInfo? = nil,
                 securityPolicy: OWSHTTPSecurityPolicy,
                 configuration: URLSessionConfiguration,
                 extraHeaders: [String: String] = [:],
                 maxResponseSize: Int? = nil) {
-        self.baseUrl = baseUrl
+        self.serviceType = serviceType
+        self._customBaseUrl = baseUrl
         self.frontingInfo = frontingInfo
         self.securityPolicy = securityPolicy
         self.configuration = configuration
@@ -248,7 +320,8 @@ public class OWSURLSession: NSObject {
                             securityPolicy: OWSHTTPSecurityPolicy,
                             configuration: URLSessionConfiguration,
                             extraHeaders: [String: String]) {
-        self.init(baseUrl: baseUrl,
+        self.init(serviceType: nil,
+                  baseUrl: baseUrl,
                   frontingInfo: frontingInfo,
                   securityPolicy: securityPolicy,
                   configuration: configuration,
@@ -555,9 +628,10 @@ public class OWSURLSession: NSObject {
         finalComponents.host = baseUrl.host
         finalComponents.port = baseUrl.port
 
-        // Use query and fragment from the request.
-        finalComponents.query = requestComponents.query
-        finalComponents.fragment = requestComponents.fragment
+        // Preserve percent-encoding from the original URL to avoid
+        // decode→re-encode roundtrips that alter characters like %2B, %2F.
+        finalComponents.percentEncodedQuery = requestComponents.percentEncodedQuery
+        finalComponents.percentEncodedFragment = requestComponents.percentEncodedFragment
 
         // Join the paths.
         finalComponents.path = (safeBaseUrl.path as NSString).appendingPathComponent(requestComponents.path)
@@ -914,7 +988,7 @@ public extension OWSURLSession {
                                    uploadTaskBuilder: UploadTaskBuilder,
                                    ignoreAppExpiry: Bool = false,
                                    progress progressBlock: ProgressBlock? = nil) -> Promise<HTTPResponse> {
-        // TODO: 目前没有过期需求，忽略 appExprity
+        // TODO: No app-expiry requirement yet; ignoring appExpiry
 //        guard ignoreAppExpiry  || !Self.appExpiry.isExpired else {
 //            return Promise(error: OWSAssertionError("App is expired."))
 //        }
@@ -1408,6 +1482,229 @@ extension OWSURLSession {
         } catch {
             owsFailDebugUnlessNetworkFailure(error)
             return Promise(error: error)
+        }
+    }
+}
+
+// MARK: - Parameter Encoding
+
+extension OWSURLSession {
+
+    /// Converts a parameter dictionary to a URL query string
+    /// - Parameter parameters: The parameter dictionary
+    /// - Returns: The encoded query string
+    private func queryStringFromParameters(_ parameters: [AnyHashable: Any]) -> String {
+        var components: [String] = []
+
+        // Characters not allowed taken from RFC 3986 Section 2.1 with exceptions for ? and / from RFC 3986 Section 3.4
+        var charactersAllowed = CharacterSet.urlQueryAllowed
+        charactersAllowed.remove(charactersIn: ":#[]@!$&'()*+,;=")
+
+        // Process each parameter with type-safe conversion
+        for (key, value) in parameters {
+            guard let stringKey = key as? String else {
+                owsFailDebug("Parameter key is not a string: \(key)")
+                continue
+            }
+
+            let encodedKey = stringKey.addingPercentEncoding(withAllowedCharacters: charactersAllowed) ?? stringKey
+            let queryComponents = convertValueToQueryComponents(value: value, key: encodedKey, allowedCharacters: charactersAllowed)
+            components.append(contentsOf: queryComponents)
+        }
+
+        // Sort by key name to ensure consistency
+        components.sort()
+        return components.joined(separator: "&")
+    }
+
+    private func convertValueToQueryComponents(value: Any, key: String, allowedCharacters: CharacterSet) -> [String] {
+        switch value {
+        case let stringValue as String:
+            return [formatQueryComponent(key: key, value: stringValue, allowedCharacters: allowedCharacters)]
+
+        case let numberValue as NSNumber:
+            // NSNumber bridges Bool / Int / Float / Double from Objective-C.
+            let stringValue: String
+            if CFBooleanGetTypeID() == CFGetTypeID(numberValue) {
+                stringValue = numberValue.boolValue ? "true" : "false"
+            } else {
+                stringValue = numberValue.stringValue
+            }
+            return [formatQueryComponent(key: key, value: stringValue, allowedCharacters: allowedCharacters)]
+
+        case let boolValue as Bool:
+            let stringValue = boolValue ? "true" : "false"
+            return [formatQueryComponent(key: key, value: stringValue, allowedCharacters: allowedCharacters)]
+
+        case let numericValue where isNumericType(numericValue):
+            let stringValue = convertNumericValueToString(numericValue)
+            return [formatQueryComponent(key: key, value: stringValue, allowedCharacters: allowedCharacters)]
+
+        case let arrayValue as [Any]:
+            return convertArrayToQueryComponents(array: arrayValue, key: key, allowedCharacters: allowedCharacters)
+
+        case let dictValue as [String: Any]:
+            return convertDictionaryToQueryComponents(dictionary: dictValue, key: key, allowedCharacters: allowedCharacters)
+
+        case let dictValue as [AnyHashable: Any]:
+            let stringDict = dictValue.compactMap { (key, value) -> (String, Any)? in
+                guard let stringKey = key as? String else { return nil }
+                return (stringKey, value)
+            }.reduce(into: [String: Any]()) { result, pair in
+                result[pair.0] = pair.1
+            }
+            return convertDictionaryToQueryComponents(dictionary: stringDict, key: key, allowedCharacters: allowedCharacters)
+
+        case is NSNull:
+            return []
+
+        default:
+            owsFailDebug("Unsupported parameter type for key '\(key)': \(type(of: value))")
+            let valueString = String(describing: value)
+            return [formatQueryComponent(key: key, value: valueString, allowedCharacters: allowedCharacters)]
+        }
+    }
+
+    private func convertArrayToQueryComponents(array: [Any], key: String, allowedCharacters: CharacterSet) -> [String] {
+        // Simple arrays → multiple key=value pairs; complex arrays → JSON string.
+        let hasComplexValues = array.contains { value in
+            return value is [Any] || value is [String: Any] || value is [AnyHashable: Any]
+        }
+
+        if hasComplexValues {
+            do {
+                let jsonData = try JSONSerialization.data(withJSONObject: array, options: [])
+                if let jsonString = String(data: jsonData, encoding: .utf8) {
+                    return [formatQueryComponent(key: key, value: jsonString, allowedCharacters: allowedCharacters)]
+                }
+            } catch {
+                owsFailDebug("Failed to serialize array to JSON for key '\(key)': \(error)")
+            }
+            let valueString = String(describing: array)
+            return [formatQueryComponent(key: key, value: valueString, allowedCharacters: allowedCharacters)]
+        } else {
+            return array.compactMap { arrayValue in
+                let valueString = convertSingleValueToString(arrayValue)
+                return formatQueryComponent(key: key, value: valueString, allowedCharacters: allowedCharacters)
+            }
+        }
+    }
+
+    private func convertDictionaryToQueryComponents(dictionary: [String: Any], key: String, allowedCharacters: CharacterSet) -> [String] {
+        // Nested dictionaries → JSON-encoded value.
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: dictionary, options: [])
+            if let jsonString = String(data: jsonData, encoding: .utf8) {
+                return [formatQueryComponent(key: key, value: jsonString, allowedCharacters: allowedCharacters)]
+            }
+        } catch {
+            owsFailDebug("Failed to serialize dictionary to JSON for key '\(key)': \(error)")
+        }
+        let valueString = String(describing: dictionary)
+        return [formatQueryComponent(key: key, value: valueString, allowedCharacters: allowedCharacters)]
+    }
+
+    private func formatQueryComponent(key: String, value: String, allowedCharacters: CharacterSet) -> String {
+        let encodedValue = value.addingPercentEncoding(withAllowedCharacters: allowedCharacters) ?? value
+        return "\(key)=\(encodedValue)"
+    }
+
+    private func isNumericType(_ value: Any) -> Bool {
+        if value is Int || value is Double || value is Float {
+            return true
+        }
+        return value is Int8 || value is Int16 || value is Int32 || value is Int64 ||
+               value is UInt || value is UInt8 || value is UInt16 || value is UInt32 || value is UInt64 ||
+               value is CGFloat
+    }
+
+    private func convertNumericValueToString(_ value: Any) -> String {
+        switch value {
+        case let intValue as Int: return String(intValue)
+        case let int8Value as Int8: return String(int8Value)
+        case let int16Value as Int16: return String(int16Value)
+        case let int32Value as Int32: return String(int32Value)
+        case let int64Value as Int64: return String(int64Value)
+        case let uintValue as UInt: return String(uintValue)
+        case let uint8Value as UInt8: return String(uint8Value)
+        case let uint16Value as UInt16: return String(uint16Value)
+        case let uint32Value as UInt32: return String(uint32Value)
+        case let uint64Value as UInt64: return String(uint64Value)
+        case let floatValue as Float: return String(floatValue)
+        case let doubleValue as Double: return String(doubleValue)
+        case let cgFloatValue as CGFloat: return String(Double(cgFloatValue))
+        default:
+            owsFailDebug("Unexpected numeric type: \(type(of: value))")
+            return String(describing: value)
+        }
+    }
+
+    private func convertSingleValueToString(_ value: Any) -> String {
+        switch value {
+        case let stringValue as String:
+            return stringValue
+        case let numberValue as NSNumber:
+            if CFBooleanGetTypeID() == CFGetTypeID(numberValue) {
+                return numberValue.boolValue ? "true" : "false"
+            } else {
+                return numberValue.stringValue
+            }
+        case let boolValue as Bool:
+            return boolValue ? "true" : "false"
+        case let numericValue where isNumericType(numericValue):
+            return convertNumericValueToString(numericValue)
+        default:
+            return String(describing: value)
+        }
+    }
+
+    /// HTTP methods that encode parameters in the URI rather than the body.
+    var httpMethodsEncodingParametersInURI: Set<HTTPMethod> {
+        return [.get, .head]
+    }
+
+    /// Processes request parameters based on HTTP method and returns URL and body data.
+    /// GET/HEAD → URL query string; POST/PUT/PATCH → JSON body.
+    public func processRequestParameters(
+        baseURL: URL,
+        method: HTTPMethod,
+        parameters: [AnyHashable: Any],
+        httpBody: Data?
+    ) throws -> (url: URL, body: Data) {
+
+        // If httpBody exists, use it and ignore parameters
+        if let httpBody = httpBody {
+            owsAssertDebug(parameters.isEmpty)
+            return (baseURL, httpBody)
+        }
+
+        guard !parameters.isEmpty else {
+            return (baseURL, Data())
+        }
+
+        if httpMethodsEncodingParametersInURI.contains(method) {
+            // GET, HEAD: parameters go in URL
+            guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+                throw OWSAssertionError("Invalid URL components for: \(baseURL)")
+            }
+
+            let queryString = queryStringFromParameters(parameters)
+            let newQueryString = [components.percentEncodedQuery, queryString]
+                .compactMap { $0 }
+                .joined(separator: "&")
+
+            components.percentEncodedQuery = newQueryString.isEmpty ? nil : newQueryString
+
+            guard let finalURL = components.url else {
+                throw OWSAssertionError("Failed to construct URL with parameters")
+            }
+
+            return (finalURL, Data())
+
+        } else {
+            // POST, PUT, PATCH: parameters go in body
+            let jsonData = try JSONSerialization.data(withJSONObject: parameters, options: [])
+            return (baseURL, jsonData)
         }
     }
 }

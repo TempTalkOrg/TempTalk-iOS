@@ -80,6 +80,10 @@
         cardType = DTPersonalCardTypeSelfNoneEdit;
     }
     DTPersonalCardController *cardVC = [[DTPersonalCardController alloc] initWithType:cardType recipientId:recipientId account:account];
+    // Opened over the home page (no underlying conversation to float over), so "send message"
+    // must push a full conversation rather than the half-screen floating one. Matches
+    // EnterCodeViewController.showPersonalCardView.
+    cardVC.isFromContacts = YES;
     if (self.sourceVc.navigationController) {
         [self.sourceVc.navigationController pushViewController:cardVC animated:YES];
     } else {

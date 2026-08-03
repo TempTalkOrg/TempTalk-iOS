@@ -140,7 +140,7 @@ NSString *const kServerConfigUpdatedNotify = @"serverConfigUpdatedNotify";
     if (!self.configUrls.count) {
         [self setup];
     }
-    if (CACurrentMediaTime() - self.lastTimeStamp < 35 * 60) {
+    if (self.lastTimeStamp > 0 && CACurrentMediaTime() - self.lastTimeStamp < 35 * 60) {
         return;
     }
     [self fetchConfigFromServer];
@@ -193,7 +193,7 @@ NSString *const kServerConfigUpdatedNotify = @"serverConfigUpdatedNotify";
         self.lastTimeStamp = CACurrentMediaTime();
         if (completion) completion();
 
-    } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
+    } failure:^(NSError * _Nonnull error) {
         @synchronized (self) {
             [self.configUrls removeObject:firstUrlString];
         }

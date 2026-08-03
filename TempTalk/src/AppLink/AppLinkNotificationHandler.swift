@@ -18,8 +18,11 @@ import Foundation
     
     @objc static let kURLHostTransfer = "transfer"
     @objc static let kURLHostInvite = "invite"
-    @objc static let kURLHostTempTalk = "yelling.pro"
-    @objc static let kURLHost3WTempTalk = "www.yelling.pro"
+    @objc static let kURLHostTempTalk = "quicall.app"
+    @objc static let kURLHost3WTempTalk = "www.quicall.app"
+    // Legacy hosts kept so old yelling.pro universal links still route during the rebrand transition
+    @objc static let kURLHostLegacy = "yelling.pro"
+    @objc static let kURLHost3WLegacy = "www.yelling.pro"
     
     @objc static let kULinkPathInvite = "/u"
     

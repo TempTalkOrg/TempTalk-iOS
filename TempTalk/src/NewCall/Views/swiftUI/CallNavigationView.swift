@@ -49,14 +49,15 @@ private struct CallNavigationCenterView: View {
     @ObservedObject private var timerManager = TimerDataManager.shared
     @ObservedObject private var dataManager = RoomDataManager.shared
     @EnvironmentObject var room: Room
+    @EnvironmentObject var roomCtx: RoomContext
 
     var body: some View {
-        let connectState = room.connectionState
+        let isReconnecting = roomCtx.isRoomReconnecting
         let isPrivateOutgoing = currentCall.callType == .private && currentCall.callState == .outgoing
         let shouldShow = isPrivateOutgoing ? DTMeetingManager.shared.inMeeting : true
         let shouldShowRoomName = currentCall.callType != .private
-        let reconnectingCount = DTMeetingManager.shared.reconnectingParticipants?.count ?? 0
-        let displayCount = connectState == .reconnecting ? reconnectingCount : dataManager.participantCount
+        // Roster is kept across reconnect (Route B), so participantCount stays accurate; no cached fallback.
+        let displayCount = dataManager.participantCount
 
         if shouldShow {
             VStack(spacing: 2) {
@@ -68,23 +69,22 @@ private struct CallNavigationCenterView: View {
                         .frame(maxWidth: .infinity)
                 }
 
-                switch connectState {
-                case .reconnecting:
+
+                if isReconnecting {
                     statusText(Localized("MEETING_NAVAGATION_CONNECTING"))
-                default:
-                    if let duration = timerManager.duration, duration > 0 {
-                        let stringDuration = DTLiveKitCallModel.stringDuration(duration)
-                        if timerManager.isShowCountDownView {
-                            CountdownView(
-                                stringDuration: stringDuration,
-                                timerManager: timerManager
-                            )
-                        } else {
-                            statusText(stringDuration)
-                        }
-                    } else if currentCall.callType == .private {
-                        statusText(Localized("MEETING_NAVAGATION_CONNECTING"))
+                } else if let duration = timerManager.duration, duration > 0 {
+                    let stringDuration = DTLiveKitCallModel.stringDuration(duration)
+                    if timerManager.isShowCountDownView {
+                        CountdownView(
+                            stringDuration: stringDuration,
+                            timerManager: timerManager
+                        )
+                    } else {
+                        statusText(stringDuration)
+                            .accessibilityIdentifier(DTCallAccessibilityID.callDuration)
                     }
+                } else if currentCall.callType == .private {
+                    statusText(Localized("MEETING_NAVAGATION_CONNECTING"))
                 }
             }
         } else {

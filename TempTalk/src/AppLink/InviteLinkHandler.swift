@@ -11,7 +11,12 @@ import Foundation
 struct InviteLinkHandler: AppLinkHandler {
     private static let invitePattern = #"pi=(([a-zA-Z0-9]{8}|[a-zA-Z0-9]{32})|\d{4})"#
     private static let inviteRegex = try! NSRegularExpression(pattern: invitePattern, options: .caseInsensitive)
-    private static let supportedHosts = [AppLinkNotificationHandler.kURLHostTempTalk, AppLinkNotificationHandler.kURLHost3WTempTalk]
+    private static let supportedHosts = [
+        AppLinkNotificationHandler.kURLHostTempTalk,
+        AppLinkNotificationHandler.kURLHost3WTempTalk,
+        AppLinkNotificationHandler.kURLHostLegacy,
+        AppLinkNotificationHandler.kURLHost3WLegacy,
+    ]
     
     static func canHandle(url: URL) -> Bool {
         // 处理Universal Link

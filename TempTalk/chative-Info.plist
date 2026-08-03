@@ -86,23 +86,23 @@
 		</dict>
 	</dict>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>Yelling needs to use Apple Music to play media attachments.</string>
+	<string>Quicall needs to use Apple Music to play media attachments.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_cht-new-device._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Yelling uses your camera to take photos to change your profile picture and send images during chats, and for video calls.</string>
+	<string>Quicall uses your camera to take photos to change your profile picture and send images during chats, and for video calls.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Yelling&apos;s Screen Lock uses Face ID.</string>
+	<string>Quicall&apos;s Screen Lock uses Face ID.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Yelling uses the local network to allow you to directly transfer your account to a new phone. It will not be used unless you explicitly choose to initiate a transfer to a new device.</string>
+	<string>Quicall uses the local network to allow you to directly transfer your account to a new phone. It will not be used unless you explicitly choose to initiate a transfer to a new device.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Yelling needs access to your microphone to make and receive phone calls and record voice messages.</string>
+	<string>Quicall needs access to your microphone to make and receive phone calls and record voice messages.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Yelling will save photos to your library.</string>
+	<string>Quicall will save photos to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Yelling requires access to your Photo Library to allow you to change your profile picture and send images during chats.</string>
+	<string>Quicall requires access to your Photo Library to allow you to change your profile picture and send images during chats.</string>
 	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
 	<true/>
 	<key>UIAppFonts</key>

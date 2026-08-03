@@ -8,6 +8,7 @@
 #import <TTMessaging/Environment.h>
 #import <TTMessaging/OWSProfileManager.h>
 #import <TTMessaging/TTMessaging-Swift.h>
+#import <TTServiceKit/OWSBackgroundTask.h>
 #import <TTServiceKit/OWSIdentityManager.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 
@@ -78,6 +79,20 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - Notifications
 
+// Flush logs off the main thread. These observers run on the scene-update path,
+// where a synchronous flush can block main past the 10s watchdog (0x8BADF00D).
+// OWSBackgroundTask keeps us alive during the async flush and ends exactly once
+// on the main thread, avoiding any data race on the task identifier.
+- (void)flushLogsInBackground
+{
+    __block OWSBackgroundTask *_Nullable backgroundTask =
+        [OWSBackgroundTask backgroundTaskWithLabelStr:__PRETTY_FUNCTION__];
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        [DDLog flushLog];
+        backgroundTask = nil;
+    });
+}
+
 - (void)applicationWillEnterForeground:(NSNotification *)notification
 {
     OWSAssertIsOnMainThread();
@@ -96,7 +111,7 @@ NS_ASSUME_NONNULL_BEGIN
     self.reportedApplicationState = UIApplicationStateBackground;
 
     OWSLogInfo(@"%@ %s", self.logTag, __PRETTY_FUNCTION__);
-    [DDLog flushLog];
+    [self flushLogsInBackground];
 
     [NSNotificationCenter.defaultCenter postNotificationName:OWSApplicationDidEnterBackgroundNotification object:nil];
 }
@@ -108,7 +123,7 @@ NS_ASSUME_NONNULL_BEGIN
     self.reportedApplicationState = UIApplicationStateInactive;
 
     OWSLogInfo(@"%@ %s", self.logTag, __PRETTY_FUNCTION__);
-    [DDLog flushLog];
+    [self flushLogsInBackground];
 
     [NSNotificationCenter.defaultCenter postNotificationName:OWSApplicationWillResignActiveNotification object:nil];
 }

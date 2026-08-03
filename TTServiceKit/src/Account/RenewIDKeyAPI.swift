@@ -44,8 +44,16 @@ public class RenewIDKeyAPI : DTBaseAPI {
             return
         }
         
-        let request : TSRequest = TSRequest.init(url: url, method: self.requestMethod, parameters: ["identityKey": identityKey, "registrationId": registrationId])
+        var parameters: [String: Any] = [
+            "identityKey": identityKey,
+            "registrationId": registrationId,
+            "newSign": newSign
+        ]
+        if let oldSign, !oldSign.isEmpty {
+            parameters["oldSign"] = oldSign
+        }
+        let request : TSRequest = TSRequest.init(url: url, method: self.requestMethod, parameters: parameters)
         request.shouldHaveAuthorizationHeaders = true;
-        self.send(request, success:sucess, failure:failure)
+        self.send(request, success: sucess, failure: failure)
     }
 }

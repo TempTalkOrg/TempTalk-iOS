@@ -115,11 +115,11 @@ class CVQuotedMessageRenderItem: ConversationRenderItem {
             if MIMETypeUtil.isVideo(contentType) {
                 return Localized("QUOTED_REPLY_TYPE_VIDEO")
             }
+            if quotedReply.isAnimated {
+                return Localized("QUOTED_REPLY_TYPE_GIF")
+            }
             if MIMETypeUtil.isImage(contentType) {
                 return Localized("QUOTED_REPLY_TYPE_IMAGE")
-            }
-            if MIMETypeUtil.isAnimated(contentType) {
-                return Localized("QUOTED_REPLY_TYPE_GIF")
             }
             return nil
         }()

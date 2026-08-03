@@ -291,7 +291,7 @@ NSString *const kNSUserDefaults_AppDisplayNameForNotification = @"kNSUserDefault
         return bundleName;
     }
     
-    return @"Yelling";
+    return TSConstants.appDisplayName;
 }
 
 - (NSString *)getAppDisplayNameForNotification

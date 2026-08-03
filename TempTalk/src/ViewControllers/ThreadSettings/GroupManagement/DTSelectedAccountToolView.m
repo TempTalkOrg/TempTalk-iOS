@@ -12,12 +12,14 @@
 
 extern NSString *const kDTAddToGroupItemIdentifier;
 
-@interface DTSelectedAccountToolView()<UICollectionViewDelegate, UICollectionViewDataSource>
-@property(nonatomic,strong) UIButton *OKBtn;
+static CGFloat const kDTSelectedItemWidth = 64;
+// Tall-host threshold: at/above this the redesigned avatar+name item is used.
+static CGFloat const kDTSelectedTallHostMinHeight = 60;
+static CGFloat const kDTSelectedItemSpacing = 12;
+
+@interface DTSelectedAccountToolView()<UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout>
 @property(nonatomic,strong) UICollectionView *collectionView;
 @property(nonatomic,strong) NSArray *dataSource;
-@property(nonatomic,strong) NSLayoutConstraint *collectionViewRightConstraint;
-@property(nonatomic,strong) NSLayoutConstraint *oKBtnWidth;
 @end
 
 @implementation DTSelectedAccountToolView
@@ -35,21 +37,10 @@ extern NSString *const kDTAddToGroupItemIdentifier;
 
 - (void)creatSubView {
     [self addSubview:self.collectionView];
-    [self addSubview:self.OKBtn];
-    
 }
 
 - (void)configLayout {
-    [self.OKBtn autoVCenterInSuperview];
-    [self.OKBtn autoPinEdge:ALEdgeRight toEdge:ALEdgeRight ofView:self withOffset:0];
-    [self.OKBtn autoSetDimension:ALDimensionHeight toSize:30];
-    self.oKBtnWidth = [self.OKBtn autoSetDimension:ALDimensionWidth toSize:50];
-    
-    [self.collectionView autoPinEdge:ALEdgeTop toEdge:ALEdgeTop ofView:self];
-    [self.collectionView autoPinEdge:ALEdgeLeft toEdge:ALEdgeLeft ofView:self withOffset:0];
-    self.collectionViewRightConstraint = [self.collectionView autoPinEdge:ALEdgeRight toEdge:ALEdgeLeft ofView:self.OKBtn withOffset:-10];
-    [self.collectionView autoPinEdge:ALEdgeBottom toEdge:ALEdgeBottom ofView:self];
-   
+    [self.collectionView autoPinEdgesToSuperviewEdges];
 }
 - (void)reloadWithData:(NSArray *)datasource {
     self.dataSource = datasource;
@@ -81,18 +72,17 @@ extern NSString *const kDTAddToGroupItemIdentifier;
 }
 //设置每个item的尺寸
 - (CGSize)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)collectionViewLayout sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
-    return CGSizeMake(self.frame.size.height,self.frame.size.height);
-}
-- (void)showOKBtn:(BOOL)show {
-    if (show) {
-        self.OKBtn.hidden = false;
-        self.oKBtnWidth.constant = 50;
-        self.collectionViewRightConstraint.constant = -10;
-    }else {
-        self.oKBtnWidth.constant = 0;
-        self.collectionViewRightConstraint.constant = 0;
-        self.OKBtn.hidden = true;
+    CGFloat available = CGRectGetHeight(collectionView.bounds);
+    // Tall host: 64-wide avatar+name item; legacy short host: square avatar-only item.
+    if (available >= kDTSelectedTallHostMinHeight) {
+        return CGSizeMake(kDTSelectedItemWidth, available);
     }
+    CGFloat side = available > 0 ? available : kDTSelectedItemWidth;
+    return CGSizeMake(side, side);
+}
+
+// No-op: the OK button was removed; kept for API compatibility (DTGroupMemberController).
+- (void)showOKBtn:(BOOL)show {
 }
 - (UIEdgeInsets)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)collectionViewLayout insetForSectionAtIndex:(NSInteger)section{
     return UIEdgeInsetsMake(0, 0, 0, 0);
@@ -105,7 +95,7 @@ extern NSString *const kDTAddToGroupItemIdentifier;
 
 //设置每个item水平间距
 - (CGFloat)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)collectionViewLayout minimumLineSpacingForSectionAtIndex:(NSInteger)section {
-    return 2;
+    return kDTSelectedItemSpacing;
 }
 //设置item选中的状态
 - (BOOL)collectionView:(UICollectionView *)collectionView shouldSelectItemAtIndexPath:(NSIndexPath *)indexPath {
@@ -117,24 +107,7 @@ extern NSString *const kDTAddToGroupItemIdentifier;
     }
 }
 
-- (void)OKBtnClick:(UIButton *)sender {
-    if (self.toolViewDelegate && [self.toolViewDelegate respondsToSelector:@selector(dtSelectedAccountToolView:okBtnClick:)]) {
-        [self.toolViewDelegate dtSelectedAccountToolView:self okBtnClick:sender];
-    }
-}
-
 #pragma mark setter & getter
-- (UIButton *)OKBtn {
-    if (!_OKBtn) {
-        _OKBtn = [[UIButton alloc] init];
-        [_OKBtn setTitle:@"OK" forState:UIControlStateNormal];
-        [_OKBtn addTarget:self action:@selector(OKBtnClick:) forControlEvents:UIControlEventTouchUpInside];
-        _OKBtn.layer.cornerRadius = 5;
-        _OKBtn.layer.masksToBounds = true;
-        [_OKBtn setBackgroundColor:Theme.accentBlueColor];
-    }
-    return _OKBtn;
-}
 
 - (UICollectionView *)collectionView {
     if (!_collectionView) {

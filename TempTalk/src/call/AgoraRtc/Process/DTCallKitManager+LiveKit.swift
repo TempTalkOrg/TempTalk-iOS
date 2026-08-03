@@ -290,12 +290,20 @@ public extension DTCallKitManager {
 
         guard !caller.isEnded else { return }
 
-        Task {
+        // @MainActor: serialize invalidCheckCount across overlapping ticks when checkRoomIdValid is slow.
+        Task { @MainActor in
             let result = await DTMeetingManager.checkRoomIdValid(roomId)
             guard let result else {
-                Logger.info("\(logTag) roomId check returned nil")
+                // Dismiss only after 2 consecutive nils (a single nil may be a transient blip).
+                caller.invalidCheckCount += 1
+                Logger.info("\(logTag) roomId check returned nil (\(caller.invalidCheckCount) consecutive)")
+                if caller.invalidCheckCount >= 2 {
+                    stopTimeoutTimerForUUID(uuidString)
+                    endCallAction(uuidString, onlyForCallKit: false)
+                }
                 return
             }
+            caller.invalidCheckCount = 0
 
             let anotherDeviceJoined = result.anotherDeviceJoined
             let userStopped = result.userStopped

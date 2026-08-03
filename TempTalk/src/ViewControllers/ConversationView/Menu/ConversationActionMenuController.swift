@@ -51,12 +51,20 @@ class ConversationActionMenuController: OWSViewController {
         return keyWindow?.safeAreaInsets ?? .zero
     }
     
+    /// Hosts without a chat nav bar / input bar (e.g. the long-message viewer) set this so the
+    /// visible range isn't shrunk by those bars — otherwise knobs near the screen edges are
+    /// misjudged as off-screen and the menu jumps to the top.
+    var visibleRangeOverride: (top: CGFloat, bottom: CGFloat)?
+
     // 屏幕可见区域的垂直方向范围
-    private lazy var visibleRange: (top: CGFloat, bottom: CGFloat) = {
+    private var visibleRange: (top: CGFloat, bottom: CGFloat) {
+        if let visibleRangeOverride {
+            return visibleRangeOverride
+        }
         let visibleAreaTop: CGFloat = safeAreaInsets.top + Constants.navigationBarHeight
         let visibleAreaBottom: CGFloat = screenHeight - safeAreaInsets.bottom - Constants.inputBarHeight
         return (visibleAreaTop, visibleAreaBottom)
-    }()
+    }
     
     // 记录 TextView 是否选中了全部的文本
     var isSelectedAll = false
@@ -258,10 +266,11 @@ class ConversationActionMenuController: OWSViewController {
             emojiStackView.axis = .horizontal
             emojiStackView.distribution = .equalSpacing
 
-            emojiAction.emojis.prefix(4).forEach { emoji in
+            emojiAction.emojis.prefix(4).enumerated().forEach { index, emoji in
                 let button = EmojiButton()
                 button.emoji = emoji
                 button.isSelected = emojiAction.selectedEmojis.contains(emoji)
+                button.accessibilityIdentifier = DTConversationAccessibilityID.emojiReactionPrefix + "\(index)"
                 button.didTapHandler = { [weak self] in
                     self?.dismissHandler?()
                     emojiAction.block(emoji)
@@ -301,6 +310,7 @@ class ConversationActionMenuController: OWSViewController {
         actions.prefix(prefix).enumerated().forEach { index, action in
             let button = ActionButton()
             button.action = action
+            button.accessibilityIdentifier = Self.accessibilityIdentifier(for: action)
             button.addTarget(self, action: #selector(actionButtonDidTap(_:)), for: .touchUpInside)
             contentView.addSubview(button)
             actionButtons.append(button)
@@ -319,6 +329,7 @@ class ConversationActionMenuController: OWSViewController {
             }
             let moreActionButton = ActionButton()
             moreActionButton.action = moreAction
+            moreActionButton.accessibilityIdentifier = DTConversationAccessibilityID.menuMore
             moreActionButton.addTarget(self, action: #selector(actionButtonDidTap(_:)), for: .touchUpInside)
             contentView.addSubview(moreActionButton)
             let moreActionButtonLeft = actionStackViewLeft + CGFloat(actionButtons.count) * (ActionButton.buttonWidth + ActionButton.buttonMargin)
@@ -519,6 +530,35 @@ class ConversationActionMenuController: OWSViewController {
         }
     }
     
+    /// Maps a built `MenuAction` to its automation id by matching the action's localized
+    /// title against the known `Localized(...)` keys used in `MenuActionBuilder`. Titles are
+    /// the only stable discriminator available on a built `MenuAction` (image is a UIImage,
+    /// block is a closure). Pure tagging — returns nil for out-of-scope actions so they stay
+    /// untagged. Covers: Quote, Forward, Recall, Copy, Translate, Speech-to-text, More.
+    /// Internal so the "更多" sheet (`ConversationActionMenuSheetController`) tags its rows
+    /// with the same ids.
+    static func accessibilityIdentifier(for action: MenuAction) -> String? {
+        let title = action.title
+        switch title {
+        case Localized("MESSAGE_ACTION_QUOTE"):
+            return DTConversationAccessibilityID.menuQuote
+        case Localized("MESSAGE_ACTION_FORWARD"):
+            return DTConversationAccessibilityID.menuForward
+        case Localized("MESSAGE_ACTION_RECALL"):
+            return DTConversationAccessibilityID.menuRecall
+        case Localized("MESSAGE_ACTION_COPY_TEXT"), Localized("MESSAGE_ACTION_COPY_MEDIA"):
+            return DTConversationAccessibilityID.menuCopy
+        case Localized("MESSAGE_ACTION_TRANSLATE_TEXT"), Localized("MESSAGE_ACTION_TRANSLATE_ORIGINE"):
+            return DTConversationAccessibilityID.menuTranslate
+        case Localized("MESSAGE_ACTION_SPEECHTOTEXT"), Localized("MESSAGE_ACTION_SPEECHTOTEXT_ORIGIN"):
+            return DTConversationAccessibilityID.menuSpeechToText
+        case Localized("MENU_ACTION_MORE_ACTION"):
+            return DTConversationAccessibilityID.menuMore
+        default:
+            return nil
+        }
+    }
+
     @objc
     private func actionButtonDidTap(_ sender: ActionButton) {
         guard let action = sender.action else {
@@ -648,6 +688,11 @@ private class ActionButton: UIButton {
             if let action {
                 self.setImage(action.image, for: .normal)
                 self.setTitle(action.title, for: .normal)
+                // UI automation: expose this button as a single accessibility element with
+                // the action title as its label, so Maestro can match it by text/id reliably
+                // (an image+title UIButton otherwise surfaces inconsistently).
+                self.isAccessibilityElement = true
+                self.accessibilityLabel = action.title
             }
         }
     }

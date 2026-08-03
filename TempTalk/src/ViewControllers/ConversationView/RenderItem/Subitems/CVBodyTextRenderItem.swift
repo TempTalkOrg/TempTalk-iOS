@@ -93,7 +93,12 @@ class CVBodyTextRenderItem: ConversationRenderItem {
         }
         
         //call at last
-        if viewItem.isConfidentialMessage && confidentialEnable {
+        // Combined-forwarding (Chat History) carries no plain body text — it was already
+        // sized by its own measurer and is rendered via the `.combinedForwarding` style
+        // (which draws the "[聊天记录]" label). Re-measuring it here with the default
+        // body-text measurer returns `.zero` (hasBodyText == NO) and collapses the bubble,
+        // so skip the confidential override for it and keep its style/size/config intact.
+        if viewItem.isConfidentialMessage && confidentialEnable && bodyTextStyle != .combinedForwarding {
             self.bodyTextStyle = .confidential
             if let existingConfig = self.bodyTextConfig {
                 let confidentialConfig = CVTextViewConfig(

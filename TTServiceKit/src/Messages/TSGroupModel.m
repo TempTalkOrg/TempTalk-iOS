@@ -142,12 +142,28 @@ NS_ASSUME_NONNULL_BEGIN
     if (_groupMemberIds == nil) {
         _groupMemberIds = [NSArray new];
     }
-    
+
     if (_notificationType == nil ) {
         _notificationType = @(TSGroupNotificationTypeAtMe);
     }
 
+    if (_verifiedMemberUids == nil) {
+        _verifiedMemberUids = [NSSet new];
+    }
+
     return self;
+}
+
+- (void)intersectVerifiedMembersWithCurrentGroupMembers {
+    if (self.verifiedMemberUids.count == 0) {
+        return;
+    }
+    NSSet<NSString *> *memberSet = [NSSet setWithArray:self.groupMemberIds];
+    NSMutableSet<NSString *> *intersected = [self.verifiedMemberUids mutableCopy];
+    [intersected intersectSet:memberSet];
+    if (intersected.count != self.verifiedMemberUids.count) {
+        self.verifiedMemberUids = [intersected copy];
+    }
 }
 
 - (BOOL)isEqual:(id)other {
@@ -165,10 +181,13 @@ NS_ASSUME_NONNULL_BEGIN
     if (![self isEqualToGroupBaseInfo:other]) {
         return NO;
     }
-    
-    NSMutableArray *compareMyGroupMemberIds = [NSMutableArray arrayWithArray:_groupMemberIds];
-    [compareMyGroupMemberIds removeObjectsInArray:other.groupMemberIds];
-    if ([compareMyGroupMemberIds count] > 0) {
+
+    if (_groupMemberIds.count != other.groupMemberIds.count) {
+        return NO;
+    }
+    NSSet *selfSet = [NSSet setWithArray:_groupMemberIds];
+    NSSet *otherSet = [NSSet setWithArray:other.groupMemberIds];
+    if (![selfSet isEqualToSet:otherSet]) {
         return NO;
     }
     return YES;

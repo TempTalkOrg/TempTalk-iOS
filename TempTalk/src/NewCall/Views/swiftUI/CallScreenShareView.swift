@@ -20,8 +20,6 @@ struct CallScreenShareView: View {
     @State private var showQuickPanel = false
     @State private var showPlaceholder = true
     @State private var screenShareUnmuteCounter: Int = 0
-    // 用于防抖的任务
-    @State private var debounceTask: Task<Void, Never>?
 
     @ObservedObject private var timerManager = TimerDataManager.shared
     @ObservedObject private var roomDataManager = RoomDataManager.shared
@@ -43,11 +41,12 @@ struct CallScreenShareView: View {
     public var body: some View {
         GeometryReader { geometry in
             let containerSize = geometry.size
+            let safeAreaInsets = geometry.safeAreaInsets
 
             ZStack {
                 screenShareContentView(geometry: geometry)
 
-                topBarView
+                topBarView(safeAreaInsets: safeAreaInsets)
                     .opacity(viewModel.showControls ? 1 : 0)
                     .allowsHitTesting(viewModel.showControls)
                     .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
@@ -60,7 +59,7 @@ struct CallScreenShareView: View {
 
                 bulletChatOverlay(containerSize: containerSize)
 
-                bottomToolbarView(containerSize: containerSize)
+                bottomToolbarView(containerSize: containerSize, bottomSafeAreaInset: safeAreaInsets.bottom)
                     .opacity(viewModel.showControls ? 1 : 0)
                     .allowsHitTesting(viewModel.showControls)
                     .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
@@ -123,8 +122,8 @@ struct CallScreenShareView: View {
     
     private func screenShareContentView(geometry: GeometryProxy) -> some View {
         let screenSize = geometry.size
-        let insets = OWSWindowManager.shared().callViewWindow.safeAreaInsets
-        let safeWidth = screenSize.width - insets.left - insets.right
+        let geoInsets = geometry.safeAreaInsets
+        let safeWidth = screenSize.width - geoInsets.leading - geoInsets.trailing
 
         return ZStack {
             if let publication = roomCtx.screenSharePublication,
@@ -137,28 +136,18 @@ struct CallScreenShareView: View {
                         renderMode: .sampleBuffer,
                         isAutoPauseResumeSampleBuffer: true,
                         pinchToZoomOptions: .resetOnRelease,
+                        keepLastFrameOnTrackChange: true,
                         didRenderFirstFrame: $isRendering
                     )
-                    .id("\(track.sid?.stringValue ?? "")-\(screenShareUnmuteCounter)-\(roomCtx.videoRefreshToken)")
+                    .id("\(track.sid?.stringValue ?? "")-\(screenShareUnmuteCounter)")
                     .frame(
                         width: safeWidth,
                         height: screenSize.height,
                         alignment: .center
                     )
-                    .padding(.leading, insets.left)
-                    .padding(.trailing, insets.right)
+                    .padding(.leading, geoInsets.leading)
+                    .padding(.trailing, geoInsets.trailing)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .onChange(of: isRendering) { rendering in
-                    debounceTask?.cancel()
-                    debounceTask = Task {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2秒
-                        guard !Task.isCancelled else { return }
-                        await MainActor.run {
-                            Logger.info("[newcall] video showPlaceholder status \(!isRendering)")
-                            showPlaceholder = !isRendering
-                        }
-                    }
                 }
                 .onChange(of: publication.isMuted) { isMuted in
                     if !isMuted {
@@ -167,7 +156,7 @@ struct CallScreenShareView: View {
                 }
             }
 
-            if showPlaceholder || roomCtx.isRoomReconnecting || roomCtx.screenSharePublication?.isMuted == true {
+            if showPlaceholder {
                 waitingForScreenPlaceholder
                         .transition(.opacity)
             }
@@ -180,9 +169,13 @@ struct CallScreenShareView: View {
                 viewModel.hiddenTopBottomBar()
             }
         }
-        .onChange(of: roomCtx.videoRefreshToken) { _ in
-            isRendering = false
+        .onChange(of: isRendering) { _ in
+            showPlaceholder = !isRendering
         }
+        // Note: intentionally do NOT reset `isRendering` when the track is briefly nil during
+        // reconnect. The placeholder ("Waiting for screen…") is first-load only; the last frame
+        // is kept frozen via `keepLastFrameOnTrackChange`. The share view is dismissed entirely
+        // when the screen-share publication truly goes away (handled in RoomContext).
     }
 
     private var waitingForScreenPlaceholder: some View {
@@ -201,9 +194,8 @@ struct CallScreenShareView: View {
     }
     
     
-    private var topBarView: some View {
-        let insets = OWSWindowManager.shared().callViewWindow.safeAreaInsets
-        let barHeight = 62 + insets.top
+    private func topBarView(safeAreaInsets: EdgeInsets) -> some View {
+        let barHeight = 62 + safeAreaInsets.top
         return ZStack {
             LinearGradient(
                 gradient: Gradient(colors: [Color.black.opacity(0.4), Color.clear]),
@@ -217,7 +209,7 @@ struct CallScreenShareView: View {
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
-                .offset(y: insets.top < 10 ? 10 - insets.top : 0)
+                .offset(y: safeAreaInsets.top < 10 ? 10 - safeAreaInsets.top : 0)
                 Spacer()
 
                 HStack(spacing: 10) {
@@ -228,11 +220,14 @@ struct CallScreenShareView: View {
                             .truncationMode(.tail)
                     }
 
-                    if let duration = timerManager.duration, duration > 0 {
+                    let isReconnecting = roomCtx.isRoomReconnecting
+                    if isReconnecting {
+                        Text(Localized("MEETING_NAVAGATION_CONNECTING"))
+                    } else if let duration = timerManager.duration, duration > 0 {
                         let stringDuration = DTLiveKitCallModel.stringDuration(duration)
                         Text(stringDuration)
                     } else if roomCtx.currentCall.callType == .private {
-                        Text("connecting...")
+                        Text(Localized("MEETING_NAVAGATION_CONNECTING"))
                     }
                 }
                 .font(.system(size: 16, weight: .medium))
@@ -240,9 +235,9 @@ struct CallScreenShareView: View {
 
                 Spacer()
             }
-            .padding(.top, insets.top)
+            .padding(.top, safeAreaInsets.top)
             .padding(.leading, 43)
-            .padding(.trailing, insets.right)
+            .padding(.trailing, safeAreaInsets.trailing)
         }
         .frame(height: barHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -332,8 +327,7 @@ struct CallScreenShareView: View {
     
     
     @ViewBuilder
-    private func bottomToolbarView(containerSize: CGSize) -> some View {
-        let bottomInset: CGFloat = OWSWindowManager.shared().callViewWindow.safeAreaInsets.bottom
+    private func bottomToolbarView(containerSize: CGSize, bottomSafeAreaInset: CGFloat) -> some View {
         if let appCtx {
             BottomToolbarView(
                 isScreenSharing: true,
@@ -350,7 +344,7 @@ struct CallScreenShareView: View {
             )
             .environmentObject(appCtx)
             .environment(\.colorScheme, .dark)
-            .padding(.bottom, max(20, bottomInset + 10))
+            .padding(.bottom, max(20, bottomSafeAreaInset + 10))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
     }
@@ -375,8 +369,6 @@ struct CallScreenShareView: View {
     
     
     private func cleanUpResourcesSync() {
-        debounceTask?.cancel()
-        debounceTask = nil
         isRendering = false
         showQuickPanel = false
         isGroupMembers = false

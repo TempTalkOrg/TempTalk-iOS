@@ -20,7 +20,6 @@
 #import <TTServiceKit/OWSError.h>
 #import "TSAccountManager.h"
 #import "AppDelegate.h"
-#import <AFNetworking/AFURLSessionManager.h>
 #import "DTStepTextFiled.h"
 #import "DTVerificationCodeController.h"
 #import "DTSignInController.h"

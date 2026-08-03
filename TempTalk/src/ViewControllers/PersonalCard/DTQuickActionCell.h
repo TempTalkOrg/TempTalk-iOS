@@ -13,6 +13,7 @@ typedef enum : NSUInteger {
     DTQuickActionTypeShare = 0,            // 不在会议中
     DTQuickActionTypeCall = 1,            // 不在会议中
     DTQuickActionTypeMessage = 2,            // 不在会议中
+    DTQuickActionTypeRemoveNow = 3,        // 弱态联系人：立即移除
 } DTQuickActionType;
 
 @class DTQuickActionCell;
@@ -26,6 +27,7 @@ typedef enum : NSUInteger {
 @property (nonatomic, weak) id <DTQuickActionCellDelegate> cellDelegate;
 @property (nonatomic, assign) BOOL haveCall;
 @property (nonatomic, assign) BOOL isFriend;
+@property (nonatomic, assign) BOOL showRemoveNow;// 弱态联系人：展示「立即移除」按钮
 
 - (void)setupAllSubViews;
 @end

@@ -348,7 +348,7 @@ public class ConversationMessageMapping: NSObject {
         guard !interactionIds.isEmpty else {
             return []
         }
-        
+
         // 2. Try to pull as many interactions as possible from the cache.
         var interactionIdToModelMap: [String: TSInteraction] = interactionReadCache.getInteractionsIfInCache(forUniqueIds: interactionIds,
                                                                                                              transaction: transaction)
@@ -385,11 +385,20 @@ public class ConversationMessageMapping: NSObject {
                 owsFailDebug("Couldn't read interaction: \(interactionId)")
                 return try loadWithoutCache()
             }
+            // Defend against a shared read-cache collision: a uniqueId that exists in more than one
+            // thread (a forwarded message and its trace can share author+timestamp, so their
+            // `author_device_timestamp` uniqueIds collide) makes the global cache return a model
+            // from another thread. Fall back to a thread-scoped DB read, which builds models
+            // straight from rows WHERE threadUniqueId = this thread, so the mapping only ever holds
+            // interactions belonging to `thread`. Root cause tracked in issue #531.
+            if interaction.uniqueThreadId != thread.uniqueId {
+                return try loadWithoutCache()
+            }
             interactions.append(interaction)
         }
-        
+
         Logger.info("message mapping interactions: \(interactions.count) thread=\(thread.uniqueId)")
-        
+
         return interactions
     }
 
