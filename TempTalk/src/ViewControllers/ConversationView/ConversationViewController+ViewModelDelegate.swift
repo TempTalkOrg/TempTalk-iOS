@@ -19,25 +19,68 @@ extension ConversationViewController: ConversationViewModelDelegate {
     private var isNeedReloadAfterAppEnterForeground: Bool {
            get { viewState.isNeedReloadAfterAppEnterForeground }
            set { viewState.isNeedReloadAfterAppEnterForeground = newValue }
-       }
+    }
 
     func reloadAfterAppEnterForegroundIfNeed() {
-        if isNeedReloadAfterAppEnterForeground {
-            isNeedReloadAfterAppEnterForeground = false
+        let didChangeLoadMoreHeaderState = updateShowLoadMoreHeaders()
+        let forceLoadMoreHeaderLayoutUpdate =
+            viewState.pendingConversationLoadMoreHeaderLayoutUpdate
+            || didChangeLoadMoreHeaderState
 
-            let reloadUpdate = ConversationUpdate.reload()
-            databaseStorage.uiRead { transation in
-                self._conversationViewModelDidUpdate(
-                    reloadUpdate,
-                    transaction: transation,
-                    completion: nil
-                )
+        // Foreground notifications are delivered to conversation controllers that are still in
+        // the navigation stack. Keep their collection work deferred until viewIsAppearing makes
+        // them visible again; that path calls back into this method when a full reload is pending.
+        guard isViewVisible else {
+            viewState.pendingConversationLoadMoreHeaderLayoutUpdate =
+                forceLoadMoreHeaderLayoutUpdate
+            return
+        }
+        viewState.pendingConversationLoadMoreHeaderLayoutUpdate = false
+
+        guard isNeedReloadAfterAppEnterForeground else {
+            applyPendingCollectionUpdateIfNeeded(
+                forceLoadMoreHeaderLayoutUpdate: forceLoadMoreHeaderLayoutUpdate
+            )
+            return
+        }
+
+        isNeedReloadAfterAppEnterForeground = false
+        let shouldScrollToBottom = viewState.pendingConversationShouldScrollToBottom
+            && conversationViewModel.focusMessageIdOnOpen == nil
+        // The foreground reload supersedes any off-screen incremental update.
+        viewState.pendingConversationCollectionUpdate = .none
+        viewState.pendingConversationShouldScrollToBottom = false
+        let reloadViewportAnchorPolicy: ConversationViewportAnchorPolicy? =
+            shouldScrollToBottom ? .disabled : nil
+
+        let reloadUpdate = ConversationUpdate.reload()
+        databaseStorage.uiRead { transation in
+            self._conversationViewModelDidUpdate(
+                reloadUpdate,
+                transaction: transation,
+                reloadViewportAnchorPolicy: reloadViewportAnchorPolicy,
+                reloadShouldInvalidateLayout: forceLoadMoreHeaderLayoutUpdate
+            ) { [weak self] isFinished in
+                guard let self else { return }
+                if !isFinished, forceLoadMoreHeaderLayoutUpdate {
+                    self.viewState.pendingConversationLoadMoreHeaderLayoutUpdate = true
+                }
+                if isFinished, shouldScrollToBottom {
+                    self.scrollToBottom(animated: false)
+                }
             }
         }
     }
     
     func conversationViewModelDidLoadInitialMessages(completion: @escaping ((Bool) -> Void)) {
         Logger.info("[Conversation] handle initial messages, threadId:\(thread.uniqueId)")
+
+        guard viewState.initialLoadPhase == .loading else {
+            Logger.warn("[Conversation] ignore duplicate initial messages callback, threadId:\(thread.uniqueId)")
+            completion(false)
+            return
+        }
+        viewState.initialLoadPhase = .ready
 
         guard isViewVisible else {
             Logger.info("[Conversation] queue refresh ui for initial messages until view visible, threadId:\(thread.uniqueId)")
@@ -73,14 +116,30 @@ extension ConversationViewController: ConversationViewModelDelegate {
     private func _conversationViewModelDidUpdate(
         _ conversationUpdate: ConversationUpdate,
         transaction: SDSAnyReadTransaction,
+        reloadViewportAnchorPolicy: ConversationViewportAnchorPolicy? = nil,
+        reloadShouldInvalidateLayout: Bool = false,
         completion: ((Bool) -> Void)?
     ) {
         AssertIsOnMainThread()
+
+        // The initial snapshot is authoritative. Coalesce database notifications
+        // that race it instead of letting them expose a provisional render state.
+        guard viewState.initialLoadPhase == .applied else {
+            if isViewLoaded {
+                recordPendingCollectionUpdate(conversationUpdate)
+            }
+            completion?(false)
+            return
+        }
         
         // FIX: https://developer.apple.com/forums/thread/728797
         if !isViewLoaded || !shouldObserveDBModifications {
-            // It's safe to ignore updates before the view loads;
-            // viewWillAppear will call resetContentAndLayout.
+            // Avoid mutating the collection view while it is off-screen, but don't
+            // discard the reason for the update. viewIsAppearing will coalesce and
+            // apply the minimum required snapshot invalidation.
+            if isViewLoaded {
+                recordPendingCollectionUpdate(conversationUpdate)
+            }
             completion?(false)
             
             // 3.1.8 当应用进入后台，websocket 还未断开时，仍然能接收到 database change，
@@ -115,9 +174,22 @@ extension ConversationViewController: ConversationViewModelDelegate {
                 
         switch conversationUpdate.conversationUpdateType {
         case .reload:
+            let scrollAction = viewState.scrollActionForNextUpdate
+            viewState.scrollActionForNextUpdate = nil
+            let shouldInvalidateLayout = reloadShouldInvalidateLayout
+                || viewState.pendingConversationLoadMoreHeaderLayoutUpdate
+            viewState.pendingConversationLoadMoreHeaderLayoutUpdate = false
             Logger.info("[Conversation] will resetContentAndLayout (reload) threadId:\(thread.uniqueId)")
-            resetContentAndLayout(transaction: transaction) { [weak self] isFinished in
+            resetContentAndLayout(
+                transaction: transaction,
+                viewportAnchorPolicy: reloadViewportAnchorPolicy,
+                invalidateLayout: shouldInvalidateLayout,
+                scrollAction: scrollAction
+            ) { [weak self] isFinished in
                 guard let self else { return }
+                if !isFinished, shouldInvalidateLayout {
+                    self.viewState.pendingConversationLoadMoreHeaderLayoutUpdate = true
+                }
                 Logger.info("[Conversation] resetContentAndLayout finished=\(isFinished) contentSize=\(self.collectionView.contentSize) threadId:\(thread.uniqueId)")
                 if isFinished {
                     self.updateLastVisibleSortId()
@@ -126,9 +198,18 @@ extension ConversationViewController: ConversationViewModelDelegate {
                 completion?(isFinished)
             }
         case .diff:
+            let shouldInvalidateLayout = viewState.pendingConversationLoadMoreHeaderLayoutUpdate
+            viewState.pendingConversationLoadMoreHeaderLayoutUpdate = false
             Logger.info("[Conversation] diff update, items before=\(viewItems.count) threadId:\(thread.uniqueId)")
-            updateWithDiff(conversationUpdate) { [weak self] isFinished in
-                self?.pruneSelectedMessagesIfNeeded()
+            updateWithDiff(
+                conversationUpdate,
+                invalidateLayout: shouldInvalidateLayout
+            ) { [weak self] isFinished in
+                guard let self else { return }
+                if !isFinished, shouldInvalidateLayout {
+                    self.viewState.pendingConversationLoadMoreHeaderLayoutUpdate = true
+                }
+                self.pruneSelectedMessagesIfNeeded()
                 completion?(isFinished)
             }
         default:
@@ -137,9 +218,110 @@ extension ConversationViewController: ConversationViewModelDelegate {
             break
         }
     }
+
+    private func recordPendingCollectionUpdate(_ conversationUpdate: ConversationUpdate) {
+        let pendingUpdate: PendingConversationCollectionUpdate
+        switch conversationUpdate.conversationUpdateType {
+        case .minor:
+            return
+        case .reload:
+            pendingUpdate = .reloadAll
+        case .diff:
+            let wasScrolledToBottom = isScrolledToBottom
+            var shouldScrollToBottom = false
+            let updatedItemIds = Set((conversationUpdate.updateItems ?? []).compactMap { updateItem -> String? in
+                switch updateItem.updateItemType {
+                case .insert:
+                    if let message = updateItem.viewItem?.interaction as? TSMessage {
+                        let isTailInsert = updateItem.newIndex == viewItems.count - 1
+                        if isTailInsert,
+                           let outgoingMessage = message as? TSOutgoingMessage,
+                           !outgoingMessage.isFromLinkedDevice {
+                            shouldScrollToBottom = true
+                        } else if isTailInsert, wasScrolledToBottom {
+                            shouldScrollToBottom = true
+                        }
+                    }
+                    return updateItem.viewItem?.interaction.uniqueId
+                case .update:
+                    return updateItem.viewItem?.interaction.uniqueId
+                case .delete:
+                    return nil
+                @unknown default:
+                    return nil
+                }
+            })
+            // Keep an empty diff as meaningful: it may contain only deletions, which
+            // the next diffable snapshot will discover without explicit reload IDs.
+            pendingUpdate = .diff(updatedItemIds: updatedItemIds)
+            viewState.pendingConversationShouldScrollToBottom =
+                viewState.pendingConversationShouldScrollToBottom || shouldScrollToBottom
+        @unknown default:
+            pendingUpdate = .reloadAll
+        }
+
+        viewState.pendingConversationCollectionUpdate.merge(pendingUpdate)
+    }
+
+    /// Applies the latest view-model state after returning from another screen.
+    /// The diffable snapshot handles inserts/deletes; existing cells are rebuilt
+    /// only when their interaction IDs were explicitly updated.
+    @discardableResult
+    func applyPendingCollectionUpdateIfNeeded(
+        forceLoadMoreHeaderLayoutUpdate: Bool = false,
+        allowViewportAnchorBeforeFirstAppearance: Bool = false
+    ) -> Bool {
+        let pendingUpdate = viewState.pendingConversationCollectionUpdate
+        guard pendingUpdate != .none || forceLoadMoreHeaderLayoutUpdate else { return false }
+        viewState.pendingConversationCollectionUpdate = .none
+        let shouldScrollToBottom = viewState.pendingConversationShouldScrollToBottom
+        viewState.pendingConversationShouldScrollToBottom = false
+
+        let shouldFollowToBottom = shouldScrollToBottom
+            && conversationViewModel.focusMessageIdOnOpen == nil
+        let viewportAnchorPolicy: ConversationViewportAnchorPolicy
+        if shouldFollowToBottom {
+            viewportAnchorPolicy = .disabled
+        } else if let viewportAnchor = captureViewportAnchor(
+            allowBeforeFirstAppearance: allowViewportAnchorBeforeFirstAppearance
+        ) {
+            viewportAnchorPolicy = .preserve(viewportAnchor)
+        } else {
+            viewportAnchorPolicy = .inherit
+        }
+        let reloadRange: ReloadRange
+        switch pendingUpdate {
+        case .none:
+            reloadRange = .none
+        case .diff(let updatedItemIds):
+            reloadRange = updatedItemIds.isEmpty
+                ? .none
+                : .part(uniqueIds: Array(updatedItemIds))
+        case .reloadAll:
+            reloadRange = .all
+        }
+
+        reloadData(
+            forceRealodRange: reloadRange,
+            viewportAnchorPolicy: viewportAnchorPolicy,
+            invalidateLayout: forceLoadMoreHeaderLayoutUpdate,
+            followToBottom: shouldFollowToBottom
+        ) { [weak self] isFinished in
+            guard let self else { return }
+            guard isFinished else {
+                if forceLoadMoreHeaderLayoutUpdate {
+                    self.viewState.pendingConversationLoadMoreHeaderLayoutUpdate = true
+                }
+                return
+            }
+            self.updateLastKnownDistanceFromBottom()
+        }
+        return true
+    }
     
     public func conversationViewModelWillLoadMoreItems() {
         AssertIsOnMainThread()
+        scrollStateBeforeLoadingMore = nil
         
         // To maintain scroll position after changing the items loaded in the conversation view:
         //
@@ -149,7 +331,7 @@ extension ConversationViewController: ConversationViewModelDelegate {
         //
         // 2. Load More
         //
-        // 3. in conversationViewModelDidLoadMoreItems
+        // 3. in conversationViewModelDidFinishLoadMoreItems
         //   - Get position of that same interaction's cell (it'll have a new index)
         //   - Get content offset after transition
         //   - Offset scrollViewContent so that the cell is in the same spot after as it was before.
@@ -178,26 +360,26 @@ extension ConversationViewController: ConversationViewModelDelegate {
         )
     }
     
-    public func conversationViewModelDidLoadMoreItems() {
+    public func conversationViewModelDidFinishLoadMoreItems(withSuccess success: Bool) {
         AssertIsOnMainThread()
+        defer {
+            isLoadingOlderItems = false
+            isLoadingNewerItems = false
+            scrollStateBeforeLoadingMore = nil
+            updateWarningHeaderLayout()
+            resumePendingScrollToBottom()
+        }
+
+        guard success else { return }
         self.layout.prepare()
 
-        isLoadingOlderItems = false
-        isLoadingNewerItems = false
-
         // scroll-to-top 动画期间不调整 contentOffset，避免与系统动画冲突导致闪烁
-        guard !isScrollingToTop else {
-            scrollStateBeforeLoadingMore = nil
-            return
-        }
+        guard !isScrollingToTop else { return }
 
-        guard let scrollState = self.scrollStateBeforeLoadingMore else {
-            return
-        }
+        guard let scrollState = self.scrollStateBeforeLoadingMore else { return }
 
         guard let newIndexPath = conversationViewModel.indexPath(for: scrollState.referenceViewItem),
               let layoutAttributes = collectionView.layoutAttributesForItem(at: newIndexPath) else {
-            scrollStateBeforeLoadingMore = nil
             return
         }
 
@@ -209,13 +391,17 @@ extension ConversationViewController: ConversationViewModelDelegate {
         let newDistance = newFrame.origin.y - previousDistance
 
         collectionView.contentOffset = CGPoint(x: 0, y: newDistance)
-        scrollStateBeforeLoadingMore = nil
     }
     
     public func conversationViewModelDidUpdateLoadMoreStatus() {
         AssertIsOnMainThread()
         
-        let _ = updateShowLoadMoreHeaders()
+        let didChange = updateShowLoadMoreHeaders()
+        if didChange {
+            // The next snapshot invalidates the cached supplementary attributes only after its
+            // render items are ready. This avoids rebuilding an intermediate, incomplete page.
+            viewState.pendingConversationLoadMoreHeaderLayoutUpdate = true
+        }
     }
     
     // Called after the view model recovers from a severe error
@@ -231,7 +417,11 @@ extension ConversationViewController: ConversationViewModelDelegate {
         conversationStyle
     }
     
-    private func updateWithDiff(_ updateContext: ConversationUpdate, completion: ((Bool) -> Void)? = nil) {
+    private func updateWithDiff(
+        _ updateContext: ConversationUpdate,
+        invalidateLayout: Bool = false,
+        completion: ((Bool) -> Void)? = nil
+    ) {
         Logger.info("[Conversation] begin items=\(viewItems.count) renderItems=\(renderItems.count) threadId:\(thread.uniqueId)")
         var scrollToBottom = false
         let isScrolledToBottom = self.isScrolledToBottom
@@ -244,12 +434,23 @@ extension ConversationViewController: ConversationViewModelDelegate {
             case .insert:
                 self.scrollContinuity = .top
                 if let message = $0.viewItem?.interaction as? TSMessage {
-                    if let outgoingMessage = message as? TSOutgoingMessage, !outgoingMessage.isFromLinkedDevice {
+                    let isTailInsert = ($0.newIndex == self.viewItems.count - 1)
+
+                    // Signal parity (see updateWithDiff in Signal-iOS): a message
+                    // sent from this device always follows to the bottom; any other
+                    // freshly inserted tail message follows only when the user was
+                    // already at the bottom before this update landed.
+                    if isTailInsert,
+                       let outgoingMessage = message as? TSOutgoingMessage,
+                       !outgoingMessage.isFromLinkedDevice {
+                        scrollToBottom = true
+                    } else if isTailInsert, isScrolledToBottom {
                         scrollToBottom = true
                     }
-                    if !scrollToBottom &&
-                        $0.newIndex == self.viewItems.count - 1 &&
-                        (message.envelopSource == DTEnvelopeSourceRestHotdata || !isScrolledToBottom) {
+
+                    // Keep the user anchored where they are when a message is
+                    // inserted while they are reading history; don't yank them down.
+                    if !scrollToBottom, isTailInsert, !isScrolledToBottom {
                         self.scrollContinuity = .bottom
                     }
                 }
@@ -262,8 +463,28 @@ extension ConversationViewController: ConversationViewModelDelegate {
             }
         }
         let reloadRange: ReloadRange = needReloadUniqueIds.isEmpty ? .none : .part(uniqueIds: needReloadUniqueIds)
-        
-        reloadData(forceRealodRange: reloadRange, animated: updateContext.shouldAnimateUpdates) { [weak self] isFinished in
+        let hasFocusMessageFromSearch = conversationViewModel.focusMessageIdOnOpen != nil
+        let shouldFollowToBottom = !updateContext.ignoreScrollToDefaultPosition
+            && scrollToBottom
+            && !hasFocusMessageFromSearch
+            && !isUserScrolling
+            && !isWaitingForDeceleration
+        let viewportAnchorPolicy: ConversationViewportAnchorPolicy
+        if shouldFollowToBottom {
+            viewportAnchorPolicy = .disabled
+        } else if let viewportAnchor = captureViewportAnchor() {
+            viewportAnchorPolicy = .preserve(viewportAnchor)
+        } else {
+            viewportAnchorPolicy = .inherit
+        }
+
+        reloadData(
+            forceRealodRange: reloadRange,
+            animated: updateContext.shouldAnimateUpdates,
+            viewportAnchorPolicy: viewportAnchorPolicy,
+            invalidateLayout: invalidateLayout,
+            followToBottom: shouldFollowToBottom
+        ) { [weak self] isFinished in
             AssertIsOnMainThread()
             guard let self else { return }
             
@@ -277,10 +498,10 @@ extension ConversationViewController: ConversationViewModelDelegate {
             
             let lastVisibleIndexPath = self.lastVisibleIndexPath
 
-            // Don't auto-scroll to bottom if there's a focus message from search
-            let hasFocusMessageFromSearch = conversationViewModel.focusMessageIdOnOpen != nil
-
-            if !updateContext.ignoreScrollToDefaultPosition, (scrollToBottom || lastVisibleIndexPath == nil), !hasFocusMessageFromSearch {
+            if !shouldFollowToBottom,
+               !updateContext.ignoreScrollToDefaultPosition,
+               lastVisibleIndexPath == nil,
+               !hasFocusMessageFromSearch {
                 self.scrollToBottom(animated: false)
             }
             
@@ -312,7 +533,9 @@ extension ConversationViewController {
 
     @discardableResult
     func processPendingInitialMessagesIfNeeded() -> Bool {
-        guard isViewVisible, let completion = consumePendingInitialLoadCompletion() else {
+        guard isViewVisible,
+              viewState.initialLoadPhase == .ready,
+              let completion = consumePendingInitialLoadCompletion() else {
             return false
         }
         Logger.info("[Conversation] resume pending initial messages refresh, threadId:\(thread.uniqueId)")
@@ -327,7 +550,17 @@ extension ConversationViewController {
     }
 
     private func performInitialMessagesRefresh(completion: @escaping ((Bool) -> Void)) {
+        guard viewState.initialLoadPhase == .ready else {
+            completion(false)
+            return
+        }
+        viewState.initialLoadPhase = .applying
         Logger.info("[Conversation] refresh ui for initial messages, threadId:\(thread.uniqueId)")
+        // The initial snapshot contains the latest view-model state and supersedes
+        // anything accumulated before the first appearance.
+        viewState.pendingConversationCollectionUpdate = .none
+        viewState.pendingConversationShouldScrollToBottom = false
+        viewState.pendingConversationLoadMoreHeaderLayoutUpdate = false
         updateShowLoadMoreHeaders()
         databaseStorage.uiRead { transaction in
             self.resetContentAndLayout(transaction: transaction) { [weak self] isFinished in
@@ -336,9 +569,34 @@ extension ConversationViewController {
                     self.updateLastVisibleSortId()
                 }
 
+                // Establish the final initial position before acknowledging the
+                // first render. This mirrors Signal's reload -> position -> reveal
+                // ordering and avoids a frame at the collection view's old offset.
+                self.updateContentInsets(animated: false, forceScrollToDefaultPosition: true)
+                self.viewState.initialLoadPhase = .applied
                 completion(isFinished)
 
-                self.updateContentInsets(animated: false, forceScrollToDefaultPosition: true)
+                // The view model clears its initial-loading state in the completion
+                // above. Re-evaluate the true beginning-of-history notice without
+                // forcing a second initial position; the header preserves the
+                // viewport established before completion.
+                self.updateWarningHeaderLayout()
+
+                // A database notification may have landed while the first
+                // snapshot was being built. Apply only that queued delta now,
+                // preserving the initial viewport established above.
+                let forceLoadMoreHeaderLayoutUpdate =
+                    self.viewState.pendingConversationLoadMoreHeaderLayoutUpdate
+                self.viewState.pendingConversationLoadMoreHeaderLayoutUpdate = false
+                let didApplyPendingUpdate = self.applyPendingCollectionUpdateIfNeeded(
+                    forceLoadMoreHeaderLayoutUpdate: forceLoadMoreHeaderLayoutUpdate,
+                    allowViewportAnchorBeforeFirstAppearance: true
+                )
+                // Keep focus ownership until a queued snapshot has committed. Its completion
+                // performs this handoff; without a queued update, finish immediately.
+                if !didApplyPendingUpdate {
+                    self.finishFocusedMessageKeyboardPresentationIfNeeded()
+                }
                 // Don't clear focusMessageIdOnOpen here - it needs to persist across viewState recreations
                 // until the user manually scrolls. This prevents the focus from being lost when
                 // reloadViewItems() creates a new ConversationViewState.

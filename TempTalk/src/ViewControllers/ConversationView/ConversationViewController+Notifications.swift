@@ -250,6 +250,7 @@ private extension ConversationViewController {
         markVisibleMessagesAsRead()
         self.cellMediaCache.removeAllObjects()
         cancelReadTimer()
+        handleConfidentialAttachmentPreviewWillResignActive()
         dismissPresentedViewControllerIfNecessary()
 
         // Cancel any in-flight voice memo recording. Without this, the

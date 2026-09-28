@@ -73,8 +73,6 @@ static BOOL isLoadInternalContactsOver = NO;
 @property (nonatomic, assign) BOOL needRefreshView;
 @property (nonatomic, assign) BOOL hasLoadContacts;
 
-@property (nonatomic, copy) void(^scrollCallback)(UIScrollView *scrollView);
-
 @property (nonatomic, strong) NSMutableArray <NSMutableArray<SignalAccount *> *> *collatedSignalAccounts;
 @property (nonatomic, strong) NSArray <NSString *> *sectionTitles;
 // YES when pending-removal (weak) contacts are pinned as section 0.
@@ -123,6 +121,7 @@ static BOOL isLoadInternalContactsOver = NO;
         _tableView.estimatedRowHeight = 0;
         _tableView.rowHeight = 70;
         _tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+        _tableView.showsVerticalScrollIndicator = NO;
         _tableView.sectionIndexColor = Theme.tinfoColor;
         if (@available(iOS 15.0, *)) {
             _tableView.sectionHeaderTopPadding = 0;
@@ -550,7 +549,7 @@ static BOOL isLoadInternalContactsOver = NO;
     if (section >= self.collatedSignalAccounts.count) return;
     if (row >= self.collatedSignalAccounts[section].count) return;
     SignalAccount *signalAccount = self.collatedSignalAccounts[section][row];
-    [self showProfileCardInfoWith:signalAccount.recipientId isFromSameThread:false isPresent:false isFromContacts:true];
+    [self showProfileCardInfoWith:signalAccount.recipientId addFriendSource:DTAddFriendSource.unspecified isFromSameThread:false isPresent:false isFromContacts:true];
 }
 
 - (nullable NSArray<NSString *> *)sectionIndexTitlesForTableView:(UITableView *)tableView {
@@ -738,7 +737,8 @@ static BOOL isLoadInternalContactsOver = NO;
 - (void)recipientIdWasSelected:(NSString *)recipientId
 {
     OWSAssertDebug(recipientId.length > 0);
-    [self showProfileCardInfoWith:recipientId isFromSameThread:false isPresent:false isFromContacts:true];
+    // Picked out of the non-contact search results.
+    [self showProfileCardInfoWith:recipientId addFriendSource:DTAddFriendSource.search isFromSameThread:false isPresent:false isFromContacts:true];
 }
 
 - (void)updateNonContactAccountSet:(NSArray<SignalRecipient *> *)recipients
@@ -844,23 +844,20 @@ static BOOL isLoadInternalContactsOver = NO;
     }
 }
 
-- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
-    scrollView.bounces = YES;
-    scrollView.showsVerticalScrollIndicator = NO;
-    !self.scrollCallback ?: self.scrollCallback(scrollView);
-}
-
-#pragma mark - JXPagingViewListViewDelegate
+#pragma mark - JXCategoryListContentViewDelegate
 - (UIView *)listView {
     return self.view;
 }
 
-- (UIScrollView *)listScrollView {
-    return self.tableView;
+- (void)listWillAppear {
+    self.viewDidAppear = YES;
+    if (self.needRefreshView) {
+        [self loadDataIfNecessary];
+    }
 }
 
-- (void)listViewDidScrollCallback:(void (^)(UIScrollView *))callback {
-    self.scrollCallback = callback;
+- (void)listDidDisappear {
+    self.viewDidAppear = NO;
 }
 
 - (void)userTakeScreenshotEvent:(NSNotification *)notify {}

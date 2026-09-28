@@ -19,6 +19,8 @@ import DTProto
     open override var logTag: String { "[newcall]" }
     
     static let shared = DTMeetingManager()
+    /// Keep a stable publisher even though this object currently has no @Published storage.
+    public let objectWillChange = ObservableObjectPublisher()
     static let meetingVersion: Int32 = 10
     static let sourceControlStart: String = "start-call"
     static let sourceControlInvite: String = "invite-members"
@@ -41,13 +43,17 @@ import DTProto
     var callDurationTimer: Timer?
     var participantDisTimer: Timer?
     var connectionPhaseTimer: Timer?
+    /// 1v1 麦克风订阅门控，见 `DTMeetingManager+Timer.armCallDurationGate()`
+    var callDurationGateTimer: Timer?
+    var isCallDurationGateArmed: Bool = false
+    var didStartCallDurationTimer: Bool = false
+    /// `track_subscribed` 可能早于门控装载，必须保持到 `.connected`。
+    var isMicTrackSubscribed: Bool = false
     
     // 会议的model
     lazy var currentCall: DTLiveKitCallModel = DTLiveKitCallModel()
-    // 排序八宫格参会人。写入必须走 `setVisibleParticipants(_:)`，以保证主线程串行化。
-    var visibleParticipants: [Participant] = []
-    // `scheduleVisibleParticipantsUpdate(_:)` 用于合并同一帧内的多次异步 commit，避免 SwiftUI body 重入时反复触发 state 更新。
-    var isVisibleParticipantsUpdateScheduled: Bool = false
+    // Active-speaker grid scheduler state for 7+ participant layouts; main-thread only.
+    var activeSpeakerGridState = ActiveSpeakerScheduler.State()
     // 自动退回的保护锁
     let timerLock = NSLock()
     // livesdk的错误状态
@@ -94,6 +100,8 @@ import DTProto
     /// on the main actor. Prevents spawning duplicate waiters when intent is
     /// parked repeatedly during one reconnect/republish window.
     private var _isCallKitMuteReplayWaiterArmed = false
+    /// Serializes permission/publish work for one pending CallKit mute intent. Main actor only.
+    private var _isApplyingPendingCallKitMuteState = false
     private var _isReconnectStateCleanupWaiterArmed = false
     private var _isCurrentCallKitAudioSessionActive = false
     private var _initialRoomAudioSetupExpectedCallKitEchoMuted: Bool?
@@ -237,14 +245,6 @@ import DTProto
         setPendingCallKitMuteState(muted, reason: reason)
     }
 
-    private func consumePendingCallKitMuteState() -> Bool? {
-        callKitMuteSuppressLock.lock()
-        defer { callKitMuteSuppressLock.unlock() }
-        let muted = _pendingCallKitMuteState
-        _pendingCallKitMuteState = nil
-        return muted
-    }
-
     @discardableResult
     func consumePendingCallKitMuteStateIfMatched(_ muted: Bool, reason: String) -> Bool {
         callKitMuteSuppressLock.lock()
@@ -348,6 +348,12 @@ import DTProto
     @MainActor
     func applyPendingCallKitMuteStateIfReady(reason: String) async {
         guard pendingCallKitMuteState() != nil else { return }
+        guard !_isApplyingPendingCallKitMuteState else {
+            Logger.info("\(logTag) CallKit mute intent apply already in flight, reason=\(reason)")
+            return
+        }
+        _isApplyingPendingCallKitMuteState = true
+        defer { _isApplyingPendingCallKitMuteState = false }
         guard lifecycleState == .connected else {
             Logger.info("\(logTag) CallKit mute intent pending: state=\(lifecycleState), reason=\(reason)")
             return
@@ -364,10 +370,31 @@ import DTProto
             Logger.info("\(logTag) CallKit mute intent pending: reconnecting/republishing, reason=\(reason)")
             return
         }
-        guard let muted = consumePendingCallKitMuteState() else { return }
+        guard let muted = pendingCallKitMuteState() else { return }
         Logger.info("\(logTag) CallKit mute intent applying: muted=\(muted), reason=\(reason)")
         beginCallKitMuteSuppression(1.0, mutedTarget: muted)
-        await muteAudio(muted)
+        if await muteAudio(
+            muted,
+            userInitiated: true,
+            syncCallKitOnFailure: false
+        ) {
+            consumePendingCallKitMuteStateIfMatched(muted, reason: "CallKit mute intent applied")
+        } else if !muted,
+                  CallMediaPermissionCoordinator.currentStatus(of: .microphone).showsPermissionBadge {
+            // A user-initiated permission attempt must produce at most one dialog. Once
+            // denied, restore CallKit and discard this replay token; a later user
+            // action can ask again. Transient failures retain both the intent and
+            // CallKit's requested state so a later successful replay needs no echo.
+            await roomContext?.syncLocalMicrophoneStateToCallKit(
+                muted: !(roomContext?.room.localParticipant.isMicrophoneEnabled() ?? false)
+            )
+            consumePendingCallKitMuteStateIfMatched(
+                muted,
+                reason: "CallKit unmute blocked by microphone permission"
+            )
+        } else {
+            Logger.info("\(logTag) CallKit mute intent remains pending after apply failure: muted=\(muted)")
+        }
     }
 
     /// Called from `didCompleteReconnect`. A `.full` reconnect re-publishes local
@@ -585,6 +612,19 @@ import DTProto
     private func handleStateChange(_ transition: StateTransition) {
         let newState = transition.to.legacyValue
         let isActive = newState.isActive
+
+        // `lifecycleState` is computed from the state machine rather than backed by @Published.
+        // Explicitly notify SwiftUI observers so lifecycle-driven UI updates do not depend on an
+        // unrelated Room connection-state publication. Hangup transitions run on the main actor;
+        // retain main-thread delivery for defensive callers on other queues.
+        if Thread.isMainThread {
+            objectWillChange.send()
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.objectWillChange.send()
+            }
+        }
+
         DispatchQueue.main.async {
             CurrentAppContext().appUserDefaults().set(isActive, forKey: TSConstants.kSharedMeetingActiveKey)
         }
@@ -605,12 +645,19 @@ import DTProto
             hasEverConnectedToRoom = true
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.startCallDurationTimer()
-                // Room media is now connected: flip the CallKit system UI from
-                // "Connecting…" to answered in sync with real audio. No-op when no
-                // answer action is held (caller side / non-CallKit answer).
-                if let uuid = self.currentCall.callKitUUID {
+                // Fulfilling the held answer action is what lets CallKit activate AVAudioSession.
+                // That activation is a prerequisite for publishing our microphone, so this cannot
+                // wait for the media-ready timer gate without creating a dependency cycle.
+                if transition.shouldFulfillPendingCallKitAnswer,
+                   let uuid = self.currentCall.callKitUUID {
                     DTCallKitManager.shared().fulfillPendingAnswerAction(uuid)
+                }
+                if self.usesOneToOneConnectionFlow {
+                    // 1v1 到这里只代表对端已在房间；计时等待其订阅本端麦克风轨道。
+                    // 期间 duration 保持 nil，导航栏沿用既有的「连接中」展示。
+                    self.armCallDurationGate()
+                } else {
+                    self.startCallDurationTimerIfNeeded(reason: "groupOrInstantConnected")
                 }
                 if !self.isFromCallkit || self.isCurrentCallKitAudioSessionActive {
                     await self.applyPendingCallKitMuteStateIfReady(reason: "state connected")
@@ -767,15 +814,25 @@ import DTProto
             newCall.conversationId = callInfo.conversationId
             callType = callInfo.callType
         }
-        newCall.callType = callType
         if callType == .group, let gid = newCall.conversationId {
             SDSDatabaseStorage.shared.read { tx in
+                // Same early verdict as the calling-message path: a group this device is no longer
+                // in is an instant call, and must not resolve the group name.
+                if self.shouldTreatGroupCallAsInstant(
+                    serverGroupId: gid,
+                    controlType: calling.controlType,
+                    transaction: tx
+                ) {
+                    callType = .instant
+                    return
+                }
                 newCall.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupCallDisplayName(
                     trustedPlaintextName: calling.roomName,
                     serverGroupId: gid,
                     transaction: tx)
             }
         }
+        newCall.callType = callType
         if case .private = callType, let localNumber = TSAccountManager.localNumber() {
             newCall.callees = [localNumber]
         }
@@ -862,7 +919,7 @@ import DTProto
             }
             self.beginCallKitMuteSuppression(1.0, mutedTarget: isMute)
             Task {
-                await self.muteAudio(isMute)
+                await self.muteAudio(isMute, userInitiated: true)
             }
         }
     }

@@ -1053,7 +1053,7 @@ const int TSMeetingVersion = 3;
                                            meetingDetailUrl:(NSString *)meetingDetailUrl
                                                 transaction:(SDSAnyWriteTransaction *)transaction {
     
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    uint64_t now = [DTTrustedClock clientStampMs];
     
     NSMutableAttributedString *attributeMessage = [[NSMutableAttributedString alloc] initWithString:@"The group has an agenda meeting, "];
     NSAttributedString *clickString = [[NSAttributedString alloc] initWithString:@"click here" attributes:@{NSForegroundColorAttributeName : DTGroupUtils.attributeInfoMessageHighlightColor}];

@@ -103,7 +103,15 @@
 
 - (void)relateReactionMessageWithOriginMessage:(TSMessage *)origionMessage
                                    transaction:(SDSAnyWriteTransaction *)transaction {
-    
+
+    // Security: the target message must belong to the thread the reaction arrived in.
+    // conversationId is the arriving thread's uniqueId; drop cross-conversation injections
+    // where reaction.source points at a message in a thread the sender isn't part of.
+    if (self.conversationId.length && ![origionMessage.uniqueThreadId isEqualToString:self.conversationId]) {
+        OWSLogError(@"[Reaction] drop cross-conversation reaction: target thread %@ != conversation %@", origionMessage.uniqueThreadId, self.conversationId);
+        return;
+    }
+
     DTReactionSource *reactionSource = [DTReactionSource new];
     reactionSource.source = self.ownSource.source;
     reactionSource.timestamp = self.ownSource.timestamp;

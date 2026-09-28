@@ -239,57 +239,83 @@ extension DTMeetingManager {
 
     @MainActor
     func turnIntoInstantCall() {
-        Logger.info("\(logTag) private call turn into instant")
+        transitionCurrentCallType(to: .instant, shouldEndOneToOneWaiting: true)
+    }
 
-        // 1. 清理 1v1 专属的超时定时器和呼叫提示音，
-        //    并补偿可能卡在 connecting 的状态机（caller 先于 callee 入房时会出现）
-        stopCallTimeoutTimer()
-        stopSound()
-        if lifecycleState == .connecting,
-           roomContext?.room.connectionState == .connected {
-            tryTransition(from: .connecting, to: .connected)
+    /// Applies a call-type change together with the corresponding meeting-bar migration.
+    ///
+    /// A call is only ever downgraded to instant and never back, but the first room metadata
+    /// can still correct a locally mis-inferred 1on1/group type. Handling any pair here makes
+    /// the published model, database bars and `allMeetings` snapshot change atomically from
+    /// the UI's perspective.
+    @MainActor
+    func transitionCurrentCallType(
+        to nextType: CallType,
+        shouldEndOneToOneWaiting: Bool = false
+    ) {
+        let previousType = currentCall.callType
+
+        if nextType != .private {
+            // A 1v1 disconnect timer may already be running if the type changes while the
+            // remote participant is offline. Instant/group meetings must never inherit it.
+            stopParticipantDisTimer()
         }
 
-        // 2. 更新 callType，让 UI 立即响应
-        currentCall.callType = .instant
+        if nextType == .instant, shouldEndOneToOneWaiting {
+            // These are connection-flow effects, not UI effects. A metadata-only instant
+            // value must not silence a solo outgoing 1v1 or remove its timeout.
+            stopCallTimeoutTimer()
+            stopSound()
+            if lifecycleState == .connecting,
+               roomContext?.room.connectionState == .connected {
+                tryTransition(from: .connecting, to: .connected)
+            }
+        }
 
-        // 3. 手动触发 objectWillChange 确保 SwiftUI 更新
-        currentCall.objectWillChange.send()
+        guard previousType != nextType else {
+            Logger.info("\(logTag)[calltype] apply no-op, already \(nextType.rawValue)")
+            return
+        }
+        let previousCall = currentCall.copy() as? DTLiveKitCallModel
 
-        // 4. 获取需要的信息
+        Logger.info(
+            "\(logTag)[calltype] applied \(previousType.rawValue) -> \(nextType.rawValue), " +
+            "endOneToOneWaiting=\(shouldEndOneToOneWaiting), roomId=\(currentCall.roomId ?? "nil")"
+        )
+
+        // @Published updates layout, title, toolbar and invite semantics immediately.
+        currentCall.callType = nextType
         let roomId = currentCall.roomId
-        let recipientId: String
-        if currentCall.isCaller, let calleeId = currentCall.conversationId {
-            recipientId = calleeId
-        } else if let caller = currentCall.caller {
-            recipientId = caller
-        } else {
-            recipientId = ""
-        }
 
-        // 5. 使用同步事务处理数据库操作（不操作 allMeetings）
         databaseStorage.write { [self] transaction in
-            // 移除 1v1 的 bar
-            if DTParamsUtils.validateString(recipientId).boolValue {
-                let contactThread = TSContactThread.getOrCreateThread(withContactId: recipientId, transaction: transaction)
-                if contactThread.isCallingSticked {
-                    contactThread.unstickCallingThread(with: transaction)
+            if let previousCall {
+                switch previousType {
+                case .private:
+                    deal1on1MeetingBar(call: previousCall, action: .remove, transaction: transaction)
+                case .group:
+                    dealGroupMeetingBar(call: previousCall, action: .remove, transaction: transaction)
+                case .instant:
+                    dealInstantMeetingBar(call: previousCall, action: .remove, transaction: transaction)
                 }
             }
 
-            // 添加 instant 的 bar
-            dealInstantMeetingBar(call: currentCall, action: .add, transaction: transaction)
+            switch nextType {
+            case .private:
+                deal1on1MeetingBar(call: currentCall, action: .add, transaction: transaction)
+            case .group:
+                dealGroupMeetingBar(call: currentCall, action: .add, transaction: transaction)
+            case .instant:
+                dealInstantMeetingBar(call: currentCall, action: .add, transaction: transaction)
+            }
         }
 
-        // 6. 事务完成后在主线程更新 allMeetings（代码更清晰）
-        if let roomId = roomId {
+        if let roomId {
             allMeetings = allMeetings.filter { $0.roomId != roomId }
         }
         if let callCopy = currentCall.copy() as? DTLiveKitCallModel {
             allMeetings.append(callCopy)
         }
 
-        // 7. 同步完成后立即发送通知
         postHomeAndConversationNoti()
     }
 
@@ -467,7 +493,13 @@ extension DTMeetingManager {
         let startTime = Date().timeIntervalSince1970
         Logger.info("\(logTag) getActiveCallList beg")
 
-        let calls = await DTCallAPIManager().getActiveCallList()
+        let calls: [[String: Any]]
+        do {
+            calls = try await DTCallAPIManager().getActiveCallList()
+        } catch {
+            Logger.error("\(logTag) getActiveCallList failed; preserving existing Join Bar: \(error.localizedDescription)")
+            return []
+        }
 
         // 先构造新的 MeetingBar 列表
         var newMeetingBars: [DTLiveKitCallModel] = []
@@ -499,14 +531,8 @@ extension DTMeetingManager {
 
                 if let conversationId = call["conversation"] as? String {
                     callModel.conversationId = conversationId
-                    if callModel.callType == .group,
-                       let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId)
-                    {
-                        if let groupThread = TSGroupThread.getWithGroupId(groupId, transaction: tx) {
-                            if !groupThread.groupModel.groupMemberIds.contains(TSAccountManager.localNumber() ?? "") {
-                                callModel.callType = .instant
-                            }
-                        } else {
+                    if callModel.callType == .group {
+                        if !self.isLocalUserInGroup(serverGroupId: conversationId, transaction: tx) {
                             callModel.callType = .instant
                         }
                     } else if callModel.callType == .private {

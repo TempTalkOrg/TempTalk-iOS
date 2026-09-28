@@ -7,25 +7,46 @@ import MultipeerConnectivity
 
 extension DeviceTransferService {
     enum Error: Swift.Error {
+        case advertisingFailed
         case assertion
         case cancel
+        case backgroundedDevice
         case certificateMismatch
+        case connectionLost
+        case localNetworkPermissionDenied
+        case localNetworkPermissionDeniedAfterSystemPrompt
         case modeMismatch
+        /// The receiving device cannot fit the incoming transfer.
         case notEnoughSpace
+        /// This device cannot fit the snapshot it has to make of its own database.
+        case notEnoughSpaceOnThisDevice
         case unsupportedVersion
-        
+
+        /// Only `.assertion` means "this should have been impossible". Every other case is
+        /// an expected outcome the user can hit, so it must never trip a debug assertion.
+        var isProgrammerError: Bool {
+            if case .assertion = self { return true }
+            return false
+        }
+
         var message: String {
             switch self {
-            case .assertion:
+            case .advertisingFailed, .assertion, .connectionLost:
                 return "DEVICE_TRANSFER_ERROR_GENERIC".localized
             case .cancel:
                 return ""
+            case .backgroundedDevice:
+                return "DEVICE_TRANSFER_ERROR_BACKGROUNDED_DEVICE".localized
             case .certificateMismatch:
                 return "DEVICE_TRANSFER_ERROR_CERTIFICATE_MISMATCH".localized
+            case .localNetworkPermissionDenied, .localNetworkPermissionDeniedAfterSystemPrompt:
+                return DeviceTransferUI.localNetworkPermissionMessage
             case .modeMismatch:
                 return "DEVICE_TRANSFER_ERROR_MODE_MISMATCH_PRIMARY".localized
             case .notEnoughSpace:
-                return "DEVICE_TRANSFER_ERROR_GENERIC".localized
+                return "DEVICE_TRANSFER_ERROR_NOT_ENOUGH_SPACE".localized
+            case .notEnoughSpaceOnThisDevice:
+                return "DEVICE_TRANSFER_ERROR_NOT_ENOUGH_SPACE_THIS_DEVICE".localized
             case .unsupportedVersion:
                 return "DEVICE_TRANSFER_ERROR_UNSUPPORTED_VERSION".localized
             }

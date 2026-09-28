@@ -202,11 +202,39 @@ int const OWSMessageSenderRetryAttempts = 3;
 NSString *const OWSMessageSenderInvalidDeviceException = @"InvalidDeviceException";
 NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
 
+/// A quoted thumbnail prepared before the send transaction.
+@interface OWSPreparedQuotedThumbnail : NSObject
+
+@property (nonatomic) OWSAttachmentInfo *attachmentInfo;
+@property (nonatomic) TSAttachmentStream *sourceStream;
+@property (nonatomic) TSAttachmentStream *thumbnailStream;
+
+@end
+
+@implementation OWSPreparedQuotedThumbnail
+@end
+
 @interface OWSMessageSender ()
 
 @property (nonatomic, readonly) id<ContactsManagerProtocol> contactsManager;
 @property (nonatomic, readonly) ContactsUpdater *contactsUpdater;
 @property (atomic, readonly) NSMutableDictionary<NSString *, NSOperationQueue *> *sendingQueueMap;
+
+/// Per-conversation preparation queues for attachment preprocessing (currently
+/// video compression). Two concurrent lanes, keyed by `uniqueThreadId` like
+/// `sendingQueueMap`, so a backlog in conversation A never gates conversation B.
+@property (atomic, readonly) NSMutableDictionary<NSString *, NSOperationQueue *> *preparationQueueMap;
+
+- (OWSUploadOperation *)buildUploadOperationForAttachmentId:(NSString *)attachmentId
+                                               recipientIds:(NSArray *)recipientIds
+                                                    message:(TSOutgoingMessage *)message;
+
+- (NSArray<OWSPreparedQuotedThumbnail *> *)prepareQuotedThumbnailsForMessage:(TSOutgoingMessage *)message;
+- (NSArray<TSAttachmentStream *> *)persistPreparedQuotedThumbnails:
+    (NSArray<OWSPreparedQuotedThumbnail *> *)preparedThumbnails
+                                                       transaction:(SDSAnyWriteTransaction *)transaction;
+- (void)removeUnpersistedPreparedQuotedThumbnails:(NSArray<OWSPreparedQuotedThumbnail *> *)preparedThumbnails
+                                             persisted:(NSArray<TSAttachmentStream *> *)persistedThumbnails;
 
 @end
 
@@ -223,6 +251,7 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
     _contactsManager = contactsManager;
     _contactsUpdater = contactsUpdater;
     _sendingQueueMap = [NSMutableDictionary new];
+    _preparationQueueMap = [NSMutableDictionary new];
 
     OWSSingletonAssert();
 
@@ -258,6 +287,159 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
     }
 }
 
+- (NSOperationQueue *)preparationQueueForMessage:(TSOutgoingMessage *)message
+{
+    OWSAssertDebug(message);
+
+    NSString *queueKey = message.uniqueThreadId ?: @"kDefaultQueueKey";
+    OWSAssertDebug(queueKey.length > 0);
+
+    @synchronized(self)
+    {
+        NSOperationQueue *preparationQueue = self.preparationQueueMap[queueKey];
+
+        if (!preparationQueue) {
+            preparationQueue = [NSOperationQueue new];
+            preparationQueue.name = [NSString stringWithFormat:@"OWSMessageSender.preparation.%@", queueKey];
+            preparationQueue.qualityOfService = NSOperationQualityOfServiceUserInitiated;
+            // Preparation is independent per message. Two lanes let the next video
+            // make progress while another is transcoding without allowing a large
+            // picker batch to saturate VideoToolbox, memory, and disk I/O. Completion
+            // order intentionally wins: a later short clip may upload and arrive before
+            // an earlier long clip, matching the product's independent-send behavior.
+            preparationQueue.maxConcurrentOperationCount = 2;
+
+            self.preparationQueueMap[queueKey] = preparationQueue;
+        }
+
+        return preparationQueue;
+    }
+}
+
+/// Build the standard outgoing-attachment upload operation. Extracted so the
+/// regular upload branch and the post-preprocessing branch share the same
+/// recipient + rapid-file wiring. Caller owns `addDependency:` / queueing.
+- (OWSUploadOperation *)buildUploadOperationForAttachmentId:(NSString *)attachmentId
+                                               recipientIds:(NSArray *)recipientIds
+                                                    message:(TSOutgoingMessage *)message
+{
+    OWSUploadOperation *uploadOperation =
+        [[OWSUploadOperation alloc] initWithAttachmentId:attachmentId recipientIds:[recipientIds copy]];
+    uploadOperation.rapidFileInfoBlock = ^(NSDictionary *_Nonnull info) {
+        if (info.count < 2) {
+            OWSLogError(@"%@ get rapidFile info failed!", self.logTag);
+            OWSProdError(@"get rapidFile info failed!");
+            return;
+        }
+        NSError *error;
+        DTRapidFile *rapidFile = [MTLJSONAdapter modelOfClass:[DTRapidFile class]
+                                           fromJSONDictionary:info
+                                                        error:&error];
+        if (!error) {
+            NSMutableArray *items = @[].mutableCopy;
+            if (message.rapidFiles.count) {
+                [items addObjectsFromArray:message.rapidFiles];
+            }
+            [items addObject:rapidFile];
+            message.rapidFiles = items.copy;
+        } else {
+            OWSLogError(@"%@ rapidFile info to model failed!", self.logTag);
+            OWSProdError(@"rapidFile info to model failed!");
+        }
+    };
+    return uploadOperation;
+}
+
+- (NSArray<OWSPreparedQuotedThumbnail *> *)prepareQuotedThumbnailsForMessage:(TSOutgoingMessage *)message
+{
+    TSQuotedMessage *_Nullable quotedMessage = message.quotedMessage;
+    if (!quotedMessage) {
+        return @[];
+    }
+
+    NSMutableArray<OWSPreparedQuotedThumbnail *> *preparedThumbnails = [NSMutableArray new];
+    for (OWSAttachmentInfo *attachmentInfo in quotedMessage.quotedAttachments) {
+        NSString *_Nullable sourceAttachmentId = attachmentInfo.attachmentId;
+        if (sourceAttachmentId.length < 1
+            || ![TSAttachmentStream hasThumbnailForMimeType:attachmentInfo.contentType]) {
+            continue;
+        }
+
+        __block TSAttachmentStream *_Nullable sourceStream = nil;
+        [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+            TSAttachment *_Nullable attachment =
+                [TSAttachment anyFetchWithUniqueId:sourceAttachmentId transaction:transaction];
+            if ([attachment isKindOfClass:[TSAttachmentStream class]]) {
+                sourceStream = (TSAttachmentStream *)attachment;
+            }
+        }];
+        if (!sourceStream) {
+            continue;
+        }
+
+        // Decrypt and decode before acquiring the write transaction.
+        TSAttachmentStream *_Nullable thumbnailStream = [sourceStream cloneAsThumbnail];
+        if (!thumbnailStream) {
+            continue;
+        }
+
+        OWSPreparedQuotedThumbnail *prepared = [OWSPreparedQuotedThumbnail new];
+        prepared.attachmentInfo = attachmentInfo;
+        prepared.sourceStream = sourceStream;
+        prepared.thumbnailStream = thumbnailStream;
+        [preparedThumbnails addObject:prepared];
+    }
+    return [preparedThumbnails copy];
+}
+
+- (NSArray<TSAttachmentStream *> *)persistPreparedQuotedThumbnails:
+    (NSArray<OWSPreparedQuotedThumbnail *> *)preparedThumbnails
+                                                       transaction:(SDSAnyWriteTransaction *)transaction
+{
+    NSMutableArray<TSAttachmentStream *> *persistedThumbnails = [NSMutableArray new];
+    for (OWSPreparedQuotedThumbnail *prepared in preparedThumbnails) {
+        TSAttachmentStream *preparedSource = prepared.sourceStream;
+        TSAttachment *_Nullable attachment =
+            [TSAttachment anyFetchWithUniqueId:preparedSource.uniqueId transaction:transaction];
+        if (![attachment isKindOfClass:[TSAttachmentStream class]]) {
+            continue;
+        }
+
+        TSAttachmentStream *canonicalSource = (TSAttachmentStream *)attachment;
+        BOOL sameRelativePath = canonicalSource.localRelativeFilePath == preparedSource.localRelativeFilePath
+            || [canonicalSource.localRelativeFilePath isEqualToString:preparedSource.localRelativeFilePath];
+        BOOL samePayload = sameRelativePath
+            && canonicalSource.byteCount == preparedSource.byteCount
+            && [canonicalSource.contentType isEqualToString:preparedSource.contentType];
+        if (!samePayload) {
+            OWSLogWarn(@"%@ quoted attachment changed while preparing its thumbnail: %@",
+                       self.logTag,
+                       preparedSource.uniqueId);
+            continue;
+        }
+
+        TSAttachmentStream *thumbnailStream = prepared.thumbnailStream;
+        // The payload is already a display-ready JPEG.
+        [thumbnailStream anyInsertPreparedThumbnailWithTransaction:transaction];
+        prepared.attachmentInfo.thumbnailAttachmentStreamId = thumbnailStream.uniqueId;
+        [persistedThumbnails addObject:thumbnailStream];
+    }
+    return [persistedThumbnails copy];
+}
+
+- (void)removeUnpersistedPreparedQuotedThumbnails:(NSArray<OWSPreparedQuotedThumbnail *> *)preparedThumbnails
+                                         persisted:(NSArray<TSAttachmentStream *> *)persistedThumbnails
+{
+    NSSet<NSString *> *persistedIds = [NSSet setWithArray:[persistedThumbnails valueForKey:@"uniqueId"]];
+    for (OWSPreparedQuotedThumbnail *prepared in preparedThumbnails) {
+        if ([persistedIds containsObject:prepared.thumbnailStream.uniqueId]) {
+            continue;
+        }
+        // Remove files rejected by canonical revalidation.
+        [prepared.thumbnailStream removePlaintextFile];
+    }
+}
+
 - (void)enqueueMessage:(TSOutgoingMessage *)message
                success:(void (^)(void))successHandler
                failure:(void (^)(NSError *error))failureHandler
@@ -275,6 +457,8 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
     //发送 消息队列
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
+        NSArray<OWSPreparedQuotedThumbnail *> *preparedQuotedThumbnails =
+            [self prepareQuotedThumbnailsForMessage:message];
         __block NSArray<TSAttachmentStream *> *quotedThumbnailAttachments = @[];
         __block NSArray<TSAttachment *> *forwardingAttachments = @[];
         __block TSAttachmentStream *_Nullable contactShareAvatarAttachment;
@@ -295,7 +479,7 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
             
             if (message.quotedMessage) {
                 quotedThumbnailAttachments =
-                    [message.quotedMessage createThumbnailAttachmentsIfNecessaryWithTransaction:writeTransaction];
+                    [self persistPreparedQuotedThumbnails:preparedQuotedThumbnails transaction:writeTransaction];
             }
             
             if (message.combinedForwardingMessage) {
@@ -340,6 +524,9 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
                 }
             }
         });
+
+        [self removeUnpersistedPreparedQuotedThumbnails:preparedQuotedThumbnails
+                                               persisted:quotedThumbnailAttachments];
         
         NSOperationQueue *sendingQueue = [self sendingQueueForMessage:message];
         OWSSendMessageOperation *sendMessageOperation =
@@ -352,36 +539,85 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
         
         // TODO de-dupe attachment enque logic.
         if (message.hasAttachments) {
-            
+
+            NSString *attachmentId = message.attachmentIds.firstObject;
+            NSArray *recipientIds = desThread.recipientIdentifiers;
+
+            __block TSAttachmentStream *placeholderStream = nil;
+            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+                TSAttachment *attachment = [TSAttachment anyFetchWithUniqueId:attachmentId
+                                                                  transaction:transaction];
+                if ([attachment isKindOfClass:[TSAttachmentStream class]]
+                    && ((TSAttachmentStream *)attachment).preprocessingKind != TSAttachmentPreprocessingKindNone) {
+                    placeholderStream = (TSAttachmentStream *)attachment;
+                }
+            }];
+
+            OWSOperation *prepOp = nil;
+            if (placeholderStream) {
+                // Off the insert transaction (see -[TSAttachmentStream
+                // anyDidInsertWithTransaction:]): a video still needs the hardware
+                // decoder, which a concurrent compression can hold for seconds, and
+                // under the write lock that stalls every later bubble. Touch the
+                // message after — the cell keys off interactions, not attachments.
+                dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+                    [placeholderStream ensureThumbnail];
+                    DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *thumbnailTransaction) {
+                        if (message.grdbId) {
+                            [self.databaseStorage touchInteraction:message
+                                                     shouldReindex:NO
+                                                       transaction:thumbnailTransaction];
+                        }
+                    });
+                });
+
+                prepOp = [self makePreprocessingOperationForMessage:message attachment:placeholderStream];
+                if (!prepOp) {
+                    // No factory entry for this kind (programmer error). Bail instead
+                    // of falling through to the regular upload branch, which would
+                    // ship the placeholder's uncompressed payload as the final one.
+                    OWSFailDebug(@"%@ no preprocessing operation for kind %lu",
+                                 self.logTag,
+                                 (unsigned long)placeholderStream.preprocessingKind);
+                    DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+                        [message updateWithAllSendingRecipientsMarkedAsFailedWithTansaction:transaction];
+                    });
+                    NSError *error = OWSErrorMakeFailedToSendOutgoingMessageError();
+                    [error setIsRetryable:NO];
+                    return failureHandler(error);
+                }
+            }
+
             OWSUploadOperation *uploadAttachmentOperation =
-            [[OWSUploadOperation alloc] initWithAttachmentId:message.attachmentIds.firstObject
-                                                recipientIds:[desThread.recipientIdentifiers copy]];
-            uploadAttachmentOperation.rapidFileInfoBlock = ^(NSDictionary * _Nonnull info) {
-                if(info.count < 2){
-                    OWSLogError(@"%@ get rapidFile info failed!", self.logTag);
-                    OWSProdError(@"get rapidFile info failed!");
-                    return;
-                }
-                NSError *error;
-                DTRapidFile *rapidFile = [MTLJSONAdapter modelOfClass:[DTRapidFile class]
-                                                   fromJSONDictionary:info
-                                                                error:&error];
-                if(!error){
-                    NSMutableArray *items = @[].mutableCopy;
-                    if(message.rapidFiles.count){
-                        [items addObjectsFromArray:message.rapidFiles];
-                    }
-                    [items addObject:rapidFile];
-                    message.rapidFiles = items.copy;
-                }else{
-                    OWSLogError(@"%@ rapidFile info to model failed!", self.logTag);
-                    OWSProdError(@"rapidFile info to model failed!");
-                }
-            };
-            [sendMessageOperation addDependency:uploadAttachmentOperation];
-            [sendingQueue addOperation:uploadAttachmentOperation];
-            
-            OWSLogInfo(@"%@ message:%llu send step-2.2 创建并添加上传附件Operation为依赖.", self.logTag, message.timestamp);
+                [self buildUploadOperationForAttachmentId:attachmentId
+                                             recipientIds:recipientIds
+                                                  message:message];
+
+            if (prepOp) {
+                // prepOp → uploadOp → sendOp. The prep op swaps the payload in
+                // place, so the attachment still needs uploading afterwards.
+                //
+                // Cancellation must cascade: if the user deletes the message
+                // mid-compression the row is still a placeholder, and uploading
+                // or sending it would ship the wrong payload.
+                uploadAttachmentOperation.cascadesCancellationFromDependencies = YES;
+                sendMessageOperation.cascadesCancellationFromDependencies = YES;
+
+                [uploadAttachmentOperation addDependency:prepOp];
+                [sendMessageOperation addDependency:uploadAttachmentOperation];
+                [[self preparationQueueForMessage:message] addOperation:prepOp];
+                [sendingQueue addOperation:uploadAttachmentOperation];
+
+                OWSLogInfo(@"%@ message:%llu send step-2.2 预处理占位 (kind=%lu) prepOp → uploadOp → sendOp.",
+                           self.logTag,
+                           message.timestamp,
+                           (unsigned long)placeholderStream.preprocessingKind);
+            } else {
+                [sendMessageOperation addDependency:uploadAttachmentOperation];
+                [sendingQueue addOperation:uploadAttachmentOperation];
+
+                OWSLogInfo(@"%@ message:%llu send step-2.2 创建并添加上传附件Operation为依赖.", self.logTag, message.timestamp);
+            }
         }
 
         // Though we currently only ever expect at most one thumbnail, the proto data model
@@ -543,58 +779,114 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
                   success:(void (^)(void))successHandler
                   failure:(void (^)(NSError *error))failureHandler
 {
+    [self enqueueAttachment:dataSource
+                contentType:contentType
+             sourceFilename:sourceFilename
+          preprocessingKind:TSAttachmentPreprocessingKindNone
+        preprocessingParams:nil
+                  inMessage:message
+     preSendMessageCallBack:preSendMessageCallBack
+                    success:successHandler
+                    failure:failureHandler];
+}
+
+- (void)enqueueAttachment:(id <DataSource>)dataSource
+              contentType:(NSString *)contentType
+           sourceFilename:(nullable NSString *)sourceFilename
+        preprocessingKind:(TSAttachmentPreprocessingKind)preprocessingKind
+      preprocessingParams:(nullable NSData *)preprocessingParams
+                inMessage:(TSOutgoingMessage *)message
+   preSendMessageCallBack:(nullable void (^)(TSOutgoingMessage *))preSendMessageCallBack
+                  success:(void (^)(void))successHandler
+                  failure:(void (^)(NSError *error))failureHandler
+{
     OWSAssertDebug(dataSource);
 
-    dispatch_async([OWSDispatch attachmentsQueue], ^{
+    void (^persistAttachment)(CGSize) = ^(CGSize sourceVideoPixelSize) {
+        dispatch_async([OWSDispatch attachmentsQueue], ^{
         
-        __block TSThread *thread = nil;
-        if(message.uniqueThreadId){
-            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
-                thread = [message threadWithTransaction:transaction];
-            }];
-        }
-        
-        TSAttachmentStream *attachmentStream =
-            [[TSAttachmentStream alloc] initWithContentType:contentType
-                                                  byteCount:(UInt64)dataSource.dataLength
-                                             sourceFilename:sourceFilename
-                                             albumMessageId:message.uniqueId
-                                                    albumId:thread.uniqueId];
-        if (message.isVoiceMessage) {
-            attachmentStream.attachmentType = TSAttachmentTypeVoiceMessage;
-        } else if (([MIMETypeUtil isImage:contentType] || [MIMETypeUtil isAnimated:contentType])
-                   && [dataSource.data imageMetadataWithPath:nil mimeType:contentType].isAnimated) {
-            // Mark animated images (GIF/animated-WebP/APNG) so receivers can preview without downloading.
-            // Gate on image MIME first so a large video/file never loads its bytes just to check.
-            attachmentStream.attachmentType = TSAttachmentTypeGif;
-        }
-
-        if (![attachmentStream writeDataSource:dataSource]) {
-            OWSProdError([OWSAnalyticsEvents messageSenderErrorCouldNotWriteAttachment]);
-            NSError *error = OWSErrorMakeWriteAttachmentDataError();
-            return failureHandler(error);
-        }
-
-        DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
-            [attachmentStream anyInsertWithTransaction:transaction];
-        });
-        if(attachmentStream.uniqueId.length){
-            NSMutableArray *newItems = @[].mutableCopy;
-            if(message.attachmentIds.count){
-                [newItems addObjectsFromArray:message.attachmentIds];
+            __block TSThread *thread = nil;
+            if(message.uniqueThreadId){
+                [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * transaction) {
+                    thread = [message threadWithTransaction:transaction];
+                }];
             }
-            [newItems addObject:attachmentStream.uniqueId];
-            message.attachmentIds = newItems.copy;
-        }
+        
+            TSAttachmentStream *attachmentStream =
+                [[TSAttachmentStream alloc] initWithContentType:contentType
+                                                      byteCount:(UInt64)dataSource.dataLength
+                                                 sourceFilename:sourceFilename
+                                                 albumMessageId:message.uniqueId
+                                                        albumId:thread.uniqueId];
+            if (message.isVoiceMessage) {
+                attachmentStream.attachmentType = TSAttachmentTypeVoiceMessage;
+            } else if (([MIMETypeUtil isImage:contentType] || [MIMETypeUtil isAnimated:contentType])
+                       && [dataSource.data imageMetadataWithPath:nil mimeType:contentType].isAnimated) {
+                // Mark animated images (GIF/animated-WebP/APNG) so receivers can preview without downloading.
+                // Gate on image MIME first so a large video/file never loads its bytes just to check.
+                attachmentStream.attachmentType = TSAttachmentTypeGif;
+            }
+
+            // Carry the placeholder intent onto the persisted row before the data is
+            // written, so `enqueueMessage:` below dispatches the matching preparation
+            // operation instead of taking the regular upload branch.
+            if (preprocessingKind != TSAttachmentPreprocessingKindNone) {
+                attachmentStream.preprocessingKind = preprocessingKind;
+                attachmentStream.preprocessingParams = preprocessingParams;
+            }
+
+            if (![attachmentStream writeDataSource:dataSource]) {
+                OWSProdError([OWSAnalyticsEvents messageSenderErrorCouldNotWriteAttachment]);
+                NSError *error = OWSErrorMakeWriteAttachmentDataError();
+                return failureHandler(error);
+            }
+
+            // Stamp dimensions obtained before entering the serial attachment queue.
+            // The cell-height pass can then size from the row without synchronously
+            // loading AVAsset metadata or decoding a frame during snapshot rendering.
+            if (sourceVideoPixelSize.width > 0 && sourceVideoPixelSize.height > 0) {
+                attachmentStream.width = (UInt32)round(sourceVideoPixelSize.width);
+                attachmentStream.height = (UInt32)round(sourceVideoPixelSize.height);
+            }
+
+            DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+                [attachmentStream anyInsertWithTransaction:transaction];
+            });
+            if(attachmentStream.uniqueId.length){
+                NSMutableArray *newItems = @[].mutableCopy;
+                if(message.attachmentIds.count){
+                    [newItems addObjectsFromArray:message.attachmentIds];
+                }
+                [newItems addObject:attachmentStream.uniqueId];
+                message.attachmentIds = newItems.copy;
+            }
 //        [message.attachmentIds addObject:attachmentStream.uniqueId];
 //        if (sourceFilename) {
 //            message.attachmentFilenameMap[attachmentStream.uniqueId] = sourceFilename;
 //        }
-        if (preSendMessageCallBack) {
-            preSendMessageCallBack(message);
-        }
-        [self enqueueMessage:message success:successHandler failure:failureHandler];
-    });
+            if (preSendMessageCallBack) {
+                preSendMessageCallBack(message);
+            }
+            [self enqueueMessage:message success:successHandler failure:failureHandler];
+        });
+    };
+
+    if (preprocessingKind == TSAttachmentPreprocessingKindVideoCompression) {
+        // AVAsset track loading can block even though it does not decode a frame.
+        // Do it independently per video so one slow metadata load cannot hold the
+        // global serial attachment queue and delay every bubble behind it. Persistence
+        // order may therefore follow metadata readiness rather than picker order; this
+        // is intentional for the same independent-send behavior as preparation above.
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            NSURL *_Nullable sourceURL = dataSource.dataUrl;
+            CGSize pixelSize = sourceURL
+                ? [OWSMessageSender videoPixelSizeForFileURL:sourceURL]
+                : CGSizeZero;
+            persistAttachment(pixelSize);
+        });
+    } else {
+        persistAttachment(CGSizeZero);
+    }
 }
 
 // 发送消息
@@ -789,7 +1081,7 @@ NSString *const OWSMessageSenderRateLimitedException = @"RateLimitedException";
                                               transaction:(SDSAnyWriteTransaction *)transaction {
     
     
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    uint64_t now = [DTTrustedClock clientStampMs];
     TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initActionInfoMessageWithType:TSInfoMessageUserPermissionForbidden
                                                                             timestamp:now
                                                                       serverTimestamp:0

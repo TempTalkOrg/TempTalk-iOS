@@ -6,12 +6,16 @@
 #import "MIMETypeUtil.h"
 #import "NSData+Image.h"
 #import "OWSFileSystem.h"
+#import "SSKCryptography.h"
 #import "TSAttachmentPointer.h"
 #import <AVFoundation/AVFoundation.h>
 #import <ImageIO/ImageIO.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
+#import <objc/runtime.h>
 
 NS_ASSUME_NONNULL_BEGIN
+
+NSErrorDomain const TSAttachmentStreamErrorDomain = @"TSAttachmentStreamErrorDomain";
 
 @interface TSAttachmentStream ()
 
@@ -27,7 +31,67 @@ NS_ASSUME_NONNULL_BEGIN
 // Optional property.  Only set for attachments which need "lazy backup restore."
 @property (nonatomic, nullable) NSString *lazyRestoreFragmentId;
 
+// Transient guard used only while inserting a payload that is already a
+// display-ready thumbnail. The insert hook runs synchronously on this instance.
+@property (atomic) BOOL shouldSkipThumbnailGenerationOnInsert;
+
 @end
+
+/// Serves in-memory byte ranges to AVFoundation.
+@interface TSAttachmentMemoryResourceLoader : NSObject <AVAssetResourceLoaderDelegate>
+@property (nonatomic, readonly) NSData *data;
+@property (nonatomic, readonly) NSString *contentType;
+- (instancetype)initWithData:(NSData *)data contentType:(NSString *)contentType;
+@end
+
+@implementation TSAttachmentMemoryResourceLoader
+
+- (instancetype)initWithData:(NSData *)data contentType:(NSString *)contentType
+{
+    self = [super init];
+    if (!self) {
+        return self;
+    }
+    _data = data;
+    _contentType = contentType;
+    return self;
+}
+
+- (BOOL)resourceLoader:(AVAssetResourceLoader *)resourceLoader
+    shouldWaitForLoadingOfRequestedResource:(AVAssetResourceLoadingRequest *)loadingRequest
+{
+    AVAssetResourceLoadingContentInformationRequest *informationRequest = loadingRequest.contentInformationRequest;
+    if (informationRequest) {
+        informationRequest.contentType = [MIMETypeUtil utiTypeForMIMEType:self.contentType] ?: self.contentType;
+        informationRequest.contentLength = (long long)self.data.length;
+        informationRequest.byteRangeAccessSupported = YES;
+    }
+
+    AVAssetResourceLoadingDataRequest *dataRequest = loadingRequest.dataRequest;
+    if (dataRequest) {
+        long long start = dataRequest.currentOffset != 0 ? dataRequest.currentOffset : dataRequest.requestedOffset;
+        if (start < 0 || start > (long long)self.data.length) {
+            NSError *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                                 code:NSFileReadCorruptFileError
+                                             userInfo:nil];
+            [loadingRequest finishLoadingWithError:error];
+            return YES;
+        }
+        NSUInteger available = self.data.length - (NSUInteger)start;
+        NSUInteger requested = (NSUInteger)MAX(0, dataRequest.requestedLength);
+        NSUInteger length = dataRequest.requestsAllDataToEndOfResource ? available : MIN(available, requested);
+        if (length > 0) {
+            [dataRequest respondWithData:[self.data subdataWithRange:NSMakeRange((NSUInteger)start, length)]];
+        }
+    }
+
+    [loadingRequest finishLoading];
+    return YES;
+}
+
+@end
+
+static void *TSAttachmentMemoryResourceLoaderAssociationKey = &TSAttachmentMemoryResourceLoaderAssociationKey;
 
 #pragma mark -
 
@@ -51,6 +115,8 @@ NS_ASSUME_NONNULL_BEGIN
                    encryptionKey:(NSData *)encryptionKey
                           height:(unsigned int)height
                     isDownloaded:(BOOL)isDownloaded
+               preprocessingKind:(TSAttachmentPreprocessingKind)preprocessingKind
+             preprocessingParams:(nullable NSData *)preprocessingParams
                         serverId:(unsigned long long)serverId
                   sourceFilename:(nullable NSString *)sourceFilename
                            width:(unsigned int)width
@@ -78,6 +144,8 @@ NS_ASSUME_NONNULL_BEGIN
                      encryptionKey:encryptionKey
                             height:height
                       isDownloaded:isDownloaded
+                 preprocessingKind:preprocessingKind
+               preprocessingParams:preprocessingParams
                           serverId:serverId
                     sourceFilename:sourceFilename
                              width:width];
@@ -180,7 +248,28 @@ NS_ASSUME_NONNULL_BEGIN
 {
     [super anyDidInsertWithTransaction:transaction];
 
+    // Placeholder rows skip the synchronous decode — -[OWSMessageSender
+    // enqueueMessage:] does it off-transaction and touches the owning message when
+    // it lands. A concurrent compression can hold the hardware decoder for seconds
+    // (~2s against a 4K encode), and holding the write lock that long stalls every
+    // later bubble in a batch.
+    if (self.preprocessingKind != TSAttachmentPreprocessingKindNone
+        || self.shouldSkipThumbnailGenerationOnInsert) {
+        return;
+    }
+
     [self ensureThumbnail];
+}
+
+- (void)anyInsertPreparedThumbnailWithTransaction:(SDSAnyWriteTransaction *)transaction
+{
+    OWSAssertDebug(!self.shouldSkipThumbnailGenerationOnInsert);
+    self.shouldSkipThumbnailGenerationOnInsert = YES;
+    @try {
+        [self anyInsertWithTransaction:transaction];
+    } @finally {
+        self.shouldSkipThumbnailGenerationOnInsert = NO;
+    }
 }
 
 - (void)anyDidUpdateWithTransaction:(SDSAnyWriteTransaction *)transaction
@@ -259,6 +348,22 @@ NS_ASSUME_NONNULL_BEGIN
     return [NSString stringWithFormat:@"%@enc", self.filePath];
 }
 
+- (BOOL)isStoredEncrypted
+{
+    return self.hasEncryptedFile && self.hasUsableEncryptionMetadata;
+}
+
+- (BOOL)hasEncryptedFile
+{
+    NSString *_Nullable path = self.encryptedFilePath;
+    return path.length > 0 && [[NSFileManager defaultManager] fileExistsAtPath:path];
+}
+
+- (BOOL)hasUsableEncryptionMetadata
+{
+    return self.encryptionKey.length >= 64 && self.digest.length > 0;
+}
+
 - (nullable NSData *)readDataFromFileWithError:(NSError **)error
 {
     *error = nil;
@@ -267,7 +372,94 @@ NS_ASSUME_NONNULL_BEGIN
         OWSFailDebug(@"%@ Missing path for attachment.", self.logTag);
         return nil;
     }
-    return [NSData dataWithContentsOfFile:filePath options:0 error:error];
+
+    // A retained instance may not yet contain committed encryption metadata.
+    if (self.hasEncryptedFile && !self.hasUsableEncryptionMetadata
+        && ![[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
+        *error = [NSError errorWithDomain:TSAttachmentStreamErrorDomain
+                                     code:TSAttachmentStreamErrorMissingEncryptionMetadata
+                                 userInfo:@{
+                                     NSLocalizedDescriptionKey : @"Encrypted attachment metadata is not available on this model instance."
+                                 }];
+        return nil;
+    }
+
+    if (self.isStoredEncrypted) {
+        NSData *_Nullable encryptedData = [self readEncryptedDataFromFileWithError:error];
+        if (!encryptedData || *error) {
+            return nil;
+        }
+
+        // Migrated ciphertext has a new IV; authenticate it with its local digest.
+        NSData *localDigest = self.digest.length == 16
+            ? [SSKCryptography computeMD5Digest:encryptedData]
+            : [SSKCryptography computeSHA256Digest:encryptedData];
+        NSError *decryptError = nil;
+        NSData *_Nullable plaintext = [SSKCryptography decryptAttachment:encryptedData
+                                                                  withKey:self.encryptionKey
+                                                                   digest:localDigest
+                                                               useMd5Hash:YES
+                                                             unpaddedSize:(UInt32)self.byteCount
+                                                                    error:&decryptError];
+        if (decryptError) {
+            *error = decryptError;
+            return nil;
+        }
+        return plaintext;
+    }
+
+    NSData *_Nullable plaintext = [NSData dataWithContentsOfFile:filePath options:0 error:error];
+    if (!plaintext || *error) {
+        return nil;
+    }
+
+    // Lazily migrate uploaded plaintext left by older builds.
+    if (self.isUploaded && self.encryptionKey.length >= 64 && self.digest.length > 0) {
+        NSData *aesKey = [self.encryptionKey subdataWithRange:NSMakeRange(0, 32)];
+        NSData *hmacKey = [self.encryptionKey subdataWithRange:NSMakeRange(32, 32)];
+        NSData *outKey = nil;
+        NSData *outDigest = nil;
+        NSData *_Nullable ciphertext = [SSKCryptography encryptAttachmentData:plaintext
+                                                                          eKey:aesKey
+                                                                       hmacKey:hmacKey
+                                                                        outKey:&outKey
+                                                                     outDigest:&outDigest
+                                                                    useMd5Hash:(self.digest.length == 16)];
+        NSError *migrationError = nil;
+        if (ciphertext && [self writeEncryptedData:ciphertext error:&migrationError]) {
+            NSError *cleanupError = nil;
+            BOOL removedPlaintext = [self removePlaintextFileWithError:&cleanupError];
+            if (!removedPlaintext) {
+                OWSLogError(@"%@ legacy plaintext cleanup failed after migration: %@", self.logTag, cleanupError);
+            }
+        } else {
+            OWSLogError(@"%@ legacy plaintext migration failed: %@", self.logTag, migrationError);
+        }
+    }
+    return plaintext;
+}
+
+- (nullable NSData *)decryptedData
+{
+    NSError *error = nil;
+    NSData *_Nullable data = [self readDataFromFileWithError:&error];
+    if ([error.domain isEqualToString:TSAttachmentStreamErrorDomain]
+        && error.code == TSAttachmentStreamErrorMissingEncryptionMetadata) {
+        // Refresh a retained pre-commit model outside the low-level read primitive.
+        __block TSAttachmentStream *_Nullable latestStream = nil;
+        [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
+            latestStream = [TSAttachmentStream anyFetchAttachmentStreamWithUniqueId:self.uniqueId
+                                                                          transaction:transaction];
+        }];
+        if (latestStream) {
+            error = nil;
+            data = [latestStream readDataFromFileWithError:&error];
+        }
+    }
+    if (error) {
+        OWSLogError(@"%@ failed to read attachment plaintext: %@", self.logTag, error);
+    }
+    return data;
 }
 
 - (BOOL)writeData:(NSData *)data error:(NSError **)error
@@ -280,7 +472,6 @@ NS_ASSUME_NONNULL_BEGIN
         OWSFailDebug(@"%@ Missing path for attachment.", self.logTag);
         return NO;
     }
-    OWSLogInfo(@"%@ Writing attachment to file: %@", self.logTag, filePath);
     return [data writeToFile:filePath options:0 error:error];
 }
 
@@ -303,8 +494,16 @@ NS_ASSUME_NONNULL_BEGIN
     if (!filePath) {
         return NO;
     }
-    OWSLogInfo(@"%@ Writing encrypted attachment to file: %@", self.logTag, filePath);
-    return [data writeToFile:filePath options:0 error:error];
+    BOOL success = [data writeToFile:filePath options:NSDataWritingAtomic error:error];
+    if (success) {
+        [[NSFileManager defaultManager]
+            setAttributes:@{ NSFileProtectionKey : NSFileProtectionCompleteUntilFirstUserAuthentication }
+            ofItemAtPath:filePath
+            error:nil];
+        NSURL *url = [NSURL fileURLWithPath:filePath];
+        [url setResourceValue:@YES forKey:NSURLIsExcludedFromBackupKey error:nil];
+    }
+    return success;
 }
 
 - (BOOL)removeEncryptedDataWithError:(NSError **)error
@@ -333,7 +532,31 @@ NS_ASSUME_NONNULL_BEGIN
         OWSFailDebug(@"%@ Missing path for attachment.", self.logTag);
         return NO;
     }
-    OWSLogInfo(@"%@ Writing attachment to file: %@", self.logTag, filePath);
+
+    // On-disk sources: copyItemAtURL: (APFS CoW) instead of a full NSData read.
+    // DataSourceValue is excluded — its dataUrl lazily writes a temp file.
+    if ([dataSource isKindOfClass:[DataSourcePath class]]) {
+        NSURL *_Nullable sourceURL = dataSource.dataUrl;
+        if (sourceURL.isFileURL) {
+            // A 0-byte source means the original is unreadable; copying it would
+            // persist a corrupt attachment that downstream code can't diagnose.
+            if (dataSource.dataLength == 0) {
+                OWSFailDebug(@"%@ Source file is empty: %@", self.logTag, sourceURL.path);
+                return NO;
+            }
+
+            // copyItemAtURL: refuses to overwrite; clear any partial leftover.
+            [[NSFileManager defaultManager] removeItemAtPath:filePath error:nil];
+
+            NSError *copyError = nil;
+            if ([dataSource writeToUrl:[NSURL fileURLWithPath:filePath] error:&copyError]) {
+                return YES;
+            }
+            OWSLogError(@"%@ Failed to copy attachment from %@: %@", self.logTag, sourceURL.path, copyError);
+            return NO;
+        }
+    }
+
     return [dataSource writeToPath:filePath];
 }
 
@@ -401,6 +624,9 @@ NS_ASSUME_NONNULL_BEGIN
     NSString *_Nullable filePath = self.filePath;
     if (!filePath) {
         OWSFailDebug(@"%@ Missing path for attachment.", self.logTag);
+        return nil;
+    }
+    if (![[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
         return nil;
     }
     return [NSURL fileURLWithPath:filePath];
@@ -474,6 +700,96 @@ NS_ASSUME_NONNULL_BEGIN
     }
 }
 
+- (BOOL)removePlaintextFileWithError:(NSError **)error
+{
+    *error = nil;
+    NSString *_Nullable filePath = self.filePath;
+    if (filePath.length > 0 && [[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
+        NSError *removeError = nil;
+        if (![[NSFileManager defaultManager] removeItemAtPath:filePath error:&removeError]) {
+            OWSLogError(@"%@ failed to remove plaintext attachment: %@", self.logTag, removeError);
+            *error = removeError;
+        }
+    }
+    NSString *_Nullable thumbnailPath = self.thumbnailPath;
+    if (thumbnailPath.length > 0 && [[NSFileManager defaultManager] fileExistsAtPath:thumbnailPath]) {
+        NSError *thumbnailError = nil;
+        if (![[NSFileManager defaultManager] removeItemAtPath:thumbnailPath error:&thumbnailError]) {
+            OWSLogError(@"%@ failed to remove plaintext attachment thumbnail: %@", self.logTag, thumbnailError);
+            if (!*error) {
+                *error = thumbnailError;
+            }
+        }
+    }
+    return *error == nil;
+}
+
+- (void)removePlaintextFile
+{
+    NSError *error = nil;
+    (void)[self removePlaintextFileWithError:&error];
+}
+
+/// Returns a URL-safe extension for the in-memory asset.
+- (NSString *)sanitizedAssetPathExtension
+{
+    NSMutableCharacterSet *allowed = [[NSCharacterSet alphanumericCharacterSet] mutableCopy];
+    [allowed formIntersectionWithCharacterSet:[NSCharacterSet characterSetWithRange:NSMakeRange(0, 128)]];
+
+    NSArray<NSString *> *candidates = @[
+        self.sourceFilename.pathExtension ?: @"",
+        [MIMETypeUtil fileExtensionForMIMEType:self.contentType] ?: @"",
+    ];
+    for (NSString *candidate in candidates) {
+        if (candidate.length < 1) {
+            continue;
+        }
+        NSString *filtered = [[candidate componentsSeparatedByCharactersInSet:[allowed invertedSet]]
+            componentsJoinedByString:@""];
+        if (filtered.length > 0) {
+            return filtered.lowercaseString;
+        }
+    }
+    return @"bin";
+}
+
+- (nullable AVAsset *)decryptedMediaAsset
+{
+    if (!self.hasEncryptedFile && !self.hasUsableEncryptionMetadata) {
+        NSURL *_Nullable mediaURL = self.mediaURL;
+        if (mediaURL) {
+            return [AVURLAsset URLAssetWithURL:mediaURL options:nil];
+        }
+    }
+
+    NSData *_Nullable data = self.decryptedData;
+    if (!data) {
+        OWSLogError(@"%@ failed to read encrypted media.", self.logTag);
+        return nil;
+    }
+
+    // AVFoundation uses the extension for type inference.
+    NSString *extension = [self sanitizedAssetPathExtension];
+    NSURL *_Nullable url = [NSURL URLWithString:[NSString stringWithFormat:@"temptalk-attachment://%@/payload.%@",
+                                                                           self.uniqueId,
+                                                                           extension]];
+    if (!url) {
+        OWSLogError(@"%@ could not build a memory asset URL for attachment: %@", self.logTag, self.uniqueId);
+        return nil;
+    }
+    AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:nil];
+    TSAttachmentMemoryResourceLoader *loader =
+        [[TSAttachmentMemoryResourceLoader alloc] initWithData:data contentType:self.contentType];
+    dispatch_queue_t queue =
+        dispatch_queue_create("com.difft.temptalk.attachment-resource-loader", DISPATCH_QUEUE_SERIAL);
+    [asset.resourceLoader setDelegate:loader queue:queue];
+    objc_setAssociatedObject(asset,
+                             TSAttachmentMemoryResourceLoaderAssociationKey,
+                             loader,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return asset;
+}
+
 - (BOOL)isAnimated {
     return [MIMETypeUtil isAnimated:self.contentType];
 }
@@ -507,8 +823,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)isValidImage
 {
     OWSAssertDebug(self.isImage || self.isAnimated);
-
-    return [NSData ows_isValidImageAtPath:self.filePath mimeType:self.contentType];
+    NSError *error = nil;
+    NSData *_Nullable data = [self readDataFromFileWithError:&error];
+    return data && !error && [self isValidImageWithData:data];
 }
 
 #pragma mark -
@@ -518,11 +835,8 @@ NS_ASSUME_NONNULL_BEGIN
     if ([self isVideo]) {
         return [self videoStillImage];
     } else if ([self isImage] || [self isAnimated]) {
-        NSURL *_Nullable mediaUrl = [self mediaURL];
-        if (!mediaUrl) {
-            return nil;
-        }
-        NSData *data = [NSData dataWithContentsOfURL:mediaUrl];
+        NSError *error = nil;
+        NSData *data = [self readDataFromFileWithError:&error];
         if (!data) {
             return nil;
         }
@@ -546,12 +860,8 @@ NS_ASSUME_NONNULL_BEGIN
         return nil;
     }
 
-    NSURL *_Nullable mediaUrl = [self mediaURL];
-    if (!mediaUrl) {
-        return nil;
-    }
-
-    NSData *data = [NSData dataWithContentsOfURL:mediaUrl];
+    NSError *error = nil;
+    NSData *data = [self readDataFromFileWithError:&error];
     if (!data) {
         return nil;
     }
@@ -570,6 +880,24 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (nullable UIImage *)thumbnailImage
 {
+    if (self.isStoredEncrypted) {
+        if (self.isVideo) {
+            return [self videoStillImageWithMaxSize:CGSizeMake(512, 512)];
+        }
+        UIImage *_Nullable image = self.image;
+        if (!image) {
+            return nil;
+        }
+        CGSize size = image.size;
+        CGFloat scale = MIN(1, 512 / MAX(size.width, size.height));
+        CGSize target = CGSizeMake(MAX(1, floor(size.width * scale)), MAX(1, floor(size.height * scale)));
+        UIGraphicsBeginImageContextWithOptions(target, NO, 1);
+        [image drawInRect:CGRectMake(0, 0, target.width, target.height)];
+        UIImage *thumbnail = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        return thumbnail;
+    }
+
     NSString *thumbnailPath = self.thumbnailPath;
     if (!thumbnailPath) {
         OWSAssertDebug(!self.isImage && !self.isVideo && !self.isAnimated);
@@ -589,6 +917,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (nullable NSData *)thumbnailData
 {
+    if (self.isStoredEncrypted) {
+        UIImage *_Nullable thumbnail = self.thumbnailImage;
+        return thumbnail ? UIImageJPEGRepresentation(thumbnail, 0.9) : nil;
+    }
+
     NSString *thumbnailPath = self.thumbnailPath;
     if (!thumbnailPath) {
         OWSAssertDebug(!self.isImage && !self.isVideo && !self.isAnimated);
@@ -607,6 +940,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)ensureThumbnail
 {
+    // Never create a plaintext disk thumbnail once ciphertext exists.
+    if (self.hasEncryptedFile) {
+        return;
+    }
+
     NSString *thumbnailPath = self.thumbnailPath;
     if (!thumbnailPath) {
         return;
@@ -617,10 +955,8 @@ NS_ASSUME_NONNULL_BEGIN
         return;
     }
 
-    if (![[NSFileManager defaultManager] fileExistsAtPath:self.mediaURL.path]) {
-        OWSLogError(@"%@ while generating thumbnail, source file doesn't exist: %@", self.logTag, self.mediaURL);
-        // If we're not lazy-restoring this message, the attachment should exist on disk.
-//        OWSAssertDebug(self.lazyRestoreFragmentId);
+    NSURL *_Nullable mediaURL = self.mediaURL;
+    if (!mediaURL || ![[NSFileManager defaultManager] fileExistsAtPath:mediaURL.path]) {
         return;
     }
 
@@ -633,8 +969,16 @@ NS_ASSUME_NONNULL_BEGIN
             return;
         }
 
-        CGImageSourceRef imageSource = CGImageSourceCreateWithURL((__bridge CFURLRef)self.mediaURL, NULL);
-        OWSAssertDebug(imageSource != NULL);
+        // Validation may migrate and remove the plaintext source.
+        if (self.hasEncryptedFile) {
+            return;
+        }
+
+        CGImageSourceRef imageSource = CGImageSourceCreateWithURL((__bridge CFURLRef)mediaURL, NULL);
+        if (!imageSource) {
+            OWSLogError(@"%@ could not open thumbnail source: %@", self.logTag, self.uniqueId);
+            return;
+        }
         NSDictionary *imageOptions = @{
             (NSString const *)kCGImageSourceCreateThumbnailFromImageIfAbsent : (NSNumber const *)kCFBooleanTrue,
             (NSString const *)kCGImageSourceThumbnailMaxPixelSize : @(thumbnailSize),
@@ -643,6 +987,11 @@ NS_ASSUME_NONNULL_BEGIN
         CGImageRef thumbnail
             = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, (__bridge CFDictionaryRef)imageOptions);
         CFRelease(imageSource);
+
+        if (!thumbnail) {
+            OWSLogError(@"%@ could not decode thumbnail source: %@", self.logTag, self.uniqueId);
+            return;
+        }
 
         result = [[UIImage alloc] initWithCGImage:thumbnail];
         CGImageRelease(thumbnail);
@@ -676,20 +1025,163 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (nullable UIImage *)videoStillImageWithMaxSize:(CGSize)maxSize
 {
-    NSURL *_Nullable mediaUrl = [self mediaURL];
-    if (!mediaUrl) {
+    if (self.isStoredEncrypted && NSThread.isMainThread) {
+        OWSLogError(@"%@ Refusing to synchronously generate an encrypted video still on the main thread.",
+            self.logTag);
         return nil;
     }
-    AVURLAsset *asset = [[AVURLAsset alloc] initWithURL:mediaUrl options:nil];
+
+    if (self.isStoredEncrypted) {
+        // Do not read result if the completion may still be writing it.
+        NSObject *resultLock = [NSObject new];
+        __block UIImage *_Nullable result = nil;
+        dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+        [self videoStillImageWithMaxSize:maxSize
+                              completion:^(UIImage *_Nullable image) {
+                                  @synchronized(resultLock) {
+                                      result = image;
+                                  }
+                                  dispatch_semaphore_signal(semaphore);
+                              }];
+        if (dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, 11 * NSEC_PER_SEC)) != 0) {
+            OWSLogError(@"%@ Timed out waiting for encrypted video still: %@", self.logTag, self.uniqueId);
+            return nil;
+        }
+        @synchronized(resultLock) {
+            return result;
+        }
+    }
+
+    AVAsset *_Nullable asset = [self decryptedMediaAsset];
+    if (!asset) {
+        return nil;
+    }
 
     AVAssetImageGenerator *generator = [[AVAssetImageGenerator alloc] initWithAsset:asset];
     generator.maximumSize = maxSize;
     generator.appliesPreferredTrackTransform = YES;
-    NSError *err = NULL;
+    NSError *_Nullable error = nil;
     CMTime time = CMTimeMake(1, 60);
-    CGImageRef imgRef = [generator copyCGImageAtTime:time actualTime:NULL error:&err];
+    CGImageRef _Nullable imageRef = [generator copyCGImageAtTime:time actualTime:NULL error:&error];
+    if (!imageRef) {
+        OWSLogError(@"%@ Failed to generate video still for attachment %@: %@", self.logTag, self.uniqueId, error);
+        return nil;
+    }
 
-    return [[UIImage alloc] initWithCGImage:imgRef];
+    UIImage *image = [[UIImage alloc] initWithCGImage:imageRef];
+    CGImageRelease(imageRef);
+    return image;
+}
+
+- (void)videoStillImageWithMaxSize:(CGSize)maxSize
+                        completion:(void (^)(UIImage *_Nullable image))completion
+{
+    OWSAssertDebug(completion);
+
+    NSObject *completionLock = [NSObject new];
+    __block BOOL hasCompleted = NO;
+    __block AVAsset *_Nullable activeAsset = nil;
+    __block AVAssetImageGenerator *_Nullable activeGenerator = nil;
+
+    void (^finish)(UIImage *_Nullable) = ^(UIImage *_Nullable image) {
+        @synchronized(completionLock) {
+            if (hasCompleted) {
+                return;
+            }
+            hasCompleted = YES;
+            activeAsset = nil;
+            activeGenerator = nil;
+        }
+        completion(image);
+    };
+
+    // Bound the operation and suppress late duplicate completions.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC),
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
+        ^{
+            AVAsset *_Nullable asset = nil;
+            AVAssetImageGenerator *_Nullable generator = nil;
+            @synchronized(completionLock) {
+                if (hasCompleted) {
+                    return;
+                }
+                hasCompleted = YES;
+                asset = activeAsset;
+                generator = activeGenerator;
+                activeAsset = nil;
+                activeGenerator = nil;
+            }
+            [asset cancelLoading];
+            [generator cancelAllCGImageGeneration];
+            OWSLogError(@"%@ Timed out asynchronously generating video still for attachment: %@",
+                self.logTag,
+                self.uniqueId);
+            completion(nil);
+        });
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        AVAsset *_Nullable asset = [self decryptedMediaAsset];
+        if (!asset) {
+            finish(nil);
+            return;
+        }
+
+        @synchronized(completionLock) {
+            if (hasCompleted) {
+                [asset cancelLoading];
+                return;
+            }
+            activeAsset = asset;
+        }
+
+        NSArray<NSString *> *keys = @[ @"tracks" ];
+        [asset loadValuesAsynchronouslyForKeys:keys
+                             completionHandler:^{
+                                 for (NSString *key in keys) {
+                                     NSError *_Nullable loadingError = nil;
+                                     if ([asset statusOfValueForKey:key error:&loadingError] != AVKeyValueStatusLoaded) {
+                                         OWSLogError(@"%@ Failed to load video metadata key %@ for attachment %@: %@",
+                                             self.logTag,
+                                             key,
+                                             self.uniqueId,
+                                             loadingError);
+                                         finish(nil);
+                                         return;
+                                     }
+                                 }
+
+                                 AVAssetImageGenerator *generator =
+                                     [[AVAssetImageGenerator alloc] initWithAsset:asset];
+                                 generator.maximumSize = maxSize;
+                                 generator.appliesPreferredTrackTransform = YES;
+                                 @synchronized(completionLock) {
+                                     if (hasCompleted) {
+                                         [generator cancelAllCGImageGeneration];
+                                         return;
+                                     }
+                                     activeGenerator = generator;
+                                 }
+
+                                 CMTime time = CMTimeMake(1, 60);
+                                 [generator generateCGImagesAsynchronouslyForTimes:@[ [NSValue valueWithCMTime:time] ]
+                                                                 completionHandler:^(CMTime requestedTime,
+                                                                     CGImageRef _Nullable imageRef,
+                                                                     CMTime actualTime,
+                                                                     AVAssetImageGeneratorResult result,
+                                                                     NSError *_Nullable error) {
+                                                                     if (result != AVAssetImageGeneratorSucceeded
+                                                                         || !imageRef) {
+                                                                         OWSLogError(@"%@ Failed to asynchronously generate video still for attachment %@: %@",
+                                                                             self.logTag,
+                                                                             self.uniqueId,
+                                                                             error);
+                                                                         finish(nil);
+                                                                         return;
+                                                                     }
+                                                                     finish([[UIImage alloc] initWithCGImage:imageRef]);
+                                                                 }];
+                             }];
+    });
 }
 
 + (void)deleteAttachments
@@ -717,10 +1209,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (CGSize)calculateImageSize
 {
     if ([self isVideo]) {
+        // Last resort — decodes a full frame just to measure it. Rows written by the
+        // sender carry width/height, so -imageSize doesn't reach here for them.
         return [self videoStillImage].size;
     } else if ([self isImage] || [self isAnimated]) {
-        NSURL *_Nullable mediaUrl = [self mediaURL];
-        if (!mediaUrl) {
+        NSError *error = nil;
+        NSData *_Nullable data = [self readDataFromFileWithError:&error];
+        if (!data || error) {
             return CGSizeZero;
         }
         if (![self isValidImage]) {
@@ -728,9 +1223,9 @@ NS_ASSUME_NONNULL_BEGIN
         }
 
         // With CGImageSource we avoid loading the whole image into memory.
-        CGImageSourceRef source = CGImageSourceCreateWithURL((CFURLRef)mediaUrl, NULL);
+        CGImageSourceRef source = CGImageSourceCreateWithData((CFDataRef)data, NULL);
         if (!source) {
-            OWSFailDebug(@"%@ Could not load image: %@", self.logTag, mediaUrl);
+            OWSFailDebug(@"%@ Could not load image data", self.logTag);
             return CGSizeZero;
         }
 
@@ -753,7 +1248,7 @@ NS_ASSUME_NONNULL_BEGIN
                         [self applyImageOrientation:(UIImageOrientation)orientation.intValue toImageSize:imageSize];
                 }
             } else {
-                OWSFailDebug(@"%@ Could not determine size of image: %@", self.logTag, mediaUrl);
+                OWSFailDebug(@"%@ Could not determine image size", self.logTag);
             }
         }
         CFRelease(source);
@@ -835,8 +1330,16 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertIsOnMainThread();
     OWSAssertDebug([self isAudio]);
 
-    NSError *error;
-    AVAudioPlayer *audioPlayer = [[AVAudioPlayer alloc] initWithContentsOfURL:self.mediaURL error:&error];
+    NSError *error = nil;
+    AVAudioPlayer *audioPlayer = nil;
+    if (self.isStoredEncrypted) {
+        NSData *_Nullable data = [self readDataFromFileWithError:&error];
+        if (data) {
+            audioPlayer = [[AVAudioPlayer alloc] initWithData:data error:&error];
+        }
+    } else {
+        audioPlayer = [[AVAudioPlayer alloc] initWithContentsOfURL:self.mediaURL error:&error];
+    }
     if (error && [error.domain isEqualToString:NSOSStatusErrorDomain]
         && (error.code == kAudioFileInvalidFileError || error.code == kAudioFileStreamError_InvalidFile)) {
         // Ignore "invalid audio file" errors.
@@ -845,7 +1348,7 @@ NS_ASSUME_NONNULL_BEGIN
     if (!error) {
         return (CGFloat)[audioPlayer duration];
     } else {
-        OWSLogError(@"Could not find audio duration: %@", self.mediaURL);
+        OWSLogError(@"Could not find audio duration: %@", error);
         return 0;
     }
 }
@@ -1023,7 +1526,38 @@ NS_ASSUME_NONNULL_BEGIN
     return self.isImage || self.isVideo || self.isAnimated;
 }
 
+#pragma mark - Preprocessing
 
+- (void)applyCompressedVideoPayloadWithRelativePath:(NSString *)relativeFilePath
+                                          byteCount:(UInt32)byteCount
+                                        contentType:(NSString *)contentType
+                                              width:(UInt32)width
+                                             height:(UInt32)height
+{
+    self.localRelativeFilePath = relativeFilePath;
+    _byteCount = byteCount;
+    _contentType = [contentType copy];
+
+    // Keep sourceFilename's extension in sync with the new contentType
+    // (e.g. IMG_xxxx.MOV → IMG_xxxx.mp4).
+    if (_sourceFilename.length > 0) {
+        NSString *newExtension = [MIMETypeUtil fileExtensionForMIMEType:contentType];
+        if (newExtension.length > 0) {
+            _sourceFilename =
+                [[[_sourceFilename stringByDeletingPathExtension] stringByAppendingPathExtension:newExtension] copy];
+        }
+    }
+
+    if (width > 0 && height > 0) {
+        self.width = width;
+        self.height = height;
+    }
+
+    @synchronized(self) {
+        self.cachedImageWidth = nil;
+        self.cachedImageHeight = nil;
+    }
+}
 
 @end
 

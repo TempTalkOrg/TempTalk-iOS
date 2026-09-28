@@ -12,6 +12,7 @@ BOOL IsNoteToSelfEnabled(void);
 @class TSInteraction;
 @class TSMessage;
 @class TSIncomingMessage;
+@class TSOutgoingMessage;
 @class TSInvalidIdentityKeyReceivingErrorMessage;
 @class SDSAnyReadTransaction;
 @class SDSAnyWriteTransaction;
@@ -352,6 +353,10 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:archivalDate:conver
 @property (nonatomic, copy, readonly) NSString *serverThreadId;
 
 - (void)updateReadPositionEntity:(DTReadPositionEntity *)readPositionEntity;
+
+- (void)generateReadPositionForOutgoingMessageIfNeeded:(TSOutgoingMessage *)outgoingMessage
+                                                thread:(TSThread *)thread
+                                           transaction:(SDSAnyWriteTransaction *)transaction;
 
 - (BOOL)previewEqualTo:(id)objc;
 

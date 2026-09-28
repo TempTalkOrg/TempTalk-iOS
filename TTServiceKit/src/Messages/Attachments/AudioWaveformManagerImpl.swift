@@ -109,6 +109,62 @@ public protocol AudioWaveformSamplingObserver: AnyObject {
         )
     }
 
+    /// Samples a waveform asynchronously from an in-memory asset.
+    @objc(audioWaveformForAsset:completion:)
+    public func audioWaveform(
+        forAsset asset: AVAsset,
+        completion: @escaping (AudioWaveform?, NSError?) -> Void
+    ) {
+        // Custom-scheme assets require asynchronous metadata loading.
+        let keys = ["readable", "duration", "tracks"]
+        let hasResolvedMetadata = AtomicBool(false, lock: .sharedGlobal)
+
+        asset.loadValuesAsynchronously(forKeys: keys) {
+            guard hasResolvedMetadata.tryToSetFlag() else { return }
+
+            DispatchQueue.global(qos: .utility).async {
+                do {
+                    for key in keys {
+                        var loadingError: NSError?
+                        guard asset.statusOfValue(forKey: key, error: &loadingError) == .loaded else {
+                            if let loadingError {
+                                owsFailDebug("Failed to load AVAsset key \(key): \(loadingError)")
+                            }
+                            throw AudioWaveformError.invalidAudioFile
+                        }
+                    }
+
+                    guard asset.isReadable else {
+                        throw AudioWaveformError.invalidAudioFile
+                    }
+
+                    let duration = asset.duration
+                    guard duration.isValid, !duration.isIndefinite else {
+                        throw AudioWaveformError.invalidAudioFile
+                    }
+                    let durationSeconds = CMTimeGetSeconds(duration)
+                    guard durationSeconds.isFinite, durationSeconds >= 0 else {
+                        throw AudioWaveformError.invalidAudioFile
+                    }
+                    guard durationSeconds <= Self.maximumDuration else {
+                        throw AudioWaveformError.audioTooLong
+                    }
+
+                    completion(try self.sampleWaveform(asset: asset), nil)
+                } catch {
+                    completion(nil, error as NSError)
+                }
+            }
+        }
+
+        // Bound metadata loading; waveform sampling has its own duration limit.
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 10) {
+            guard hasResolvedMetadata.tryToSetFlag() else { return }
+            asset.cancelLoading()
+            completion(nil, AudioWaveformError.fileIOError as NSError)
+        }
+    }
+
 //    public func audioWaveformSync(
 //        forEncryptedAudioFileAtPath filePath: String,
 //        encryptionKey: Data,

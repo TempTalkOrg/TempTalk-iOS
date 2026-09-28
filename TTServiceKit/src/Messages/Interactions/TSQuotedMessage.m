@@ -238,6 +238,11 @@ NS_ASSUME_NONNULL_BEGIN
     }
     TSAttachmentStream *sourceStream = (TSAttachmentStream *)attachment;
 
+    // Avoid decrypting encrypted media inside the receive write transaction.
+    if (sourceStream.hasEncryptedFile) {
+        return nil;
+    }
+
     TSAttachmentStream *_Nullable thumbnailStream = [sourceStream cloneAsThumbnail];
     if (!thumbnailStream) {
         return nil;
@@ -302,36 +307,6 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     return [streamIds copy];
-}
-
-// Before sending, persist a thumbnail attachment derived from the quoted attachment
-- (NSArray<TSAttachmentStream *> *)createThumbnailAttachmentsIfNecessaryWithTransaction:
-    (SDSAnyWriteTransaction *)transaction
-{
-    NSMutableArray<TSAttachmentStream *> *thumbnailAttachments = [NSMutableArray new];
-
-    for (OWSAttachmentInfo *info in self.quotedAttachments) {
-
-        if (!info.attachmentId.length) {
-            continue;
-        }
-        TSAttachment *attachment = [TSAttachment anyFetchWithUniqueId:info.attachmentId transaction:transaction];
-        if (![attachment isKindOfClass:[TSAttachmentStream class]]) {
-            continue;
-        }
-        TSAttachmentStream *sourceStream = (TSAttachmentStream *)attachment;
-
-        TSAttachmentStream *_Nullable thumbnailStream = [sourceStream cloneAsThumbnail];
-        if (!thumbnailStream) {
-            continue;
-        }
-
-        [thumbnailStream anyInsertWithTransaction:transaction];
-        info.thumbnailAttachmentStreamId = thumbnailStream.uniqueId;
-        [thumbnailAttachments addObject:thumbnailStream];
-    }
-
-    return [thumbnailAttachments copy];
 }
 
 @end

@@ -29,7 +29,6 @@ import TTMessaging
 
     // Cached audio data to survive message deletion
     private var cachedAudioData: Data?
-    private var cachedAudioURL: URL?
 
     // UI Components
     private let containerView = UIView()
@@ -203,28 +202,12 @@ import TTMessaging
             stopAudioPlayer()
         }
 
-        // Try to get media URL - use cached URL if original file is gone
-        var mediaURL: URL?
-
-        // First try the original file path
-        if let filePath = attachmentStream.filePath(), FileManager.default.fileExists(atPath: filePath) {
-            mediaURL = attachmentStream.mediaURL()
-        } else if let cachedURL = cachedAudioURL, FileManager.default.fileExists(atPath: cachedURL.path) {
-            // Original file deleted, use cached copy
-            Logger.info("Using cached audio file for playback")
-            mediaURL = cachedURL
-        } else {
-            Logger.error("Missing audio file - neither original nor cached version available")
+        guard let audioData = cachedAudioData ?? attachmentStream.decryptedData() else {
+            Logger.error("Could not decrypt confidential audio")
             return
         }
 
-        guard let finalMediaURL = mediaURL else {
-            Logger.error("Could not get media URL")
-            return
-        }
-
-        // Create new player
-        audioPlayer = OWSAudioPlayer(mediaUrl: finalMediaURL, delegate: viewItem)
+        audioPlayer = OWSAudioPlayer(mediaData: audioData, delegate: viewItem)
         audioPlayer?.owner = viewItem.interaction.uniqueId as AnyObject
         audioPlayer?.playWithPlaybackAudioCategory()
 
@@ -272,40 +255,15 @@ import TTMessaging
     // MARK: - Audio Caching
 
     private func cacheAudioData(from attachmentStream: TSAttachmentStream) {
-        guard let filePath = attachmentStream.filePath(),
-              FileManager.default.fileExists(atPath: filePath) else {
-            Logger.error("Cannot cache audio - file does not exist")
+        guard let audioData = attachmentStream.decryptedData() else {
+            Logger.error("Cannot cache audio - decryption failed")
             return
         }
-
-        do {
-            // Read the decrypted audio data into memory
-            let audioData = try Data(contentsOf: URL(fileURLWithPath: filePath))
-            self.cachedAudioData = audioData
-
-            // Create a temporary file to store the cached audio
-            let tempDir = NSTemporaryDirectory()
-            let tempFileName = "confidential_audio_\(UUID().uuidString).m4a"
-            let tempURL = URL(fileURLWithPath: tempDir).appendingPathComponent(tempFileName)
-
-            // Write cached data to temp file
-            try audioData.write(to: tempURL)
-            self.cachedAudioURL = tempURL
-
-            Logger.info("Successfully cached audio data: \(audioData.count) bytes at \(tempURL.path)")
-        } catch {
-            Logger.error("Failed to cache audio data: \(error)")
-        }
+        cachedAudioData = audioData
     }
 
     private func cleanupCachedAudio() {
-        // Clean up temporary cached audio file
-        if let cachedURL = cachedAudioURL {
-            try? FileManager.default.removeItem(at: cachedURL)
-            Logger.info("Cleaned up cached audio file")
-        }
         cachedAudioData = nil
-        cachedAudioURL = nil
     }
 
     // MARK: - Mark as Read

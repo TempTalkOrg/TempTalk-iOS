@@ -14,11 +14,11 @@ import TTServiceKit
 @objc
 extension ConversationViewController {
     /// 展示个人信息卡片
-    func showPersonalInfoCard(recipientId: String) {
+    func showPersonalInfoCard(recipientId: String, addFriendSource: AddFriendSource) {
         dismissKeyBoard(byUserAction: true)
         // 判断是否是同一个 thread（1v1 会话）
         let isFromSameThread = !thread.isGroupThread() && thread.contactIdentifier() == recipientId
-        self.showProfileCardInfo(with: recipientId, isFromSameThread: isFromSameThread)
+        self.showProfileCardInfo(with: recipientId, addFriendSource: addFriendSource, isFromSameThread: isFromSameThread)
     }
 }
 
@@ -85,14 +85,16 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
             return
         }
 
+        let source = AddFriendHandler.shareContactSource(for: viewItem)
+
         if viewItem.isConfidentialMessage {
             // Confidential contact card: show full card, then burn the source message on view.
             handleConfidentialMessageTap(viewItem: viewItem) { [weak self] in
-                self?.showPersonalInfoCard(recipientId: shareContractId)
+                self?.showPersonalInfoCard(recipientId: shareContractId, addFriendSource: source)
                 self?.burnConfidentialMessageOnView(viewItem)
             }
         } else {
-            showPersonalInfoCard(recipientId: shareContractId)
+            showPersonalInfoCard(recipientId: shareContractId, addFriendSource: source)
         }
     }
     
@@ -242,6 +244,7 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
         AssertIsOnMainThread()
         owsAssertDebug(quotedReply.timestamp > 0)
         owsAssertDebug(!quotedReply.authorId.isEmpty)
+        cancelScrollDownButtonNavigation()
         
         databaseStorage.uiRead { transaction in
             self.conversationViewModel.ensureLoadWindowContainsQuotedReply(
@@ -297,14 +300,12 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
             nav.modalPresentationStyle = .fullScreen
             navigationController?.presentFormSheet(nav, animated: true)
         } else if cellType == .genericAttachment,
-                  let attachmentStream = viewItem.attachmentStream(),
-                  let filePath = attachmentStream.filePath() {
-            let incomingMessage = message as? TSIncomingMessage
-            let filePreviewVC = DTConfidentialFilePreviewController(
-                fileURL: URL(fileURLWithPath: filePath),
-                incomingMessage: incomingMessage
+                  let attachmentStream = viewItem.attachmentStream() {
+            previewAttachment(
+                attachmentStream: attachmentStream,
+                viewItem: viewItem,
+                confidentialMessage: message
             )
-            filePreviewVC.present(from: self)
         } else {
             let confideMessageVC = DTConfideMessageController(message)
             let nav = OWSNavigationController(rootViewController: confideMessageVC)
@@ -357,7 +358,7 @@ extension ConversationViewController: ConversationMessageBubbleViewDelegate {
 
 private extension ConversationViewController {
     /// Burn a confidential contact card on view: mark read + delete the source message.
-    /// Incoming only, mirroring DTConfidentialFilePreviewController.markAsReadAndDelete.
+    /// Incoming only; mark the confidential file read once secure rendering begins.
     func burnConfidentialMessageOnView(_ viewItem: ConversationViewItem) {
         guard let incoming = viewItem.interaction as? TSIncomingMessage,
               incoming.isConfidentialMessage() else {

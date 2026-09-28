@@ -54,6 +54,12 @@ var defaultRoomName: String {
     }
     @Published var callType: CallType = .instant
     var roomId: String?
+    /// Client-generated id for one user-initiated start action. It stays stable across
+    /// connection retries so control messages can address the call before `roomId` arrives.
+    var clientCallId: String?
+    /// True only for the local start-call path. Do not infer this from `isCaller`: the original
+    /// caller can later join the same room again without being the initiator of that session.
+    var isInitiator: Bool = false
     /// 当前通话对应的 CallKit UUID string（由 delegate 回调设置）
     var callKitUUID: String?
 //    var roomName: String = ""
@@ -71,6 +77,10 @@ var defaultRoomName: String {
     var duration: TimeInterval?
     /// 是否展示本地的call消息
     var createCallMsg: Bool = false
+    /// `createCallMsg == false` 时，群 start-call 通过普通 IM 补充 CallMsg。
+    /// Signal 成功和快速挂断的成功回调可能竞争，必须只允许其中一个路径发送。
+    private let groupStartCallMessageClaimLock = NSLock()
+    private var didClaimGroupStartCallMessageDelivery = false
     /// calling的消息类型
     var controlType: String?
     /// 邀请人的id列表
@@ -90,6 +100,15 @@ var defaultRoomName: String {
     /// startCall优化之后会返回响应body
     var ttcalResponseBody: Livekit_TTCallResponseBody?
     var ttcalResponseOptions: Livekit_TTCallOptions?
+
+    func claimGroupStartCallMessageDelivery() -> Bool {
+        groupStartCallMessageClaimLock.lock()
+        defer { groupStartCallMessageClaimLock.unlock() }
+
+        guard !didClaimGroupStartCallMessageDelivery else { return false }
+        didClaimGroupStartCallMessageDelivery = true
+        return true
+    }
     
     private var _roomName: String = ""
     var roomName: String {
@@ -115,8 +134,10 @@ var defaultRoomName: String {
                 }
                 let name = Environment.shared.contactsManager.displayName(forPhoneIdentifier: caller)
                 if name == caller {
-                    //获取昵称失败
-                    return "\(_roomName)'s instant call"
+                    // Never echo `_roomName` here: a group call resolved to instant for an outsider
+                    // still carries the group name from the wire, and this is the one place it would
+                    // reach the in-call title.
+                    return "instant call"
                 } else {
                     if DTParamsUtils.validateString(name).boolValue {
                         return "\(name)'s instant call"
@@ -144,6 +165,29 @@ var defaultRoomName: String {
         }
         
         return caller == localNumber
+    }
+
+    /// The other side of the original 1v1 call: the callee(s) when this device is the caller,
+    /// the caller otherwise. Inviting only these keeps the call at two people, so it stays 1v1.
+    var oneToOnePeerIds: Set<String> {
+        let peerIds: [String]
+        if isCaller {
+            if let callees, !callees.isEmpty {
+                peerIds = callees
+            } else if let conversationId, !conversationId.isEmpty {
+                peerIds = [conversationId]
+            } else {
+                peerIds = []
+            }
+        } else if let caller, !caller.isEmpty {
+            peerIds = [caller]
+        } else {
+            peerIds = []
+        }
+
+        return Set(peerIds.map {
+            $0.components(separatedBy: ".").first ?? $0
+        })
     }
         
     var othersideParticipantName: String {
@@ -204,6 +248,9 @@ extension DTLiveKitCallModel: NSCopying {
         copy.callState = self.callState
         copy.callType = self.callType
         copy.roomId = self.roomId
+        copy.clientCallId = self.clientCallId
+        // isInitiator is not copied: it belongs to one local start attempt, and bar/alert copies
+        // outlive it — inheriting it would let a rejoin end a live meeting.
         copy.roomName = self.roomName
         copy.conversationId = self.conversationId
         copy.caller = self.caller

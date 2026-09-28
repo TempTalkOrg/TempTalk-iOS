@@ -15,6 +15,7 @@
 #import "AppDelegate.h"
 #import "SignalApp.h"
 #import "Yelling-Swift.h"
+#import <TTServiceKit/TTServiceKit-Swift.h>
 #import "DTChatLoginUtils.h"
 #import <TTServiceKit/Localize_Swift.h>
 #import <TTServiceKit/DTScreenLockEntity.h>
@@ -756,7 +757,7 @@ static dispatch_source_t _timer;
     __block TSContactThread *cThread = nil;
     DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
         if([TSContactThread getThreadWithContactId:inviter transaction:writeTransaction]){
-            uint64_t now = [NSDate ows_millisecondTimeStamp];
+            uint64_t now = [DTTrustedClock clientStampMs];
             [[[TSInfoMessage alloc] initWithTimestamp:now
                                              inThread:cThread
                                           messageType:TSInfoMessageAddToContactsSucess] anyInsertWithTransaction:writeTransaction];

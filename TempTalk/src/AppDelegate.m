@@ -27,6 +27,7 @@
 #import <TTServiceKit/OWSArchivedMessageJob.h>
 #import <TTServiceKit/OWSMessageManager.h>
 #import <TTServiceKit/OWSMessageSender.h>
+#import <TTServiceKit/DTAttachmentPlaintextMigrator.h>
 #import <TTServiceKit/OWSOrphanedDataCleaner.h>
 #import <TTServiceKit/OWSReadReceiptManager.h>
 #import <TTServiceKit/TSAccountManager.h>
@@ -56,6 +57,7 @@
 
 @import FirebaseCrashlytics;
 @import FirebaseCore;
+@import FirebasePerformance;
 @import Intents;
 
 static NSTimeInterval launchStartedAt;
@@ -262,6 +264,7 @@ static void DTInstallSnapshotWindowCrashGuard(void)
         if([TSAccountManager sharedInstance].isRegistered){
             [[DTCallManager sharedInstance] requestForConfigMeetingversion];
         }
+        [[DTTrustedClock shared] ensureAnchored];
         // 冷启动时启动归档定时器、执行历史数据修复和清理空会话
         [[OWSArchivedMessageJob sharedJob] startIfNecessary];
         [[OWSArchivedMessageJob sharedJob] fixThreadsWithZeroExpiresInSecondsOnce];
@@ -313,6 +316,10 @@ static void DTInstallSnapshotWindowCrashGuard(void)
 #elif RELEASE
         NSString *filePath = [[NSBundle mainBundle] pathForResource:@"GoogleService-Info-chative" ofType:@"plist"];
         FIROptions *option = [[FIROptions alloc] initWithContentsOfFile:filePath];
+        // Firebase Performance 10.x can race while swizzling URLSession download delegate
+        // progress callbacks. Disable automatic instrumentation before Firebase starts; custom
+        // traces remain available through dataCollectionEnabled.
+        [FIRPerformance sharedInstance].instrumentationEnabled = NO;
         [FIRApp configureWithOptions:option];
         
         OWSLogDebug(@"tt begin config firebase.");
@@ -442,6 +449,10 @@ static void DTInstallSnapshotWindowCrashGuard(void)
     if (CurrentAppContext().isRunningTests) {
         return;
     }
+
+    // Schedule cleanup on every activation. File protection can prevent a previous
+    // pass from removing per-launch temporary directories while the device is locked.
+    ClearOldTemporaryDirectories();
 
     [self ensureRootViewController];
 
@@ -852,6 +863,10 @@ extern bool bScreenLockDone;
     // Note that this does much more than set a flag;
     // it will also run all deferred blocks.
     [AppReadiness setAppIsReady];
+
+    // Converge plaintext left by older builds after storage and migrations are
+    // ready. The worker is batched, idempotent, and never runs crypto in a DB transaction.
+    [DTAttachmentPlaintextMigrator runAsync];
 
     if ([TSAccountManager isRegistered]) {
         OWSLogDebug(@"localNumber: %@", [TSAccountManager localNumber]);

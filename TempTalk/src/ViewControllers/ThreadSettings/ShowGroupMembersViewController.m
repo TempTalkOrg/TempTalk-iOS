@@ -15,6 +15,7 @@
 #import <TTServiceKit/OWSBlockingManager.h>
 #import <TTServiceKit/SignalAccount.h>
 #import <TTServiceKit/TSGroupThread.h>
+#import <TTServiceKit/TTServiceKit-Swift.h>
 
 @import ContactsUI;
 
@@ -422,13 +423,15 @@ OWSTableViewControllerDelegate>
 
 - (void)showContactInfoViewForRecipientId:(NSString *)recipientId
 {
-    // Convert thread.uniqueId to groupModel.groupId using transformToServerGroupId
+    DTAddFriendSource *addFriendSource = DTAddFriendSource.unspecified;
     if ([self.thread isKindOfClass:[TSGroupThread class]]) {
         TSGroupThread *groupThread = (TSGroupThread *)self.thread;
         NSString *groupIdStr = [TSGroupThread transformToServerGroupIdWithLocalGroupId:groupThread.groupModel.groupId];
-        [[DTAddFriendSourceManager shared] setGroupSource:DTSourceToPersonalCardTypeInGroupMemberUserIcon groupId:groupIdStr ?: @""];
+        if (groupIdStr.length > 0) {
+            addFriendSource = [DTAddFriendSource fromGroupWithGroupId:groupIdStr];
+        }
     }
-    [self showProfileCardInfoWith:recipientId isFromSameThread:false isPresent:false isFromContacts:true];
+    [self showProfileCardInfoWith:recipientId addFriendSource:addFriendSource isFromSameThread:false isPresent:false isFromContacts:true];
 }
 
 - (void)showConversationViewForRecipientId:(NSString *)recipientId

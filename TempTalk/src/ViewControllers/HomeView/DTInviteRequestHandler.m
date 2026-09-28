@@ -8,6 +8,7 @@
 
 #import "DTInviteRequestHandler.h"
 #import "Yelling-Swift.h"
+#import <TTServiceKit/TTServiceKit-Swift.h>
 
 @implementation DTInviteRequestHandler
 
@@ -72,14 +73,15 @@
 }
 
 - (void)showPersonalCardView:(NSString *)recipientId account:(SignalAccount * __nullable)account {
-    // Set randomCode source before showing personal card
-    [DTAddFriendSourceManager.shared setOtherSource:DTSourceToPersonalCardTypeRandomCode];
-
     DTPersonalCardType cardType = DTPersonalCardTypeOther;
     if ([recipientId isEqualToString:TSAccountManager.localNumber]) {
         cardType = DTPersonalCardTypeSelfNoneEdit;
     }
-    DTPersonalCardController *cardVC = [[DTPersonalCardController alloc] initWithType:cardType recipientId:recipientId account:account];
+    // Reached by opening an invite link or scanning the matching QR code.
+    DTPersonalCardController *cardVC = [[DTPersonalCardController alloc] initWithType:cardType
+                                                                          recipientId:recipientId
+                                                                              account:account
+                                                                      addFriendSource:DTAddFriendSource.link];
     // Opened over the home page (no underlying conversation to float over), so "send message"
     // must push a full conversation rather than the half-screen floating one. Matches
     // EnterCodeViewController.showPersonalCardView.

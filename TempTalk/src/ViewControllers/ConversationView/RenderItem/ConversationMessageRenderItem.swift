@@ -335,19 +335,24 @@ class ConversationOutgoingMessageRenderItem: ConversationMessageRenderItem {
         if let headerViewHeight = headerRenderItem?.viewSize.height {
             height += headerViewHeight
         }
-        
+
         if let messageBubbleViewHeight = messageBubbleRenderItem?.viewSize.height {
             height += messageBubbleViewHeight
         }
-        
+
         if let translateViewHeight = translateRenderItem?.viewSize.height, translateViewHeight > 0 {
             height += translateViewHeight + Self.msgVStackViewSpacing
         }
-        
+
 //        if let footerViewHeight = footerRenderItem?.viewSize.height, footerViewHeight > 0 {
 //            height += footerViewHeight + Self.msgVStackViewSpacing
 //        }
-        
+
+        // The "Send failed · Tap to retry" hint sits below the bubble, outside it.
+        if shouldDisplaySendFailedBadge {
+            height += ConversationSendFailedTipView.viewHeight + ConversationSendFailedTipView.bubbleSpacing
+        }
+
         return CGSizeCeil(CGSizeMake(conversationStyle.viewWidth, height))
     }
 }

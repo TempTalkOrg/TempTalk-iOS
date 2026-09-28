@@ -7,7 +7,6 @@
 //
 
 import UIKit
-import QuickLook
 import AVFoundation
 import TTMessaging
 import TTServiceKit
@@ -19,6 +18,78 @@ import TTServiceKit
 
 enum ConversationSection: CaseIterable {
     case main
+}
+
+/// Coordinates the first snapshot with the controller's first appearance.
+/// Keeping this explicit prevents a provisional empty snapshot from being
+/// rendered before the view model's initial load finishes.
+enum ConversationInitialLoadPhase {
+    case loading
+    case ready
+    case applying
+    case applied
+}
+
+/// The semantic destination owned by a scroll-down button tap. Keeping the
+/// destination semantic lets us reapply it after an asynchronous snapshot.
+enum ConversationScrollDownTarget {
+    case unreadIndicator
+    case latestMessage
+}
+
+/// A programmatic scroll that belongs to a collection update. Like Signal's
+/// CVScrollAction, this is carried through the asynchronous render/snapshot
+/// pipeline and performed only after the winning generation has landed.
+struct ConversationCollectionScrollAction {
+    enum Destination {
+        case bottomOfLoadWindow
+    }
+
+    let destination: Destination
+    let isAnimated: Bool
+    let userScrollGeneration: UInt64
+    let requestGeneration: UInt64
+}
+
+/// A stable message-relative viewport position captured before an asynchronous
+/// collection update. Unlike an index path or absolute content offset, this
+/// remains valid when messages are inserted or cell heights are recomputed.
+struct ConversationViewportAnchor {
+    let interactionUniqueId: String
+    let distanceFromViewportTop: CGFloat
+    let userScrollGeneration: UInt64
+}
+
+/// Makes the caller's viewport intent explicit. In particular, `.disabled`
+/// must not be represented by a nil anchor because nil previously meant
+/// "inherit an in-flight anchor".
+enum ConversationViewportAnchorPolicy {
+    case inherit
+    case preserve(ConversationViewportAnchor)
+    case disabled
+}
+
+/// Coalesces collection updates that land while the conversation is off-screen.
+/// Inserts and deletes are represented by the next diffable snapshot; only items
+/// that still exist in both snapshots need to be explicitly reloaded.
+enum PendingConversationCollectionUpdate: Equatable {
+    case none
+    case diff(updatedItemIds: Set<String>)
+    case reloadAll
+
+    mutating func merge(_ update: PendingConversationCollectionUpdate) {
+        switch (self, update) {
+        case (_, .none):
+            break
+        case (.reloadAll, _), (_, .reloadAll):
+            self = .reloadAll
+        case (.none, .diff(let updatedItemIds)):
+            self = .diff(updatedItemIds: updatedItemIds)
+        case (.diff(let currentIds), .diff(let updatedItemIds)):
+            self = .diff(updatedItemIds: currentIds.union(updatedItemIds))
+        }
+    }
+
 }
 
 struct InCallVoiceMemoAudioOwnership {
@@ -66,6 +137,25 @@ class CVViewState: NSObject {
     lazy var renderItemBuilder = ConversationCellRenderItemBuilder()
     var renderItems: [ConversationCellRenderItem] = []
     var renderItemsMap: [String: ConversationCellRenderItem] = [:]
+    /// Incremented at the start of every `reloadData`.
+    var collectionReloadGeneration: UInt64 = 0
+    /// Generation of the most recently committed snapshot. A reload whose generation is older than
+    /// this has been superseded on screen and must not overwrite `renderItems`.
+    var collectionCommittedGeneration: UInt64 = 0
+    /// Reload requirements that a newer generation must inherit until they are committed.
+    var collectionReloadIdsByGeneration: [UInt64: Set<String>] = [:]
+    /// Viewport anchors that a newer in-flight generation must inherit until one commits.
+    var collectionViewportAnchorsByGeneration: [UInt64: ConversationViewportAnchor] = [:]
+    /// Layout invalidations that a newer generation must inherit until one commits.
+    var collectionLayoutInvalidationGenerations: Set<UInt64> = []
+    /// A local-send insert may be followed immediately by a persisted-row update. Both snapshots
+    /// are built asynchronously, so the newer update must inherit the original "follow bottom"
+    /// intent instead of restoring the pre-insert viewport anchor over the new bubble.
+    /// The value is the user-scroll generation that requested the follow; a later drag cancels it.
+    var collectionFollowToBottomUserScrollGenerations: [UInt64: UInt64] = [:]
+    /// A load-more status change that happened while collection updates were suspended.
+    /// The next visible snapshot must invalidate the layout so header/footer heights are rebuilt.
+    var pendingConversationLoadMoreHeaderLayoutUpdate = false
     
     var headerView: ConversationHeaderView?
     lazy var remindView = DTRemindView()
@@ -99,9 +189,46 @@ class CVViewState: NSObject {
     var isViewVisible = false
     var isUserScrolling = false
     var isWaitingForDeceleration = false
+    /// Incremented whenever the user starts a drag so an asynchronous reload
+    /// cannot restore an anchor captured before that gesture.
+    var userScrollGeneration: UInt64 = 0
     // loadInitialMessages completion may arrive before viewIsAppearing flips isViewVisible to true;
     // queue it here and replay from viewIsAppearing to avoid losing the first snapshot.
+    var initialLoadPhase: ConversationInitialLoadPhase = .loading
     var pendingInitialLoadCompletion: ((Bool) -> Void)?
+    /// UI updates are intentionally not applied while this controller is off-screen.
+    /// Preserve their minimum invalidation range so returning from another screen
+    /// does not require rebuilding every message cell.
+    var pendingConversationCollectionUpdate: PendingConversationCollectionUpdate = .none
+    /// Mirrors the normal live-diff behavior: a tail message received while the
+    /// user was at the bottom should still be visible when the conversation returns.
+    var pendingConversationShouldScrollToBottom = false
+    /// Coalesces scroll-down requests made while older/newer items are loading.
+    /// A nil value means there is no outstanding request.
+    var pendingScrollToBottomAnimated: Bool?
+    /// Consumed by the reload triggered by `loadNewest`. Keeping this separate
+    /// from the button target prevents an unrelated collection update from
+    /// deciding when the bottom animation should begin.
+    var scrollActionForNextUpdate: ConversationCollectionScrollAction?
+    /// Retained until the button animation completes so a collection reload that
+    /// starts during the animation can inherit the same destination.
+    var activeScrollDownCollectionAction: ConversationCollectionScrollAction?
+    /// Scroll actions owned by in-flight collection generations. Newer
+    /// generations inherit an older action so an out-of-order async build cannot
+    /// discard the explicit destination.
+    var collectionScrollActionsByGeneration: [UInt64: ConversationCollectionScrollAction] = [:]
+    /// Invalidates a captured action when another navigation request supersedes it.
+    var scrollActionRequestGeneration: UInt64 = 0
+    /// While non-nil, collection updates must not restore an older viewport anchor.
+    var scrollDownButtonTarget: ConversationScrollDownTarget?
+    /// Starting a replacement UIKit animation can synchronously finish the animation it
+    /// supersedes. Ignore that stale delegate callback instead of treating it as another
+    /// interrupted attempt.
+    var isStartingScrollDownAnimation = false
+    /// Coalesces interrupted-animation recovery and bounds it so bottom navigation always
+    /// converges even if layout keeps invalidating UIKit's animation.
+    var isScrollDownAnimationRetryScheduled = false
+    var scrollDownAnimationRetryCount = 0
 
     var viewHasEverAppeared = false
     var shouldAnimateKeyboardChanges = false
@@ -133,12 +260,15 @@ class CVViewState: NSObject {
     var hasUnreadMessages = false
     var scrollDownButton: ConversationScrollButton?
     var dateSeparatorView: ConversationDateSeparatorView?
+    var dateSeparatorTopOffset: CGFloat?
 
     // MARK: - Initial Scroll Position Protection
     /// 存储初始滚动到未读消息的目标位置，用于防止键盘闪现导致的位置偏移
     var initialScrollTargetOffset: CGFloat?
     /// 初始滚动保护的截止时间，超过此时间后清除保护
     var initialScrollProtectionDeadline: Date?
+    /// The focus handoff may finish only after keyboardDidShow and any in-flight snapshot both complete.
+    var isFocusKeyboardPresentationComplete = false
     
     var lastPosition: CGFloat = .zero
     var isScrollUp = false
@@ -155,7 +285,6 @@ class CVViewState: NSObject {
     var lastKnownDistanceFromBottom: CGFloat?
     var scrollContinuity: ScrollContinuity = .bottom
     var scrollUpdateTimer: Timer?
-    var hideDateTimer: Timer?
 
     var isScrollingToTop = false
     
@@ -185,7 +314,6 @@ class CVViewState: NSObject {
 
     // MARK: photo
     var photoBrowser: DTPhotoBrowserHelper?
-    var loadingView: UIActivityIndicatorView?
     
     // MARK: audio
     var audioPlayer: OWSAudioPlayer?
@@ -207,7 +335,8 @@ class CVViewState: NSObject {
     
     // MARK: attachment
     var currentPreviewFileURL: NSURL?
-    var previewController: QLPreviewController?
+    var attachmentPreviewRequestID: UUID?
+    weak var confidentialAttachmentPreviewController: UIViewController?
     
     // MARK: Group
     lazy var rejoinGroupAPI = DTInviteToGroupAPI()
@@ -224,6 +353,11 @@ class CVViewState: NSObject {
         self.thread = thread
         self.conversationViewMode = conversationViewMode
         self.conversationStyle = ConversationStyle(thread: thread)
+    }
+
+    deinit {
+        // A staged plaintext copy must not outlive the conversation that decrypted it.
+        DTQuickLookPreviewFile.cleanUp(currentPreviewFileURL as URL?)
     }
 }
 

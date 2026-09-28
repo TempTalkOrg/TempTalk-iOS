@@ -181,7 +181,20 @@ public class SignalAttachment: NSObject {
     
     @objc
     private(set) public var isVoiceMessage = false
-    
+
+    /// Preprocessing intent carried into the `TSAttachmentStream` when this
+    /// attachment is enqueued. `.none` keeps the existing fully-prepared-payload
+    /// flow; a non-`.none` value tells `OWSMessageSender.enqueueAttachment` to
+    /// mark the persisted stream as a placeholder so the dispatched preprocessing
+    /// operation can compress it before the upload starts.
+    @objc
+    public var preprocessingKind: TSAttachmentPreprocessingKind = .none
+
+    /// JSON payload paired with `preprocessingKind`, forwarded verbatim onto
+    /// `TSAttachmentStream.preprocessingParams`.
+    @objc
+    public var preprocessingParams: Data?
+
     // MARK: Constants
     
     static let kMaxFileSizeAnimatedImage = OWSMediaUtils.kMaxFileSizeAnimatedImage
@@ -1280,6 +1293,31 @@ public class SignalAttachment: NSObject {
         }
     }
     
+    /// Build an outgoing video attachment whose payload is still the original
+    /// (uncompressed) source. Skips the `kMaxFileSizeVideo` cap that
+    /// `attachment(dataSource:dataUTI:)` enforces, because the placeholder gets
+    /// recompressed by `VideoCompressionOperation` before upload and the ceiling
+    /// is re-checked against the *output* bytes. The UTI is still validated so a
+    /// non-video never gets marked `.videoCompression`.
+    @objc
+    public class func videoPlaceholderAttachment(dataSource: DataSource?, dataUTI: String) -> SignalAttachment {
+        guard let dataSource else {
+            let attachment = SignalAttachment(dataSource: DataSourceValue.emptyDataSource(), dataUTI: dataUTI)
+            attachment.error = .missingData
+            return attachment
+        }
+        let attachment = SignalAttachment(dataSource: dataSource, dataUTI: dataUTI)
+        guard videoUTISet.contains(dataUTI) else {
+            attachment.error = .invalidFileFormat
+            return attachment
+        }
+        guard dataSource.dataLength() > 0 else {
+            attachment.error = .invalidData
+            return attachment
+        }
+        return attachment
+    }
+
     @objc
     public class func empty() -> SignalAttachment {
         return SignalAttachment.attachment(dataSource: DataSourceValue.emptyDataSource(),

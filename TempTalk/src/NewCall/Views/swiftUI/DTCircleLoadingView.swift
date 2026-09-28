@@ -17,17 +17,21 @@ public enum ConnectState: Int {
 public struct DTCircleLoadingView: View {
     
     public var connectState: ConnectState
+    public var color: Color
+    public var size: CGFloat
     
     @State private var isAnimating: Bool = false
     @State private var rotation: Double = 0
     
-    public init(connectState: ConnectState) {
+    public init(connectState: ConnectState, color: Color = .white, size: CGFloat = 12) {
         self.connectState = connectState
+        self.color = color
+        self.size = size
     }
     
     public var body: some View {
         CircleArc()
-            .stroke(Color.white, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
             .rotationEffect(.degrees(isAnimating ? 360 : 0))
             .animation(connectState == .connecting ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isAnimating)
             .onAppear {
@@ -38,7 +42,7 @@ public struct DTCircleLoadingView: View {
             .onChange(of: connectState) { newState in
                 isAnimating = (newState == .connecting)
             }
-            .frame(width: 12, height: 12)
+            .frame(width: size, height: size)
     }
 }
 

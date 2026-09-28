@@ -33,6 +33,9 @@ class ConversationActionMenuController: OWSViewController {
     private lazy var contentView: UIView = {
         let view = UIView()
         view.backgroundColor = .clear
+        // Clip the edge-to-edge grid to the bubble's rounded corners.
+        view.layer.cornerRadius = 12
+        view.layer.masksToBounds = true
         return view
     }()
     private lazy var containerView = ConversationActionMenuContainerView()
@@ -173,7 +176,7 @@ class ConversationActionMenuController: OWSViewController {
         guard !CGSizeEqualToSize(contentSize, .zero) else { return }
 
         let arrowHeight = ConversationActionMenuContainerView.arrowHeight
-        let containerViewPaddingH: CGFloat = 8
+        let containerViewPaddingH: CGFloat = 0
         let containerViewWidth = contentSize.width + containerViewPaddingH * 2
         let containerViewHeight = contentSize.height + arrowHeight
 
@@ -244,23 +247,31 @@ class ConversationActionMenuController: OWSViewController {
     private func refreshContainerView() {
         guard !actions.isEmpty else { return }
 
-        // 最多展示 5 个 action
-        let maxCountOfActions = 5
-        let isNeedShowMore = actions.count > maxCountOfActions
+        // Canonical order: fill the grid left-to-right by action kind (master order).
+        let orderedActions = actions
+            .enumerated()
+            .sorted {
+                $0.element.kind.rawValue != $1.element.kind.rawValue
+                    ? $0.element.kind.rawValue < $1.element.kind.rawValue
+                    : $0.offset < $1.offset
+            }
+            .map { $0.element }
 
-        // 根据实际按钮数量计算宽度
-        let actualButtonCount: Int
-        if isNeedShowMore {
-            actualButtonCount = maxCountOfActions // 4 个 action + 1 个 more
-        } else {
-            actualButtonCount = actions.count
-        }
+        // Column count adapts to total, never exceeding two rows.
+        let count = orderedActions.count
+        let columnCount = Self.columnCount(for: count)
+        let cellWidth: CGFloat = columnCount == 5 ? Self.cellWidthNarrow : Self.cellWidth
+        let cellHeight = Self.cellHeight
+        let line = Self.gridLineWidth
+        let rowCount = Int(ceil(Double(count) / Double(columnCount)))
 
-        let actionStackViewLeft: CGFloat = 8
-        let contentViewWidth = actionStackViewLeft * 2 + ActionButton.buttonWidth * CGFloat(actualButtonCount) + ActionButton.buttonMargin * CGFloat(actualButtonCount - 1)
+        let gridWidth = CGFloat(columnCount) * cellWidth + CGFloat(columnCount - 1) * line
+        let gridHeight = CGFloat(rowCount) * cellHeight + CGFloat(rowCount - 1) * line
+
+        let contentViewWidth = gridWidth
         var contentViewHeight: CGFloat = 0
 
-        // emojis，最多展示 4 个 emoji + more
+        // Reaction row (suppressed for Saved / confidential via a nil emojiAction).
         if let emojiAction, !emojiAction.emojis.isEmpty {
             let emojiStackView = UIStackView()
             emojiStackView.axis = .horizontal
@@ -292,61 +303,61 @@ class ConversationActionMenuController: OWSViewController {
             self.moreEmojiButton = moreButton
 
             contentView.addSubview(emojiStackView)
-            let emojiStackViewLeft: CGFloat = 8
+            let emojiStackViewLeft: CGFloat = 16
             let emojiStackViewWidth = contentViewWidth - emojiStackViewLeft * 2
             emojiStackView.frame = CGRect(x: emojiStackViewLeft, y: 10, width: emojiStackViewWidth, height: EmojiButton.buttonSize)
-            
+
             let lineView = UIView()
             contentView.addSubview(lineView)
-            lineView.frame = CGRect(x: 0, y: CGRectGetMaxY(emojiStackView.frame) + 10, width: contentViewWidth, height: 1.0)
+            lineView.frame = CGRect(x: 0, y: CGRectGetMaxY(emojiStackView.frame) + 10, width: contentViewWidth, height: line)
             self.lineView = lineView
-            
+
             contentViewHeight = CGRectGetMaxY(lineView.frame)
         }
 
-        // actions，最多展示 5 个，超过 5 个时展示 4 个 action + more
-        contentViewHeight += 16
-        let prefix = isNeedShowMore ? maxCountOfActions - 1 : actions.count
-        actions.prefix(prefix).enumerated().forEach { index, action in
+        // Action grid: the grid-line color shows through the 1pt gaps between cells.
+        let gridContainer = UIView()
+        gridContainer.backgroundColor = Self.gridLineColor
+        contentView.addSubview(gridContainer)
+        gridContainer.frame = CGRect(x: 0, y: contentViewHeight, width: gridWidth, height: gridHeight)
+
+        func cellFrame(at index: Int) -> CGRect {
+            let row = index / columnCount
+            let col = index % columnCount
+            return CGRect(
+                x: CGFloat(col) * (cellWidth + line),
+                y: CGFloat(row) * (cellHeight + line),
+                width: cellWidth,
+                height: cellHeight
+            )
+        }
+
+        orderedActions.enumerated().forEach { index, action in
             let button = ActionButton()
+            button.backgroundColor = Self.cellBackgroundColor
             button.action = action
             button.accessibilityIdentifier = Self.accessibilityIdentifier(for: action)
             button.addTarget(self, action: #selector(actionButtonDidTap(_:)), for: .touchUpInside)
-            contentView.addSubview(button)
+            gridContainer.addSubview(button)
             actionButtons.append(button)
+            button.frame = cellFrame(at: index)
+        }
 
-            let buttonLeft = actionStackViewLeft + CGFloat(index) * (ActionButton.buttonWidth + ActionButton.buttonMargin)
-            button.frame = CGRectMake(buttonLeft, contentViewHeight, ActionButton.buttonWidth, ActionButton.buttonHeight)
+        // Trailing blank cells keep the last row rectangular.
+        let blankCount = (columnCount - count % columnCount) % columnCount
+        for offset in 0..<blankCount {
+            let blank = UIView()
+            blank.backgroundColor = Self.cellBackgroundColor
+            gridContainer.addSubview(blank)
+            blank.frame = cellFrame(at: count + offset)
         }
-        if isNeedShowMore {
-            let moreAction = MenuAction(
-                image: #imageLiteral(resourceName: "ic_longpress_more").withRenderingMode(.alwaysTemplate),
-                title: Localized("MENU_ACTION_MORE_ACTION"),
-                subtitle: nil,
-                dismissBeforePerformAction: false
-            ) { [weak self] _ in
-                self?.didTapSelectMoreActionButton()
-            }
-            let moreActionButton = ActionButton()
-            moreActionButton.action = moreAction
-            moreActionButton.accessibilityIdentifier = DTConversationAccessibilityID.menuMore
-            moreActionButton.addTarget(self, action: #selector(actionButtonDidTap(_:)), for: .touchUpInside)
-            contentView.addSubview(moreActionButton)
-            let moreActionButtonLeft = actionStackViewLeft + CGFloat(actionButtons.count) * (ActionButton.buttonWidth + ActionButton.buttonMargin)
-            moreActionButton.frame = CGRectMake(
-                moreActionButtonLeft,
-                contentViewHeight,
-                ActionButton.buttonWidth,
-                ActionButton.buttonHeight
-            )
-            actionButtons.append(moreActionButton)
-        }
-        contentViewHeight += ActionButton.buttonHeight + 16
-        
+
+        contentViewHeight = CGRectGetMaxY(gridContainer.frame)
+
         self.contentSize = CGSize(width: contentViewWidth, height: contentViewHeight)
-        
+
         refreshContainerViewFrame()
-        
+
         applyTheme()
     }
     
@@ -354,7 +365,7 @@ class ConversationActionMenuController: OWSViewController {
         guard !CGSizeEqualToSize(contentSize, .zero) else { return }
 
         let arrowHeight = ConversationActionMenuContainerView.arrowHeight
-        let containerViewPaddingH: CGFloat = 8
+        let containerViewPaddingH: CGFloat = 0
         let containerViewWidth = contentSize.width + containerViewPaddingH * 2
         let containerViewHeight = contentSize.height + arrowHeight
         let sourceViewFrame = self.sourceViewFrame
@@ -534,9 +545,7 @@ class ConversationActionMenuController: OWSViewController {
     /// title against the known `Localized(...)` keys used in `MenuActionBuilder`. Titles are
     /// the only stable discriminator available on a built `MenuAction` (image is a UIImage,
     /// block is a closure). Pure tagging — returns nil for out-of-scope actions so they stay
-    /// untagged. Covers: Quote, Forward, Recall, Copy, Translate, Speech-to-text, More.
-    /// Internal so the "更多" sheet (`ConversationActionMenuSheetController`) tags its rows
-    /// with the same ids.
+    /// untagged. Covers: Quote, Forward, Recall, Copy, Translate, Speech-to-text.
     static func accessibilityIdentifier(for action: MenuAction) -> String? {
         let title = action.title
         switch title {
@@ -575,27 +584,37 @@ class ConversationActionMenuController: OWSViewController {
         }
     }
     
-    private func didTapSelectMoreActionButton() {
-        dismissHandler?()
-        guard let presentingViewController, !actions.isEmpty else {
-            dismiss(animated: true)
-            return
-        }
-        dismiss(animated: false) {
-            let actionSheetController = ConversationActionMenuSheetController(actions: self.actions)
-            presentingViewController.presentPanModal(actionSheetController)
+    override func applyTheme() {
+        self.containerView.containerBackgroundColor = Self.cellBackgroundColor
+        self.moreEmojiButton?.tintColor = Self.primaryTintColor
+        self.lineView?.backgroundColor = Self.gridLineColor
+
+        actionButtons.forEach {
+            let tint = ($0.action?.isDestructive == true) ? Self.destructiveTintColor : Self.primaryTintColor
+            $0.tintColor = tint
+            $0.setTitleColor(tint, for: .normal)
         }
     }
-    
-    override func applyTheme() {
-        self.containerView.containerBackgroundColor = UIColor(rgbHex: 0x474D57)
-        self.moreEmojiButton?.tintColor = UIColor(rgbHex: 0xEAECEF)
-        self.lineView?.backgroundColor = UIColor(rgbHex: 0x5E6673)
-        
-        actionButtons.forEach {
-            $0.tintColor = UIColor(rgbHex: 0xEAECEF)
-            $0.setTitleColor(UIColor(rgbHex: 0xEAECEF), for: .normal)
-        }
+
+    // MARK: - Grid metrics & palette (always-dark menu)
+
+    private static let cellWidth: CGFloat = 68
+    private static let cellWidthNarrow: CGFloat = 64  // 5-column layout
+    private static let cellHeight: CGFloat = 68
+    private static let gridLineWidth: CGFloat = 1
+
+    private static let cellBackgroundColor = UIColor(rgbHex: 0x2B3139)
+    private static let gridLineColor = UIColor(white: 1, alpha: 0.08)
+    private static let primaryTintColor = UIColor(rgbHex: 0xEAECEF)
+    private static let destructiveTintColor = UIColor(rgbHex: 0xF84135)
+
+    // Column count adapts to total, never exceeding two rows:
+    // n<=4 -> n | n==5 -> 5 | 6...8 -> 4 | 9,10 -> 5
+    private static func columnCount(for count: Int) -> Int {
+        if count <= 4 { return count }
+        if count == 5 { return 5 }
+        if count >= 9 { return 5 }
+        return 4
     }
 }
 
@@ -677,12 +696,9 @@ private class EmojiButton: UIView {
 // MARK: - Action Button
 
 private class ActionButton: UIButton {
-    
+
     static let imageWidth: CGFloat = 20
-    static let buttonWidth: CGFloat = 55
-    static let buttonHeight: CGFloat = 40
-    static let buttonMargin: CGFloat = 7
-    
+
     var action: MenuAction? {
         didSet {
             if let action {
@@ -700,7 +716,7 @@ private class ActionButton: UIButton {
     override init(frame: CGRect) {
         super.init(frame: frame)
         
-        titleLabel?.font = .systemFont(ofSize: 12)
+        titleLabel?.font = .systemFont(ofSize: 11)
         titleLabel?.textAlignment = .center
         titleLabel?.numberOfLines = 0
     }

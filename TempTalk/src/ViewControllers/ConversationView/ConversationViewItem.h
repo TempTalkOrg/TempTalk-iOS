@@ -20,6 +20,8 @@ typedef NS_ENUM(NSInteger, OWSMessageCellType) {
     OWSMessageCellType_ContactShare,
     OWSMessageCellType_CombinedForwarding,
     OWSMessageCellType_Card,
+    /// Outgoing video placeholder whose payload is still being compressed.
+    OWSMessageCellType_VideoTranscoding,
 };
 
 NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType);

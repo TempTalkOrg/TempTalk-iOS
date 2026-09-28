@@ -28,14 +28,22 @@ extension RoomContext: RoomDelegate {
         Logger.debug("\(logTag) Did update e2eeState")
     }
 
-    public nonisolated func room(_: Room, didUpdateConnectionState connectionState: ConnectionState, from oldValue: ConnectionState) {
+    public nonisolated func room(_ callbackRoom: Room, didUpdateConnectionState connectionState: ConnectionState, from oldValue: ConnectionState) {
         Task { @MainActor [weak self] in
             guard let self else { return }
             Logger.info("\(logTag) Did update connectionState \(oldValue) -> \(connectionState), isRoomReconnecting: \(isRoomReconnecting)")
+            updateMediaSendStatusPresentation(
+                roomConnectionState: connectionState,
+                mediaSendConnectionState: callbackRoom.mediaSendConnectionState,
+                trigger: "roomConnection \(oldValue)->\(connectionState)"
+            )
+            refreshNetworkQualitySuppression(trigger: "roomConnection \(oldValue)->\(connectionState)")
 
             if case .disconnected = connectionState,
                let error = room.disconnectError,
-               error.type != .cancelled
+               error.type != .cancelled,
+               callManager.lifecycleState != .disconnecting,
+               callManager.lifecycleState != .idle
             {
                 latestError = room.disconnectError
 
@@ -47,8 +55,37 @@ extension RoomContext: RoomDelegate {
         }
     }
 
+    public nonisolated func room(
+        _ callbackRoom: Room,
+        didUpdateMediaSendConnectionState state: MediaSendConnectionState,
+        from oldState: MediaSendConnectionState
+    ) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            updateMediaSendStatusPresentation(
+                roomConnectionState: callbackRoom.connectionState,
+                mediaSendConnectionState: state,
+                trigger: "mediaSendConnection \(oldState)->\(state)"
+            )
+            refreshNetworkQualitySuppression(trigger: "mediaSendConnection \(oldState)->\(state)")
+        }
+    }
+
     public nonisolated func roomDidConnect(_: Room) {
         Logger.info("\(logTag) roomDidConnect")
+    }
+
+    /// Measures the gap between local room connect, remote join, and participant state changes.
+    /// These diagnostics do not control call-timer readiness.
+    @MainActor
+    func logCallTiming(_ stage: String, extra: String = "") {
+        let now = ProcessInfo.processInfo.systemUptime
+        let sinceConnected = callTimingConnectedAt > 0 ? Int((now - callTimingConnectedAt) * 1000) : -1
+        let sinceRemoteJoined = callTimingRemoteJoinedAt > 0 ? Int((now - callTimingRemoteJoinedAt) * 1000) : -1
+        Logger.info(
+            "\(logTag)[1v1Timing] stage=\(stage) sinceConnected=\(sinceConnected)ms " +
+            "sinceRemoteJoined=\(sinceRemoteJoined)ms callType=\(currentCall.callType.rawValue)\(extra)"
+        )
     }
 
     @MainActor
@@ -59,7 +96,19 @@ extension RoomContext: RoomDelegate {
         }
         didHandleInitialRoomDidConnect = true
 
+        callTimingConnectedAt = ProcessInfo.processInfo.systemUptime
+        logCallTiming("roomConnected", extra: " remotes=\(room.remoteParticipants.count) source=\(source)")
+        // The remote can already be in the room when we connect (callee joining a room the caller is
+        // waiting in), in which case no participantDidConnect will ever fire for it.
+        if callTimingRemoteJoinedAt == 0, let remote = room.remoteParticipants.values.first {
+            callTimingRemoteJoinedAt = ProcessInfo.processInfo.systemUptime
+            logCallTiming("remoteAlreadyPresent", extra: " alreadyActive=\(remote.state == .active)")
+        }
+
         Logger.info("\(logTag) initial room connect handling: source=\(source)")
+        // Defensive re-read before the one-shot microphone decision: SignalConnected normally runs
+        // first, but callback scheduling must not open the mic on a stale inferred type.
+        ingestRoomCallTypeFromMetadata(reason: "initial room connected")
         callManager.stopConnectionPhaseTimer()
 
         if callManager.shouldDeferInitialRoomAudioSetupForCallKit() {
@@ -76,6 +125,7 @@ extension RoomContext: RoomDelegate {
         callManager.feedbackRoomId = currentCall.roomId
 
         handlePostConnectState(for: room)
+        refreshNetworkQualitySuppression(trigger: "initial room connected")
 
         callManager.currentCallTalkingPop()
         RoomDataManager.shared.connectParticipant(participant: room.localParticipant)
@@ -97,7 +147,6 @@ extension RoomContext: RoomDelegate {
         didHandleInitialRoomAudioSetup = true
 
         let isPrivate = currentCall.callType == .private
-        let needPublishSilenceAudio = currentCall.ttcalResponseOptions?.autoPublishSilenceAudio ?? false
         callManager.seedPendingCallKitMuteIntentIfAvailable(
             uuidString: currentCall.callKitUUID,
             reason: "initial room audio setup start"
@@ -106,7 +155,14 @@ extension RoomContext: RoomDelegate {
         let shouldStartGroupMutedAtEngineStart = initialPendingCallKitMuteState ?? true
         var finalShouldStartGroupMuted = shouldStartGroupMutedAtEngineStart
 
-        Logger.info("\(logTag) initial audio setup start: source=\(source), isPrivate=\(isPrivate), pendingCallKitMute=\(String(describing: initialPendingCallKitMuteState))")
+        // The one-shot microphone decision reads the resolved type, so record it and its source.
+        Logger.info(
+            "\(logTag)[calltype] initial audio setup start: source=\(source), isPrivate=\(isPrivate), " +
+            "pendingCallKitMute=\(String(describing: initialPendingCallKitMuteState)), " +
+            "effectiveCallType=\(callTypeStateMachine.state.effectiveType.rawValue), " +
+            "callTypeSource=\(String(describing: callTypeStateMachine.state.source)), " +
+            "participants=\(room.allParticipants.count)"
+        )
 
         do {
             if !isPrivate, shouldStartGroupMutedAtEngineStart {
@@ -144,8 +200,20 @@ extension RoomContext: RoomDelegate {
                         callManager.clearInitialRoomAudioSetupCallKitEchoGuard(reason: "initial 1v1 microphone setup completed")
                     }
                 }
-                try await room.localParticipant.setMicrophone(enabled: microphoneEnabled)
-                callManager.consumePendingCallKitMuteStateIfMatched(!microphoneEnabled, reason: "initial 1v1 microphone state applied")
+                // Goes through the permission gate: an unauthorized initial setup must join
+                // muted instead of pretending the mic is live.
+                if await setLocalMicrophone(enable: microphoneEnabled) {
+                    callManager.consumePendingCallKitMuteStateIfMatched(!microphoneEnabled, reason: "initial 1v1 microphone state applied")
+                } else if callManager.pendingCallKitMuteState() == nil {
+                    // No deferred CallKit action will repair the default initial
+                    // state, so reflect the microphone that stayed muted.
+                    syncLocalMicrophoneStateToCallKit(muted: !room.localParticipant.isMicrophoneEnabled())
+                } else {
+                    // Keep CallKit at the pending user's requested state. The serialized
+                    // replay below prompts once and only rolls CallKit back on a final
+                    // denial, avoiding a muted->unmuted corrective transaction pair.
+                    Logger.info("\(logTag) initial 1v1 microphone setup deferred to pending CallKit replay")
+                }
             } else {
                 if !shouldStartGroupMuted {
                     Logger.info("\(logTag) initial audio setup applying pending CallKit unmute")
@@ -161,11 +229,13 @@ extension RoomContext: RoomDelegate {
                             callManager.clearInitialRoomAudioSetupCallKitEchoGuard(reason: "initial group pending unmute completed")
                         }
                     }
-                    await setLocalMicrophone(enable: true)
-                    callManager.consumePendingCallKitMuteStateIfMatched(false, reason: "initial group unmute applied")
-                } else if needPublishSilenceAudio {
-                    Logger.info("\(logTag) initial audio setup publishing muted microphone")
-                    await setLocalMicrophone(enable: true, publishMuted: true)
+                    if await setLocalMicrophone(enable: true) {
+                        callManager.consumePendingCallKitMuteStateIfMatched(false, reason: "initial group unmute applied")
+                    } else {
+                        // Keep CallKit at the pending unmute target while the serialized
+                        // replay handles permission. Only a final denial rolls it back.
+                        Logger.info("\(logTag) initial group unmute deferred to pending CallKit replay")
+                    }
                 } else {
                     Logger.info("\(logTag) initial audio setup skip prewarm: muted group join")
                 }
@@ -179,19 +249,25 @@ extension RoomContext: RoomDelegate {
                     callManager.consumePendingCallKitMuteStateIfMatched(true, reason: "initial group mute applied")
                 }
             }
-        } catch {
-            Logger.error("\(logTag) failed to set audio track: isPrivate=\(isPrivate), needPublishSilenceAudio=\(needPublishSilenceAudio), \(error)")
         }
 
         if !isPrivate, shouldStartGroupMutedAtEngineStart {
             callManager.shortenCallKitMuteSuppressionTail(0.35, mutedTarget: finalShouldStartGroupMuted, reason: "initial room audio setup completed")
         }
         didCompleteInitialRoomAudioSetup = true
+        Logger.info(
+            "\(logTag)[calltype] initial audio setup done: isPrivate=\(isPrivate), " +
+            "micEnabled=\(room.localParticipant.isMicrophoneEnabled()), " +
+            "modelType=\(currentCall.callType.rawValue)"
+        )
         await callManager.applyPendingCallKitMuteStateIfReady(reason: "initial room audio setup completed")
     }
 
     private func handlePostConnectState(for room: Room) {
-        if currentCall.callType != .private {
+        reevaluateCallType(reason: "post connect participants")
+        let usesOneToOneConnectionFlow = callTypeStateMachine.usesOneToOneConnectionFlow
+
+        if !usesOneToOneConnectionFlow {
             // 展示 meeting bar
             if currentCall.isCaller {
                 callManager.handleMeetingBar(call: currentCall, action: .add)
@@ -199,20 +275,20 @@ extension RoomContext: RoomDelegate {
             // 超时计时停止
             callManager.stopCallTimeoutTimer()
             callManager.tryTransition(from: .connecting, to: .connected)
-            // 非会议中的人，展示 instant
-            Logger.info("\(logTag) check localParticipant \(room.localParticipant.identity?.stringValue)")
-            checkPartiantInRoom(room.localParticipant.identity?.stringValue ?? "")
-        } else {
-            // private call
+        }
+
+        if usesOneToOneConnectionFlow {
+            Logger.info(
+                "\(logTag)[calltype] 1on1 connection flow: role=\(currentCall.isCaller ? "caller" : "callee"), " +
+                "remotes=\(room.remoteParticipants.count), effective=\(callTypeStateMachine.state.effectiveType.rawValue)"
+            )
+            // Preserve 1v1 connection/message side effects even when its effective UI type
+            // is corrected to instant because of participant count or a local invite.
             // Remote is actually in the room after a (failover) connect: cancel any stale disconnect
             // timer left from a failed first attempt, so it can't falsely hang up the live call 60s later.
             // Only cancel when the remote is present; if it truly left (local only), keep the timer.
             if !room.remoteParticipants.isEmpty {
                 callManager.stopParticipantDisTimer()
-            }
-
-            if room.remoteParticipants.count > 1 {
-                callManager.turnIntoInstantCall()
             }
 
             if currentCall.isCaller {
@@ -228,6 +304,7 @@ extension RoomContext: RoomDelegate {
                 callManager.handleMeetingBar(call: currentCall, action: .add)
                 callManager.tryTransition(from: .connecting, to: .connected)
                 // 异步调用 joinedCall
+                Logger.info("\(logTag)[calltype] 1on1 callee sending joined message")
                 Task { await callManager.joinedCall() }
             }
         }
@@ -238,6 +315,33 @@ extension RoomContext: RoomDelegate {
             guard let self else { return }
             Logger.info("\(logTag) roomDidSignalConnect")
 
+            // Capture the start attempt before checking lifecycle state. During a fast local
+            // hangup, start-call may already have been accepted even though UI teardown began.
+            let signalCall = currentCall
+            let signalThread = callManager.startCallThread
+            let signalSource = callManager.fromSource
+            let lifecycleState = callManager.lifecycleState
+            guard lifecycleState != .disconnecting, lifecycleState != .idle else {
+                if let response = room.ttCallResp, response.hasBody {
+                    callManager.commitAcceptedGroupStartCallMessageDuringTeardown(
+                        call: signalCall,
+                        thread: signalThread,
+                        source: signalSource,
+                        body: response.body
+                    )
+                } else {
+                    Logger.info(
+                        "\(logTag)[callmsg-bind] skip CallMsg: teardown has no accepted start response, " +
+                            "lifecycle=\(lifecycleState)"
+                    )
+                }
+                return
+            }
+
+            // JoinResponse sets room.metadata without emitting RoomMetadataChanged, so this
+            // active read is required and must precede connected/audio initialization.
+            ingestRoomCallTypeFromMetadata(reason: "signal connected")
+
             guard !callManager.inMeeting else {
                 Logger.info("\(logTag) same call has Multiple SignalConnect")
                 return
@@ -245,6 +349,14 @@ extension RoomContext: RoomDelegate {
 
             /// 连接成功
             @MainActor func handleSuccess(with response: Livekit_TTCallResponse) {
+                let lifecycleState = callManager.lifecycleState
+                guard currentCall === signalCall,
+                      lifecycleState != .disconnecting,
+                      lifecycleState != .idle
+                else {
+                    Logger.info("\(logTag) ignore stale signal response, state=\(lifecycleState)")
+                    return
+                }
                 guard response.hasBody else {
                     Logger.error("\(logTag) response.body is empty, waiting for timeout")
                     return
@@ -257,7 +369,16 @@ extension RoomContext: RoomDelegate {
             }
 
             /// 超时处理
+            @MainActor
             func handleTimeout() {
+                let lifecycleState = callManager.lifecycleState
+                guard currentCall === signalCall,
+                      lifecycleState != .disconnecting,
+                      lifecycleState != .idle
+                else {
+                    Logger.info("\(logTag) ignore signal response timeout during teardown, state=\(lifecycleState)")
+                    return
+                }
                 Logger.error("[newcall] ttCallResp is nil or body empty after 15s")
                 let roomId = DTMeetingManager.shared.currentCall.roomId
                 Task {
@@ -276,7 +397,7 @@ extension RoomContext: RoomDelegate {
                 connectTimeoutTask = Task {
                     try? await Task.sleep(nanoseconds: 15 * 1_000_000_000)
                     guard !Task.isCancelled else { return }
-                    if let response = room.ttCallResp, response.hasBody {
+                    if let response = self.room.ttCallResp, response.hasBody {
                         handleSuccess(with: response)
                     } else {
                         handleTimeout()
@@ -305,11 +426,22 @@ extension RoomContext: RoomDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
 
+            resetNetworkQuality()
+
             // 当前用户离会（无论是否有错误都执行）
             RoomDataManager.shared.disconnectParticipant(participant: room.localParticipant)
             UIDevice.current.isProximityMonitoringEnabled = false
 
             if let error {
+                let lifecycleState = callManager.lifecycleState
+                guard lifecycleState != .disconnecting, lifecycleState != .idle else {
+                    Logger.info(
+                        "\(logTag) didDisconnect during local teardown, " +
+                        "suppress connection error handling, state=\(lifecycleState), errorType=\(error.type)"
+                    )
+                    return
+                }
+
                 // 检查是否是主动断开导致的（cancelled 类型不需要处理）
                 if error.type == .cancelled {
                     Logger.info("\(logTag) didDisconnect cancelled - user initiated disconnect")
@@ -353,6 +485,7 @@ extension RoomContext: RoomDelegate {
             endLocalAudioDiagnostics(reason: "room is reconnecting")
             Logger.info("\(logTag) [reconnect-state] isRoomReconnecting: \(isRoomReconnecting) → true (roomIsReconnecting)")
             isRoomReconnecting = true
+            refreshNetworkQualitySuppression(trigger: "roomIsReconnecting")
             callManager.feedbackIsNetworkPoor = true
         }
     }
@@ -367,6 +500,7 @@ extension RoomContext: RoomDelegate {
             endLocalAudioDiagnostics(reason: "did start reconnect \(reconnectMode)")
             Logger.info("\(logTag) [reconnect-state] didStartReconnect mode: \(reconnectMode), isRoomReconnecting: \(isRoomReconnecting) → true")
             isRoomReconnecting = true
+            refreshNetworkQualitySuppression(trigger: "didStartReconnect \(reconnectMode)")
             callManager.feedbackIsNetworkPoor = true
         }
     }
@@ -381,12 +515,26 @@ extension RoomContext: RoomDelegate {
             Logger.info("\(logTag) [reconnect-state] didCompleteReconnect mode: \(reconnectMode), participants: \(participantCount), isRoomReconnecting: \(isRoomReconnecting) → false")
 
             isRoomReconnecting = false
+            refreshNetworkQualitySuppression(trigger: "didCompleteReconnect \(reconnectMode)")
+            if callManager.usesOneToOneConnectionFlow {
+                callManager.armCallDurationGate()
+            }
 
             callManager.stopParticipantDisTimer()
             checkAndPresentScreenShareIfNeeded()
-            callManager.setVisibleParticipants([])
+            // Reconnect finished: rebuild the speaker grid from the current roster rather than
+            // carrying stale visible slots / hold timers across the reconnect. Replaces the old
+            // setVisibleParticipants([]) reset; safe here since we're inside the @MainActor task.
+            callManager.resetActiveSpeakerGridState()
 
             RoomDataManager.shared.participantCount = participantCount
+            // Metadata landing mid-reconnect emits no event and a quick reconnect never revisits
+            // JoinResponse, so re-read the raw value rather than only re-running the corrections.
+            Logger.info(
+                "\(logTag)[calltype] re-read after \(reconnectMode) reconnect: " +
+                "previousAuthoritative=\(callTypeStateMachine.authoritativeCallType?.rawValue ?? "nil")"
+            )
+            ingestRoomCallTypeFromMetadata(reason: "reconnect completed")
 
             // Replay any CallKit/toolbar mute intent parked during the
             // reconnect + post-reconnect `republishAllTracks` window.
@@ -399,17 +547,59 @@ extension RoomContext: RoomDelegate {
 
     // MARK: remote participant state
 
+    public nonisolated func room(
+        _: Room,
+        participant: Participant,
+        didUpdateConnectionQuality quality: ConnectionQuality
+    ) {
+        Task { @MainActor [weak self, weak participant] in
+            guard let self, let participant else { return }
+            let isCurrentParticipant = participant === room.localParticipant
+                || room.remoteParticipants.values.contains { $0 === participant }
+            guard isCurrentParticipant else {
+                // LiveKit delegate callbacks can already be queued when a remote leaves. Do not
+                // mutate tracker state from a Participant instance that no longer owns room state.
+                CallNetworkQualityLog.debug(
+                    "event=sample_ignored reason=stale_participant sid=\(participant.sid?.stringValue ?? "nil") "
+                        + "raw=\(quality)"
+                )
+                return
+            }
+
+            ingestNetworkQuality(quality, for: participant)
+        }
+    }
+
     // remote online
     public nonisolated func room(_: Room, participantDidConnect participant: RemoteParticipant) {
         Task { @MainActor [weak self, weak participant] in
             guard let self, let participant else { return }
+            if room.remoteParticipants.values.contains(where: { $0 === participant }) {
+                // A current Participant instance starts a new quality lifetime for its SID.
+                startNetworkQualityLifetime(for: participant)
+            } else {
+                // LiveKit delegate callbacks can already be queued when a remote leaves. Do not
+                // let a stale connect callback reset the current owner's tracker state.
+                CallNetworkQualityLog.debug(
+                    "event=participant_connect_ignored reason=stale_participant "
+                        + "sid=\(participant.sid?.stringValue ?? "nil")"
+                )
+            }
             Logger.info("\(logTag) remote connected")
-            if case .private = currentCall.callType {
+            if callTimingRemoteJoinedAt == 0 { callTimingRemoteJoinedAt = ProcessInfo.processInfo.systemUptime }
+            logCallTiming("remoteJoined", extra: " identity=\(participant.identity?.stringValue ?? "nil")")
+            reevaluateCallType(reason: "participant connected")
+
+            switch callTypeStateMachine.connectionFlowType {
+            case .private:
                 // 1v1
                 Logger.info("\(logTag) private cancel disconnect Timer")
                 callManager.stopParticipantDisTimer()
-                // 1on1 callee入会
-                if case .outgoing = currentCall.callState, currentCall.isCaller {
+                // The server-restored meeting-bar model can lose the process-local
+                // `.outgoing` phase. Lifecycle is the source of truth: while this
+                // caller is connecting, the first remote participant completes 1v1.
+                if currentCall.isCaller,
+                   callManager.lifecycleState == .connecting {
                     callManager.handleMeetingBar(call: currentCall, action: .add)
                     currentCall.callState = .answering
                     callManager.stopSound()
@@ -418,17 +608,12 @@ extension RoomContext: RoomDelegate {
                     callManager.tryTransition(from: .connecting, to: .connected)
                 }
 
-                if case .answering = currentCall.callState, room.allParticipants.keys.count > 2 {
-                    // 1on1 call进入更多人type转为instant
-                    callManager.turnIntoInstantCall()
-                }
-
                 // 直接赋值主线程属性（extension 已为 @MainActor）
                 othersideParticipantFor1on1 = participant
-            } else if case .group = currentCall.callType {
-                // 非会议中的人，展示instant
-                checkPartiantInRoom(room.localParticipant.identity?.stringValue ?? "")
-            } else if case .instant = currentCall.callType {
+                callManager.armCallDurationGate()
+            case .group:
+                Logger.info("\(logTag) participant connected in group call")
+            case .instant:
                 // instant call
                 callManager.stopCallTimeoutTimer()
                 callManager.tryTransition(from: .connecting, to: .connected)
@@ -449,10 +634,26 @@ extension RoomContext: RoomDelegate {
     // remote offline
     public nonisolated func room(_: Room, participantDidDisconnect participant: RemoteParticipant) {
         let participantIdentity = participant.identity
+        let participantSID = participant.sid?.stringValue
+        let participantObjectID = ObjectIdentifier(participant)
         Task { @MainActor [weak self, weak participant] in
             guard let self else { return }
+            if let participantSID {
+                let hasCurrentReplacement = room.remoteParticipants.values.contains {
+                    ObjectIdentifier($0) != participantObjectID
+                        && $0.sid?.stringValue == participantSID
+                }
+                if !hasCurrentReplacement {
+                    removeNetworkQualityParticipant(withSID: participantSID)
+                } else {
+                    CallNetworkQualityLog.info(
+                        "event=participant_remove_ignored reason=sid_reused sid=\(participantSID)"
+                    )
+                }
+            }
             let participantId = participantIdentity?.stringValue ?? "unknown"
             Logger.debug("\(logTag) remote disconnected, participantId: \(participantId), remaining participants: \(room.allParticipants.count)")
+            reevaluateCallType(reason: "participant disconnected")
 
             // Drop the mic-on dedup entry on a genuine leave so a later rejoin with the
             // same identity bullets again. Skip during reconnect: a full reconnect may
@@ -466,9 +667,9 @@ extension RoomContext: RoomDelegate {
                 self.focusParticipant = nil
             }
 
-            // Auto-end an emptied 1v1/instant call; a real group may keep a lone participant.
-            let hangupWhenAlone = (currentCall.callType == .private || currentCall.callType == .instant)
-            if hangupWhenAlone, room.allParticipants.count == 1 {
+            // Only 1v1 calls end after the remote participant has remained disconnected.
+            // Instant/group meetings allow the local participant to stay in the room alone.
+            if currentCall.callType == .private, room.allParticipants.count == 1 {
                 Logger.info("\(logTag) only local participant remains, start disconnect timer")
                 callManager.startParticipantDisTimer {
                     let roomId = DTMeetingManager.shared.currentCall.roomId
@@ -488,7 +689,148 @@ extension RoomContext: RoomDelegate {
         }
     }
 
-    public nonisolated func room(_: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType _: EncryptionType) {
+    public nonisolated func room(_: Room, didUpdateMetadata metadata: String?) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            Logger.info("\(logTag)[calltype] metadata changed event: raw=\(metadata ?? "nil")")
+            ingestRoomCallTypeFromMetadata(reason: "room metadata changed")
+        }
+    }
+
+    // MARK: - Call type resolution
+
+    @MainActor
+    private func ingestRoomCallTypeFromMetadata(reason: String) {
+        // Only a 1v1-origin call has a type the server knows better than we do; for the others this
+        // trigger just means "re-check the local conditions".
+        guard callTypeStateMachine.usesOneToOneConnectionFlow else {
+            reevaluateCallType(reason: reason)
+            return
+        }
+
+        let rawMetadata = room.metadata
+        let metadata = RoomDataProcessor.parseMetadata(from: rawMetadata)
+        let metadataCallType = metadata?.callType
+        let participantCount = room.allParticipants.count
+        let isSelfInGroup = isLocalUserInCurrentCallGroup()
+        // Post-lenient-parse values, so a partial payload shows which defaults were applied.
+        let caps = metadata.map {
+            "a=\($0.canPublishAudio),v=\($0.canPublishVideo),s=\($0.canPublishScreen)"
+        } ?? "unparsed"
+        Logger.info(
+            "\(logTag)[calltype] ingest: reason=\(reason), parsed=\(metadataCallType?.rawValue ?? "nil"), " +
+            "participants=\(participantCount), notOutsider=\(isSelfInGroup), " +
+            "modelType=\(currentCall.callType.rawValue), " +
+            "oneToOneFlow=\(callTypeStateMachine.usesOneToOneConnectionFlow), " +
+            "caps=[\(caps)], raw=\(rawMetadata ?? "nil")"
+        )
+        let transition = callTypeStateMachine.ingest(
+            metadataCallType: metadataCallType,
+            participantCount: participantCount,
+            isSelfInGroup: isSelfInGroup
+        )
+        applyCallTypeTransition(
+            transition,
+            reason: reason,
+            participantCount: participantCount,
+            isSelfInGroup: isSelfInGroup
+        )
+    }
+
+    @MainActor
+    func reevaluateCallType(reason: String) {
+        let participantCount = room.allParticipants.count
+        let isSelfInGroup = isLocalUserInCurrentCallGroup()
+        Logger.info(
+            "\(logTag)[calltype] reevaluate: reason=\(reason), participants=\(participantCount), " +
+            "notOutsider=\(isSelfInGroup), authoritative=\(callTypeStateMachine.authoritativeCallType?.rawValue ?? "nil"), " +
+            "modelType=\(currentCall.callType.rawValue)"
+        )
+        let transition = callTypeStateMachine.reevaluate(
+            participantCount: participantCount,
+            isSelfInGroup: isSelfInGroup
+        )
+        applyCallTypeTransition(
+            transition,
+            reason: reason,
+            participantCount: participantCount,
+            isSelfInGroup: isSelfInGroup
+        )
+    }
+
+    @MainActor
+    func forceInstantCallForLocalUpgrade(reason: String) {
+        Logger.info(
+            "\(logTag)[calltype] local instant override: reason=\(reason), " +
+            "authoritative=\(callTypeStateMachine.authoritativeCallType?.rawValue ?? "nil"), " +
+            "modelType=\(currentCall.callType.rawValue)"
+        )
+        let transition = callTypeStateMachine.forceInstantForLocalUpgrade()
+        if transition == nil {
+            // The UI may already be instant because metadata arrived first. Inviting still
+            // deliberately completes the original 1v1 waiting flow.
+            callManager.transitionCurrentCallType(
+                to: .instant,
+                shouldEndOneToOneWaiting: true
+            )
+            return
+        }
+        applyCallTypeTransition(
+            transition,
+            reason: reason,
+            participantCount: room.allParticipants.count,
+            isSelfInGroup: isLocalUserInCurrentCallGroup()
+        )
+    }
+
+    @MainActor
+    private func applyCallTypeTransition(
+        _ transition: CallTypeTransition?,
+        reason: String,
+        participantCount: Int,
+        isSelfInGroup: Bool
+    ) {
+        guard let transition else {
+            Logger.info(
+                "\(logTag)[calltype] no-op: effective=\(callTypeStateMachine.state.effectiveType.rawValue), " +
+                "source=\(String(describing: callTypeStateMachine.state.source)), reason=\(reason)"
+            )
+            return
+        }
+
+        let previousType = transition.from.effectiveType
+        let nextType = transition.to.effectiveType
+        // Identities explain the count: every device of an account is its own participant, which is
+        // what pushes a multi-device 1on1 call to instant.
+        let identities = room.allParticipants.keys
+            .map { $0.stringValue }
+            .sorted()
+            .joined(separator: ", ")
+        Logger.info(
+            "\(logTag)[calltype] resolved \(previousType.rawValue) -> \(nextType.rawValue), " +
+            "source=\(String(describing: transition.to.source)), reason=\(reason), " +
+            "participants=\(participantCount), notOutsider=\(isSelfInGroup), " +
+            "oneToOneFlow=\(callTypeStateMachine.usesOneToOneConnectionFlow), identities=[\(identities)]"
+        )
+
+        guard currentCall.callType != nextType else {
+            Logger.info("\(logTag)[calltype] model already reconciled at \(nextType.rawValue)")
+            return
+        }
+
+        // Instant is terminal, but the first room metadata can still correct a locally
+        // mis-inferred type (1on1 <-> group), so the migration handles any pair.
+        let shouldEndOneToOneWaiting =
+            nextType == .instant &&
+            callTypeStateMachine.usesOneToOneConnectionFlow &&
+            (participantCount > 1 || transition.to.source == .localInstantOverride)
+        callManager.transitionCurrentCallType(
+            to: nextType,
+            shouldEndOneToOneWaiting: shouldEndOneToOneWaiting
+        )
+    }
+
+    public nonisolated func room(_ callbackRoom: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType _: EncryptionType) {
         let participantId = participant?.identity?.stringValue.components(separatedBy: ".").first ?? ""
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -523,6 +865,27 @@ extension RoomContext: RoomDelegate {
                 }
 
                 return (currentTimeMs, expiredTimeMs, durationMs, operatorIdentity.components(separatedBy: ".").first ?? "")
+            }
+
+            func parseServerEndCallPayload(
+                from data: Data,
+                outerTopic: String
+            ) -> (uuid: String, sendTimestamp: UInt64)? {
+                guard
+                    let packet = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                    let payload = packet["payload"] as? String,
+                    let outerTimestamp = packet["sendTimestamp"] as? UInt64,
+                    let uuid = packet["uuid"] as? String,
+                    let payloadData = payload.data(using: .utf8),
+                    let message = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any],
+                    let innerTopic = message["topic"] as? String,
+                    let innerTimestamp = message["sendTimestamp"] as? UInt64,
+                    innerTopic == outerTopic,
+                    innerTimestamp == outerTimestamp
+                else {
+                    return nil
+                }
+                return (uuid, outerTimestamp)
             }
 
             switch topic {
@@ -585,6 +948,27 @@ extension RoomContext: RoomDelegate {
                         Logger.error("\(logTag) Failed to parse data for topic 'end-call'")
                     }
                 }
+
+            case "server-end-call":
+                guard callbackRoom === room, callManager.roomContext === self else {
+                    Logger.warn("\(logTag) server-end-call rejected: inactive room")
+                    return
+                }
+                guard participant == nil else {
+                    Logger.warn("\(logTag) server-end-call rejected: participant is not nil")
+                    return
+                }
+                guard let packet = parseServerEndCallPayload(from: data, outerTopic: topic) else {
+                    Logger.warn("\(logTag) server-end-call rejected: invalid payload")
+                    return
+                }
+                Logger.info(
+                    "\(logTag) server-end-call accepted uuid=\(packet.uuid) " +
+                    "sendTimestamp=\(packet.sendTimestamp)"
+                )
+                await DTMeetingManager.shared.meetingNotificationEndAllClearData(
+                    roomId: currentCall.roomId
+                )
 
             default:
                 break
@@ -773,6 +1157,27 @@ extension RoomContext: RoomDelegate {
             } else if isVideoTrack {
                 RoomDataManager.shared.updateVideoMuteParticipant(participant: participant)
             }
+        }
+    }
+
+    public nonisolated func room(_: Room, participant: Participant, didUpdateState state: ParticipantState) {
+        guard participant is RemoteParticipant else { return }
+        let identity = participant.identity?.stringValue ?? "nil"
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let stage = state == .active ? "participantActive" : "participantState"
+            logCallTiming(stage, extra: " identity=\(identity) state=\(state)")
+        }
+    }
+
+    public nonisolated func room(_: Room, participant _: LocalParticipant, remoteDidSubscribeTrack publication: LocalTrackPublication) {
+        let source = publication.source
+        let sid = publication.sid
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            logCallTiming("localTrackSubscribed", extra: " source=\(source) sid=\(sid)")
+            // 只有麦克风轨道控制 1v1 计时；摄像头和屏幕共享忽略。
+            if source == .microphone { callManager.notifyLocalMicTrackSubscribed() }
         }
     }
 

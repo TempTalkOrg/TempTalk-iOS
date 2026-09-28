@@ -73,7 +73,7 @@ NS_ASSUME_NONNULL_BEGIN
 
     [sentBuilder setDestination:self.sentRecipientId];
     [sentBuilder setMessage:[self.message buildDataMessage:self.sentRecipientId]];
-    [sentBuilder setExpirationStartTimestamp:[NSDate ows_millisecondTimeStamp]];
+    [sentBuilder setExpirationStartTimestamp:[DTTrustedClock now]];
     [sentBuilder setSequenceID:self.message.sequenceId];
     [sentBuilder setNotifySequenceID:self.message.notifySequenceId];
     

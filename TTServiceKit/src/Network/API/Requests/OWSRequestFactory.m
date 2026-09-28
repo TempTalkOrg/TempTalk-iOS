@@ -428,7 +428,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (TSRequest *)getMeetingChannelAndPasswordRequestV1 {
     NSString *urlString = [NSString stringWithFormat:@"%@", self.MeetingCreateExternalPath_V1];
-    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+    NSTimeInterval now = [DTTrustedClock now] / 1000.0;
     TSRequest *request = [TSRequest requestWithUrl:[NSURL URLWithString:urlString] method:@"POST" parameters:@{@"startTs" : @(ceil(now))}];
     request.shouldHaveAuthorizationHeaders = NO;
     return request;
@@ -579,7 +579,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (NSTimeInterval)requestTimestamp {
     
-    return ceil([[NSDate date] timeIntervalSince1970]);
+    return ceil([DTTrustedClock now] / 1000.0);
 }
 
 #pragma mark - userstatus

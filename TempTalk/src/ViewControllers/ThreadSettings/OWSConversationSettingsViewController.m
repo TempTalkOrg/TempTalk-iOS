@@ -470,7 +470,8 @@ const CGFloat kIconViewLength = 24;
             return [self disclosureCellWithName:Localized(@"CONVERSATION_SETTINGS_NAME_CARD", @"table cell label in conversation settings") iconName:@"table_ic_share_profile"];
         } actionBlock:^{
             @strongify(self);
-            [self showProfileCardInfo:self.thread.contactIdentifier];
+            // A 1:1 conversation carries no provenance for how the two of us met.
+            [self showProfileCardInfo:self.thread.contactIdentifier addFriendSource:DTAddFriendSource.unspecified];
         }]];
     }
 
@@ -1151,7 +1152,7 @@ const CGFloat kIconViewLength = 24;
                                                               handler:^(UIAlertAction * _Nonnull action) {
             
             DatabaseStorageAsyncWrite(self.databaseStorage, (^(SDSAnyWriteTransaction *writeTransaction) {
-                TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
+                TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:[DTTrustedClock clientStampMs]
                                                                              inThread:self.thread
                                                                           messageType:TSInfoMessageReportedMessage
                                                                      expiresInSeconds:self.thread.messageExpiresInSeconds
@@ -1406,13 +1407,15 @@ const CGFloat kIconViewLength = 24;
         } else {
             recipientId = self.thread.contactIdentifier;
         }
-        // Convert thread.uniqueId to groupModel.groupId using transformToServerGroupId
+        DTAddFriendSource *addFriendSource = DTAddFriendSource.unspecified;
         if ([self.thread isKindOfClass:[TSGroupThread class]]) {
             TSGroupThread *groupThread = (TSGroupThread *)self.thread;
             NSString *groupIdStr = [TSGroupThread transformToServerGroupIdWithLocalGroupId:groupThread.groupModel.groupId];
-            [[DTAddFriendSourceManager shared] setGroupSource:DTSourceToPersonalCardTypeInGroupMemberUserIcon groupId:groupIdStr ?: @""];
+            if (groupIdStr.length > 0) {
+                addFriendSource = [DTAddFriendSource fromGroupWithGroupId:groupIdStr];
+            }
         }
-        [self showProfileCardInfo:recipientId];
+        [self showProfileCardInfo:recipientId addFriendSource:addFriendSource];
     } viewAll:^{
         @strongify(self)
         if (!self.isGroupThread) { return; }

@@ -128,7 +128,8 @@ extension ConversationViewController {
                                                     inputTextViewDelegate: self,
                                                     inputToolbarState: inputToolbarState(),
                                                     relationship: inputToolbarRelationship(),
-                                                    threadType: threadType)
+                                                    threadType: threadType,
+                                                    usesEndToEndEncryptionPlaceholder: usesEndToEndEncryptionInputPlaceholder)
         viewState.inputToolbar = inputToolbar
 
         // Update confidential button visibility based on group size
@@ -160,7 +161,8 @@ extension ConversationViewController {
                                                     inputTextViewDelegate: self,
                                                     inputToolbarState: inputToolbarState(),
                                                     relationship: inputToolbarRelationship(),
-                                                    threadType: threadType)
+                                                    threadType: threadType,
+                                                    usesEndToEndEncryptionPlaceholder: usesEndToEndEncryptionInputPlaceholder)
 
         // Update confidential button visibility based on group size
         // Must set viewState.inputToolbar first to avoid infinite loop
@@ -168,6 +170,13 @@ extension ConversationViewController {
         updateConfidentialButtonVisibility()
 
         return inputToolbar
+    }
+
+    private var usesEndToEndEncryptionInputPlaceholder: Bool {
+        if case .endToEndEncryption = conversationNoticeRelationshipStyle {
+            return true
+        }
+        return false
     }
 
     /// Update confidential button visibility based on group member count
@@ -258,11 +267,19 @@ extension ConversationViewController {
         // Changing the contentInset can change the contentOffset, so make sure we
         // stash the current value before making any changes.
         let oldYOffset = collectionView.contentOffset.y
-        
-        if collectionView.contentInset != newInsets {
-            collectionView.contentInset = newInsets
+
+        // Match Signal's inset update ordering: UIKit may adjust contentOffset as a side
+        // effect of changing contentInset. Preserve the current offset here, then let the
+        // explicit positioning rules below decide whether the viewport should move.
+        let didChangeInsets = collectionView.contentInset != newInsets
+        UIView.performWithoutAnimation {
+            if didChangeInsets {
+                let contentOffset = collectionView.contentOffset
+                collectionView.contentInset = newInsets
+                collectionView.setContentOffset(contentOffset, animated: false)
+            }
+            collectionView.scrollIndicatorInsets = newInsets
         }
-        collectionView.scrollIndicatorInsets = newInsets
         
         guard allowAutoScroll else {
             return
@@ -271,6 +288,17 @@ extension ConversationViewController {
         func adjustInsets() {
             let insetChange = newInsets.bottom - oldInsets.bottom
             let isKeyboardActuallyVisible = self.inputToolbar.isInputViewFirstResponder
+            let hasFocusMessage = conversationViewModel.viewState.focusItemIndex != nil
+            let justCompletedInitialScroll = viewState.hasCompletedInitialScroll
+                && !viewState.userHasScrolled
+            let realKeyboardOwnsFocusPosition = hasFocusMessage
+                && justCompletedInitialScroll
+                && isKeyboardActuallyVisible
+                && !inputToolbar.isMeasuringKeyboardHeight
+                && !inputToolbar.hasUnsupersededKeyboardPreload
+                && inputAccessoryPlaceholder.keyboardOverlap > 0
+            let isPresentingKeyboardForFocusMessage = realKeyboardOwnsFocusPosition
+                && insetChange > 0
 
             let keyboardVisible: Bool
             if #available(iOS 15.0, *) {
@@ -288,10 +316,32 @@ extension ConversationViewController {
                 return
             }
 
+            // The initial focus/unread/failed destination owns the viewport until the user
+            // explicitly scrolls or begins input. Keyboard preloading can emit a show/hide
+            // pair while opening a conversation; restoring for any measurable drift avoids
+            // losing the intentional 40pt spacing when that transient inset disappears.
+            if viewState.hasCompletedInitialScroll,
+               !viewState.userHasScrolled,
+               !realKeyboardOwnsFocusPosition,
+               let targetOffset = viewState.initialScrollTargetOffset,
+               let deadline = viewState.initialScrollProtectionDeadline,
+               Date() < deadline {
+                let minimumOffset = -collectionView.adjustedContentInset.top
+                let restoredOffset = CGFloatClamp(targetOffset, minimumOffset, maxContentOffsetY)
+                let offsetDrift = abs(collectionView.contentOffset.y - restoredOffset)
+                if offsetDrift > 0.5 {
+                    UIView.performWithoutAnimation {
+                        collectionView.setContentOffset(
+                            CGPoint(x: collectionView.contentOffset.x, y: restoredOffset),
+                            animated: false
+                        )
+                    }
+                }
+                return
+            }
+
             // 2. 键盘弹起或已在底部的情况
             if (wasScrolledToBottom || (insetChange > 0 && isKeyboardActuallyVisible)) && !self.isScreenOrientationChanging {
-                let hasFocusMessage = conversationViewModel.viewState.focusItemIndex != nil
-                let justCompletedInitialScroll = viewState.hasCompletedInitialScroll && !viewState.userHasScrolled
                 let hasFloatingConversationPresented = presentedViewController is FloatingConversationViewController
 
                 // 2.1 正常情况：滚动到底部
@@ -299,11 +349,10 @@ extension ConversationViewController {
                     scrollToBottom(animated: false)
                 }
                 // 2.2 从搜索跳转 + 键盘弹起：调整滚动确保焦点消息可见
-                else if hasFocusMessage && justCompletedInitialScroll && insetChange > 0 {
-                    if let focusIndex = conversationViewModel.viewState.focusItemIndex?.intValue {
-                        let indexPath = IndexPath(row: focusIndex, section: 0)
-                        collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: false)
-                    }
+                else if isPresentingKeyboardForFocusMessage {
+                    // Use the stable message ID instead of the view model's transient row.
+                    // If a snapshot is still committing, its completion retries this operation.
+                    recenterFocusedMessageIfPossible()
                 }
                 // 2.3a 用户主动弹起键盘：清除保护并滚动到底部
                 // 用户弹起键盘是明确的输入信号，应该滚动到底部
@@ -328,26 +377,8 @@ extension ConversationViewController {
                 }
 
                 // 3.2 从搜索跳转时不调整（保护焦点位置）
-                let hasFocusMessage = conversationViewModel.viewState.focusItemIndex != nil
-                let justCompletedInitialScroll = viewState.hasCompletedInitialScroll && !viewState.userHasScrolled
                 if hasFocusMessage && justCompletedInitialScroll {
                     return
-                }
-
-                // 3.3 初始滚动位置保护：如果在保护期内且有目标位置，恢复到目标位置
-                if let targetOffset = viewState.initialScrollTargetOffset,
-                   let deadline = viewState.initialScrollProtectionDeadline,
-                   Date() < deadline {
-                    // 检查当前位置是否偏离目标位置超过阈值（50pt）
-                    let currentOffset = collectionView.contentOffset.y
-                    let offsetDrift = abs(currentOffset - targetOffset)
-                    if offsetDrift > 50 {
-                        let minYOffset = -view.safeAreaInsets.top
-                        let restoredOffset = CGFloatClamp(targetOffset, minYOffset, safeContentHeight)
-                        collectionView.setContentOffset(CGPoint(x: 0, y: restoredOffset), animated: false)
-                        return
-                    } else {
-                    }
                 }
 
                 // 清除过期的保护
@@ -365,16 +396,6 @@ extension ConversationViewController {
 
                 // 3.5 正常调整 content offset
                 if insetChange != 0 {
-                    // 3.5a 如果在初始滚动保护期内，跳过键盘引起的自动调整
-                    // 这样可以防止刚进入页面时键盘事件导致未读消息位置下移
-                    // 但只在有未读消息的情况下保护，否则会影响正常的键盘滚动行为
-                    if let targetOffset = viewState.initialScrollTargetOffset,
-                       let deadline = viewState.initialScrollProtectionDeadline,
-                       Date() < deadline,
-                       conversationViewModel.viewState.unreadIndicatorIndex != nil {
-                        return
-                    }
-
                     let minYOffset = -view.safeAreaInsets.top
                     let newYOffset = CGFloatClamp(oldYOffset + insetChange, minYOffset, safeContentHeight)
                     let newOffset = CGPointMake(0, newYOffset)
@@ -512,6 +533,60 @@ extension ConversationViewController {
     }
 }
 
+// MARK: - Focus Message Keyboard Positioning
+
+extension ConversationViewController {
+    /// Centers the search result against the currently committed snapshot.
+    /// The stable interaction ID remains valid when a queued insert/delete changes row indices.
+    @discardableResult
+    func recenterFocusedMessageIfPossible() -> Bool {
+        guard !collectionView.hasUncommittedUpdates,
+              let focusMessageId = conversationViewModel.focusMessageIdOnOpen,
+              let indexPath = dataSource.indexPath(for: focusMessageId),
+              indexPath.section < collectionView.numberOfSections,
+              indexPath.row >= 0,
+              indexPath.row < collectionView.numberOfItems(inSection: indexPath.section),
+              dataSource.itemIdentifier(for: indexPath) == focusMessageId else {
+            return false
+        }
+
+        collectionView.scrollToItem(
+            at: indexPath,
+            at: .centeredVertically,
+            animated: false
+        )
+        return true
+    }
+
+    /// Completes the focus handoff only after the real keyboard and collection snapshot agree.
+    /// If a diff is still committing, its completion calls this method again.
+    @discardableResult
+    func finishFocusedMessageKeyboardPresentationIfNeeded() -> Bool {
+        let hasFocusMessage = conversationViewModel.viewState.focusItemIndex != nil
+        let justCompletedInitialScroll = viewState.hasCompletedInitialScroll
+            && !viewState.userHasScrolled
+        guard hasFocusMessage,
+              justCompletedInitialScroll,
+              viewState.isFocusKeyboardPresentationComplete,
+              isViewVisible,
+              !inputToolbar.isMeasuringKeyboardHeight,
+              !inputToolbar.hasUnsupersededKeyboardPreload,
+              inputToolbar.isInputViewFirstResponder,
+              inputAccessoryPlaceholder.keyboardOverlap > 0,
+              recenterFocusedMessageIfPossible() else {
+            return false
+        }
+
+        viewState.initialScrollTargetOffset = nil
+        viewState.initialScrollProtectionDeadline = nil
+        viewState.isFocusKeyboardPresentationComplete = false
+        conversationViewModel.focusMessageIdOnOpen = nil
+        conversationViewModel.clearFocusMessageIndex()
+        viewState.userHasScrolled = true
+        return true
+    }
+}
+
 // MARK: - InputAccessoryPlaceholder
 
 extension ConversationViewController: InputAccessoryViewPlaceholderDelegate {
@@ -519,11 +594,34 @@ extension ConversationViewController: InputAccessoryViewPlaceholderDelegate {
                                                               animationCurve: UIView.AnimationCurve) {
         AssertIsOnMainThread()
 
+        // Keyboard preloading briefly makes the text view first responder and immediately
+        // resigns it. Newer iOS versions can deliver the resulting show notification after
+        // the responder has already resigned, including when returning from Quick Look.
+        // Treat only a keyboard currently owned by this conversation as visible UI.
+        guard isViewVisible,
+              !inputToolbar.isMeasuringKeyboardHeight,
+              !inputToolbar.hasUnsupersededKeyboardPreload,
+              inputToolbar.isInputViewFirstResponder else {
+            inputAccessoryPlaceholder.setKeyboardDismiss()
+            return
+        }
+
         handleKeyboardStateChange(animationDuration: animationDuration,
                                   animationCurve: animationCurve)
     }
 
     public func inputAccessoryPlaceholderKeyboardDidPresent() {
+        guard isViewVisible,
+              !inputToolbar.isMeasuringKeyboardHeight,
+              !inputToolbar.hasUnsupersededKeyboardPreload,
+              inputToolbar.isInputViewFirstResponder else {
+            inputAccessoryPlaceholder.setKeyboardDismiss()
+            return
+        }
+        // Record the keyboard fact independently of initial snapshot readiness. The keyboard
+        // and snapshot may complete in either order; the second event performs the handoff.
+        viewState.isFocusKeyboardPresentationComplete = true
+
         guard viewHasEverAppeared else { return }
 
         updateBottomBarPosition()
@@ -536,15 +634,9 @@ extension ConversationViewController: InputAccessoryViewPlaceholderDelegate {
             scrollToBottom(animated: false)
         }
 
-        // 键盘完全显示后，清除搜索跳转的焦点保护
-        let hasFocusMessage = conversationViewModel.viewState.focusItemIndex != nil
-        let justCompletedInitialScroll = viewState.hasCompletedInitialScroll && !viewState.userHasScrolled
-
-        if hasFocusMessage && justCompletedInitialScroll {
-            conversationViewModel.focusMessageIdOnOpen = nil
-            conversationViewModel.clearFocusMessageIndex()
-            viewState.userHasScrolled = true
-        }
+        // Clear search focus only after the committed snapshot can actually center it.
+        // Otherwise an in-flight diff can leave the focused bubble behind the keyboard.
+        finishFocusedMessageKeyboardPresentationIfNeeded()
     }
 
     public func inputAccessoryPlaceholderKeyboardIsDismissing(animationDuration: TimeInterval,
@@ -556,6 +648,7 @@ extension ConversationViewController: InputAccessoryViewPlaceholderDelegate {
     }
 
     public func inputAccessoryPlaceholderKeyboardDidDismiss() {
+        viewState.isFocusKeyboardPresentationComplete = false
         if viewHasEverAppeared {
             updateBottomBarPosition()
             updateContentInsets(animated: false)

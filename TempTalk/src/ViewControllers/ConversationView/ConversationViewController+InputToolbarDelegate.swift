@@ -364,6 +364,12 @@ extension ConversationViewController: ConversationInputToolbarDelegate {
             return
         }
 
+        // Beginning input is explicit user intent and supersedes the temporary
+        // initial focus/unread/failed viewport ownership.
+        viewState.initialScrollTargetOffset = nil
+        viewState.initialScrollProtectionDeadline = nil
+        viewState.isFocusKeyboardPresentationComplete = false
+
         // 正常情况：清除焦点并滚动到底部
         if conversationViewModel.focusMessageIdOnOpen != nil {
             conversationViewModel.focusMessageIdOnOpen = nil
@@ -586,11 +592,7 @@ extension ConversationViewController {
             AudioServicesPlaySystemSound(soundId)
         }
         
-        handleAddFriendRequest(message: message,
-                               sourceType: .inUserCard,
-                               sourceConversationID: nil,
-                               shareContactCardUId: nil,
-                               action: nil)
+        handleAddFriendRequest(message: message, source: contextualAddFriendSource)
     }
     
     private func resetQuotePreview() {
@@ -655,18 +657,31 @@ extension ConversationViewController: AttachmentApprovalViewControllerDelegate {
     }
 
     public func attachmentApproval(_ attachmentApproval: AttachmentApprovalViewController, didApproveAttachments attachments: [SignalAttachment]) {
+        sendApprovedAttachments(attachments)
+    }
+
+    /// Shared by the approval sheet (camera / document paths) and the media
+    /// preview screen (picker path) so both send identically.
+    func sendApprovedAttachments(_ attachments: [SignalAttachment]) {
         let captionText = attachments.last?.captionText
         attachments.forEach { $0.captionText = nil }
+        // Stagger persistence so the serial attachment queue and the conversation
+        // snapshot pipeline can publish each bubble independently instead of
+        // coalescing a whole picker batch into one visible update.
         attachments.enumerated().forEach { index, attachment in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 * Double(index)) { [weak self] in
                 guard let self else { return }
-                self.tryToSendAttachments([attachment], preSendMessageCallBack: { _ in }, messageText: nil, completion: nil)
+                self.tryToSendAttachments(
+                    [attachment],
+                    preSendMessageCallBack: { _ in },
+                    messageText: nil,
+                    completion: nil
+                )
             }
         }
 
         if let text = captionText, !text.isEmpty {
-            let textDelay = 0.1 * Double(attachments.count)
-            DispatchQueue.main.asyncAfter(deadline: .now() + textDelay) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1 * Double(attachments.count)) { [weak self] in
                 guard let self else { return }
                 _ = ThreadUtil.sendMessage(
                     withText: text,
@@ -681,6 +696,26 @@ extension ConversationViewController: AttachmentApprovalViewControllerDelegate {
 
         dismiss(animated: true)
         scrollToBottom(animated: false)
+    }
+}
+
+// MARK: - MediaPreviewViewControllerDelegate
+
+extension ConversationViewController: MediaPreviewViewControllerDelegate {
+    func mediaPreview(_ vc: MediaPreviewViewController, didApproveAttachments attachments: [SignalAttachment]) {
+        sendApprovedAttachments(attachments)
+    }
+
+    func mediaPreviewDidCancel(_ vc: MediaPreviewViewController) {
+        dismiss(animated: true)
+    }
+
+    func mediaPreviewDidTapConfide(_ vc: MediaPreviewViewController) {
+        ImpactHapticFeedback.impactOccurred(style: .light)
+        performConfidentialModeToggleIfNeeded { [weak self, weak vc] in
+            guard let self, let toolbar = vc?.bottomToolbar else { return }
+            toolbar.isConfidential = self.thread.conversationEntity?.confidentialMode == .confidential
+        }
     }
 }
 

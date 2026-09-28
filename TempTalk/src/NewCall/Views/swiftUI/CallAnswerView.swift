@@ -28,8 +28,14 @@ struct CallAnswerView: View {
         return Environment.shared.contactsManager.displayName(forPhoneIdentifier: currentCall.caller)
     }
     
-    func roomName() -> String {
-        return "\(Localized("GROUP_CALL_WAITING_ANSWER"))\(currentCall.roomName)"
+    /// Only an outsider has the group name withheld; a member still sees which meeting this is.
+    /// `callType` already carries that verdict — it resolves to instant exactly for outsiders.
+    func inviteSubtitle() -> String {
+        if currentCall.callType == .group {
+            return "\(Localized("GROUP_CALL_WAITING_ANSWER"))\(currentCall.roomName)"
+        }
+
+        return Localized("CALL_INCOMING_ALERT_INVITE_CALL")
     }
     
     var body: some View {
@@ -42,7 +48,7 @@ struct CallAnswerView: View {
                 .foregroundColor(.white)
                 .padding(.top, 10)
             if currentCall.callType != .private {
-                Text(roomName())
+                Text(inviteSubtitle())
                     .font(.system(size: 20))
                     .foregroundColor(.white)
             }

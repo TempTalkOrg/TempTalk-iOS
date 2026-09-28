@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import TTServiceKit
 
 extension DateUtil {
     @objc
@@ -104,11 +105,18 @@ extension DateUtil {
     }
 
 
+    /// P0-08: "now" for display must come from the server axis, same as `formatDateForConversationList`.
+    /// With the wall clock, moving device time backwards makes every normal message look like it is
+    /// "from the future", so `clampBeforeNow` rewrites its shown time to the (wrong) local clock face.
+    private static func trustedNow() -> Date {
+        Date(millisecondsSince1970: DTTrustedClock.now())
+    }
+
     // We might receive a message "from the future" due to a bug or
     // malicious sender or a sender whose device time is misconfigured,
     // etc. Clamp message and date headers dates to the past & present.
     private static func clampBeforeNow(_ date: Date) -> Date {
-        let nowDate = Date()
+        let nowDate = trustedNow()
         return date < nowDate ? date : nowDate
     }
 
@@ -117,7 +125,7 @@ extension DateUtil {
                                                     shouldUseLongFormat: Bool) -> String {
         let date = clampBeforeNow(Date(millisecondsSince1970: timestamp))
         let calendar = Calendar.current
-        let minutesDiff = calendar.dateComponents([.minute], from: date, to: Date()).minute ?? 0
+        let minutesDiff = calendar.dateComponents([.minute], from: date, to: trustedNow()).minute ?? 0
         if minutesDiff < 1 {
             return OWSLocalizedString("DATE_NOW",
                                      comment: "The present; the current time.")
@@ -153,9 +161,8 @@ extension DateUtil {
     /// 消息发送时间在今天，eg: 15:20 or 3:20 PM （根据系统设置展示 12 或 24 小时制）
     @objc
     public static func formatDateForConversationList(_ date: Date) -> String {
-        let date = clampBeforeNow(date)
-        let nowTimestamp = Date.ows_millisecondTimestamp()
-        let now = Date(millisecondsSince1970: nowTimestamp)
+        let now = Date(millisecondsSince1970: DTTrustedClock.now())
+        let date = date < now ? date : now
         let yearsDiff = yearsFrom(firstDate: date, toSecondDate: now)
         let daysDiff = daysFrom(firstDate: date, toSecondDate: now)
         
@@ -177,8 +184,7 @@ extension DateUtil {
     @objc
     public static func formatDateForConversationHeader(_ date: Date) -> String {
         let date = clampBeforeNow(date)
-        let nowTimestamp = Date.ows_millisecondTimestamp()
-        let now = Date(millisecondsSince1970: nowTimestamp)
+        let now = trustedNow()
         let yearsDiff = yearsFrom(firstDate: date, toSecondDate: now)
         let daysDiff = daysFrom(firstDate: date, toSecondDate: now)
         
@@ -198,7 +204,7 @@ extension DateUtil {
     public static func formatDateHeaderForCVC(_ date: Date) -> String {
         let date = clampBeforeNow(date)
         let calendar = Calendar.current
-        let monthsDiff = calendar.dateComponents([.month], from: date, to: Date()).month ?? 0
+        let monthsDiff = calendar.dateComponents([.month], from: date, to: trustedNow()).month ?? 0
         if monthsDiff >= 6 {
             // Mar 8, 2017
             return dateHeaderOldDateFormatter.string(from: date)
@@ -214,11 +220,12 @@ extension DateUtil {
     public static func formatTimestampRelatively(_ timestamp: UInt64) -> String {
         let date = clampBeforeNow(Date(millisecondsSince1970: timestamp))
         let calendar = Calendar.current
-        let minutesDiff = calendar.dateComponents([.minute], from: date, to: Date()).minute ?? 0
+        let now = trustedNow()
+        let minutesDiff = calendar.dateComponents([.minute], from: date, to: now).minute ?? 0
         if minutesDiff < 1 {
             return OWSLocalizedString("DATE_NOW", comment: "The present; the current time.")
         } else {
-            let secondsDiff = calendar.dateComponents([.second], from: date, to: Date()).second ?? 0
+            let secondsDiff = calendar.dateComponents([.second], from: date, to: now).second ?? 0
             return String.formatDurationLossless(durationSeconds: UInt32(secondsDiff))
         }
     }

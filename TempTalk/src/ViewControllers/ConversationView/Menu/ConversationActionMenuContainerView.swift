@@ -17,7 +17,7 @@ class ConversationActionMenuContainerView: UIView {
     
     static let arrowHeight: CGFloat = 6.0
     private let arrowWidth: CGFloat = 13.5
-    private let cornerRadius: CGFloat = 8.0
+    private let cornerRadius: CGFloat = 12.0
     
     private var sourceRect: CGRect = .zero
     private var arrowPosition: CGFloat = 0.0

@@ -23,8 +23,22 @@ public class OWSVideoPlayer: NSObject {
     weak var delegate: OWSVideoPlayerDelegate?
 
     @objc init(url: URL) {
-        self.avPlayer = AVPlayer(url: url)
+        let asset = AVURLAsset(url: url)
+        self.avPlayer = AVPlayer(playerItem: AVPlayerItem(asset: asset))
         self.audioActivity = AudioActivity(audioDescription: "[OWSVideoPlayer] url:\(url)")
+
+        super.init()
+
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(playerItemDidPlayToCompletion(_:)),
+                                               name: NSNotification.Name.AVPlayerItemDidPlayToEndTime,
+                                               object: avPlayer.currentItem)
+    }
+
+    /// Plays a seekable memory-backed attachment asset.
+    @objc init(asset: AVAsset) {
+        self.avPlayer = AVPlayer(playerItem: AVPlayerItem(asset: asset))
+        self.audioActivity = AudioActivity(audioDescription: "[OWSVideoPlayer] memory asset")
 
         super.init()
 

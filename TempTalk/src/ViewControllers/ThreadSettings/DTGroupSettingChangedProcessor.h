@@ -23,6 +23,12 @@ NS_ASSUME_NONNULL_BEGIN
                                    success:(void(^)(SDSAnyWriteTransaction *writeTransaction))success
                                    failure:(void(^)(void))failure;
 
+- (void)changeGroupSettingWithPropertyName:(NSString *)propertyName
+                                     value:(NSNumber *)value
+                successWithServerTimestamp:(void(^)(SDSAnyWriteTransaction *writeTransaction,
+                                                     uint64_t serverTimestamp))success
+                                   failure:(void(^)(void))failure;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -437,6 +437,15 @@ const UIWindowLevel UIWindowLevel_ScreenProtection(void)
     } else {
         frontWindow = self.rootWindow;
     }
+
+    // Backstop: once the passcode lock window is no longer the frontmost window
+    // (a call floats above it, or root/home is brought forward), dismiss its
+    // keyboard. The passcode number pad is a system keyboard window that floats
+    // above every app window and would otherwise leak over the call or home page.
+    if (frontWindow != self.screenBlockingWindow) {
+        [self.screenBlockingWindow endEditing:YES];
+    }
+
     [frontWindow.rootViewController setNeedsStatusBarAppearanceUpdate];
     if (@available(iOS 16, *)) {
         [frontWindow.rootViewController setNeedsUpdateOfSupportedInterfaceOrientations];

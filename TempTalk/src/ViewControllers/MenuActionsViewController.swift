@@ -6,6 +6,25 @@ import Foundation
 import TTMessaging
 import UIKit
 
+// Canonical display order of menu actions (LINE-style grid fills left-to-right by rank).
+// A message never carries both Translate and Convert, so they share one segment slot.
+@objc
+public enum MenuActionKind: Int {
+    case resend = 0  // Failed outgoing message only — paired with Delete
+    case quote = 1
+    case copy
+    case forward
+    case select
+    case convert   // Translate / Voice-to-Text / Discard Convert
+    case save      // Save to Photos / Download
+    case favorite  // Add to Favorites (GIF library)
+    case addToSaved
+    case recall
+    case delete
+    case info
+    case other = 999
+}
+
 @objc
 public class MenuAction: NSObject {
     let block: (MenuAction) -> Void
@@ -13,12 +32,16 @@ public class MenuAction: NSObject {
     let title: String
     let subtitle: String?
     let dismissBeforePerformAction: Bool
+    let kind: MenuActionKind
+    // Recall / Delete render in the terror red tint.
+    var isDestructive: Bool { kind == .recall || kind == .delete }
 
     public init(
         image: UIImage,
         title: String,
         subtitle: String?,
         dismissBeforePerformAction: Bool = true,
+        kind: MenuActionKind = .other,
         block: @escaping (MenuAction) -> Void
     ) {
         self.image = image.withRenderingMode(UIImage.RenderingMode.alwaysTemplate)
@@ -26,6 +49,7 @@ public class MenuAction: NSObject {
         self.subtitle = subtitle
         self.block = block
         self.dismissBeforePerformAction = dismissBeforePerformAction
+        self.kind = kind
     }
 }
 

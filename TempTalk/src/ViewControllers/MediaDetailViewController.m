@@ -17,6 +17,7 @@
 #import <MediaPlayer/MediaPlayer.h>
 #import <TTMessaging/TTMessaging-Swift.h>
 #import <TTServiceKit/NSData+Image.h>
+#import <TTServiceKit/TTServiceKit-Swift.h>
 #import <YYImage/YYImage.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -46,6 +47,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, nullable) PlayerProgressBar *videoProgressBar;
 @property (nonatomic, nullable) UIBarButtonItem *videoPlayBarButton;
 @property (nonatomic, nullable) UIBarButtonItem *videoPauseBarButton;
+@property (nonatomic) NSUInteger videoLoadGeneration;
+@property (nonatomic) BOOL isVideoLoadInFlight;
+@property (nonatomic) BOOL shouldPlayWhenVideoReady;
+@property (nonatomic) CGSize videoDisplaySize;
+@property (nonatomic, nullable) NSLayoutConstraint *videoWidthConstraint;
+@property (nonatomic, nullable) NSLayoutConstraint *videoHeightConstraint;
+@property (nonatomic, nullable) UIActivityIndicatorView *videoLoadingIndicator;
 
 @property (nonatomic, nullable) DTImageRecognizeButton *recognizeButton;
 @property (nonatomic, nullable) NSLayoutConstraint *recognizeButtonTrailingConstraint;
@@ -90,7 +98,7 @@ NS_ASSUME_NONNULL_BEGIN
     // Decode lazily so building an off-screen page (e.g. a swipe neighbor) stays
     // cheap; prefer the image the pager pre-decoded. Cache it once resolved in
     // case the attachment stream is later deleted.
-    if (!_image) {
+    if (!_image && !self.isVideo) {
         _image = self.preloadedImage ?: self.attachmentStream.image;
     }
     return _image;
@@ -104,11 +112,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable UIImage *)decodedImageForAttachment:(TSAttachmentStream *)attachmentStream
 {
     if (attachmentStream.isAnimated) {
-        NSURL *_Nullable url = attachmentStream.mediaURL;
-        if (!url) {
-            return nil;
-        }
-        NSData *_Nullable data = [NSData dataWithContentsOfURL:url];
+        NSData *_Nullable data = attachmentStream.decryptedData;
         if (!data) {
             return nil;
         }
@@ -127,10 +131,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSData *)fileData
 {
     if (!_fileData) {
-        NSURL *_Nullable url = self.attachmentUrl;
-        if (url) {
-            _fileData = [NSData dataWithContentsOfURL:url];
-        }
+        _fileData = self.attachmentStream.decryptedData;
     }
     return _fileData;
 }
@@ -184,6 +185,10 @@ NS_ASSUME_NONNULL_BEGIN
     // scrollable, and on return it would swallow the horizontal paging swipe.
     // Restoring min zoom also re-centers contentOffset automatically.
     [self zoomOutAnimated:NO];
+    self.videoLoadGeneration += 1;
+    self.isVideoLoadInFlight = NO;
+    // Cancel autoplay when leaving the page.
+    self.shouldPlayWhenVideoReady = NO;
 }
 
 - (void)viewDidLayoutSubviews
@@ -197,6 +202,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)viewDidAppear:(BOOL)animated
 {
     [super viewDidAppear:animated];
+
+    if (self.isVideo && !self.videoPlayer) {
+        [self loadVideoIfNeeded];
+    }
     
     [self recognizeImageIfNeed:self.image];
 }
@@ -204,17 +213,20 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)updateMinZoomScale
 {
     CGSize viewSize = self.scrollView.bounds.size;
-    UIImage *image = self.image;
-    
-    if (!image) return;
-
-    if (image.size.width == 0 || image.size.height == 0) {
-        OWSFailDebug(@"%@ Invalid image dimensions. %@", self.logTag, NSStringFromCGSize(image.size));
+    // A failed image decode has no layout size.
+    if (!self.isVideo && !self.image) {
         return;
     }
 
-    CGFloat scaleWidth = viewSize.width / image.size.width;
-    CGFloat scaleHeight = viewSize.height / image.size.height;
+    CGSize mediaSize = self.isVideo ? self.videoDisplaySize : self.image.size;
+
+    if (mediaSize.width <= 0 || mediaSize.height <= 0) {
+        OWSFailDebug(@"%@ Invalid media dimensions. %@", self.logTag, NSStringFromCGSize(mediaSize));
+        return;
+    }
+
+    CGFloat scaleWidth = viewSize.width / mediaSize.width;
+    CGFloat scaleHeight = viewSize.height / mediaSize.height;
     CGFloat minScale = MIN(scaleWidth, scaleHeight);
 
     if (minScale != self.scrollView.minimumZoomScale) {
@@ -270,7 +282,7 @@ NS_ASSUME_NONNULL_BEGIN
             self.mediaView = [UIImageView new];
         }
     } else if (self.isVideo) {
-        self.mediaView = [self buildVideoPlayerView];
+        self.mediaView = [self buildVideoPlaceholderView];
     } else {
         // Present the static image using standard UIImageView
         UIImageView *imageView = [[UIImageView alloc] initWithImage:self.image];
@@ -304,63 +316,139 @@ NS_ASSUME_NONNULL_BEGIN
     self.mediaView.layer.minificationFilter = kCAFilterTrilinear;
     self.mediaView.layer.magnificationFilter = kCAFilterTrilinear;
 
-    if (self.isVideo) {
-        PlayerProgressBar *videoProgressBar = [PlayerProgressBar new];
-        videoProgressBar.delegate = self;
-        videoProgressBar.player = self.videoPlayer.avPlayer;
-
-        // We hide the progress bar until either:
-        // 1. Video completes playing
-        // 2. User taps the screen
-        videoProgressBar.hidden = YES;
-
-        self.videoProgressBar = videoProgressBar;
-        [self.view addSubview:videoProgressBar];
-        [videoProgressBar autoPinWidthToSuperview];
-        [videoProgressBar autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
-        CGFloat kVideoProgressBarHeight = 44;
-        [videoProgressBar autoSetDimension:ALDimensionHeight toSize:kVideoProgressBarHeight];
-
-        UIButton *playVideoButton = [UIButton new];
-        self.playVideoButton = playVideoButton;
-
-        [playVideoButton addTarget:self action:@selector(playVideo) forControlEvents:UIControlEventTouchUpInside];
-
-        UIImage *playImage = [UIImage imageNamed:@"play_button"];
-        [playVideoButton setBackgroundImage:playImage forState:UIControlStateNormal];
-        playVideoButton.contentMode = UIViewContentModeScaleAspectFill;
-
-        [self.view addSubview:playVideoButton];
-
-        CGFloat playVideoButtonWidth = ScaleFromIPhone5(70);
-        [playVideoButton autoSetDimensionsToSize:CGSizeMake(playVideoButtonWidth, playVideoButtonWidth)];
-        [playVideoButton autoCenterInSuperview];
-    }
-    
     [self applyTheme];
 }
 
-- (UIView *)buildVideoPlayerView
+- (UIView *)buildVideoPlaceholderView
 {
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    if (![fileManager fileExistsAtPath:[self.attachmentUrl path]]) {
-        OWSFailDebug(@"%@ Missing video file: %@", self.logTag, self.attachmentStream.mediaURL);
-    }
-
-    OWSVideoPlayer *player = [[OWSVideoPlayer alloc] initWithUrl:self.attachmentUrl];
-    [player seekToTime:kCMTimeZero];
-    player.delegate = self;
-    self.videoPlayer = player;
-
     VideoPlayerView *playerView = [VideoPlayerView new];
-    playerView.player = player.avPlayer;
+
+    CGSize videoSize = CGSizeMake(self.attachmentStream.width, self.attachmentStream.height);
+    if (videoSize.width <= 0 || videoSize.height <= 0) {
+        videoSize = UIScreen.mainScreen.bounds.size;
+    }
+    self.videoDisplaySize = videoSize;
 
     [NSLayoutConstraint autoSetPriority:UILayoutPriorityDefaultLow
                          forConstraints:^{
-                             [playerView autoSetDimensionsToSize:self.image.size];
+                             self.videoWidthConstraint = [playerView autoSetDimension:ALDimensionWidth
+                                                                               toSize:videoSize.width];
+                             self.videoHeightConstraint = [playerView autoSetDimension:ALDimensionHeight
+                                                                                toSize:videoSize.height];
                          }];
 
+    UIActivityIndicatorView *indicator = [[UIActivityIndicatorView alloc]
+        initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+    self.videoLoadingIndicator = indicator;
+    [playerView addSubview:indicator];
+    [indicator autoCenterInSuperview];
+    [indicator startAnimating];
+
     return playerView;
+}
+
+- (void)loadVideoIfNeeded
+{
+    if (self.videoPlayer || self.isVideoLoadInFlight || !self.isVideo) {
+        return;
+    }
+    self.isVideoLoadInFlight = YES;
+    NSUInteger generation = ++self.videoLoadGeneration;
+    TSAttachmentStream *attachmentStream = self.attachmentStream;
+    CGSize fallbackSize = self.videoDisplaySize;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        @autoreleasepool {
+            AVAsset *_Nullable asset = attachmentStream.decryptedMediaAsset;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                __strong typeof(weakSelf) self = weakSelf;
+                if (!self || generation != self.videoLoadGeneration) {
+                    return;
+                }
+                self.isVideoLoadInFlight = NO;
+                [self.videoLoadingIndicator stopAnimating];
+                self.videoLoadingIndicator = nil;
+                if (!asset) {
+                    self.shouldPlayWhenVideoReady = NO;
+                    [self showVideoLoadFailure];
+                    return;
+                }
+
+                OWSVideoPlayer *player = [[OWSVideoPlayer alloc] initWithAsset:asset];
+                [player seekToTime:kCMTimeZero];
+                player.delegate = self;
+                self.videoPlayer = player;
+                ((VideoPlayerView *)self.mediaView).player = player.avPlayer;
+                [self installVideoControls];
+                [self.delegate mediaDetailViewControllerDidPrepareVideo:self];
+                [self updateMinZoomScale];
+                [self.view setNeedsLayout];
+
+                // Honor a play request made while the asset was loading.
+                if (self.shouldPlayWhenVideoReady) {
+                    self.shouldPlayWhenVideoReady = NO;
+                    [self playVideo];
+                }
+
+                // Resolve display size asynchronously without blocking playback.
+                [VideoDisplaySizeResolver displaySizeOfAsset:asset
+                                                 completion:^(CGSize resolvedSize) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        __strong typeof(weakSelf) self = weakSelf;
+                        if (!self || generation != self.videoLoadGeneration) {
+                            return;
+                        }
+                        CGSize displaySize = resolvedSize.width > 0 && resolvedSize.height > 0
+                            ? resolvedSize
+                            : fallbackSize;
+                        if (CGSizeEqualToSize(displaySize, self.videoDisplaySize)) {
+                            return;
+                        }
+                        self.videoDisplaySize = displaySize;
+                        self.videoWidthConstraint.constant = displaySize.width;
+                        self.videoHeightConstraint.constant = displaySize.height;
+                        [self updateMinZoomScale];
+                        [self.view setNeedsLayout];
+                    });
+                }];
+            });
+        }
+    });
+}
+
+- (void)installVideoControls
+{
+    PlayerProgressBar *videoProgressBar = [PlayerProgressBar new];
+    videoProgressBar.delegate = self;
+    videoProgressBar.player = self.videoPlayer.avPlayer;
+    videoProgressBar.hidden = YES;
+    self.videoProgressBar = videoProgressBar;
+    [self.view addSubview:videoProgressBar];
+    [videoProgressBar autoPinWidthToSuperview];
+    [videoProgressBar autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
+    [videoProgressBar autoSetDimension:ALDimensionHeight toSize:44];
+
+    UIButton *playVideoButton = [UIButton new];
+    self.playVideoButton = playVideoButton;
+    [playVideoButton addTarget:self action:@selector(playVideo) forControlEvents:UIControlEventTouchUpInside];
+    [playVideoButton setBackgroundImage:[UIImage imageNamed:@"play_button"] forState:UIControlStateNormal];
+    playVideoButton.contentMode = UIViewContentModeScaleAspectFill;
+    [self.view addSubview:playVideoButton];
+    CGFloat width = ScaleFromIPhone5(70);
+    [playVideoButton autoSetDimensionsToSize:CGSizeMake(width, width)];
+    [playVideoButton autoCenterInSuperview];
+}
+
+- (void)showVideoLoadFailure
+{
+    UILabel *label = [UILabel new];
+    label.text = Localized(@"ATTACHMENT_ERROR_INVALID_DATA", @"");
+    label.textColor = Theme.isDarkThemeEnabled ? UIColor.ows_gray15Color : UIColor.ows_gray75Color;
+    label.textAlignment = NSTextAlignmentCenter;
+    label.numberOfLines = 0;
+    [self.mediaView addSubview:label];
+    [label autoCenterInSuperview];
+    [label autoPinWidthToSuperviewWithMargin:24];
 }
 
 - (void)setShouldHideToolbars:(BOOL)shouldHideToolbars
@@ -438,14 +526,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)didPressPlayBarButton:(id)sender
 {
     OWSAssertDebug(self.isVideo);
-    OWSAssertDebug(self.videoPlayer);
     [self playVideo];
 }
 
 - (void)didPressPauseBarButton:(id)sender
 {
     OWSAssertDebug(self.isVideo);
-    OWSAssertDebug(self.videoPlayer);
     [self pauseVideo];
 }
 
@@ -546,7 +632,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)playVideo
 {
-    OWSAssertDebug(self.videoPlayer);
+    if (!self.videoPlayer) {
+        self.shouldPlayWhenVideoReady = YES;
+        [self loadVideoIfNeeded];
+        return;
+    }
 
     self.playVideoButton.hidden = YES;
 
@@ -558,7 +648,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)pauseVideo
 {
     OWSAssertDebug(self.isVideo);
-    OWSAssertDebug(self.videoPlayer);
+    self.shouldPlayWhenVideoReady = NO;
+    if (!self.videoPlayer) {
+        [self.delegate mediaDetailViewController:self isPlayingVideo:NO];
+        return;
+    }
 
     [self.videoPlayer pause];
 
@@ -575,7 +669,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)stopVideo
 {
     OWSAssertDebug(self.isVideo);
-    OWSAssertDebug(self.videoPlayer);
+    self.shouldPlayWhenVideoReady = NO;
+    if (!self.videoPlayer) {
+        return;
+    }
 
     [self.videoPlayer stop];
 

@@ -8,12 +8,17 @@
 
 import UIKit
 import MultipeerConnectivity
+import TTMessaging
 
 @objc class DTTransferReceivingViewController: UIViewController {
     
     private let progress: Progress
     private let logintoken: String
     private let oldDevice: Bool
+    /// A failed presentation must not permanently latch recovery. If UIKit cannot present
+    /// because another controller is in flight, the weak reference clears and a later error
+    /// can try again.
+    private weak var transferFailureAlert: UIAlertController?
     
     @objc init(logintoken: String, progress: Progress, oldDevice: Bool) {
         self.logintoken = logintoken
@@ -30,7 +35,9 @@ import MultipeerConnectivity
         super.viewWillAppear(animated)
 
         progress.addObserver(self, forKeyPath: #keyPath(Progress.fractionCompleted), options: .initial, context: nil)
-        
+
+        // Backgrounding aborts an in-flight transfer, so never let auto-lock do it.
+        DeviceSleepManager.shared.addBlock(blockObject: self)
         DeviceTransferService.shared.addObserver(self)
     }
 
@@ -38,6 +45,7 @@ import MultipeerConnectivity
         super.viewWillDisappear(animated)
 
         progress.removeObserver(self, forKeyPath: #keyPath(Progress.fractionCompleted))
+        DeviceSleepManager.shared.removeBlock(blockObject: self)
         DeviceTransferService.shared.removeObserver(self)
         DeviceTransferService.shared.stopAcceptingTransfersFromOldDevices()
         DeviceTransferService.shared.cancelTransferFromOldDevice()
@@ -87,8 +95,18 @@ import MultipeerConnectivity
     }
     
     @objc private func buttonEvent(cancel sender: UIButton) {
-//        navigationController?.popViewController(animated: true, completion: nil)
-        self.dismiss(animated: true)
+        returnToQRCode()
+    }
+
+    private func returnToQRCode(openSettings: Bool = false) {
+        guard navigationController?.topViewController === self else { return }
+        transferFailureAlert = nil
+        DeviceTransferService.shared.stopTransfer()
+        navigationController?.popViewController(animated: true, completion: {
+            if openSettings {
+                DeviceTransferUI.openAppSettings()
+            }
+        })
     }
     
     private func showTransferSuccess() {
@@ -132,7 +150,7 @@ import MultipeerConnectivity
         label.font = UIFont.systemFont(ofSize: 14)
         label.textAlignment = .center
         label.numberOfLines = .zero
-        label.text = "Keep both devices on and near each other.".localized
+        label.text = DeviceTransferUI.inProgressInstructions
         return label
     }()
     
@@ -180,16 +198,12 @@ import MultipeerConnectivity
 }
 
 extension DTTransferReceivingViewController: DeviceTransferServiceObserver {
-    func deviceTransferServiceDiscoveredNewDevice(peerId: MCPeerID, discoveryInfo: [String : String]?) {
-        OWSLogger.info("[DeviceTransferModule -> func -> DiscoveredNewDevice] new device discovered")
-    }
+    func deviceTransferServiceDiscoveredNewDevice(peerId: MCPeerID, discoveryInfo: [String : String]?) {}
     
     func deviceTransferServiceDidStartTransfer(progress: Progress) {
     }
     
     func deviceTransferServiceDidEndTransfer(error: DeviceTransferService.Error?) {
-        OWSLogger.info("[DeviceTransferModule -> func -> DidEndTransfer] error = \(String(describing: error?.message))")
-        
         guard let error = error else {
             if(!self.oldDevice){
                 TSAccountManager.shared.setTransferedSucess(false)
@@ -198,16 +212,55 @@ extension DTTransferReceivingViewController: DeviceTransferServiceObserver {
             return
         }
         
+        if case .cancel = error {
+            return
+        }
+
+        if case .localNetworkPermissionDenied = error {
+            guard transferFailureAlert?.presentingViewController == nil else { return }
+            let alertController = DeviceTransferUI.localNetworkAlert(
+                cancelHandler: { [weak self] in
+                    self?.transferFailureAlert = nil
+                    self?.returnToQRCode()
+                },
+                settingsHandler: { [weak self] in
+                    self?.transferFailureAlert = nil
+                    self?.returnToQRCode(openSettings: true)
+                }
+            )
+            transferFailureAlert = alertController
+            present(alertController, animated: true)
+            return
+        }
+
+        guard transferFailureAlert?.presentingViewController == nil else { return }
+        let title: String
+        let message: String
+        switch error {
+        case .backgroundedDevice:
+            title = Localized("DEVICE_TRANSFER_INTERRUPTED_TITLE")
+            message = Localized("DEVICE_TRANSFER_INTERRUPTED_BODY")
+        case .advertisingFailed, .assertion, .connectionLost:
+            title = Localized("DEVICE_TRANSFER_CONNECTION_FAILED_TITLE")
+            message = Localized("DEVICE_TRANSFER_CONNECTION_FAILED_BODY")
+        default:
+            title = "Transfer Failed".localized
+            message = error.message
+        }
+
         let alertController = UIAlertController(
-            title: "Transfer Failed".localized,
-            message: String(format: "The transfer failed. %1$@.Please try again.".localized, error.message),
+            title: title,
+            message: message,
             preferredStyle: .alert
         )
-        let okAction = UIAlertAction(title: "OK".localized, style: .default) { _ in
-            self.navigationController?.popViewController(animated: true, completion: nil)
+        let confirmAction = UIAlertAction(title: "OK".localized, style: .default) { [weak self] _ in
+            guard let self else { return }
+            self.transferFailureAlert = nil
+            self.returnToQRCode()
         }
-        alertController.addAction(okAction)
-        navigationController?.present(alertController, animated: true)
+        alertController.addAction(confirmAction)
+        transferFailureAlert = alertController
+        present(alertController, animated: true)
     }
     
 }
@@ -219,7 +272,8 @@ extension DTTransferReceivingViewController {
         }
         
         DispatchMainThreadSafe {
-            self.progressLabel.text = "\(Int(self.progress.fractionCompleted * 100))%"
+            let wholePercent = Int(self.progress.fractionCompleted * 100)
+            self.progressLabel.text = "\(wholePercent)%"
             self.progressView.setProgress(Float(self.progress.fractionCompleted), animated: true)
             if let estimatedTime = self.progress.estimatedTimeRemaining, estimatedTime.isFinite {
                 self.timeLabel.text = String(format: "About %1$@ second remaining".localized, "\(Int(estimatedTime))")

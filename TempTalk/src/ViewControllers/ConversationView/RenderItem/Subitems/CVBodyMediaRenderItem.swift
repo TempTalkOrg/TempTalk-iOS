@@ -13,13 +13,15 @@ import TTServiceKit
 class CVBodyMediaRenderItem: ConversationRenderItem {
     
     static let contactShareVSpacing: CGFloat = 12
+    // Keep file cards consistent with Android while still respecting the bubble's available width.
+    private static let genericAttachmentMaxWidth: CGFloat = 270
     let audioAttachmentFileNameHeight: CGFloat = 24
     
     private let signleForwardTitleWidth: CGFloat
     
     var hasBodyMediaWithThumbnail: Bool {
         switch viewItem.messageCellType() {
-        case .stillImage, .animatedImage, .video:
+        case .stillImage, .animatedImage, .video, .videoTranscoding:
             return true
         default:
             return isDownloadingAttachmentWithThumbnail
@@ -65,7 +67,7 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
         
         var result: CGSize = .zero
         switch viewItem.messageCellType() {
-        case .stillImage, .animatedImage, .video:
+        case .stillImage, .animatedImage, .video, .videoTranscoding:
             result = measureSizeForThumbnailMedia(
                 mediaSize: viewItem.mediaSize(),
                 maxMessageWidth: maxMessageWidth,
@@ -162,18 +164,17 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
         }
         
         var size: CGSize = .zero
-        let maxAttachmentWidth: CGFloat = 200
+        let maxAttachmentWidth = Self.genericAttachmentMaxWidth
         let minAttachmentWidth: CGFloat = minMessageWidth
         
         let topLabelFont = UIFont.ows_dynamicTypeBody
         let bottomLabelFont = UIFont.ows_dynamicTypeCaption1
         let labelVSpacing: CGFloat = 2
-        let labelsHeight = topLabelFont.lineHeight + bottomLabelFont.lineHeight + labelVSpacing
-        
+        let iconWidth: CGFloat = 36
         let iconHeight: CGFloat = 48
+        let hSpacing: CGFloat = 8
         let vMargin: CGFloat = 5
-        let contentHeight = max(iconHeight, labelsHeight)
-        size.height = contentHeight + vMargin * 2
+        let maxLabelsWidth = max(0, maxAttachmentWidth - iconWidth - hSpacing)
         
         let topText = {
             if let text = attachmentStream.sourceFilename?.stripped, !text.isEmpty {
@@ -187,20 +188,13 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
         let topTextConfig: CVLabelConfig = .unstyledText(
             topText,
             font: topLabelFont,
-            numberOfLines: 1,
+            numberOfLines: 2,
             lineBreakMode: .byTruncatingMiddle
         )
-        let topTextSize = topTextConfig.measure(maxWidth: maxAttachmentWidth)
+        let topTextSize = topTextConfig.measure(maxWidth: maxLabelsWidth)
         
         let bottomText = {
-            guard let filePath = attachmentStream.filePath() else {
-                return ""
-            }
-            guard let attributes = try? FileManager.default.attributesOfItem(atPath: filePath) else {
-                return ""
-            }
-            let fileSize = (attributes as NSDictionary).fileSize()
-            return OWSFormat.formatFileSize(UInt(fileSize))
+            OWSFormat.formatFileSize(UInt(attachmentStream.byteCount))
         }()
         let bottomTextConfig: CVLabelConfig = .unstyledText(
             bottomText,
@@ -208,11 +202,13 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
             numberOfLines: 1,
             lineBreakMode: .byTruncatingMiddle
         )
-        let bottomTextSize = bottomTextConfig.measure(maxWidth: maxAttachmentWidth)
+        let bottomTextSize = bottomTextConfig.measure(maxWidth: maxLabelsWidth)
         
+        let labelsHeight = topTextSize.height + bottomTextSize.height + labelVSpacing
+        let contentHeight = max(iconHeight, labelsHeight)
+        size.height = contentHeight + vMargin * 2
+
         let labelsWidth = max(topTextSize.width, bottomTextSize.width)
-        let iconWidth: CGFloat = 36
-        let hSpacing: CGFloat = 8
         let contentWidth = iconWidth + labelsWidth + hSpacing
         size.width = max(min(maxAttachmentWidth, contentWidth), minAttachmentWidth)
         
@@ -248,13 +244,16 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
         let fileNameConfig: CVLabelConfig = .unstyledText(
             fileName,
             font: fileNameFont,
-            numberOfLines: 1,
+            numberOfLines: 2,
             lineBreakMode: .byTruncatingMiddle,
             textAlignment: .center
         )
-        let maxWidth: CGFloat = 200
+        let maxWidth = Self.genericAttachmentMaxWidth
         let minWidth: CGFloat = minMessageWidth
-        let fileNameSize = fileNameConfig.measure(maxWidth: maxWidth)
+        let iconWidth: CGFloat = 36.0
+        let spacing: CGFloat = 5
+        let maxLabelsWidth = max(0, maxWidth - iconWidth - spacing)
+        let fileNameSize = fileNameConfig.measure(maxWidth: maxLabelsWidth)
         
         let byteCount = attachmentPointer.byteCount
         var fileSizeString: String = ""
@@ -283,16 +282,14 @@ class CVBodyMediaRenderItem: ConversationRenderItem {
             lineBreakMode: .byTruncatingTail,
             textAlignment: .center
         )
-        let statusSize = statusConfig.measure(maxWidth: maxWidth)
+        let statusSize = statusConfig.measure(maxWidth: maxLabelsWidth)
         
-        let iconWidth: CGFloat = 36.0
-        let spacing: CGFloat = 5
         let labelsWidth = max(fileNameSize.width, statusSize.width)
         let contentWidth = iconWidth + labelsWidth + spacing * 2
         let sizeWidth = ceil(max(min(maxWidth, contentWidth + spacing * 3), minWidth))
         
         let progressHeight: CGFloat = 6
-        let sizeHeight = ceil(fileNameFont.lineHeight + statusFont.lineHeight + progressHeight + spacing * 2)
+        let sizeHeight = ceil(fileNameSize.height + statusSize.height + progressHeight + spacing * 2)
         
         return .init(width: sizeWidth, height: sizeHeight)
     }

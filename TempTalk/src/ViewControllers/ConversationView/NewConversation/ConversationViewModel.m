@@ -88,6 +88,14 @@ NS_ASSUME_NONNULL_BEGIN
         if ([viewItem.interaction isKindOfClass:OWSUnreadIndicatorInteraction.class]) {
             _unreadIndicatorIndex = @(i);
         }
+
+        // viewItems run oldest to newest, so the first failed outgoing message is the oldest one.
+        if (_oldestFailedOutgoingIndex == nil && [viewItem.interaction isKindOfClass:TSOutgoingMessage.class]) {
+            TSOutgoingMessage *outgoingMessage = (TSOutgoingMessage *)viewItem.interaction;
+            if (outgoingMessage.messageState == TSOutgoingMessageStateFailed) {
+                _oldestFailedOutgoingIndex = @(i);
+            }
+        }
     }
     _interactionIndexMap = [interactionIndexMap copy];
     _viewItemsMap = [viewItemsMap copy];
@@ -368,16 +376,16 @@ NS_ASSUME_NONNULL_BEGIN
     return [self.messageMapping.canFetchNewer get];
 }
 
-- (void)appendOlderItemsWithTransaction:(SDSAnyReadTransaction *)transaction
+- (BOOL)appendOlderItemsWithTransaction:(SDSAnyReadTransaction *)transaction
 {
     if (self.isLoadingInitialMessages) {
         OWSLogInfo(@"[Conversation] skip appendOlderItems before the initial messages are loaded");
-        return;
+        return NO;
     }
     
     // 解决在下拉加载更多时，数据还在处理中，继续下拉刷新，导致一次拉取了多页数据
     if (self.isLoadingMore) {
-        return;
+        return NO;
     }
     self.isLoadingMore = YES;
     
@@ -395,23 +403,22 @@ NS_ASSUME_NONNULL_BEGIN
     @weakify(self)
     [self diffMappingWithTransaction:transaction completion:^(BOOL isFinished) {
         @strongify(self)
-        if (isFinished) {
-            [self.delegate conversationViewModelDidLoadMoreItems];
-        }
         self.isLoadingMore = NO;
+        [self.delegate conversationViewModelDidFinishLoadMoreItemsWithSuccess:isFinished];
     }];
+    return YES;
 }
 
-- (void)appendNewerItemsWithTransaction:(SDSAnyReadTransaction *)transaction
+- (BOOL)appendNewerItemsWithTransaction:(SDSAnyReadTransaction *)transaction
 {
     if (self.isLoadingInitialMessages) {
         OWSLogInfo(@"[Conversation] skip appendNewerItems before the initial messages are loaded");
-        return;
+        return NO;
     }
     
     // 解决在下拉加载更多时，数据还在处理中，继续下拉刷新，导致一次拉取了多页数据
     if (self.isLoadingMore) {
-        return;
+        return NO;
     }
     self.isLoadingMore = YES;
     
@@ -429,11 +436,10 @@ NS_ASSUME_NONNULL_BEGIN
     @weakify(self)
     [self diffMappingWithTransaction:transaction completion:^(BOOL isFinished) {
         @strongify(self)
-        if (isFinished) {
-            [self.delegate conversationViewModelDidLoadMoreItems];
-        }
         self.isLoadingMore = NO;
+        [self.delegate conversationViewModelDidFinishLoadMoreItemsWithSuccess:isFinished];
     }];
+    return YES;
 }
 
 - (void)clearUnreadMessagesIndicator
@@ -838,7 +844,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                                         updatedItemSet:updatedItemSetParam];
 //    [self.delegate conversationViewModelWillLoadMoreItems];self.viewItems.count
     [self.delegate conversationViewModelDidUpdate:conversationUpdate transaction:nil completion:nil];
-//    [self.delegate conversationViewModelDidLoadMoreItems];
+//    [self.delegate conversationViewModelDidFinishLoadMoreItemsWithSuccess:YES];
 }
 
 - (BOOL)shouldAnimateUpdateItems:(NSArray<ConversationUpdateItem *> *)updateItems
@@ -1388,6 +1394,7 @@ NS_ASSUME_NONNULL_BEGIN
     }
     
     id<ConversationViewItem> _Nullable viewItem = self.viewItemCache[interactionUniqueId];
+    BOOL viewItemWasCached = (viewItem != nil);
     if (!viewItem) {
         viewItem = [[ConversationInteractionViewItem alloc] initWithInteraction:interaction
                                                                          thread:self.thread
@@ -1397,6 +1404,19 @@ NS_ASSUME_NONNULL_BEGIN
         
     }
     
+    if (viewItemWasCached &&
+        [viewItem.interaction isKindOfClass:[TSOutgoingMessage class]] &&
+        [freshInteraction isKindOfClass:[TSOutgoingMessage class]]) {
+        TSOutgoingMessageState cachedState = ((TSOutgoingMessage *)viewItem.interaction).messageState;
+        TSOutgoingMessageState freshState = ((TSOutgoingMessage *)freshInteraction).messageState;
+        if (cachedState != freshState) {
+            OWSLogWarn(@"[SendStatusTrace] stale viewItem id=%@ cached=%@ database=%@",
+                       interactionUniqueId,
+                       NSStringForOutgoingMessageState(cachedState),
+                       NSStringForOutgoingMessageState(freshState));
+        }
+    }
+
     __block BOOL needMarkAsRead = NO;
     __block BOOL needRefreshCard = NO;
     
@@ -1469,6 +1489,15 @@ NS_ASSUME_NONNULL_BEGIN
     [self updateForTransientItems];
 }
 
+- (void)refreshInteractionWithUniqueId:(NSString *)uniqueId
+{
+    OWSAssertIsOnMainThread();
+    if (uniqueId.length < 1) {
+        return;
+    }
+    [self anyDBDidUpdateWithUpdatedInteractionIds:[NSSet setWithObject:uniqueId]];
+}
+
 // Whenever an interaction is modified, we need to reload it from the DB
 // and update the corresponding view item.
 - (void)reloadInteractionForViewItem:(id<ConversationViewItem>)viewItem transaction:(SDSAnyReadTransaction *)transaction
@@ -1486,6 +1515,17 @@ NS_ASSUME_NONNULL_BEGIN
     if (!interaction) {
         OWSFailDebug(@"could not reload interaction");
     } else {
+        if ([viewItem.interaction isKindOfClass:[TSOutgoingMessage class]] &&
+            [interaction isKindOfClass:[TSOutgoingMessage class]]) {
+            TSOutgoingMessageState cachedState = ((TSOutgoingMessage *)viewItem.interaction).messageState;
+            TSOutgoingMessageState freshState = ((TSOutgoingMessage *)interaction).messageState;
+            if (cachedState != freshState) {
+                OWSLogInfo(@"[SendStatusTrace] viewItem refreshed id=%@ cached=%@ database=%@",
+                           interaction.uniqueId,
+                           NSStringForOutgoingMessageState(cachedState),
+                           NSStringForOutgoingMessageState(freshState));
+            }
+        }
         [viewItem replaceInteraction:interaction transaction:transaction];
     }
 }
@@ -1556,20 +1596,21 @@ NS_ASSUME_NONNULL_BEGIN
     }];
 }
 
-- (void)ensureLoadWindowContainsNewestItemsWithTransaction:(SDSAnyReadTransaction *)transaction
+- (BOOL)ensureLoadWindowContainsNewestItemsWithTransaction:(SDSAnyReadTransaction *)transaction
+                                                completion:(void (^)(BOOL isFinished))completion
 {
     OWSAssertIsOnMainThread();
     
     if (self.isLoadingInitialMessages) {
         OWSLogInfo(@"[Conversation] skip ensureLoadWindowContainsNewestItems before the initial messages are loaded");
-        return;
+        return NO;
     }
 
     NSError *error;
     [self.messageMapping loadNewestMessagePageWithTransaction:transaction error:&error];
     if (error != nil) {
         OWSFailDebug(@"failure: %@", error);
-        return;
+        return NO;
     }
 
     self.collapseCutoffDate = [NSDate new];
@@ -1579,7 +1620,10 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     [self.delegate conversationViewModelDidUpdateLoadMoreStatus];
-    [self.delegate conversationViewModelDidUpdate:ConversationUpdate.reloadUpdate transaction:transaction completion:nil];
+    [self.delegate conversationViewModelDidUpdate:ConversationUpdate.reloadUpdate
+                                       transaction:transaction
+                                        completion:completion];
+    return YES;
 }
 
 - (nullable TSInteraction *)firstCallOrMessageForLoadedInteractionsWithTransaction:(SDSAnyReadTransaction *)transaction

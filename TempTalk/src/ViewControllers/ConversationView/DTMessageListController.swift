@@ -22,6 +22,7 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
     var attachmentDownloadFlag = [UInt64]()
     var isMultiSelectMode = false
     var currentFileURL: URL?
+    private var attachmentPreviewRequestID: UUID?
     lazy var selectedViewItems: [ConversationViewItem] = {
         return [ConversationViewItem]()
     }()
@@ -57,6 +58,8 @@ class DTMessageListController: OWSViewController, DatabaseChangeDelegate {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        // A staged plaintext copy must not outlive the controller that decrypted it.
+        DTQuickLookPreviewFile.cleanUp(currentFileURL)
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -735,7 +738,52 @@ extension DTMessageListController: ConversationMessageBubbleViewDelegate {
     
     func previewAttachment(_ attachmentStream: TSAttachmentStream) {
         owsAssertDebug(Thread.isMainThread)
+
+        if attachmentStream.hasEncryptedFile
+            || (attachmentStream.isUploaded && attachmentStream.hasUsableEncryptionMetadata) {
+            let requestID = UUID()
+            attachmentPreviewRequestID = requestID
+            DTQuickLookPreviewFile.prepareDecryptedCopy(from: attachmentStream) { [weak self] result in
+                guard let self else {
+                    if case .success(let previewURL) = result {
+                        DTQuickLookPreviewFile.cleanUp(previewURL)
+                    }
+                    return
+                }
+                guard self.attachmentPreviewRequestID == requestID else {
+                    if case .success(let previewURL) = result {
+                        DTQuickLookPreviewFile.cleanUp(previewURL)
+                    }
+                    return
+                }
+                self.attachmentPreviewRequestID = nil
+
+                switch result {
+                case .success(let previewURL):
+                    guard self.viewIfLoaded?.window != nil,
+                          !self.isBeingDismissed,
+                          !(self.navigationController?.isBeingDismissed ?? false),
+                          self.presentedViewController == nil,
+                          self.navigationController?.presentedViewController == nil else {
+                        DTQuickLookPreviewFile.cleanUp(previewURL)
+                        return
+                    }
+
+                    DTQuickLookPreviewFile.cleanUp(self.currentFileURL)
+                    self.currentFileURL = previewURL
+                    let previewController = QLPreviewController()
+                    previewController.delegate = self
+                    previewController.dataSource = self
+                    self.present(previewController, animated: true)
+                case .failure(let error):
+                    DTToastHelper.show(withInfo: error.localizedDescription)
+                }
+            }
+            return
+        }
         
+        // A synchronous plaintext preview supersedes any encrypted preview still in flight.
+        attachmentPreviewRequestID = nil
         guard let filePath = attachmentStream.filePath() else {
             return
         }
@@ -743,11 +791,19 @@ extension DTMessageListController: ConversationMessageBubbleViewDelegate {
             owsAssertDebug(FileManager.default.fileExists(atPath: filePath))
             return
         }
-        currentFileURL = URL(fileURLWithPath: filePath)
-        guard let currentFileURL = currentFileURL, QLPreviewController.canPreview(currentFileURL as QLPreviewItem) else {
-            DTToastHelper.show(withInfo: "Unsupported file type")
+        let fileURL = URL(fileURLWithPath: filePath)
+        guard QLPreviewController.canPreview(fileURL as QLPreviewItem) else {
+            DTToastHelper.show(withInfo: Localized("UNSUPPORTED_ATTACHMENT"))
             return
         }
+        // Stage a hard link so QuickLook's "Save to Files" cannot crash if the original
+        // file is removed (upload completion, disappearing message, recall) mid-preview.
+        guard let previewURL = DTQuickLookPreviewFile.make(from: fileURL) else {
+            DTToastHelper.show(withInfo: Localized("UNSUPPORTED_ATTACHMENT"))
+            return
+        }
+        DTQuickLookPreviewFile.cleanUp(currentFileURL)
+        currentFileURL = previewURL
         let previewController = QLPreviewController()
         previewController.delegate = self
         previewController.dataSource = self
@@ -893,6 +949,18 @@ extension DTMessageListController: ConversationMessageBubbleViewDelegate {
     }
 }
 
+// MARK: - DTAddFriendSourceProviding
+
+extension DTMessageListController: DTAddFriendSourceProviding {
+
+    /// Tapping an @mention here opens a personal card exactly as it does from a conversation, so
+    /// this screen has to vouch for the group it belongs to — otherwise the friend request that
+    /// follows reports no source at all.
+    @objc var contextualAddFriendSource: AddFriendSource {
+        AddFriendSource.from(thread: currentThread) ?? .unspecified
+    }
+}
+
 extension DTMessageListController: UIDocumentInteractionControllerDelegate {
     
     func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
@@ -932,24 +1000,24 @@ extension DTMessageListController: QLPreviewControllerDataSource, QLPreviewContr
     public func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
         guard let fileURL = self.currentFileURL else {
             owsFailDebug("currentFileURL was unexpectedly nil")
-            // Dismiss the preview controller and show error to user
             controller.dismiss(animated: true) {
                 OWSActionSheets.showErrorAlert(message: Localized("FILE_PREVIEW_ERROR",
                                                                           comment: "Error message when file preview fails"))
             }
-            // Create a valid placeholder file to prevent QuickLook crash
-            let tempDir = FileManager.default.temporaryDirectory
-            let placeholderURL = tempDir.appendingPathComponent("placeholder.txt")
-            try? "Placeholder".write(to: placeholderURL, atomically: true, encoding: .utf8)
-            return placeholderURL as QLPreviewItem
+            return DTQuickLookPreviewFile.placeholder()
         }
         return fileURL as QLPreviewItem
     }
-    
+
     public func previewControllerWillDismiss(_ controller: QLPreviewController) {
         if #available(iOS 16.0, *) {
             setNeedsUpdateOfSupportedInterfaceOrientations()
         }
+    }
+
+    public func previewControllerDidDismiss(_ controller: QLPreviewController) {
+        DTQuickLookPreviewFile.cleanUp(currentFileURL)
+        currentFileURL = nil
     }
     
     public func previewController(_ controller: QLPreviewController, editingModeFor previewItem: QLPreviewItem) -> QLPreviewItemEditingMode {
@@ -957,4 +1025,3 @@ extension DTMessageListController: QLPreviewControllerDataSource, QLPreviewContr
     }
     
 }
-

@@ -109,7 +109,7 @@
             hasText = YES;
             quotedText = @"";
 
-            NSData *_Nullable oversizeTextData = [NSData dataWithContentsOfFile:attachmentStream.filePath];
+            NSData *_Nullable oversizeTextData = attachmentStream.decryptedData;
             if (oversizeTextData) {
                 // We don't need to include the entire text body of the message, just
                 // enough to render a snippet.  kOversizeTextMessageSizeThreshold is our

@@ -1,5 +1,6 @@
 import XCTest
 import Combine
+import LiveKit
 @testable import Yelling
 
 final class CallStateMachineTests: XCTestCase {
@@ -43,6 +44,22 @@ final class CallStateMachineTests: XCTestCase {
 
         XCTAssertTrue(result)
         XCTAssertEqual(sut.state, .connected)
+    }
+
+    func test_connectedTransitionRequiresImmediateCallKitAnswerFulfill() {
+        var connectedTransition: StateTransition?
+        sut.statePublisher
+            .sink { transition in
+                if transition.to == .connected {
+                    connectedTransition = transition
+                }
+            }
+            .store(in: &cancellables)
+
+        sut.dispatch(.startConnecting)
+        sut.dispatch(.didConnect)
+
+        XCTAssertEqual(connectedTransition?.shouldFulfillPendingCallKitAnswer, true)
     }
 
     // MARK: - 4. Legal: connecting -> disconnecting
@@ -197,6 +214,117 @@ final class CallStateMachineTests: XCTestCase {
     }
 }
 
+final class CallDurationGateTimeoutTests: XCTestCase {
+
+    func test_trackSubscribedStartsOnlyAfterGateIsArmed() {
+        XCTAssertFalse(
+            DTMeetingManager.shouldStartCallDurationTimer(
+                isGateArmed: false,
+                isMicTrackSubscribed: true,
+                didStartTimer: false
+            )
+        )
+        XCTAssertTrue(
+            DTMeetingManager.shouldStartCallDurationTimer(
+                isGateArmed: true,
+                isMicTrackSubscribed: true,
+                didStartTimer: false
+            )
+        )
+    }
+
+    func test_trackSubscribedDoesNotRestartTimer() {
+        XCTAssertFalse(
+            DTMeetingManager.shouldStartCallDurationTimer(
+                isGateArmed: true,
+                isMicTrackSubscribed: true,
+                didStartTimer: true
+            )
+        )
+    }
+
+    func test_staleTimerIsRejectedAfterGateRearmed() {
+        let staleTimer = Timer(timeInterval: 5, repeats: false) { _ in }
+        let activeTimer = Timer(timeInterval: 5, repeats: false) { _ in }
+
+        XCTAssertFalse(
+            DTMeetingManager.shouldHandleCallDurationGateTimeout(
+                firedTimer: staleTimer,
+                activeTimer: activeTimer,
+                isGateArmed: true,
+                isInMeeting: true
+            )
+        )
+    }
+
+    func test_currentTimerRequiresArmedGateAndLiveMeeting() {
+        let timer = Timer(timeInterval: 5, repeats: false) { _ in }
+
+        XCTAssertTrue(
+            DTMeetingManager.shouldHandleCallDurationGateTimeout(
+                firedTimer: timer,
+                activeTimer: timer,
+                isGateArmed: true,
+                isInMeeting: true
+            )
+        )
+        XCTAssertFalse(
+            DTMeetingManager.shouldHandleCallDurationGateTimeout(
+                firedTimer: timer,
+                activeTimer: timer,
+                isGateArmed: false,
+                isInMeeting: true
+            )
+        )
+        XCTAssertFalse(
+            DTMeetingManager.shouldHandleCallDurationGateTimeout(
+                firedTimer: timer,
+                activeTimer: timer,
+                isGateArmed: true,
+                isInMeeting: false
+            )
+        )
+    }
+}
+
+final class MediaSendStatusPresentationTests: XCTestCase {
+
+    func test_mediaConnectingIsNormalAfterRoomIsConnected() {
+        XCTAssertEqual(resolve(room: .connected, media: .idle), .none)
+        XCTAssertEqual(resolve(room: .connected, media: .connecting), .none)
+        XCTAssertEqual(resolve(room: .connected, media: .connected), .none)
+    }
+
+    func test_recoveringAndFailedShareMediaRecoveryPresentation() {
+        XCTAssertEqual(resolve(room: .connected, media: .recovering), .mediaRecovering)
+        XCTAssertEqual(resolve(room: .connected, media: .failed), .mediaRecovering)
+    }
+
+    func test_roomRecoveryTakesPriorityOverMediaRecovery() {
+        XCTAssertEqual(resolve(room: .connecting, media: .recovering), .roomRecovering)
+        XCTAssertEqual(resolve(room: .reconnecting, media: .failed), .roomRecovering)
+        XCTAssertEqual(resolve(room: .connected, media: .roomRecovering), .roomRecovering)
+    }
+
+    func test_terminalRoomStatesSuppressRecoveryPresentation() {
+        for roomState in [ConnectionState.disconnected, .disconnecting] {
+            XCTAssertEqual(resolve(room: roomState, media: .roomRecovering), .none)
+            XCTAssertEqual(resolve(room: roomState, media: .recovering), .none)
+            XCTAssertEqual(resolve(room: roomState, media: .failed), .none)
+        }
+    }
+
+    private func resolve(
+        room: ConnectionState,
+        media: MediaSendConnectionState
+    ) -> MediaSendStatusPresentation {
+        MediaSendStatusPresentation.resolve(
+            roomConnectionState: room,
+            mediaSendConnectionState: media
+        )
+    }
+}
+
 final class InCallVoiceMemoAudioOwnershipTests: XCTestCase {
 
     func test_finishPreservesRecordingWhenLiveKitOwnsPublicationThroughout() {
@@ -234,5 +362,58 @@ final class InCallVoiceMemoAudioOwnershipTests: XCTestCase {
         let nextAction = sut.finish(hasCurrentMicrophonePublication: true)
 
         XCTAssertEqual(nextAction, .stopRecording)
+    }
+}
+
+final class CallKitMuteActionClassificationTests: XCTestCase {
+    func test_withoutPendingAppAction_classifiesNativeAction() {
+        XCTAssertEqual(
+            DTClassifyCallKitMuteAction(false, false, false, false, false),
+            .nativeAction
+        )
+    }
+
+    func test_exactUUID_classifiesAppCallback() {
+        XCTAssertEqual(
+            DTClassifyCallKitMuteAction(true, false, true, false, false),
+            .appCallback
+        )
+        XCTAssertEqual(
+            DTClassifyCallKitMuteAction(true, true, true, false, false),
+            .appCallback
+        )
+    }
+
+    func test_unsupersededDifferentUUIDWithSameTarget_classifiesSystemEcho() {
+        XCTAssertEqual(
+            DTClassifyCallKitMuteAction(true, false, false, false, false),
+            .sameTargetSystemEcho
+        )
+        XCTAssertEqual(
+            DTClassifyCallKitMuteAction(true, false, false, true, true),
+            .sameTargetSystemEcho
+        )
+    }
+
+    func test_supersededDifferentUUIDWithOriginalTarget_isForwarded() {
+        XCTAssertEqual(
+            DTClassifyCallKitMuteAction(true, true, false, false, false),
+            .oppositeAction
+        )
+        XCTAssertEqual(
+            DTClassifyCallKitMuteAction(true, true, false, true, true),
+            .oppositeAction
+        )
+    }
+
+    func test_differentUUIDWithOppositeTarget_classifiesOppositeAction() {
+        XCTAssertEqual(
+            DTClassifyCallKitMuteAction(true, false, false, true, false),
+            .oppositeAction
+        )
+        XCTAssertEqual(
+            DTClassifyCallKitMuteAction(true, true, false, false, true),
+            .oppositeAction
+        )
     }
 }

@@ -43,8 +43,9 @@ extension ConversationViewController {
         
         // Note the usage of MAX() to handle the case where there isn't enough
         // content to fill the collection view at its current size.
-        let maxContentOffsetY = contentHeight + adjustedContentInset.bottom - collectionView.bounds.size.height
-        return maxContentOffsetY
+        let firstContentPageTop = -adjustedContentInset.top
+        let lastContentPageTop = contentHeight + adjustedContentInset.bottom - collectionView.bounds.size.height
+        return max(firstContentPageTop, lastContentPageTop)
     }
     
     var safeContentHeight: CGFloat {
@@ -70,11 +71,25 @@ extension ConversationViewController {
         }
         return IndexPath(row: index.intValue, section: 0)
     }
+
+    private var indexPathOfOldestFailedMessage: IndexPath? {
+        guard let index = conversationViewModel.viewState.oldestFailedOutgoingIndex else {
+            return nil
+        }
+        return IndexPath(row: index.intValue, section: 0)
+    }
+
+    /// Unread and failed messages rank equally, so land on whichever comes first in the
+    /// conversation. The load window is anchored the same way in
+    /// `ConversationMessageMapping.loadInitialMessagePage`.
+    private var indexPathOfDefaultPosition: IndexPath? {
+        return [indexPathOfUnreadMessagesIndicator, indexPathOfOldestFailedMessage]
+            .compactMap { $0 }
+            .min { $0.row < $1.row }
+    }
     
     func scrollToDefaultPosition(animated: Bool) {
-        guard !isUserScrolling else {
-            return
-        }
+        guard !isUserScrolling else { return }
         
         // Fix: 解决某些场景下，还未 reload ui 的情况下，执行了 scroll to 操作，引发 crash
         if viewItems.count != dataSource.snapshot().numberOfItems {
@@ -88,11 +103,13 @@ extension ConversationViewController {
     }
 
     private func _scrollToDefaultPosition(animated: Bool) {
+        cancelScrollDownButtonNavigation()
+
         let focusIndexPath = indexPathOfFocusMessage
         let unreadIndexPath = indexPathOfUnreadMessagesIndicator
+        let defaultIndexPath = indexPathOfDefaultPosition
 
-
-        guard let indexPath = focusIndexPath ?? unreadIndexPath else {
+        guard let indexPath = focusIndexPath ?? defaultIndexPath else {
             scrollToBottom(animated: animated)
             viewState.hasCompletedInitialScroll = true
             return
@@ -103,14 +120,15 @@ extension ConversationViewController {
             collectionView.setContentOffset(.zero, animated: animated)
         } else if indexPath.row < dataSource.snapshot().numberOfItems {
             // For focus messages (from search), use .centeredVertically to highlight the message
-            // For unread messages, use .top with padding to show them near the top of the screen
+            // For unread / failed messages, use .top with padding to show them near the top of the screen
             let isFocusMessage = indexPathOfFocusMessage != nil
 
             if isFocusMessage {
                 // Focus message: center it for emphasis
                 collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: animated)
             } else {
-                if let unreadAttributes = collectionView.layoutAttributesForItem(at: indexPath) {
+                if defaultIndexPath == unreadIndexPath,
+                   let unreadAttributes = collectionView.layoutAttributesForItem(at: indexPath) {
                     let bottomOffset = maxContentOffsetY
                     let unreadIndicatorY = unreadAttributes.frame.minY
                     let unreadIndicatorScreenY = unreadIndicatorY - bottomOffset
@@ -146,35 +164,169 @@ extension ConversationViewController {
     func scrollToBottom(animated: Bool) {
         AssertIsOnMainThread()
 
-        guard !isUserScrolling else {
+        guard !isUserScrolling else { return }
+
+        // This explicit target supersedes every viewport anchor captured by an
+        // in-flight collection rebuild.
+        viewState.collectionViewportAnchorsByGeneration.removeAll()
+
+        if viewState.scrollDownButtonTarget == .latestMessage,
+           viewState.activeScrollDownCollectionAction == nil {
+            viewState.activeScrollDownCollectionAction = ConversationCollectionScrollAction(
+                destination: .bottomOfLoadWindow,
+                isAnimated: animated,
+                userScrollGeneration: viewState.userScrollGeneration,
+                requestGeneration: viewState.scrollActionRequestGeneration
+            )
+        }
+
+        if isLoadingOlderItems || isLoadingNewerItems {
+            enqueueScrollToBottom(animated: animated)
             return
         }
         
-        if conversationViewModel.canLoadNewerItems() {
+        let canLoadNewerItems = conversationViewModel.canLoadNewerItems()
+        if canLoadNewerItems {
+            // Match Signal's loadAndScrollToNewestItems: carry the bottom action through the
+            // reload and perform it only after the winning collection generation has landed.
+            let isScrollDownButtonRequest = viewState.scrollDownButtonTarget == .latestMessage
+            if !isScrollDownButtonRequest {
+                viewState.scrollActionRequestGeneration &+= 1
+            }
+            let scrollAction: ConversationCollectionScrollAction
+            if isScrollDownButtonRequest,
+               let activeScrollAction = viewState.activeScrollDownCollectionAction {
+                scrollAction = activeScrollAction
+            } else {
+                scrollAction = ConversationCollectionScrollAction(
+                    destination: .bottomOfLoadWindow,
+                    isAnimated: animated,
+                    userScrollGeneration: viewState.userScrollGeneration,
+                    requestGeneration: viewState.scrollActionRequestGeneration
+                )
+            }
+            if isScrollDownButtonRequest {
+                viewState.activeScrollDownCollectionAction = scrollAction
+            }
+            viewState.scrollActionForNextUpdate = scrollAction
+            isLoadingNewerItems = true
+            var didStartLoading = false
             databaseStorage.uiRead { [weak self] transaction in
                 guard let self else { return }
-                self.conversationViewModel.ensureLoadWindowContainsNewestItems(with: transaction)
+                didStartLoading = self.conversationViewModel.ensureLoadWindowContainsNewestItems(
+                    with: transaction
+                ) { [weak self] isFinished in
+                    guard let self else { return }
+                    self.isLoadingNewerItems = false
+                    if !isFinished {
+                        self.viewState.scrollActionForNextUpdate = nil
+                        self.scrollToLoadedWindowBottom(animated: animated)
+                    }
+                    self.resumePendingScrollToBottom()
+                }
             }
+            if !didStartLoading {
+                isLoadingNewerItems = false
+                viewState.scrollActionForNextUpdate = nil
+                scrollToLoadedWindowBottom(animated: animated)
+            }
+            return
         }
+
+        viewState.pendingScrollToBottomAnimated = nil
+        scrollToLoadedWindowBottom(animated: animated)
+    }
+
+    private func enqueueScrollToBottom(animated: Bool) {
+        if let pendingAnimated = viewState.pendingScrollToBottomAnimated {
+            viewState.pendingScrollToBottomAnimated = pendingAnimated || animated
+        } else {
+            viewState.pendingScrollToBottomAnimated = animated
+        }
+    }
+
+    /// Resumes a scroll request that arrived while a pagination/newest-window
+    /// load was running. A failed newest-window rebuild falls back to the bottom
+    /// of the currently loaded window instead of retrying indefinitely.
+    func resumePendingScrollToBottom(allowNewestLoad: Bool = true) {
+        guard let animated = viewState.pendingScrollToBottomAnimated else { return }
+        viewState.pendingScrollToBottomAnimated = nil
+
+        // A drag that began after the request is newer user intent.
+        guard !isUserScrolling else { return }
+
+        if allowNewestLoad {
+            scrollToBottom(animated: animated)
+        } else {
+            scrollToLoadedWindowBottom(animated: animated)
+        }
+    }
+
+    private func scrollToLoadedWindowBottom(animated: Bool) {
+        AssertIsOnMainThread()
         
         // Ensure the view is fully layed out before we try to scroll to the bottom, since
         // we use the collectionView bounds to determine where the "bottom" is.
         self.view.layoutIfNeeded()
         
-        let bottomInset = -collectionView.adjustedContentInset.bottom
-        let firstContentPageTop = -collectionView.adjustedContentInset.top
-        let collectionViewUnobscuredHeight = collectionView.bounds.size.height + bottomInset
-        let lastContentPageTop = safeContentHeight - collectionViewUnobscuredHeight
-        
-        let dstY = max(firstContentPageTop, lastContentPageTop)
-        
+        let dstY = maxContentOffsetY
+        let isScrollDownButtonRequest = viewState.scrollDownButtonTarget == .latestMessage
+        let shouldWaitForAnimation = isScrollDownButtonRequest
+            && animated
+            && abs(collectionView.contentOffset.y - dstY) > 0.5
+        if shouldWaitForAnimation {
+            viewState.isStartingScrollDownAnimation = true
+        }
         collectionView.setContentOffset(.init(x: 0, y: dstY), animated: animated)
-        didScrollToBottom()
+        viewState.isStartingScrollDownAnimation = false
+        if !shouldWaitForAnimation {
+            didScrollToBottom()
+        }
+    }
+
+    /// Performs a Signal-style scroll action after its collection generation commits.
+    /// The action is ignored if a newer user drag has taken ownership of the viewport.
+    func performCollectionScrollAction(_ scrollAction: ConversationCollectionScrollAction) {
+        AssertIsOnMainThread()
+
+        guard scrollAction.userScrollGeneration == viewState.userScrollGeneration,
+              scrollAction.requestGeneration == viewState.scrollActionRequestGeneration,
+              !isUserScrolling else {
+            // A stale update belongs to an older navigation request. Ignoring it must not
+            // cancel a newer button tap that has already taken ownership of the viewport.
+            return
+        }
+
+        switch scrollAction.destination {
+        case .bottomOfLoadWindow:
+            scrollToLoadedWindowBottom(animated: scrollAction.isAnimated)
+        }
     }
     
     private func didScrollToBottom() {
+        if viewState.scrollDownButtonTarget == .latestMessage {
+            viewState.scrollDownButtonTarget = nil
+        }
+        viewState.isStartingScrollDownAnimation = false
+        viewState.isScrollDownAnimationRetryScheduled = false
+        viewState.scrollDownAnimationRetryCount = 0
+        viewState.activeScrollDownCollectionAction = nil
         self.scrollDownButton.isHidden = true
-        
+
+        // We are now at the very bottom, so the newest item is fully seen.
+        // Advance the "last visible" markers synchronously here to close the
+        // small window where the async update lags behind and briefly flashes
+        // the scroll-down button (e.g. right after sending a voice message,
+        // whose cell measures its height asynchronously).
+        if let lastItem = viewItems.last {
+            let sortId = lastItem.interaction.timestampForSorting()
+            if sortId > self.lastVisibleSortId {
+                self.lastVisibleSortId = sortId
+                self.lastMsgSequenceId = lastItem.interaction.sequenceId
+                self.lastNotifySequenceId = lastItem.interaction.notifySequenceId
+            }
+        }
+
         updateLastVisibleSortIdWithSneakyAsyncTransaction()
     }
 }
@@ -222,7 +374,9 @@ extension ConversationViewController {
     @objc private func scrollDownButtonTapped() {
         // Fix: 解决某些场景下，还未 reload ui 的情况下，执行了 scroll down 操作，引发 crash
         if viewItems.count != dataSource.snapshot().numberOfItems {
-            reloadData { [weak self] isFinished in
+            // This tap is an explicit viewport request. An anchor inherited from an
+            // in-flight reload must not restore the old position after we choose a target.
+            reloadData(viewportAnchorPolicy: .disabled) { [weak self] isFinished in
                 guard let self, isFinished else { return }
                 self.scrollDown()
             }
@@ -232,23 +386,207 @@ extension ConversationViewController {
     }
     
     private func scrollDown() {
-        if let unreadMessageIndexPath = self.indexPathOfUnreadMessagesIndicator {
-            let unreadRow = unreadMessageIndexPath.row
-            let visibleIndexPaths = collectionView.indexPathsForVisibleItems
-            let isScrolledAboveUnreadIndicator = visibleIndexPaths.first(where: { $0.row > unreadRow }) == nil
-            
-            if isScrolledAboveUnreadIndicator, unreadMessageIndexPath.row < dataSource.snapshot().numberOfItems {
-                // Only scroll as far as the unread indicator if we're scrolled above the unread indicator.
-                collectionView.scrollToItem(
-                    at: unreadMessageIndexPath,
-                    at: .top,
-                    animated: true
+        if let unreadIndexPath = indexPathOfUnreadMessagesIndicator,
+           unreadIndexPath.row < dataSource.snapshot().numberOfItems,
+           isViewportAboveUnreadIndicator(at: unreadIndexPath),
+           scrollToUnreadIndicator(at: unreadIndexPath, animated: true) {
+            // Signal's first stage: while above the divider, stop at unread.
+            return
+        }
+
+        beginScrollDownButtonTarget(.latestMessage)
+        scrollToBottom(animated: true)
+    }
+
+    private func beginScrollDownButtonTarget(_ target: ConversationScrollDownTarget) {
+        viewState.scrollActionRequestGeneration &+= 1
+        viewState.scrollActionForNextUpdate = nil
+        viewState.activeScrollDownCollectionAction = nil
+        viewState.collectionScrollActionsByGeneration.removeAll()
+        viewState.scrollDownButtonTarget = target
+        viewState.isStartingScrollDownAnimation = false
+        viewState.isScrollDownAnimationRetryScheduled = false
+        viewState.scrollDownAnimationRetryCount = 0
+        viewState.collectionViewportAnchorsByGeneration.removeAll()
+        Logger.info(
+            "[ConversationScrollDown] begin target=\(target) offset=\(collectionView.contentOffset.y)"
+        )
+    }
+
+    func cancelScrollDownButtonNavigation() {
+        viewState.scrollActionRequestGeneration &+= 1
+        viewState.scrollDownButtonTarget = nil
+        viewState.pendingScrollToBottomAnimated = nil
+        viewState.scrollActionForNextUpdate = nil
+        viewState.activeScrollDownCollectionAction = nil
+        viewState.collectionScrollActionsByGeneration.removeAll()
+        viewState.isStartingScrollDownAnimation = false
+        viewState.isScrollDownAnimationRetryScheduled = false
+        viewState.scrollDownAnimationRetryCount = 0
+    }
+
+    /// Match Signal's boundary: once any row after the unread divider is visible, the
+    /// divider has been reached and the next tap should go directly to the latest message.
+    private func isViewportAboveUnreadIndicator(at indexPath: IndexPath) -> Bool {
+        let visibleIndexPaths = collectionView.indexPathsForVisibleItems
+        if !visibleIndexPaths.isEmpty {
+            return visibleIndexPaths.allSatisfy { $0.row <= indexPath.row }
+        }
+
+        view.layoutIfNeeded()
+        guard let attributes = layout.layoutAttributesForItem(at: indexPath) else { return false }
+        let visibleBottomY = collectionView.contentOffset.y
+            + collectionView.bounds.height
+            - collectionView.adjustedContentInset.bottom
+        return visibleBottomY <= attributes.frame.maxY
+    }
+
+    @discardableResult
+    private func scrollToUnreadIndicator(at indexPath: IndexPath, animated: Bool) -> Bool {
+        guard !isUserScrolling else { return false }
+
+        view.layoutIfNeeded()
+        guard let attributes = layout.layoutAttributesForItem(at: indexPath) else {
+            return false
+        }
+
+        beginScrollDownButtonTarget(.unreadIndicator)
+        let destinationY = unreadIndicatorDestinationY(attributes: attributes)
+        let shouldWaitForAnimation = animated
+            && abs(collectionView.contentOffset.y - destinationY) > 0.5
+        collectionView.setContentOffset(
+            CGPoint(x: collectionView.contentOffset.x, y: destinationY),
+            animated: animated
+        )
+        updateLastKnownDistanceFromBottom()
+        if !shouldWaitForAnimation {
+            completeScrollDownButtonAnimation()
+        }
+        return true
+    }
+
+    private func unreadIndicatorDestinationY(
+        attributes: UICollectionViewLayoutAttributes
+    ) -> CGFloat {
+        let topInset = collectionView.adjustedContentInset.top
+        let minimumOffsetY = -topInset
+        return min(
+            maxContentOffsetY,
+            max(minimumOffsetY, attributes.frame.minY - topInset)
+        )
+    }
+
+    /// Reapplies the button's semantic destination after either the UIKit animation or
+    /// an interrupting diffable snapshot completes. Signal gives programmatic scrolling
+    /// ownership over load landing; this is the equivalent coordination for TempTalk.
+    func resumeScrollDownButtonTargetAfterCollectionUpdate() {
+        guard let target = viewState.scrollDownButtonTarget else { return }
+        guard !isUserScrolling else {
+            viewState.scrollDownButtonTarget = nil
+            return
+        }
+
+        switch target {
+        case .unreadIndicator:
+            finishScrollToUnreadIndicator()
+
+        case .latestMessage:
+            // A collection update that inherited the bottom action will call
+            // performCollectionScrollAction from its own completion. This fallback covers
+            // non-generation layout updates without completing the action prematurely.
+            guard !isLoadingOlderItems, !isLoadingNewerItems else { return }
+            performCollectionScrollAction(
+                ConversationCollectionScrollAction(
+                    destination: .bottomOfLoadWindow,
+                    isAnimated: true,
+                    userScrollGeneration: viewState.userScrollGeneration,
+                    requestGeneration: viewState.scrollActionRequestGeneration
                 )
+            )
+        }
+    }
+
+    /// Completes only from UIScrollView's animation callback. The scroll timer must not
+    /// finalize a long animation while UIKit is still moving toward its destination.
+    private func completeScrollDownButtonAnimation() {
+        guard let target = viewState.scrollDownButtonTarget else { return }
+
+        switch target {
+        case .unreadIndicator:
+            finishScrollToUnreadIndicator()
+
+        case .latestMessage:
+            view.layoutIfNeeded()
+            let destinationY = maxContentOffsetY
+            guard abs(collectionView.contentOffset.y - destinationY) <= 1 else {
+                if viewState.isScrollDownAnimationRetryScheduled {
+                    return
+                }
+
+                if viewState.scrollDownAnimationRetryCount > 0 {
+                    // UIKit has already interrupted the one recovery animation. Consume the
+                    // semantic target before snapping so synchronous delegate callbacks are
+                    // idempotent and the button request cannot loop forever.
+                    viewState.scrollDownButtonTarget = nil
+                    collectionView.setContentOffset(
+                        CGPoint(x: collectionView.contentOffset.x, y: destinationY),
+                        animated: false
+                    )
+                    didScrollToBottom()
+                    Logger.info(
+                        "[ConversationScrollDown] complete target=latestMessage "
+                            + "fallback=true offset=\(collectionView.contentOffset.y)"
+                    )
+                    return
+                }
+
+                viewState.scrollDownAnimationRetryCount += 1
+                viewState.isScrollDownAnimationRetryScheduled = true
+                let requestGeneration = viewState.scrollActionRequestGeneration
+                Logger.info(
+                    "[ConversationScrollDown] interrupted target=latestMessage "
+                        + "offset=\(collectionView.contentOffset.y) destination=\(destinationY)"
+                )
+                DispatchQueue.main.async { [weak self] in
+                    guard let self,
+                          self.viewState.scrollDownButtonTarget == .latestMessage,
+                          self.viewState.scrollActionRequestGeneration == requestGeneration,
+                          !self.isUserScrolling else { return }
+                    self.viewState.isScrollDownAnimationRetryScheduled = false
+                    self.scrollToLoadedWindowBottom(animated: true)
+                }
                 return
             }
+
+            didScrollToBottom()
+            Logger.info(
+                "[ConversationScrollDown] complete target=latestMessage offset=\(collectionView.contentOffset.y)"
+            )
         }
-        
-        scrollToBottom(animated: true)
+    }
+
+    private func finishScrollToUnreadIndicator() {
+        // Consume the target before layout; layout can synchronously re-enter scroll callbacks.
+        viewState.scrollDownButtonTarget = nil
+        view.layoutIfNeeded()
+        guard let indexPath = indexPathOfUnreadMessagesIndicator,
+              indexPath.row < dataSource.snapshot().numberOfItems,
+              let attributes = layout.layoutAttributesForItem(at: indexPath) else {
+            beginScrollDownButtonTarget(.latestMessage)
+            scrollToBottom(animated: false)
+            return
+        }
+
+        let destinationY = unreadIndicatorDestinationY(attributes: attributes)
+        collectionView.setContentOffset(
+            CGPoint(x: collectionView.contentOffset.x, y: destinationY),
+            animated: false
+        )
+        updateLastKnownDistanceFromBottom()
+        ensureScrollDownButton()
+        Logger.info(
+            "[ConversationScrollDown] complete target=unreadIndicator offset=\(collectionView.contentOffset.y)"
+        )
     }
     
     @objc func ensureScrollDownButton() {
@@ -258,6 +596,13 @@ extension ConversationViewController {
             scrollDownButton.isHidden = true
             return
         }
+
+        // Do not hide the control merely because the newest row became visible during
+        // the animation. It is complete only after the final content offset is reached.
+        if viewState.scrollDownButtonTarget != nil {
+            scrollDownButton.isHidden = false
+            return
+        }
         
         let contentInset = collectionView.contentInset
         let contentOffsetY = collectionView.contentOffset.y
@@ -265,18 +610,19 @@ extension ConversationViewController {
         
         let spaceToBottom = safeContentHeight + contentInset.bottom - (contentOffsetY + collectionViewHeight)
         let pageHeight = collectionViewHeight - (contentInset.top + contentInset.bottom)
-        
-        // Show "scroll down" button if user is scrolled up at least one page.
-        let isScrolledUp = spaceToBottom > pageHeight
-        
-        var shouldShowScrollDownButton = false
-        if let lastViewItem = viewItems.last {
-            if lastViewItem.interaction.timestampForSorting() > self.lastVisibleSortId {
-                shouldShowScrollDownButton = true
-            } else if isScrolledUp {
-                shouldShowScrollDownButton = true
-            }
-        }
+
+        // Show the button once the user has scrolled up at least one page.
+        let isScrolledUpOnePage = spaceToBottom > pageHeight
+
+        // Or when there is newer content the user hasn't reached yet: a later
+        // message not yet seen (only meaningful when not already at the bottom,
+        // otherwise the newest message is on screen), or newer items still
+        // outside the loaded window.
+        let hasLaterMessageOffscreen = (!isScrolledToBottom
+            && (viewItems.last?.interaction.timestampForSorting() ?? 0) > self.lastVisibleSortId)
+            || conversationViewModel.canLoadNewerItems()
+
+        let shouldShowScrollDownButton = !viewItems.isEmpty && (isScrolledUpOnePage || hasLaterMessageOffscreen)
         self.scrollDownButton.isHidden = !shouldShowScrollDownButton
     }
 }
@@ -287,13 +633,6 @@ extension ConversationViewController {
     private var dateSeparatorView: ConversationDateSeparatorView? {
         get { viewState.dateSeparatorView }
         set { viewState.dateSeparatorView = newValue }
-    }
-
-    private func startHideDateTimer() {
-        hideDateTimer?.invalidate()
-        hideDateTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
-            self?.hideDateSeparator()
-        }
     }
 
     private func hideDateSeparator() {
@@ -317,15 +656,29 @@ extension ConversationViewController {
 
     private func updateDateSeparatorConstraints(joinbarHeight: CGFloat) {
         guard let dateSeparatorView else { return }
+
+        // The E2EE notice is part of the scrollable conversation content. Its
+        // content inset must not push the floating date header down after the
+        // notice has scrolled away. Keep the legacy stranger-warning offset.
+        let noticeHeaderOffset: CGFloat
+        switch conversationNoticeHeaderStyle {
+        case .stranger:
+            noticeHeaderOffset = collectionView.contentInset.top
+        case .endToEndEncryption, .none:
+            noticeHeaderOffset = 0
+        }
+
+        let topOffset = noticeHeaderOffset + joinbarHeight
+        guard viewState.dateSeparatorTopOffset != topOffset else { return }
+        viewState.dateSeparatorTopOffset = topOffset
+
         dateSeparatorView.snp.updateConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide.snp.top)
-                .offset(collectionView.contentInset.top + joinbarHeight)
+                .offset(topOffset)
         }
     }
 
     private func refreshDateSeparator() {
-        hideDateTimer?.invalidate()
-
         let currentOffset = CGPoint(
             x: collectionView.contentOffset.x,
             y: collectionView.contentOffset.y + collectionView.contentInset.top
@@ -478,11 +831,6 @@ extension ConversationViewController: UIScrollViewDelegate {
         set { viewState.scrollUpdateTimer = newValue }
     }
     
-    var hideDateTimer: Timer? {
-        get { viewState.hideDateTimer }
-        set { viewState.hideDateTimer = newValue }
-    }
-
     var isScrollingToTop: Bool {
         get { viewState.isScrollingToTop }
         set { viewState.isScrollingToTop = newValue }
@@ -494,6 +842,7 @@ extension ConversationViewController: UIScrollViewDelegate {
     }
 
     private func performCustomScrollToTop() {
+        cancelScrollDownButtonNavigation()
         isScrollingToTop = true
         viewState.scrollStateBeforeLoadingMore = nil
 
@@ -506,8 +855,8 @@ extension ConversationViewController: UIScrollViewDelegate {
             // 短距离，直接动画
             UIView.animate(withDuration: 0.3, animations: {
                 self.collectionView.setContentOffset(CGPoint(x: 0, y: topOffset), animated: false)
-            }, completion: { _ in
-                self.finishScrollToTop()
+            }, completion: { completed in
+                self.finishScrollToTop(didComplete: completed)
             })
         } else {
             // 长距离：先无动画跳到接近顶部（一屏距离），再短距离动画滑到顶部
@@ -515,24 +864,40 @@ extension ConversationViewController: UIScrollViewDelegate {
             collectionView.setContentOffset(CGPoint(x: 0, y: nearTopOffset), animated: false)
 
             DispatchQueue.main.async {
+                guard self.isScrollingToTop else { return }
+
                 UIView.animate(withDuration: 0.3, animations: {
                     self.collectionView.setContentOffset(CGPoint(x: 0, y: topOffset), animated: false)
-                }, completion: { _ in
-                    self.finishScrollToTop()
+                }, completion: { completed in
+                    self.finishScrollToTop(didComplete: completed)
                 })
             }
         }
     }
 
-    private func finishScrollToTop() {
+    private func finishScrollToTop(didComplete: Bool) {
+        // A drag clears this flag before cancelling the animation, so its delayed
+        // completion must not move the viewport or update the header mid-gesture.
+        guard isScrollingToTop else { return }
+
         isScrollingToTop = false
+        guard didComplete else {
+            updateWarningHeaderLayout()
+            return
+        }
+
         isScrollUp = false
         autoLoadMoreIfNecessary()
+        updateWarningHeaderLayout()
+        collectionView.setContentOffset(
+            CGPoint(x: collectionView.contentOffset.x, y: -collectionView.adjustedContentInset.top),
+            animated: false
+        )
         updateLastVisibleSortIdWithSneakyAsyncTransaction()
     }
 
     public func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
-        finishScrollToTop()
+        finishScrollToTop(didComplete: true)
     }
 
     // MARK: - scrollViewDidScroll
@@ -566,6 +931,8 @@ extension ConversationViewController: UIScrollViewDelegate {
         }
 
         userHasScrolled = true
+        viewState.userScrollGeneration &+= 1
+        cancelScrollDownButtonNavigation()
         isUserScrolling = true
         actionMenuController?.hideMenu(animation: false)
 
@@ -582,6 +949,7 @@ extension ConversationViewController: UIScrollViewDelegate {
             viewState.initialScrollTargetOffset = nil
             viewState.initialScrollProtectionDeadline = nil
         }
+        viewState.isFocusKeyboardPresentationComplete = false
 
         refreshDateSeparator()
     }
@@ -597,16 +965,14 @@ extension ConversationViewController: UIScrollViewDelegate {
         guard isUserScrolling else {
             return
         }
+        isWaitingForDeceleration = decelerate
         isUserScrolling = false
         
-        if decelerate {
-            isWaitingForDeceleration = decelerate
-        } else {
+        if !decelerate {
             scheduleScrollUpdateTimer()
-            
+            updateWarningHeaderLayout()
+
             actionMenuController?.showMenu(animation: true)
-            
-            startHideDateTimer()
         }
     }
     
@@ -615,12 +981,21 @@ extension ConversationViewController: UIScrollViewDelegate {
             return
         }
         isWaitingForDeceleration = false
-        
+
         scheduleScrollUpdateTimer()
-        
+        updateWarningHeaderLayout()
+
         actionMenuController?.showMenu(animation: true)
-        
-        startHideDateTimer()
+    }
+
+    public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        // setContentOffset(animated:) can synchronously report the animation it just
+        // superseded. The replacement animation has not had a chance to move yet.
+        guard !viewState.isStartingScrollDownAnimation else { return }
+
+        completeScrollDownButtonAnimation()
+
+        scheduleScrollUpdateTimer()
     }
     
     @objc func updateLastKnownDistanceFromBottom() {
@@ -645,7 +1020,7 @@ extension ConversationViewController: UIScrollViewDelegate {
         guard viewHasEverAppeared else {
             return
         }
-        
+
         autoLoadMoreIfNecessary()
         updateLastVisibleSortIdWithSneakyAsyncTransaction()
     }
@@ -693,6 +1068,9 @@ extension ConversationViewController {
     private func autoLoadMoreIfNecessary() {
         // scroll-to-top 动画期间不触发加载更多
         guard !isScrollingToTop else { return }
+        // ConversationViewModel serializes older/newer pagination with one shared flag.
+        // Mirror that ownership here so a request in the opposite direction cannot start.
+        guard !isLoadingOlderItems, !isLoadingNewerItems else { return }
 
         let isMainAppAndActive = CurrentAppContext().isMainAppAndActive
         if isUserScrolling || isWaitingForDeceleration || !isViewVisible || !isMainAppAndActive {
@@ -712,16 +1090,15 @@ extension ConversationViewController {
             Logger.info("[hot data] ------ ⬆️⬆️⬆️")
 
             if isShowLoadOlderHeader {
-                // 防止在加载过程中重复触发
-                guard !isLoadingOlderItems else {
-                    Logger.info("[hot data] already loading older items, skip")
-                    return
-                }
                 isLoadingOlderItems = true
+                var didStartLoading = false
                 BenchManager.bench(title: "loading older interactions") {
                     self.databaseStorage.uiRead { transaction in
-                        self.conversationViewModel.appendOlderItems(with: transaction)
+                        didStartLoading = self.conversationViewModel.appendOlderItems(with: transaction)
                     }
+                }
+                if !didStartLoading {
+                    isLoadingOlderItems = false
                 }
             } else if isShowFetchOlderHeader {
                 if conversationViewModel.messageMapping.isFetchingData.get() {
@@ -737,16 +1114,15 @@ extension ConversationViewController {
             Logger.info("[hot data] ------ ⬇️⬇️⬇️")
 
             if isShowLoadNewerHeader {
-                // 防止在加载过程中重复触发
-                guard !isLoadingNewerItems else {
-                    Logger.info("[hot data] already loading newer items, skip")
-                    return
-                }
                 isLoadingNewerItems = true
+                var didStartLoading = false
                 BenchManager.bench(title: "loading newer interactions") {
                     self.databaseStorage.uiRead { transaction in
-                        self.conversationViewModel.appendNewerItems(with: transaction)
+                        didStartLoading = self.conversationViewModel.appendNewerItems(with: transaction)
                     }
+                }
+                if !didStartLoading {
+                    isLoadingNewerItems = false
                 }
             } else if isShowFetchNewerHeader {
                 if conversationViewModel.messageMapping.isFetchingData.get() {
@@ -768,7 +1144,7 @@ extension ConversationViewController {
     func updateShowLoadMoreHeaders(transaction: SDSAnyReadTransaction) {
         let valueChanged = updateShowLoadMoreHeaders()
         if valueChanged, viewHasEverAppeared {
-            resetContentAndLayout(transaction: transaction)
+            resetContentAndLayout(transaction: transaction, invalidateLayout: true)
         }
     }
     
@@ -804,16 +1180,31 @@ extension ConversationViewController {
     func resetContentAndLayout(
         transaction: SDSAnyReadTransaction,
         forceRealodRange: ReloadRange = .all,
+        viewportAnchorPolicy explicitViewportAnchorPolicy: ConversationViewportAnchorPolicy? = nil,
+        invalidateLayout: Bool = false,
+        scrollAction: ConversationCollectionScrollAction? = nil,
         completion: ((Bool) -> Void)? = nil
     ) {
-        Logger.info("[Conversation] begin forceRange=\(forceRealodRange) items(before)=\(viewItems.count) renderItems=\(renderItems.count)")
+        let viewportAnchorPolicy: ConversationViewportAnchorPolicy
+        if let explicitViewportAnchorPolicy {
+            viewportAnchorPolicy = explicitViewportAnchorPolicy
+        } else if let viewportAnchor = captureViewportAnchor() {
+            viewportAnchorPolicy = .preserve(viewportAnchor)
+        } else {
+            viewportAnchorPolicy = .inherit
+        }
         scrollContinuity = .bottom
         
         // Avoid layout corrupt issues and out-of-date message subtitles.
         lastReloadDate = Date()
         conversationViewModel.viewDidResetContentAndLayout(with: transaction)
         
-        reloadData(forceRealodRange: forceRealodRange) { [weak self] isFinished in
+        reloadData(
+            forceRealodRange: forceRealodRange,
+            viewportAnchorPolicy: viewportAnchorPolicy,
+            invalidateLayout: invalidateLayout,
+            scrollAction: scrollAction
+        ) { [weak self] isFinished in
             guard let self else { return }
             if self.viewHasEverAppeared, isFinished {
                 // Try to update the lastKnownDistanceFromBottom; the content size may have changed.
@@ -868,6 +1259,7 @@ extension ConversationViewController {
     }
     
     private func forcusMessage(_ message: TSMessage, animated: Bool) {
+        cancelScrollDownButtonNavigation()
         databaseStorage.uiRead { transaction in
             self.conversationViewModel.ensureLoadWindowContainsInteractionId(
                 message.uniqueId,

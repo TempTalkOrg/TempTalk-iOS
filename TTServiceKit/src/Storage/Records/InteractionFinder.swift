@@ -460,6 +460,59 @@ public class InteractionFinder: NSObject, InteractionFinderAdapter {
         }
     }
 
+    /// The earliest outgoing message in this thread that failed to send, or nil if there is none.
+    /// Outgoing messages carry `serverTimestamp = timestamp` from creation (corrected once the
+    /// server accepts them), so a failed message sorts at the point in the conversation where it
+    /// was sent — the same ordering the unread anchor uses.
+    @objc
+    public func oldestFailedOutgoingInteraction(transaction: SDSAnyReadTransaction) -> TSInteraction? {
+        switch transaction.readTransaction {
+        case .grdbRead(let grdbRead):
+            return grdbAdapter.oldestFailedOutgoingInteraction(transaction: grdbRead)
+        }
+    }
+
+    @objc
+    public func hasFailedOutgoingMessage(transaction: SDSAnyReadTransaction) -> Bool {
+        return oldestFailedOutgoingInteraction(transaction: transaction) != nil
+    }
+
+    /// Whether any persisted outgoing message in this thread is still being sent.
+    @objc
+    public func hasSendingOutgoingMessage(transaction: SDSAnyReadTransaction) -> Bool {
+        switch transaction.readTransaction {
+        case .grdbRead(let grdbRead):
+            return grdbAdapter.hasSendingOutgoingMessage(transaction: grdbRead)
+        }
+    }
+
+    /// Reads only the persisted derived state used to decide whether a recipient-state write
+    /// should invalidate conversation-level send indicators. NSNumber keeps the missing-row case
+    /// representable across the Objective-C boundary.
+    @objc
+    public static func outgoingMessageState(
+        uniqueId: String,
+        transaction: SDSAnyReadTransaction
+    ) -> NSNumber? {
+        switch transaction.readTransaction {
+        case .grdbRead(let grdbRead):
+            let sql = """
+            SELECT \(interactionColumn: .storedMessageState)
+            FROM \(InteractionRecord.databaseTableName)
+            WHERE \(interactionColumn: .uniqueId) = ?
+            LIMIT 1
+            """
+            guard let rawValue = try! Int.fetchOne(
+                grdbRead.database,
+                sql: sql,
+                arguments: [uniqueId]
+            ) else {
+                return nil
+            }
+            return NSNumber(value: rawValue)
+        }
+    }
+
     public func interaction(at index: UInt, transaction: SDSAnyReadTransaction) throws -> TSInteraction? {
         switch transaction.readTransaction {
         case .grdbRead(let grdbRead):
@@ -805,7 +858,7 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
     static func interactionIdsWithExpiredPerConversationExpiration(transaction: ReadTransaction) -> [String] {
         // NOTE: We DO NOT consult storedShouldStartExpireTimer here;
         //       once expiration has begun we want to see it through.
-        let now: UInt64 = NSDate.ows_millisecondTimeStamp()
+        let now = DTTrustedClock.now()
         let sql = """
         SELECT \(interactionColumn: .uniqueId)
         FROM \(InteractionRecord.databaseTableName)
@@ -888,11 +941,13 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
                 AND \(interactionColumn: .errorType) IS NOT ?
                 AND \(interactionColumn: .messageType) IS NOT ?
                 AND \(interactionColumn: .messageType) IS NOT ?
+                AND \(interactionColumn: .messageType) IS NOT ?
+                AND \(interactionColumn: .messageType) IS NOT ?
                 AND \(interactionColumn: .recall) IS NULL
                 ORDER BY \(interactionColumn: .serverTimestamp) DESC
                 LIMIT 1
                 """
-        let arguments: StatementArguments = [threadUniqueId, TSErrorMessageType.nonBlockingIdentityChange.rawValue, TSInfoMessageType.verificationStateChange.rawValue, TSInfoMessageType.confidentialViewed.rawValue]
+        let arguments: StatementArguments = [threadUniqueId, TSErrorMessageType.nonBlockingIdentityChange.rawValue, TSInfoMessageType.verificationStateChange.rawValue, TSInfoMessageType.confidentialViewed.rawValue, TSInfoMessageType.forwardNotice.rawValue, TSInfoMessageType.copyNotice.rawValue]
         return TSInteraction.grdbFetchOne(sql: sql, arguments: arguments, transaction: transaction)
     }
     
@@ -1277,7 +1332,7 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
     }
     
     func lastestIncomingInteraction(transaction: GRDBReadTransaction) -> TSIncomingMessage? {
-        
+
         let sql = """
         SELECT *
         FROM \(InteractionRecord.databaseTableName)
@@ -1286,10 +1341,40 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
         ORDER BY \(interactionColumn: .serverTimestamp) DESC
         LIMIT 1
         """
-        
+
         let arguments: StatementArguments = [threadUniqueId]
-        
+
         return TSIncomingMessage.grdbFetchOne(sql: sql, arguments: arguments, transaction: transaction) as? TSIncomingMessage ?? nil
+    }
+
+    func oldestFailedOutgoingInteraction(transaction: GRDBReadTransaction) -> TSInteraction? {
+        let sql = """
+        SELECT *
+        FROM \(InteractionRecord.databaseTableName)
+        \(sqlThreadUniqueIdCondition())
+        AND \(interactionColumn: .storedMessageState) = \(TSOutgoingMessageState.failed.rawValue)
+        ORDER BY \(interactionColumn: .serverTimestamp) ASC
+        LIMIT 1
+        """
+
+        let arguments: StatementArguments = [threadUniqueId]
+
+        return TSInteraction.grdbFetchOne(sql: sql, arguments: arguments, transaction: transaction)
+    }
+
+    func hasSendingOutgoingMessage(transaction: GRDBReadTransaction) -> Bool {
+        let sql = """
+        SELECT EXISTS(
+            SELECT 1
+            FROM \(InteractionRecord.databaseTableName)
+            \(sqlThreadUniqueIdCondition())
+            AND \(interactionColumn: .storedMessageState) = \(TSOutgoingMessageState.sending.rawValue)
+            LIMIT 1
+        )
+        """
+        let arguments: StatementArguments = [threadUniqueId]
+
+        return try! Bool.fetchOne(transaction.database, sql: sql, arguments: arguments) ?? false
     }
 
     func interaction(at index: UInt, transaction: GRDBReadTransaction) throws -> TSInteraction? {
@@ -1461,7 +1546,7 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
     /// messages never create), so qualify them once their own expiresInSeconds has elapsed;
     /// threads with expiration off are left untouched.
     static func findCleanableVisibleThreadIds(noteToSelfThreadId: String, transaction: GRDBReadTransaction) -> [String] {
-        let nowSeconds = Date().timeIntervalSince1970
+        let nowSeconds = TimeInterval(DTTrustedClock.now()) / 1000
         let sql = """
         SELECT DISTINCT t.uniqueId
         FROM \(ThreadRecord.databaseTableName) t
@@ -1521,7 +1606,7 @@ struct GRDBInteractionFinderAdapter: InteractionFinderAdapter {
 
     static func findOrphanThreadIds(noteToSelfThreadId: String, transaction: GRDBReadTransaction) -> [String] {
         let gracePeriodSeconds: Double = 300
-        let creationCutoff = Date().timeIntervalSince1970 - gracePeriodSeconds
+        let creationCutoff = TimeInterval(DTTrustedClock.now()) / 1000 - gracePeriodSeconds
 
         let sql = """
         SELECT t.uniqueId FROM \(ThreadRecord.databaseTableName) t

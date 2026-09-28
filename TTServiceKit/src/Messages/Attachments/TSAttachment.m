@@ -41,6 +41,8 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
                    encryptionKey:(NSData *)encryptionKey
                           height:(unsigned int)height
                     isDownloaded:(BOOL)isDownloaded
+               preprocessingKind:(TSAttachmentPreprocessingKind)preprocessingKind
+             preprocessingParams:(nullable NSData *)preprocessingParams
                         serverId:(unsigned long long)serverId
                   sourceFilename:(nullable NSString *)sourceFilename
                            width:(unsigned int)width
@@ -62,6 +64,8 @@ NSUInteger const TSAttachmentSchemaVersion = 4;
     _encryptionKey = encryptionKey;
     _height = height;
     _isDownloaded = isDownloaded;
+    _preprocessingKind = preprocessingKind;
+    _preprocessingParams = preprocessingParams;
     _serverId = serverId;
     _sourceFilename = sourceFilename;
     _width = width;

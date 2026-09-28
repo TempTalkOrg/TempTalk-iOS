@@ -7,17 +7,16 @@
 //
 
 #import "DTContactsViewController.h"
-#import <JXPagingView/JXPagerListRefreshView.h>
 #import <JXCategoryView/JXCategoryView.h>
 #import <TTMessaging/OWSWindowManager.h>
 #import "NewContactThreadViewController.h"
 #import "DTGroupsViewController.h"
 #import "Yelling-Swift.h"
 
-@interface DTContactsViewController ()<JXCategoryTitleViewDataSource, JXPagerViewDelegate, JXCategoryViewDelegate>
+@interface DTContactsViewController ()<JXCategoryTitleViewDataSource, JXCategoryViewDelegate, JXCategoryListContainerViewDelegate>
 
 @property (nonatomic, strong) OWSSearchBar *searchBar;
-@property (nonatomic, strong) JXPagerListRefreshView *pagerView;
+@property (nonatomic, strong) JXCategoryListContainerView *containerView;
 @property (nonatomic, strong) JXCategoryTitleView *titleView;
 @property (nonatomic, strong) JXCategoryIndicatorLineView *indicator;
 @property (nonatomic, strong) UIView *separator;
@@ -48,7 +47,7 @@
         _searchBar.customPlaceholder = Localized(@"HOME_VIEW_CONVERSATION_SEARCHBAR_PLACEHOLDER",
                                                   @"Placeholder text for search bar which filters conversations.");
         [_searchBar sizeToFit];
-        [_searchBar autoSetDimensionsToSize:CGSizeMake(kScreenWidth, 44)];
+        [_searchBar autoSetDimension:ALDimensionHeight toSize:44];
         UIButton *btnSearch = [UIButton buttonWithType:UIButtonTypeSystem];
         btnSearch.userInteractionEnabled = YES;
         [btnSearch addTarget:self action:@selector(showSeachViewController) forControlEvents:UIControlEventTouchUpInside];
@@ -94,14 +93,12 @@
     return _titleView;
 }
 
-- (JXPagerListRefreshView *)pagerView {
-    
-    if (!_pagerView) {
-        _pagerView = [[JXPagerListRefreshView alloc] initWithDelegate:self];
-        _pagerView.mainTableView.backgroundColor = Theme.bgpagePrimaryColor;
-        _pagerView.listContainerView.listCellBackgroundColor = Theme.bgpagePrimaryColor;
+- (JXCategoryListContainerView *)containerView {
+    if (!_containerView) {
+        _containerView = [[JXCategoryListContainerView alloc] initWithType:JXCategoryListContainerType_CollectionView delegate:self];
+        _containerView.listCellBackgroundColor = Theme.bgpagePrimaryColor;
     }
-    return _pagerView;;
+    return _containerView;
 }
 
 - (NewContactThreadViewController *)contactsVC {
@@ -121,13 +118,25 @@
 - (void)loadView {
     [super loadView];
 
-    [self.view addSubview:self.pagerView];
-    [self.pagerView autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
-    [self.pagerView autoPinEdgeToSuperviewEdge:ALEdgeBottom];
-    [self.pagerView autoPinEdgeToSuperviewEdge:ALEdgeLeading];
-    [self.pagerView autoPinEdgeToSuperviewEdge:ALEdgeTrailing];
-    
-    self.titleView.listContainer = (id<JXCategoryViewListContainer>)self.pagerView.listContainerView;
+    [self.view addSubview:self.searchBar];
+    [self.view addSubview:self.titleView];
+    [self.view addSubview:self.containerView];
+
+    [self.searchBar autoPinEdgeToSuperviewSafeArea:ALEdgeTop];
+    [self.searchBar autoPinEdgeToSuperviewEdge:ALEdgeLeading];
+    [self.searchBar autoPinEdgeToSuperviewEdge:ALEdgeTrailing];
+
+    [self.titleView autoSetDimension:ALDimensionHeight toSize:36];
+    [self.titleView autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.searchBar];
+    [self.titleView autoPinEdgeToSuperviewEdge:ALEdgeLeading];
+    [self.titleView autoPinEdgeToSuperviewEdge:ALEdgeTrailing];
+
+    [self.containerView autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.titleView];
+    [self.containerView autoPinEdgeToSuperviewEdge:ALEdgeBottom];
+    [self.containerView autoPinEdgeToSuperviewEdge:ALEdgeLeading];
+    [self.containerView autoPinEdgeToSuperviewEdge:ALEdgeTrailing];
+
+    self.titleView.listContainer = self.containerView;
 }
 
 - (void)viewDidLoad {
@@ -168,7 +177,7 @@
 - (void)applyTheme {
     [super applyTheme];
 
-    self.pagerView.listContainerView.listCellBackgroundColor = Theme.bgpagePrimaryColor;
+    self.containerView.listCellBackgroundColor = Theme.bgpagePrimaryColor;
     self.titleView.backgroundColor = Theme.bgpagePrimaryColor;
     self.titleView.titleSelectedColor = Theme.tprimaryColor;
     self.indicator.indicatorColor = Theme.tprimaryColor;
@@ -180,32 +189,16 @@
 - (void)applyLanguage {
     [super applyLanguage];
     self.leftTitle = Localized(@"MESSAGE_COMPOSEVIEW_TITLE", @"");
-    self.titleView.titles = @[Localized(@"CONTACT_GROUPS", @""), Localized(@"CONTACT_ALL", @"")];
+    self.titleView.titles = @[Localized(@"CONTACT_ALL", @""), Localized(@"CONTACT_GROUPS", @"")];
     [self.titleView reloadData];
 }
 
-//MARK: - JXPagerViewDelegate
-- (UIView *)tableHeaderViewInPagerView:(JXPagerView *)pagerView {
-    return self.searchBar;
-}
-
-- (NSUInteger)tableHeaderViewHeightInPagerView:(JXPagerView *)pagerView {
-    return (NSUInteger)self.searchBar.height;
-}
-
-- (NSUInteger)heightForPinSectionHeaderInPagerView:(JXPagerView *)pagerView {
-    return 36;
-}
-
-- (UIView *)viewForPinSectionHeaderInPagerView:(JXPagerView *)pagerView {
-    return self.titleView;
-}
-
-- (NSInteger)numberOfListsInPagerView:(JXPagerView *)pagerView {
+//MARK: - JXCategoryListContainerViewDelegate
+- (NSInteger)numberOfListsInlistContainerView:(JXCategoryListContainerView *)listContainerView {
     return (NSInteger)self.titleView.titles.count;
 }
 
-- (id<JXPagerViewListViewDelegate>)pagerView:(JXPagerView *)pagerView initListAtIndex:(NSInteger)index {
+- (id<JXCategoryListContentViewDelegate>)listContainerView:(JXCategoryListContainerView *)listContainerView initListForIndex:(NSInteger)index {
     if (index == 0) return self.contactsVC;
     else if (index == 1) return self.groupsVC;
     else return nil;

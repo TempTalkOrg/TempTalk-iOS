@@ -29,6 +29,8 @@ extension ConversationViewController {
     
     // MARK: - 状态刷新
     func refreshJoinBarView() {
+        defer { refreshDateSeparatorViewPosition() }
+
         // 如果是从 PersonalCard 打开的浮动窗口
         if isFromPersonalCard {
             // 只有在全屏模式（100%）才显示 joinbar
@@ -95,9 +97,19 @@ extension ConversationViewController {
         guard let roomId = callModel.roomId else { return }
         
         Task {
-            guard let result = await DTMeetingManager.checkRoomIdValid(roomId) else { return }
+            let anotherDeviceJoined: Bool
+            switch await DTMeetingManager.checkRoomAvailability(roomId) {
+            case .valid(let joined, _):
+                anotherDeviceJoined = joined
+            case .gone:
+                return
+            case .unknown:
+                // Probe failed (transport/decode); fall back to the default calling label.
+                Logger.info("[joinBar] roomId probe transient failure, default calling label")
+                anotherDeviceJoined = false
+            }
             DispatchMainThreadSafe {
-                if result.anotherDeviceJoined {
+                if anotherDeviceJoined {
                     self.joinCallView.avatarView.setImageWithRecipientId(TSAccountManager.localNumber())
                     self.joinCallView.textLabel.text = Localized("CONVERSATION_JOIN_BAR_PRIVATE_ANOTHER_DEVICE")
                 } else {
@@ -147,12 +159,7 @@ extension ConversationViewController {
     }
     
     func showJoinBarView() -> Bool {
-        guard !DTMeetingManager.shared.isMinimize,
-              !DTMeetingManager.shared.allMeetings.isEmpty,
-              let callModel = DTMeetingManager.shared.allMeetings.first else {
-            return false
-        }
-        return true
+        return joinCallView.superview != nil && !joinCallView.isHidden
     }
        
     func showJoinBarViewHeight() -> CGFloat {

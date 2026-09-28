@@ -139,11 +139,22 @@ NSString *const OWSOperationKeyIsFinished = @"isFinished";
         return;
     }
     
+    if (self.cascadesCancellationFromDependencies) {
+        for (NSOperation *dependency in self.dependencies) {
+            if (dependency.isCancelled) {
+                OWSLogInfo(@"[%@] cascading cancellation from dependency %@", self, dependency);
+                [self cancel];
+                [self reportCancelled];
+                return;
+            }
+        }
+    }
+
     if (self.isCancelled) {
         [self reportCancelled];
         return;
     }
-    
+
     [self run];
 }
 

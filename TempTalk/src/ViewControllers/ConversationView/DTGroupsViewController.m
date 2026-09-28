@@ -24,7 +24,6 @@
 @property (nonatomic, strong) UITableView *tableView;
 
 @property (nonatomic, strong) NSArray <DTGroupBaseInfoEntity *> *groups;
-@property (nonatomic, copy) void(^scrollCallback)(UIScrollView *scrollView);
 
 @end
 
@@ -39,6 +38,7 @@
         _tableView.estimatedRowHeight = 0;
         _tableView.rowHeight = 70;
         _tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+        _tableView.showsVerticalScrollIndicator = NO;
         if (@available(iOS 15.0, *)) {
             _tableView.sectionHeaderTopPadding = 0;
         }
@@ -271,27 +271,13 @@
     [self.navigationController pushViewController:conversationVC animated:YES];
 }
 
-- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
-    scrollView.bounces = YES;
-    scrollView.showsVerticalScrollIndicator = NO;
-    !self.scrollCallback ?: self.scrollCallback(scrollView);
-}
-
 - (void)listWillAppear {
     [self fetchData];
 }
 
-#pragma mark - JXPagingViewListViewDelegate
+#pragma mark - JXCategoryListContentViewDelegate
 - (UIView *)listView {
     return self.view;
-}
-
-- (UIScrollView *)listScrollView {
-    return self.tableView;
-}
-
-- (void)listViewDidScrollCallback:(void (^)(UIScrollView *))callback {
-    self.scrollCallback = callback;
 }
 
 - (void)userTakeScreenshotEvent:(NSNotification *)notify {

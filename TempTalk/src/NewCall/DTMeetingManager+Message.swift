@@ -57,7 +57,8 @@ extension DTMeetingManager {
         createCallMsg: Bool? = false,
         controlType: String? = nil,
         callees: [String]?,
-        timestamp: UInt64?
+        timestamp: UInt64?,
+        recipientsOutsideGroup: Set<String> = []
     ) async -> (cipherMessages: [[String: Any]], encInfos: [[String: Any]], keyResult: DTEncryptedKeyResult)? {
 
         await requestPublicKeysIfNeed(identifiers: recipientIds)
@@ -97,6 +98,11 @@ extension DTMeetingManager {
                 var cipherMessage = [String: Any]()
                 cipherMessage["uid"] = key
                 cipherMessage["registrationId"] = value.remoteRegistrationId
+
+                // Withholding both the group id and the room name is what makes an outsider see a
+                // plain instant call from the inviter, in-app and in CallKit alike.
+                let accountId = key.components(separatedBy: ".").first ?? key
+                let withholdsGroupIdentity = recipientsOutsideGroup.contains(accountId)
                 
                 let sessionCipher = DTSessionCipher(
                     recipientId: key,
@@ -109,6 +115,7 @@ extension DTMeetingManager {
                     let callingBuilder = DSKProtoCallMessageCalling.builder()
                    
                     let conversationIdBulider = DSKProtoConversationId.builder()
+                    var carriesConversationId = false
                     if let conversationId {
                         if case .private = callType {
                             if key != localNumber {
@@ -116,11 +123,16 @@ extension DTMeetingManager {
                             } else {
                                 conversationIdBulider.setNumber(conversationId)
                             }
-                        } else if case .group = callType, let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId) {
+                            carriesConversationId = true
+                        } else if case .group = callType,
+                                  !withholdsGroupIdentity,
+                                  let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId) {
                             conversationIdBulider.setGroupID(groupId)
+                            carriesConversationId = true
                         }
-                        
-                        if let conversationID = try? conversationIdBulider.build() {
+
+                        // An empty conversation id still reads as "belongs to a conversation".
+                        if carriesConversationId, let conversationID = try? conversationIdBulider.build() {
                             callingBuilder.setConversationID(conversationID)
                         }
                     }
@@ -130,7 +142,7 @@ extension DTMeetingManager {
                     if let roomId, !roomId.isEmpty {
                         callingBuilder.setRoomID(roomId)
                     }
-                    if let roomName {
+                    if let roomName, !withholdsGroupIdentity {
                         callingBuilder.setRoomName(roomName)
                     }
                     if let emk = result.eMKeys[key] {
@@ -210,6 +222,7 @@ extension DTMeetingManager {
         return (cipherMessages, encInfos, result)
     }
     
+    @MainActor
     func sendCallMessage(_ msgType: DTCallMessageType,
                          forceEndGroupMeeting: Bool = false,
                          _ targetCall: DTLiveKitCallModel = DTMeetingManager.shared.currentCall) async {
@@ -225,17 +238,21 @@ extension DTMeetingManager {
             return
         }
         
-        guard let roomId = targetCall.roomId else {
-            Logger.error("no roomId")
+        let roomId = targetCall.roomId
+        let clientCallId = targetCall.clientCallId
+        guard roomId?.isEmpty == false || clientCallId?.isEmpty == false else {
+            Logger.error("no roomId or clientCallId")
             return
         }
         
+        let isOneToOneFlow = usesOneToOneConnectionFlow(for: targetCall)
+        let controlCallType: CallType = isOneToOneFlow ? .private : targetCall.callType
         var recipientIds: [String] = []
         switch msgType {
         case .joined:
             recipientIds = [localNumber]
         case .cancel:
-            guard targetCall.callType == .private else {
+            guard isOneToOneFlow else {
                 Logger.error("\(logTag) cancel api is not private")
                 return
             }
@@ -249,7 +266,7 @@ extension DTMeetingManager {
             }
             recipientIds = callees
         case .reject:
-            if targetCall.callType == .private {
+            if isOneToOneFlow {
                 if let callees = targetCall.callees, !callees.isEmpty {
                     recipientIds += callees
                 }
@@ -258,24 +275,21 @@ extension DTMeetingManager {
                 recipientIds = [localNumber]
             }
         case .hangup:
-            if !forceEndGroupMeeting && targetCall.callType != .private{
+            if !forceEndGroupMeeting && !isOneToOneFlow {
                 Logger.error("\(logTag) hangup api is end")
                 return
             }
             
             // 区分end和leave
             if forceEndGroupMeeting {
-                // 添加远程的其他人的id
-                if let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: currentCall.conversationId ?? ""),
+                // Resolve from targetCall: the stale-prekey resend runs after cleanup replaced
+                // currentCall and released the room context. Invitees carry the pre-room end path.
+                var allIds = DTMeetingManager.shared.allParticipantIds + (targetCall.inviteCallees ?? [])
+                if let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: targetCall.conversationId ?? ""),
                    let groupThread = TSGroupThread.getWithGroupId(groupId) {
-                    // 群成员和参会人员并集
-                        let allIds = groupThread.groupModel.groupMemberIds + DTMeetingManager.shared.allParticipantIds
-                        recipientIds = Array(Set(allIds))
-                } else {
-                    for participantId in DTMeetingManager.shared.allParticipantIds {
-                        recipientIds.append(participantId)
-                    }
+                    allIds += groupThread.groupModel.groupMemberIds
                 }
+                recipientIds = Array(Set(allIds))
             } else {
                 if let callees = targetCall.callees, !callees.isEmpty {
                     recipientIds += callees
@@ -292,7 +306,7 @@ extension DTMeetingManager {
         
         guard let callMessage = await createCallMessage(
             localNumber: localNumber,
-            callType: targetCall.callType,
+            callType: controlCallType,
             msgType: msgType,
             conversationId: nil,
             caller: caller,
@@ -308,10 +322,11 @@ extension DTMeetingManager {
                         
         let data = await DTCallAPIManager().controlCallMessage(
             roomId: roomId,
+            clientCallId: clientCallId,
             msgType: msgType,
             cipherMessages: callMessage.cipherMessages,
             forceEndGroupMeeting: forceEndGroupMeeting,
-            callType: targetCall.callType
+            callType: controlCallType
         )
 
         if let tmpNeedsSync = data["needsSync"],
@@ -328,7 +343,11 @@ extension DTMeetingManager {
             storeFreshPrekeys(stale) { [weak self] in
                 guard let self else { return }
                 Task {
-                    await self.sendCallMessage(msgType, forceEndGroupMeeting: forceEndGroupMeeting)
+                    await self.sendCallMessage(
+                        msgType,
+                        forceEndGroupMeeting: forceEndGroupMeeting,
+                        targetCall
+                    )
                 }
             }
         } else {
@@ -337,6 +356,126 @@ extension DTMeetingManager {
         
     }
     
+    @MainActor
+    var usesOneToOneConnectionFlow: Bool {
+        roomContext?.callTypeStateMachine.usesOneToOneConnectionFlow ??
+            (currentCall.callType == .private)
+    }
+
+    @MainActor
+    func usesOneToOneConnectionFlow(for call: DTLiveKitCallModel) -> Bool {
+        call === currentCall ? usesOneToOneConnectionFlow : call.callType == .private
+    }
+
+    /// Whether this device belongs to the group a call was created for. `unknown` must stay
+    /// distinct from `outsider`: mistaking "cannot tell yet" for "not a member" mislabels a normal
+    /// group meeting as instant, and instant is terminal.
+    enum GroupMembership {
+        case member
+        /// Certain: a roster exists and we are not in it.
+        case outsider
+        /// Undecidable for now: no local thread yet, or the account is not ready.
+        case unknown
+    }
+
+    /// The verdict an incoming group call should be built from. When membership is unknown, only an
+    /// explicit invite suggests we are outside the group — members learn about a group call from
+    /// the group's own start-call broadcast.
+    @objc
+    func shouldTreatGroupCallAsInstant(
+        serverGroupId: String,
+        controlType: String?,
+        transaction: SDSAnyReadTransaction
+    ) -> Bool {
+        switch groupMembership(serverGroupId: serverGroupId, transaction: transaction) {
+        case .member:
+            return false
+        case .outsider:
+            return true
+        case .unknown:
+            return controlType == DTMeetingManager.sourceControlInvite
+        }
+    }
+
+    /// For the connect-time re-checks: only a certain outsider verdict may downgrade the call.
+    @objc
+    func isLocalUserInGroup(serverGroupId: String, transaction: SDSAnyReadTransaction) -> Bool {
+        groupMembership(serverGroupId: serverGroupId, transaction: transaction) != .outsider
+    }
+
+    func groupMembership(serverGroupId: String, transaction: SDSAnyReadTransaction) -> GroupMembership {
+        // Unresolvable is `unknown`, never `outsider`: a missing thread equally means "we left" or
+        // "not synced yet", and the CallKit path can run before the account is ready.
+        guard let localNumber = TSAccountManager.localNumber(),
+              let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: serverGroupId),
+              let groupThread = TSGroupThread(groupId: groupId, transaction: transaction)
+        else {
+            return .unknown
+        }
+
+        // A roster of only ourselves is the placeholder `getOrCreateThreadWithGroupId:` seeds
+        // (TSGroupThread.m) — fabricated, so it proves nothing either way.
+        let memberIds = groupThread.groupModel.groupMemberIds
+        if memberIds.count == 1, memberIds.first == localNumber {
+            return .unknown
+        }
+
+        // Only a real roster that does not list us is proof of being outside the group.
+        return memberIds.contains(localNumber) ? .member : .outsider
+    }
+
+    /// Invitees outside this call's group, judged from the inviter's own roster — the invitee's can
+    /// be a stale snapshot that still lists them. Empty for non-group calls.
+    @MainActor
+    private func recipientsOutsideCurrentCallGroup(_ recipientIds: [String]) -> Set<String> {
+        guard currentCall.callType == .group,
+              let conversationId = currentCall.conversationId,
+              let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId)
+        else {
+            return []
+        }
+
+        var memberIds: Set<String> = []
+        databaseStorage.read { transaction in
+            // Our own roster is only evidence while we are a confirmed member of it. A placeholder
+            // or unsynced one would mark every invitee an outsider and strip the group identity
+            // from group members too.
+            guard self.groupMembership(serverGroupId: conversationId, transaction: transaction) == .member,
+                  let groupThread = TSGroupThread(groupId: groupId, transaction: transaction)
+            else {
+                return
+            }
+            memberIds = Set(groupThread.groupModel.groupMemberIds)
+        }
+
+        // `.member` guarantees a non-empty roster, so an empty one means we could not judge.
+        guard !memberIds.isEmpty else {
+            return []
+        }
+
+        let inviteeIds = Set(recipientIds.map {
+            $0.components(separatedBy: ".").first ?? $0
+        })
+
+        return inviteeIds.subtracting(memberIds)
+    }
+
+    /// True when every invitee is the original 1v1 peer — a retry that leaves the call at two
+    /// people, so it must not upgrade to instant.
+    @MainActor
+    private func invitesOnlyOneToOnePeer(_ recipientIds: [String]) -> Bool {
+        let peerIds = currentCall.oneToOnePeerIds
+        guard !peerIds.isEmpty, !recipientIds.isEmpty else {
+            return false
+        }
+
+        let inviteeIds = Set(recipientIds.map {
+            $0.components(separatedBy: ".").first ?? $0
+        })
+
+        return inviteeIds.isSubset(of: peerIds)
+    }
+
     @MainActor func inviteUsersToCall(_ recipientIds: [String]) {
 
         guard let roomId = currentCall.roomId,
@@ -347,9 +486,21 @@ extension DTMeetingManager {
 
         // 发起邀请时，如果是1v1通话，立即转换为instant call
         // 发起邀请的人主观知道要邀请其他人，不管对方是否接受邀请，都应该转换
-        if currentCall.callType == .private {
-            Logger.info("\(logTag) inviting users in 1v1 call, turn into instant call immediately")
-            turnIntoInstantCall()
+        if currentCall.callType == .private ||
+            roomContext?.callTypeStateMachine.usesOneToOneConnectionFlow == true {
+            if invitesOnlyOneToOnePeer(recipientIds) {
+                // Retrying the peer that failed to join keeps the call at two people, so it
+                // stays 1v1: the ringing, timeout and 1on1 control messages must survive.
+                Logger.info("\(logTag)[calltype] re-inviting the 1on1 peer, staying private")
+            } else {
+                Logger.info("\(logTag) inviting users in 1v1 call, turn into instant call immediately")
+                if let roomContext {
+                    roomContext.forceInstantCallForLocalUpgrade(reason: "invite users from 1on1")
+                } else {
+                    // Defensive fallback for message flows without an active room context.
+                    turnIntoInstantCall()
+                }
+            }
         }
 
         let timestamp = Date.ows_millisecondTimestamp()
@@ -373,8 +524,14 @@ extension DTMeetingManager {
             recipientIdentifiers = filteredIdentifiers
         }
         
+        let recipientsOutsideGroup = recipientsOutsideCurrentCallGroup(recipientIds)
+
         Task {
-            let conversationId = currentCall.callType == .group ? currentCall.conversationId : nil
+            // A still-private retry has to reproduce the original 1v1 wire shape: dropping the peer
+            // conversation would make the callee resolve the invite as an instant call, seeding its
+            // state machine wrong so its hangup never reaches us. Only a real instant call has no
+            // conversation to carry.
+            let conversationId = currentCall.callType == .instant ? nil : currentCall.conversationId
             guard let inviteMessage = await createCallMessage(
                 localNumber: localNumber,
                 callType: currentCall.callType,
@@ -387,7 +544,8 @@ extension DTMeetingManager {
                 createCallMsg: createCallMsgEnabled(),
                 controlType: DTMeetingManager.sourceControlInvite,
                 callees: recipientIds,
-                timestamp: timestamp) else {
+                timestamp: timestamp,
+                recipientsOutsideGroup: recipientsOutsideGroup) else {
                 return
             }
             
@@ -504,15 +662,25 @@ extension DTMeetingManager: DTCallMessageDelegate {
                     newCall.conversationId = callInfo.conversationId
                     callType = callInfo.callType
                 }
-                newCall.callType = callType
                 if callType == .group, let gid = newCall.conversationId {
                     SDSDatabaseStorage.shared.read { tx in
+                        // Same verdict the state machine reaches after connecting, just early
+                        // enough that the title never shows the group name and then changes.
+                        if self.shouldTreatGroupCallAsInstant(
+                            serverGroupId: gid,
+                            controlType: controlType,
+                            transaction: tx
+                        ) {
+                            callType = .instant
+                            return
+                        }
                         newCall.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupCallDisplayName(
                             trustedPlaintextName: roomName,
                             serverGroupId: gid,
                             transaction: tx)
                     }
                 }
+                newCall.callType = callType
                 if callType == .private, let localNumber = TSAccountManager.localNumber() {
                     newCall.callees = [localNumber]
                 }
@@ -535,10 +703,18 @@ extension DTMeetingManager: DTCallMessageDelegate {
 
             if hasActiveCall {
                 // Busy: gate only the banner on validity; the call-log above stays unconditional.
-                let busyResult = await DTMeetingManager.checkRoomIdValid(roomId)
-                guard let busyResult, !busyResult.userStopped, !busyResult.anotherDeviceJoined else {
-                    Logger.info("\(logTag) busy: room invalid/ended, skip alert banner")
+                switch await DTMeetingManager.checkRoomAvailability(roomId) {
+                case .valid(let anotherDeviceJoined, let userStopped):
+                    guard !userStopped, !anotherDeviceJoined else {
+                        Logger.info("\(logTag) busy: room ended, skip alert banner")
+                        return
+                    }
+                case .gone:
+                    Logger.info("\(logTag) busy: room gone, skip alert banner")
                     return
+                case .unknown:
+                    // Probe failed (transport/decode); fail-open and still show the banner.
+                    Logger.info("\(logTag) busy: room probe transient failure, show banner anyway")
                 }
                 Logger.info("\(logTag) hasMeeting or currentCall exists, show alert banner for new call")
                 DTAlertCallViewManager.shared().addLiveKitCallAlert(newCall)
@@ -560,7 +736,7 @@ extension DTMeetingManager: DTCallMessageDelegate {
             }
 
             // check-call now gates only the incoming UI.
-            let result = await DTMeetingManager.checkRoomIdValid(roomId)
+            let availability = await DTMeetingManager.checkRoomAvailability(roomId)
             // A concurrent hangup/reject may have torn down currentCall during the await; don't resurrect the UI.
             guard currentCall.roomId == roomId else {
                 Logger.info("\(logTag) currentCall torn down during check, skip incoming UI")
@@ -572,21 +748,29 @@ extension DTMeetingManager: DTCallMessageDelegate {
                 resetRingingCurrentCall()
                 return
             }
-            guard let result else {
-                Logger.info("\(logTag) roomId invalid, skip incoming UI")
+            switch availability {
+            case .gone:
+                Logger.info("\(logTag) roomId gone, skip incoming UI")
                 resetRingingCurrentCall()
                 return
-            }
-            if result.userStopped {
-                Logger.info("\(logTag) roomId userStopped, skip incoming UI")
-                resetRingingCurrentCall()
-                return
-            }
-            if result.anotherDeviceJoined {
-                // Already answered on another own device → not a missed call; skip incoming UI.
-                Logger.info("\(logTag) roomId anotherDeviceJoined, skip incoming UI")
-                resetRingingCurrentCall()
-                return
+            case .valid(let anotherDeviceJoined, let userStopped):
+                if userStopped {
+                    Logger.info("\(logTag) roomId userStopped, skip incoming UI")
+                    resetRingingCurrentCall()
+                    return
+                }
+                if anotherDeviceJoined {
+                    // Already answered on another own device → not a missed call; skip the ring.
+                    // The room is still live, so keep the join entry — unlike .gone / userStopped,
+                    // where the room is dead and the bar must stay away.
+                    Logger.info("\(logTag) roomId anotherDeviceJoined, skip incoming UI, keep meeting bar")
+                    handleMeetingBar(call: newCall, action: .add)
+                    resetRingingCurrentCall()
+                    return
+                }
+            case .unknown:
+                // Probe failed (transport/decode); fail-open and still ring rather than drop the call.
+                Logger.info("\(logTag) roomId probe transient failure, show incoming UI anyway")
             }
 
             /// calling展示meetingbar
@@ -651,11 +835,13 @@ extension DTMeetingManager: DTCallMessageDelegate {
                 // 关键判断：如果是同一个用户的不同设备，且我们还在idle状态
                 // 说明另一个设备已经接听了，我们应该取消
                 if isSameUser {
-                    Logger.info("\(logTag) Another device answered, canceling call")
+                    Logger.info("\(logTag) Another device answered, tearing down local ring")
                     // Another device answered → stop ringing here. Dismiss the ring, keyed on roomId.
                     endCallKitRing(roomId: roomId)
                     let wasGroupCall = (currentCall.callType == .group)
-                    await remoteCallHaveBeenCanceled()
+                    // Not a cancel: the room is still live, so the meeting bar must survive as
+                    // this device's way back into the call.
+                    await answeredOnLinkedDevice()
                     // Group meeting may still be live after teardown; re-derive the bar from server truth.
                     if wasGroupCall {
                         syncServerCalls()
@@ -723,8 +909,17 @@ extension DTMeetingManager: DTCallMessageDelegate {
         }
 
         if roomId == currentRoomId {
-            if currentCall.callType == .private, DTMeetingManager.shared.inMeeting, envelope.source == TSAccountManager.shared.localNumber() {
-                Logger.info("\(logTag) Ignoring reject message from other device while in meeting")
+            // Guard first: endCallKitRing reports the call ended to CallKit, so it must NOT run when
+            // we ignore a self reject on an active call — that would tear down the live CallKit session.
+            let isRoomConnected = roomContext?.room.connectionState == .connected
+            if Self.shouldIgnoreSelfControlMessageForActiveCall(
+                envelope: envelope,
+                isAnswering: isAnswering,
+                inMeeting: inMeeting,
+                callState: currentCall.callState,
+                isRoomConnected: isRoomConnected
+            ) {
+                Logger.info("\(logTag) ignoring self reject for active call")
                 return
             }
 
@@ -759,20 +954,54 @@ extension DTMeetingManager: DTCallMessageDelegate {
         }
 
     }
-    
-    public func handleWasHungupMessage(roomId: String) {
+
+    /// A sibling device's reject/hangup (`source == self`) must not tear down THIS device's call
+    /// while it is actively answering or already in the call. Keyed on source only, NOT sourceDevice:
+    /// call-control arrives as `.notify`/`.plaintext`, which skip `sourceDevice > 0` validation, so it
+    /// is often 0. A genuine same-device decline can't reach here anyway — the active gate is false for it.
+    static func shouldIgnoreSelfControlMessageForActiveCall(
+        envelope: DSKProtoEnvelope,
+        isAnswering: Bool,
+        inMeeting: Bool,
+        callState: CallState,
+        isRoomConnected: Bool
+    ) -> Bool {
+        guard envelope.source == TSAccountManager.localNumber() else {
+            return false
+        }
+
+        return isAnswering || inMeeting || callState == .answering || isRoomConnected
+    }
+
+    public func handleWasHungupMessage(roomId: String, envelope: DSKProtoEnvelope) {
         // Serialize on the main actor so this currentCall read can't race the calling handler.
         Task { @MainActor in
             Logger.info("\(logTag) handleWasHungupMessage")
 
-            // A hung-up call's CallKit ring always dies — keyed on roomId, independent of teardown.
-            endCallKitRing(roomId: roomId)
-
             if roomId == currentCall.roomId {
+                // Guard first: endCallKitRing reports the call ended to CallKit, so it must NOT run when
+                // we ignore a self hangup on an active call — that would tear down the live CallKit session.
+                let isRoomConnected = roomContext?.room.connectionState == .connected
+                if Self.shouldIgnoreSelfControlMessageForActiveCall(
+                    envelope: envelope,
+                    isAnswering: isAnswering,
+                    inMeeting: inMeeting,
+                    callState: currentCall.callState,
+                    isRoomConnected: isRoomConnected
+                ) {
+                    Logger.info("\(logTag) ignoring self hangup for active call")
+                    return
+                }
+
+                // A hung-up call's CallKit ring dies once we know we're not ignoring it.
+                endCallKitRing(roomId: roomId)
+
                 Task {
                     await othersideHungupCall(roomId: roomId)
                 }
             } else {
+                // Different room: dismiss its ring and remove any bar/alert.
+                endCallKitRing(roomId: roomId)
                 callAlertManager.removeLiveKitAlertCall(roomId)
                 handleMeetingBar(roomId: roomId, action: .remove)
             }
@@ -803,27 +1032,71 @@ extension DTMeetingManager: DTCallMessageDelegate {
         }
     }
     
-    func sendGroupCallMessage(thread: TSThread) {
+    func sendGroupCallMessage(
+        thread: TSThread,
+        call: DTLiveKitCallModel,
+        acceptedRoomId: String?,
+        trigger: String
+    ) {
         
         guard let groupThread = thread as? TSGroupThread else {
             return
         }
-        
-        guard !createCallMsgEnabled() else {
+
+        // Read the mode frozen on this call attempt. A config refresh between start-call and the
+        // response must not switch message strategies and leave this accepted call without a row.
+        let canEnqueue = call.isInitiator &&
+            call.callType == .group &&
+            call.controlType == DTMeetingManager.sourceControlStart &&
+            !call.createCallMsg &&
+            acceptedRoomId?.isEmpty == false
+        guard canEnqueue, let acceptedRoomId else {
             return
         }
-        
+
+        let redactedClientCallId = Self.redactedCallLogIdentifier(call.clientCallId)
+        let redactedRoomId = Self.redactedCallLogIdentifier(acceptedRoomId)
+
+        guard call.claimGroupStartCallMessageDelivery() else {
+            Logger.info(
+                "\(logTag)[callmsg-bind] duplicate CallMsg suppressed " +
+                    "clientCallId=\(redactedClientCallId) roomId=\(redactedRoomId)"
+            )
+            return
+        }
+
+        let shouldLogBinding = trigger == "teardown-success"
         DispatchMainThreadSafe {
-            let message = ThreadUtil.sendMessage(withText: self.nameSelf() + " has started a call",
-                                   atPersons: nil,
-                                   mentions: nil,
-                                   in: groupThread,
-                                   quotedReplyModel: nil,
-                                   messageSender: self.messageSender,
-                                   forceNormalMode: true,
-                                   success: {}, failure: { error in
-                Logger.error("\(self.logTag) Failed to deliver message with error: \(error.localizedDescription)")
-            })
+            _ = ThreadUtil.sendMessage(
+                withText: self.nameSelf() + " has started a call",
+                atPersons: nil,
+                mentions: nil,
+                in: groupThread,
+                quotedReplyModel: nil,
+                messageSender: self.messageSender,
+                forceNormalMode: true,
+                success: {
+                    if shouldLogBinding {
+                        Logger.info(
+                            "\(self.logTag)[callmsg-bind] teardown CallMsg send succeeded " +
+                                "clientCallId=\(redactedClientCallId) roomId=\(redactedRoomId)"
+                        )
+                    }
+                }, failure: { error in
+                    let nsError = error as NSError
+                    Logger.error(
+                        "\(self.logTag)[callmsg-bind] CallMsg send failed " +
+                            "clientCallId=\(redactedClientCallId) roomId=\(redactedRoomId) " +
+                            "path=\(trigger) errorDomain=\(nsError.domain) errorCode=\(nsError.code)"
+                    )
+                }
+            )
+            if shouldLogBinding {
+                Logger.info(
+                    "\(self.logTag)[callmsg-bind] teardown CallMsg queued " +
+                        "clientCallId=\(redactedClientCallId) roomId=\(redactedRoomId)"
+                )
+            }
         }
 
     }
@@ -1179,10 +1452,13 @@ extension DTMeetingManager: DTCallMessageDelegate {
             let callType = self.currentCall.callType
             switch callType {
             case .group:
+                // Fetch, never create: leaving a group deletes its thread
+                // (GroupNotifyManagementHandler.dismissGroup), and re-creating it here would leave a
+                // placeholder listing only ourselves that later reads as a real membership.
                 guard
-                    let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId)
+                    let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId),
+                    let thread = TSGroupThread(groupId: localGroupId, transaction: writeTransation)
                 else { return }
-                let thread = TSGroupThread.getOrCreateThread(withGroupId: localGroupId, transaction: writeTransation)
                 self.createCriticalAlertLocalOutgoingMessage(
                     thread: thread,
                     timestamp: localTimestamp,

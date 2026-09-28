@@ -225,7 +225,8 @@ class ConversationMessageBubbleView: UIView {
         }
         loadCellContentBlock = nil
         unloadCellContentBlock = nil
-        
+        // Keep the in-flight token until its decode completes.
+
         bodyMediaView?.subviews.forEach { $0.removeFromSuperview() }
         if let bodyMediaView {
             removeGaussianBlur(from: bodyMediaView)
@@ -322,6 +323,12 @@ class ConversationMessageBubbleView: UIView {
     // Not `private`: createAnimatedImageView lives in a same-type extension in another file.
     var reusableAnimatedView: YYAnimatedImageView?
     var reusableAnimatedAttachmentId: String?
+    /// Identifies an animated decode by attachment and target view.
+    struct AnimatedDecodeToken: Equatable {
+        let attachmentId: String
+        let viewId: ObjectIdentifier
+    }
+    var animatedDecodeInFlight: AnimatedDecodeToken?
     var downloadView: AttachmentPointerView?
     var bodyTextSelectionView: DTTextSelectionView?
     
@@ -394,7 +401,7 @@ extension ConversationMessageBubbleView {
         let cellType = viewItem.messageCellType()
 
         switch cellType {
-        case .stillImage, .animatedImage, .video:
+        case .stillImage, .animatedImage, .video, .videoTranscoding:
             let targetView: UIView
             if message.isSingleForward(),
                let bodyMediaView = self.bodyMediaView {
@@ -565,10 +572,6 @@ extension ConversationMessageBubbleView: UITextViewDelegate {
 
         let mentionsAll = "\(CVBodyTextRenderItem.kVisitingCardScheme)://\(MENTIONS_ALL)"
         guard !URL.absoluteString.contains(mentionsAll) else { return false }
-        if let groupThread = self.renderItem?.viewItem.thread as? TSGroupThread {
-            let groupIdStr = TSGroupThread.transformToServerGroupId(withLocalGroupId: groupThread.groupModel.groupId)
-            DTAddFriendSourceManager.shared.setGroupSource(.inGroupUserID, groupId: groupIdStr ?? "")
-        }
         delegate.messageBubbleView?(self, didTapLinkWith: viewItem, url: URL)
         return false
     }

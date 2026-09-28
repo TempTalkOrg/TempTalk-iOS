@@ -15,6 +15,11 @@ public protocol DTPanModalNavigationChildController: AnyObject {
 
 @objc
 public class DTPanModalNavController: OWSNavigationController, PanModalPresentable {
+
+    /// Opt in for overlays whose presenter remains visibly active behind the
+    /// sheet. Keep the default lifecycle for existing pan-modal call sites that
+    /// may intentionally use presenter disappearance as a teardown signal.
+    public var disableAppearanceTransition = false
     
     public var isShortFormEnabled = true
     public var defaultHeight: CGFloat = 434.0

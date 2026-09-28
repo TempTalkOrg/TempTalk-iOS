@@ -744,6 +744,12 @@ public class OWSURLSession: NSObject {
                 disposition = .useCredential
             } else {
                 disposition = .cancelAuthenticationChallenge
+                // A pinned connection failing cert validation is a strong MITM
+                // signal; system-default failures are noisier and excluded.
+                if !securityPolicy.pinnedCertificates.isEmpty {
+                    Logger.error("Pinned TLS validation failed for host \(challenge.protectionSpace.host), possible MITM.")
+                    DTNetworkRiskWarning.shared.warnPossibleMITM()
+                }
             }
         } else {
             disposition = .performDefaultHandling

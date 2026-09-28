@@ -49,7 +49,10 @@ struct PersonCardHandler: AppLinkHandler {
         }
         
         if let sourceVC {
-            sourceVC.showProfileCardInfo(with: number)
+            // A person-card link carries a uid but no provenance, so let the screen that opened it
+            // speak for the source (e.g. an @mention tapped inside a group conversation).
+            let source = (sourceVC as? DTAddFriendSourceProviding)?.contextualAddFriendSource ?? .unspecified
+            sourceVC.showProfileCardInfo(with: number, addFriendSource: source)
         }
         
         return false

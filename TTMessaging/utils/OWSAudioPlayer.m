@@ -38,7 +38,8 @@ typedef NS_ENUM(NSInteger, OWSAudioPlayMode) {
 
 @interface OWSAudioPlayer () <AVAudioPlayerDelegate>
 
-@property (nonatomic, readonly) NSURL *mediaUrl;
+@property (nonatomic, nullable, readonly) NSURL *mediaUrl;
+@property (nonatomic, nullable, readonly) NSData *mediaData;
 @property (nonatomic, nullable) AVAudioPlayer *audioPlayer;
 @property (nonatomic, nullable) NSTimer *audioPlayerPoller;
 @property (nonatomic, readonly) OWSAudioActivity *audioActivity;
@@ -79,6 +80,26 @@ typedef NS_ENUM(NSInteger, OWSAudioPlayMode) {
                                                  name:OWSApplicationDidEnterBackgroundNotification
                                                object:nil];
 
+    return self;
+}
+
+- (instancetype)initWithMediaData:(NSData *)mediaData delegate:(id<OWSAudioPlayerDelegate>)delegate
+{
+    self = [super init];
+    if (!self) {
+        return self;
+    }
+
+    OWSAssertDebug(mediaData.length > 0);
+    OWSAssertDebug(delegate);
+    _delegate = delegate;
+    _mediaData = mediaData;
+    _playbackRate = 1.0;
+    _audioActivity = [[OWSAudioActivity alloc] initWithAudioDescription:[NSString stringWithFormat:@"%@ memory", self.logTag]];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(applicationDidEnterBackground:)
+                                                 name:OWSApplicationDidEnterBackgroundNotification
+                                               object:nil];
     return self;
 }
 
@@ -148,7 +169,7 @@ typedef NS_ENUM(NSInteger, OWSAudioPlayMode) {
 - (void)play
 {
     OWSAssertIsOnMainThread();
-    OWSAssertDebug(self.mediaUrl);
+    OWSAssertDebug(self.mediaUrl || self.mediaData);
     OWSAssertDebug([self.delegate audioPlaybackState] != AudioPlaybackState_Playing);
 
     [self.audioPlayerPoller invalidate];
@@ -157,7 +178,11 @@ typedef NS_ENUM(NSInteger, OWSAudioPlayMode) {
     
     if (!self.audioPlayer) {
         NSError *error;
-        self.audioPlayer = [[AVAudioPlayer alloc] initWithContentsOfURL:self.mediaUrl error:&error];
+        if (self.mediaData) {
+            self.audioPlayer = [[AVAudioPlayer alloc] initWithData:self.mediaData error:&error];
+        } else {
+            self.audioPlayer = [[AVAudioPlayer alloc] initWithContentsOfURL:self.mediaUrl error:&error];
+        }
         if (error) {
             OWSLogError(@"%@ [audio] error: %@", self.logTag, error);
             [self stop];

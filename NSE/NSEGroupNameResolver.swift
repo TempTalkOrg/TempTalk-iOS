@@ -28,14 +28,29 @@ internal struct NSEGroupNameResolver {
             return .useServerProvided
         }
 
+        // Push carries the current ciphertext; prefer it over the local copy when decrypting.
+        let pushEncryptedName = (aps["groupInfo"] as? [String: Any])?["encryptedName"] as? String
+
         let threadId = TSGroupThread.threadId(fromGroupId: groupIdData)
         if let groupThread = TSGroupThread.anyFetchGroupThread(uniqueId: threadId, transaction: transaction) {
-            return resolveWithThread(groupThread, transaction: transaction)
+            return resolveWithThread(groupThread, pushEncryptedName: pushEncryptedName, transaction: transaction)
         }
-        return resolveWithoutThread(serverGid: conversationId, transaction: transaction)
+        return resolveWithoutThread(serverGid: conversationId, pushEncryptedName: pushEncryptedName, transaction: transaction)
+    }
+
+    /// Prefer the push's current ciphertext; fall back to the local (possibly empty/stale) copy.
+    static func preferredEncryptedName(push: String?, local: String?) -> String? {
+        (push?.isEmpty == false) ? push : local
+    }
+
+    /// Prefer the locally decrypted plaintext; `baseInfo.name` is the server-side generic
+    /// placeholder for encrypted groups and must never win over the real cached name.
+    static func preferredOriginalName(localGroupName: String?, baseInfoName: String?) -> String? {
+        (localGroupName?.isEmpty == false) ? localGroupName : baseInfoName
     }
 
     private func resolveWithThread(_ groupThread: TSGroupThread,
+                                    pushEncryptedName: String?,
                                     transaction: SDSAnyReadTransaction) -> GroupNameResolution {
         guard groupThread.groupModel.isEncryptedGroup else {
             return .useServerProvided
@@ -53,12 +68,13 @@ internal struct NSEGroupNameResolver {
         }
 
         let baseInfo = DTGroupBaseInfoEntity.anyFetch(uniqueId: serverGid, transaction: transaction)
-        // Prefer baseInfo.name; it outlives the thread.
-        let originalName: String? = baseInfo?.name ?? groupThread.groupModel.groupName
+        let effectiveEncryptedName = Self.preferredEncryptedName(push: pushEncryptedName, local: baseInfo?.encryptedName)
+        let originalName = Self.preferredOriginalName(localGroupName: groupThread.groupModel.groupName,
+                                                      baseInfoName: baseInfo?.name)
         let displayName = DTGroupCryptoDisplayHelper.shared.displayGroupName(
             gid: serverGid,
             groupCryptoMode: groupThread.groupModel.groupCryptoMode,
-            encryptedName: baseInfo?.encryptedName,
+            encryptedName: effectiveEncryptedName,
             originalName: originalName,
             transaction: transaction
         )
@@ -71,6 +87,7 @@ internal struct NSEGroupNameResolver {
     }
 
     private func resolveWithoutThread(serverGid: String,
+                                       pushEncryptedName: String?,
                                        transaction: SDSAnyReadTransaction) -> GroupNameResolution {
         let baseInfo = DTGroupBaseInfoEntity.anyFetch(uniqueId: serverGid, transaction: transaction)
         let cryptoMode = baseInfo?.groupCryptoMode ?? 0
@@ -86,10 +103,12 @@ internal struct NSEGroupNameResolver {
             Logger.error("[NSE] encrypted group missing R_group locally, gid: \(serverGid)")
         }
 
+        // No thread here, so no decrypted plaintext to prefer; baseInfo.name is the only fallback.
+        let effectiveEncryptedName = Self.preferredEncryptedName(push: pushEncryptedName, local: baseInfo?.encryptedName)
         let displayName = DTGroupCryptoDisplayHelper.shared.displayGroupName(
             gid: serverGid,
             groupCryptoMode: Int(cryptoMode),
-            encryptedName: baseInfo?.encryptedName,
+            encryptedName: effectiveEncryptedName,
             originalName: baseInfo?.name,
             transaction: transaction
         )

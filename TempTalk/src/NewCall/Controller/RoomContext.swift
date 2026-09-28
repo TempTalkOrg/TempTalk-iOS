@@ -29,11 +29,44 @@ enum ErrorHandlingState {
     case handled // 错误已被处理，不需要重复处理
 }
 
+enum MediaSendStatusPresentation: Equatable {
+    static let recoveringLocalizationKey = "MEETING_NAVAGATION_MEDIA_SEND_ISSUE"
+
+    case none
+    case roomRecovering
+    case mediaRecovering
+
+    static func resolve(
+        roomConnectionState: ConnectionState,
+        mediaSendConnectionState: MediaSendConnectionState
+    ) -> Self {
+        if roomConnectionState == .disconnected || roomConnectionState == .disconnecting {
+            return .none
+        }
+
+        if roomConnectionState == .connecting
+            || roomConnectionState == .reconnecting
+            || mediaSendConnectionState == .roomRecovering
+        {
+            return .roomRecovering
+        }
+
+        guard roomConnectionState == .connected else { return .none }
+        switch mediaSendConnectionState {
+        case .recovering, .failed:
+            return .mediaRecovering
+        case .idle, .connecting, .connected, .roomRecovering:
+            return .none
+        }
+    }
+}
+
 @MainActor
 final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncryptor {
     // MARK: - Constants / Utilities
 
     let logTag: String = "[newcall]"
+    static let mediaSendLogTag: String = "[newcall][media-send]"
 
     // JSON encoders/decoders — these are used only on main actor in this class
     let jsonEncoder = JSONEncoder()
@@ -51,6 +84,13 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     var currentCall: DTLiveKitCallModel {
         callManager.currentCall
     }
+
+    /// Resolves the UI/interaction call type while preserving the original local inference
+    /// as a fallback for rooms whose metadata is missing or invalid.
+    ///
+    /// Seeded from the call type this room is connecting for: that seed decides
+    /// `usesOneToOneConnectionFlow`, so it must not depend on when it is first accessed.
+    let callTypeStateMachine: CallTypeStateMachine
 
     // Used to show connection error dialog
     @Published var shouldShowDisconnectReason: Bool = false
@@ -115,11 +155,275 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
     // 是否存在待展示的UI
     var pendingShowUI = false
     var didHandleInitialRoomDidConnect = false
+    // Timing probe for the 1v1 "when can the remote actually hear me" question. Observation only —
+    // see logCallTiming(_:extra:). Monotonic uptime, so wall-clock changes can't skew the deltas.
+    var callTimingConnectedAt: TimeInterval = 0
+    var callTimingRemoteJoinedAt: TimeInterval = 0
     var didHandleInitialRoomAudioSetup = false
     var didCompleteInitialRoomAudioSetup = false
     var isApplyingInitialRoomAudioSetup = false
     var deferredInitialRoomAudioSetupForCallKit = false
     @Published var isRoomReconnecting: Bool = false
+    @Published private(set) var mediaSendStatusPresentation: MediaSendStatusPresentation = .none
+    @Published private(set) var networkQualitySnapshot: CallNetworkQualitySnapshot = .empty
+
+    private lazy var networkQualityTracker: CallNetworkQualityTracker = {
+        let tracker = CallNetworkQualityTracker()
+        tracker.onSnapshotChange = { [weak self] snapshot in
+            guard let self else { return }
+            networkQualitySnapshot = snapshot
+            logNetworkQualityPresentation(snapshot, trigger: "snapshot_changed")
+        }
+        return tracker
+    }()
+
+    /// Remote weak-network presentation follows the effective UI type, not the live roster size.
+    /// A group call with only two connected participants still uses participant badges, and a
+    /// private call upgraded to an instant call switches from the banner to participant badges.
+    var usesOneToOneNetworkQualityPresentation: Bool {
+        currentCall.callType == .private
+    }
+
+    func isNetworkPoor(for participant: Participant) -> Bool {
+        guard participant is RemoteParticipant,
+              let participantKey = participant.sid?.stringValue else {
+            return false
+        }
+        return networkQualitySnapshot.poorRemoteParticipantKeys.contains(participantKey)
+    }
+
+    func refreshNetworkQualitySuppression(trigger: String) {
+        let shouldSuppress = CallNetworkQualityTracker.shouldSuppress(
+            roomConnectionState: room.connectionState,
+            mediaSendConnectionState: room.mediaSendConnectionState,
+            isExplicitlyReconnecting: isRoomReconnecting
+        )
+        let wasSuppressed = networkQualityTracker.isSuppressed
+        var reseedCount = 0
+
+        if shouldSuppress {
+            networkQualityTracker.setSuppressed(true)
+        } else if networkQualityTracker.isSuppressed {
+            let participants: [Participant] = [room.localParticipant]
+                + Array(room.remoteParticipants.values)
+            let samples = participants.compactMap(networkQualitySample(for:))
+            reseedCount = samples.count
+            networkQualityTracker.setSuppressed(false, reseedingWith: samples)
+        }
+
+        let message = "event=suppression_evaluated trigger=\"\(trigger)\" "
+            + "changed=\(wasSuppressed != networkQualityTracker.isSuppressed) "
+            + "suppressed=\(networkQualityTracker.isSuppressed) room=\(room.connectionState) "
+            + "mediaSend=\(room.mediaSendConnectionState) explicitReconnect=\(isRoomReconnecting) "
+            + "reseedCount=\(reseedCount)"
+        if wasSuppressed != networkQualityTracker.isSuppressed {
+            CallNetworkQualityLog.info(message)
+        } else {
+            CallNetworkQualityLog.debug(message)
+        }
+    }
+
+    func ingestNetworkQuality(_ quality: ConnectionQuality, for participant: Participant) {
+        let role = participant is LocalParticipant ? "local" : "remote"
+        _ = reconcileNetworkQualityParticipants(trigger: "quality_sample_\(role)")
+        guard let participantKey = participant.sid?.stringValue else {
+            CallNetworkQualityLog.debug(
+                "event=sample_ignored reason=missing_sid role=\(role) raw=\(quality)"
+            )
+            return
+        }
+        let level = CallNetworkQualityLevel(connectionQuality: quality)
+        CallNetworkQualityLog.debug(
+            "event=quality_sample sid=\(participantKey) role=\(role) raw=\(quality) mapped=\(level) "
+                + "suppressed=\(networkQualityTracker.isSuppressed)"
+        )
+        networkQualityTracker.ingest(
+            CallNetworkQualitySample(
+                participantKey: participantKey,
+                participantIdentity: participant.identity?.stringValue,
+                isLocal: participant is LocalParticipant,
+                level: level
+            )
+        )
+    }
+
+    func startNetworkQualityLifetime(for participant: Participant) {
+        _ = reconcileNetworkQualityParticipants(
+            trigger: "participant_lifetime_start"
+        )
+        guard let participantKey = participant.sid?.stringValue else {
+            CallNetworkQualityLog.debug(
+                "event=lifetime_start_ignored reason=missing_sid role=\(participant is LocalParticipant ? "local" : "remote")"
+            )
+            return
+        }
+        CallNetworkQualityLog.info(
+            "event=participant_lifetime_started sid=\(participantKey) "
+                + "role=\(participant is LocalParticipant ? "local" : "remote") "
+                + "seedRaw=\(participant.connectionQuality)"
+        )
+        if networkQualityTracker.claimTransferredLifetime(
+            withKey: participantKey,
+            participantIdentity: participant.identity?.stringValue
+        ) {
+            CallNetworkQualityLog.info(
+                "event=participant_lifetime_transferred sid=\(participantKey) "
+                    + "identity=\(participant.identity?.stringValue ?? "nil")"
+            )
+        } else {
+            networkQualityTracker.removeParticipant(withKey: participantKey)
+        }
+        ingestNetworkQuality(participant.connectionQuality, for: participant)
+    }
+
+    func removeNetworkQualityParticipant(withSID participantSID: String) {
+        // The replacement can already be present in LiveKit's identity-keyed roster even when
+        // its participantDidConnect task has not reached the main actor yet. Reconcile first so
+        // an overlapping replacement with a new SID can inherit published poor state.
+        _ = reconcileNetworkQualityParticipants(trigger: "participant_lifetime_end")
+        networkQualityTracker.removeParticipant(withKey: participantSID)
+    }
+
+    func resetNetworkQuality() {
+        networkQualityTracker.reset(reason: "room_disconnected")
+    }
+
+    private func reconcileNetworkQualityParticipants(trigger: String) -> Set<String> {
+        var currentParticipantKeys = Set(
+            room.remoteParticipants.values.compactMap { $0.sid?.stringValue }
+        )
+        let replacementKeysByIdentity: [String: String] = Dictionary(
+            uniqueKeysWithValues: room.remoteParticipants.values.compactMap { participant in
+                guard let identity = participant.identity?.stringValue,
+                      let participantKey = participant.sid?.stringValue else {
+                    return nil
+                }
+                return (identity, participantKey)
+            }
+        )
+        if let localParticipantKey = room.localParticipant.sid?.stringValue {
+            currentParticipantKeys.insert(localParticipantKey)
+        }
+        return networkQualityTracker.retainParticipants(
+            withKeys: currentParticipantKeys,
+            replacementKeysByIdentity: replacementKeysByIdentity,
+            reason: trigger
+        )
+    }
+
+    private func networkQualitySample(for participant: Participant) -> CallNetworkQualitySample? {
+        guard let participantKey = participant.sid?.stringValue else {
+            CallNetworkQualityLog.debug(
+                "event=reseed_ignored reason=missing_sid role=\(participant is LocalParticipant ? "local" : "remote")"
+            )
+            return nil
+        }
+        let quality = participant.connectionQuality
+        return CallNetworkQualitySample(
+            participantKey: participantKey,
+            participantIdentity: participant.identity?.stringValue,
+            isLocal: participant is LocalParticipant,
+            level: CallNetworkQualityLevel(connectionQuality: quality)
+        )
+    }
+
+    private func logNetworkQualityPresentation(
+        _ snapshot: CallNetworkQualitySnapshot,
+        trigger: String
+    ) {
+        let remotePoorSIDs = snapshot.poorRemoteParticipantKeys.sorted()
+        let higherPriorityPresentation: String
+        switch mediaSendStatusPresentation {
+        case .none:
+            higherPriorityPresentation = "none"
+        case .roomRecovering:
+            higherPriorityPresentation = "room-recovering"
+        case .mediaRecovering:
+            higherPriorityPresentation = "media-send"
+        }
+
+        let banner: String
+        let badgeSIDs: [String]
+        let decision: String
+        let blockedBy: String
+        if networkQualityTracker.isSuppressed {
+            banner = "none"
+            badgeSIDs = []
+            decision = "hidden"
+            blockedBy = "suppressed"
+        } else if snapshot.isLocalPoor {
+            badgeSIDs = []
+            if mediaSendStatusPresentation == .none {
+                banner = "local-network-poor"
+                decision = "show-banner"
+                blockedBy = "none"
+            } else {
+                banner = "none"
+                decision = "hidden"
+                blockedBy = higherPriorityPresentation
+            }
+        } else if usesOneToOneNetworkQualityPresentation, !remotePoorSIDs.isEmpty {
+            badgeSIDs = []
+            if mediaSendStatusPresentation == .none {
+                banner = "remote-network-poor"
+                decision = "show-banner"
+                blockedBy = "none"
+            } else {
+                banner = "none"
+                decision = "hidden"
+                blockedBy = higherPriorityPresentation
+            }
+        } else if !usesOneToOneNetworkQualityPresentation, !remotePoorSIDs.isEmpty {
+            banner = "none"
+            badgeSIDs = remotePoorSIDs
+            decision = "show-participant-badges"
+            blockedBy = "none"
+        } else {
+            banner = "none"
+            badgeSIDs = []
+            decision = "hidden"
+            blockedBy = "no-published-poor-state"
+        }
+
+        CallNetworkQualityLog.info(
+            "event=presentation_decision trigger=\(trigger) callType=\(currentCall.callType) "
+                + "mode=\(usesOneToOneNetworkQualityPresentation ? "one-to-one-banner" : "group-badges") "
+                + "suppressed=\(networkQualityTracker.isSuppressed) localPoor=\(snapshot.isLocalPoor) "
+                + "remotePoorSIDs=\(remotePoorSIDs) higherPriority=\(higherPriorityPresentation) "
+                + "weakNetworkDecision=\(decision) candidateShouldShowBanner=\(banner != "none") "
+                + "candidateBanner=\(banner) candidateShouldShowBadges=\(!badgeSIDs.isEmpty) "
+                + "candidateBadgeSIDs=\(badgeSIDs) blockedBy=\(blockedBy) "
+                + "finalUIEvent=ui_state"
+        )
+    }
+
+    func updateMediaSendStatusPresentation(
+        roomConnectionState: ConnectionState,
+        mediaSendConnectionState: MediaSendConnectionState,
+        trigger: String
+    ) {
+        let previousPresentation = mediaSendStatusPresentation
+        let nextPresentation = MediaSendStatusPresentation.resolve(
+            roomConnectionState: roomConnectionState,
+            mediaSendConnectionState: mediaSendConnectionState
+        )
+        mediaSendStatusPresentation = nextPresentation
+
+        let message = "\(Self.mediaSendLogTag) trigger=\(trigger) "
+            + "room=\(roomConnectionState) mediaSend=\(mediaSendConnectionState) "
+            + "presentation=\(previousPresentation)->\(nextPresentation)"
+        if nextPresentation != .none {
+            Logger.warn(message)
+        } else {
+            Logger.info(message)
+        }
+        if previousPresentation != nextPresentation {
+            logNetworkQualityPresentation(
+                networkQualitySnapshot,
+                trigger: "media_presentation_\(previousPresentation)_to_\(nextPresentation)"
+            )
+        }
+    }
 
     /// Remote identities we've already surfaced a "mic on" bullet for, until they mute
     /// or genuinely leave. Deduplicates the mic-on bullet across its two triggers
@@ -132,7 +436,9 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
 
     // MARK: - Init / Deinit
 
-    init(token: String, lkContext: LiveKitContext?) {
+    init(token: String, lkContext: LiveKitContext?, initialCallType: CallType) {
+        callTypeStateMachine = CallTypeStateMachine(initialCallType: initialCallType)
+
         AudioManager.shared.capturePostProcessingDelegate = audioProcessor
 
         if let cachedMode = CallSettingsManager.shared.getDenoiseMode() {
@@ -164,6 +470,10 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+
+                // A grant made in Settings must clear the microphone badge, but must not
+                // start capture on its own: the user has to ask for that again.
+                CallMediaPermissionCoordinator.shared.refreshStatuses(reason: "app did become active")
 
                 // Cancel any pending delayed dismiss so it won't race with the
                 // present logic below and cause a flash (present → delayed dismiss).
@@ -272,6 +582,7 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         unpublishScreenShareTask?.cancel()
         unpublishScreenShareTask = nil
         isConnecting = false
+        networkQualityTracker.reset(reason: "connect_cancelled")
         // 取消连接时标记为已处理，防止后续 delegate 回调触发清理
         markHandled()
     }
@@ -405,8 +716,69 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         Logger.info("\(logTag): room disconnect completed, cleared all view controllers")
     }
 
-    func setLocalMicrophone(enable: Bool, publishMuted: Bool = false) async {
-        _ = try? await room.localParticipant.setMicrophone(enabled: enable, publishMuted: publishMuted)
+    /// Final gate for every local microphone change.
+    ///
+    /// Disabling never checks permission — teardown and remote mute commands must always
+    /// go through. Enabling requires authorization: automatic paths fail safely and stay
+    /// silent, only a user-initiated tap may prompt or show the settings guide.
+    ///
+    /// Returns whether LiveKit actually applied the change.
+    @discardableResult
+    func setLocalMicrophone(enable: Bool, publishMuted: Bool = false, userInitiated: Bool = false) async -> Bool {
+        guard await permissionAllowsEnabling(.microphone, enable: enable, userInitiated: userInitiated) else {
+            return false
+        }
+        if userInitiated {
+            // Permission prompts can outlive the caller's suppression window. Re-arm it
+            // immediately before LiveKit changes the hardware-backed microphone state.
+            callManager.beginCallKitMuteSuppression(1.0, mutedTarget: !enable)
+        }
+
+        do {
+            try await room.localParticipant.setMicrophone(enabled: enable, publishMuted: publishMuted)
+            return true
+        } catch {
+            handleLocalMediaFailure(.microphone, enable: enable, userInitiated: userInitiated, error: error)
+            return false
+        }
+    }
+
+    /// Final gate for every local camera change. Dialog-only by product decision: a denied
+    /// camera never shows a persistent badge.
+    ///
+    /// Returns whether LiveKit actually applied the change.
+    @discardableResult
+    func setLocalCamera(enable: Bool, userInitiated: Bool = false) async -> Bool {
+        guard await permissionAllowsEnabling(.camera, enable: enable, userInitiated: userInitiated) else {
+            return false
+        }
+
+        do {
+            try await room.localParticipant.setCamera(enabled: enable)
+            return true
+        } catch {
+            handleLocalMediaFailure(.camera, enable: enable, userInitiated: userInitiated, error: error)
+            return false
+        }
+    }
+
+    private func permissionAllowsEnabling(_ media: CallMedia, enable: Bool, userInitiated: Bool) async -> Bool {
+        guard enable else { return true }
+
+        let permissions = CallMediaPermissionCoordinator.shared
+        if userInitiated {
+            return await permissions.requestAccessForUserAction(of: media)
+        }
+        return permissions.allowsAutomaticEnable(of: media)
+    }
+
+    private func handleLocalMediaFailure(_ media: CallMedia, enable: Bool, userInitiated: Bool, error: Error) {
+        Logger.error("\(logTag) failed to set local \(media.rawValue) enable=\(enable): \(error)")
+
+        // The pre-check handles known authorization states; permission can still change
+        // mid-call, or the device can fail in a way LiveKit reports as an access denial.
+        guard let liveKitError = error as? LiveKitError, liveKitError.type == .deviceAccessDenied else { return }
+        CallMediaPermissionCoordinator.shared.handleDeviceAccessDenied(of: media, userInitiated: userInitiated)
     }
 
     func syncLocalMicrophoneStateToCallKit(muted: Bool) {
@@ -441,6 +813,11 @@ final class RoomContext: ObservableObject, DTRTCAudioSessionObserver, TTEncrypto
         let callWindow = OWSWindowManager.shared().callViewWindow
         let callVC = callWindow.findTopViewController()
         callVC.present(vc, animated: animated, completion: completion)
+    }
+
+    @MainActor
+    func presentEndToEndEncryptionInfo() {
+        presentOnTop(E2EEInfoViewController(forceDarkTheme: true), animated: false)
     }
 
     @MainActor
@@ -803,23 +1180,26 @@ extension RoomContext {
         callManager.inviteAction()
     }
 
-    func checkPartiantInRoom(_: String) {
-        // 获取群信息
-        Logger.info("\(logTag) check is in room with conversationId \(currentCall.conversationId ?? "empty")")
-        if let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: currentCall.conversationId ?? ""),
-           let groupThread = TSGroupThread.getWithGroupId(groupId)
-        {
-            // 如果参会人不是群成员
-            Logger.error("\(logTag) current call is Group")
-            if !TSGroupThread.isLocalUserInGroup(groupThread)() {
-                Logger.error("\(logTag) current call is not in Group")
-                callManager.turnIntoInstantCall()
-            }
-        } else {
-            // 如果群不存在
-            Logger.error("\(logTag) current call is Instant")
-            callManager.turnIntoInstantCall()
+    /// Reads as "not a certain outsider", not "definitely a member": an undecidable verdict returns
+    /// true so an unsynced group is never mistaken for one we left. Logged as `notOutsider`.
+    /// Delegates to the shared predicate so connect-time re-checks agree with the built model.
+    func isLocalUserInCurrentCallGroup() -> Bool {
+        // A 1v1 conversationId is a phone number, which would look like a group with no thread.
+        guard currentCall.callType == .group,
+              let conversationId = currentCall.conversationId
+        else {
+            return false
         }
+
+        var isMember = false
+        SDSDatabaseStorage.shared.read { transaction in
+            isMember = self.callManager.isLocalUserInGroup(
+                serverGroupId: conversationId,
+                transaction: transaction
+            )
+        }
+
+        return isMember
     }
 }
 

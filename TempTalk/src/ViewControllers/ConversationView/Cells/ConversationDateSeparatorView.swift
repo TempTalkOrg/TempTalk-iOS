@@ -59,9 +59,11 @@ class ConversationDateSeparatorView: UIView {
     }
     
     func configure(viewItem: ConversationViewItem) {
-        if let oldViewItem = self.viewItem, oldViewItem.interaction.uniqueThreadId == viewItem.interaction.uniqueThreadId {
+        if let oldViewItem = self.viewItem,
+           oldViewItem.interaction.uniqueId == viewItem.interaction.uniqueId {
             return
         }
+        self.viewItem = viewItem
         let date = viewItem.interaction.dateForSorting()
         let dateString = DateUtil.formatDateForConversationHeader(date)
         dateLabel.text = dateString

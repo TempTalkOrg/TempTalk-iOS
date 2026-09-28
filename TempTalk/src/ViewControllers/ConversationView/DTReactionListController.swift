@@ -53,9 +53,10 @@ class DTReactionListController: OWSTableViewController {
                 DTPersonalCardController.preConfigure(withRecipientId: reactionSource.source) { [weak self] signalAccount in
                     guard let self else { return }
                     
-                    let personalCardVC = DTPersonalCardController(type: .other, 
+                    let personalCardVC = DTPersonalCardController(type: .other,
                                                                   recipientId: reactionSource.source,
-                                                                  account: signalAccount)
+                                                                  account: signalAccount,
+                                                                  addFriendSource: .unspecified)
                     
                     self.navigationController?.modalPresentationStyle = .fullScreen
                     self.navigationController?.pushViewController(personalCardVC, animated: true)

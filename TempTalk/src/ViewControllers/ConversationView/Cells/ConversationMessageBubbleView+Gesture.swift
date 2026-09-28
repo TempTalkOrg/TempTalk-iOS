@@ -85,18 +85,6 @@ extension ConversationMessageBubbleView {
             
         case .contactShare:
             if viewItem.messageCellType() == .contactShare, viewItem.contactShare != nil {
-                // 获取分享名片的用户ID（消息发送者）
-                var shareContactCardUid: String?
-
-                if let incomingMessage = viewItem.interaction as? TSIncomingMessage {
-                    shareContactCardUid = incomingMessage.authorId
-                }
-
-                if let uid = shareContactCardUid {
-                    DTAddFriendSourceManager.shared.setShareContactSource(shareContactCardUid: uid)
-                } else {
-                    DTAddFriendSourceManager.shared.setOtherSource(.inUserCard)
-                }
                 delegate?.messageBubbleView?(self, didTapContactShareViewWith: viewItem)
             }
             

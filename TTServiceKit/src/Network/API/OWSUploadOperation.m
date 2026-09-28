@@ -32,6 +32,13 @@ NSString *const kAttachmentUploadAttachmentIDKey = @"kAttachmentUploadAttachment
 // indicator shows up as quickly as possible.
 static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
 
+static unsigned long long ExpectedEncryptedAttachmentLength(NSUInteger plaintextLength)
+{
+    // IV || AES-CBC/PKCS7 ciphertext || SHA-256 HMAC. PKCS7 always adds at
+    // least one block, including when plaintext is already block-aligned.
+    return 16ULL + (((unsigned long long)plaintextLength / 16ULL) + 1ULL) * 16ULL + 32ULL;
+}
+
 @interface OWSUploadOperation ()
 
 @property (readonly, nonatomic) NSString *attachmentId;
@@ -49,6 +56,24 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
 @property(nonatomic,strong) dispatch_group_t group;
 
 @property (assign, nonatomic,readwrite) BOOL allowDuplicateUpload;
+
+- (void)successWithAttachmentStream:(TSAttachmentStream *)attachmentStream
+                     attachmentData:(NSData *)attachmentData
+                          originKey:(NSData *)originKey
+                             entity:(DTFileDataEntity *)entity
+                          rapidHash:(NSString *)rapidHash;
+- (void)persistUploadedAttachmentStream:(TSAttachmentStream *)attachmentStream
+                        localCiphertext:(NSData *)localCiphertext
+                             localDigest:(NSData *)localDigest
+                           encryptionKey:(NSData *)encryptionKey
+                            remoteDigest:(NSData *)remoteDigest
+                   remoteEncryptedLength:(long long)remoteEncryptedLength
+                      serverAttachmentId:(NSString *)serverAttachmentId
+                                serverId:(UInt64)serverId
+                                waveform:(nullable AudioWaveform *)waveform
+                           audioDuration:(nullable NSNumber *)audioDuration
+                              completion:(dispatch_block_t)completion;
+- (void)finishPreviouslyUploadedAttachmentStream:(TSAttachmentStream *)attachmentStream;
 @end
 
 @implementation OWSUploadOperation
@@ -464,7 +489,7 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
 
     if (attachmentStream.isUploaded && attachmentStream.serverId > 0 && !self.allowDuplicateUpload) {
         OWSLogDebug(@"%@ Attachment previously uploaded.", self.logTag);
-        [self reportSuccess];
+        [self finishPreviouslyUploadedAttachmentStream:attachmentStream];
         return;
     }
     
@@ -519,15 +544,18 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
            DTParamsUtils.validateString(entity.cipherHash) &&
            DTParamsUtils.validateString(entity.attachmentId) &&
            entity.authorizeIdToInt > 0){
-            //
-            [self fireNotificationWithProgress:1.0];
-            [self successWithAttachmentStream:attachmentStream serverId:entity.authorizeIdToInt originKey:originKey cipherHash:entity.cipherHash];
-            if(self.rapidFileInfoBlock){
-                NSMutableDictionary *info = @{}.mutableCopy;
-                info[@"rapidHash"] = [keyHash base64EncodedString];
-                info[@"authorizedId"] = entity.authorizeId;
-                self.rapidFileInfoBlock(info.copy);
-            }
+            unsigned long long expectedLength = ExpectedEncryptedAttachmentLength(attachmentData.length);
+            OWSLogDebug(@"%@ rapid metadata remoteLength=%lld expectedLength=%llu sizeMatches=%@ digestLength=%lu",
+                        self.logTag,
+                        entity.fileSize,
+                        expectedLength,
+                        entity.fileSize > 0 && (unsigned long long)entity.fileSize == expectedLength ? @"YES" : @"NO",
+                        (unsigned long)[NSData dataFromHexString:entity.cipherHash].length);
+            [self successWithAttachmentStream:attachmentStream
+                                attachmentData:attachmentData
+                                    originKey:originKey
+                                       entity:entity
+                                    rapidHash:[keyHash base64EncodedString]];
             
         }else{
             // Server may return multiple URLs (urls array) or single URL (url field)
@@ -558,18 +586,17 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
                    DTParamsUtils.validateString(entity.attachmentId) &&
                    entity.authorizeIdToInt > 0){
                     [self fireNotificationWithProgress:1.0];
-                    [self successWithAttachmentStream:attachmentStream serverId:entity.authorizeIdToInt originKey:originKey cipherHash:entity.cipherHash];
-                }else{
-                    DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
-                        [attachmentStream anyUpdateAttachmentStreamWithTransaction:transaction
-                                                                             block:^(TSAttachmentStream * instance) {
-                            instance.serverId = entity.authorizeIdToInt;
-                        }];
-                        [transaction addAsyncCompletionOnMain:^{
-                            [self reportSuccess];
-                        }];
-                    });
                 }
+                // The uploaded bytes were already persisted; only authorization is new.
+                DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+                    [attachmentStream anyUpdateAttachmentStreamWithTransaction:transaction
+                                                                         block:^(TSAttachmentStream * instance) {
+                        instance.serverId = entity.authorizeIdToInt;
+                    }];
+                    [transaction addAsyncCompletionOnMain:^{
+                        [self reportSuccess];
+                    }];
+                });
             };
             
             //upload
@@ -664,23 +691,211 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
 }
 
 - (void)successWithAttachmentStream:(TSAttachmentStream *)attachmentStream
-                           serverId:(UInt64)serverId
+                     attachmentData:(NSData *)attachmentData
                           originKey:(NSData *)originKey
-                         cipherHash:(NSString *)cipherHash{
-    
+                             entity:(DTFileDataEntity *)entity
+                          rapidHash:(NSString *)rapidHash
+{
+    NSData *_Nullable remoteDigest = [NSData dataFromHexString:entity.cipherHash];
+    if (originKey.length < 64 || remoteDigest.length == 0) {
+        NSError *metadataError = OWSErrorMakeFailedToSendOutgoingMessageError();
+        metadataError.isRetryable = YES;
+        OWSLogError(@"%@ rapid upload returned invalid encryption metadata.", self.logTag);
+        [self reportError:metadataError];
+        return;
+    }
+
+    dispatch_async([OWSDispatch attachmentsQueue], ^{
+        NSData *aesKey = [originKey subdataWithRange:NSMakeRange(0, 32)];
+        NSData *hmacKey = [originKey subdataWithRange:NSMakeRange(32, 32)];
+        NSData *localKey = nil;
+        NSData *localDigest = nil;
+        NSData *_Nullable localCiphertext = [SSKCryptography encryptAttachmentData:attachmentData
+                                                                                eKey:aesKey
+                                                                             hmacKey:hmacKey
+                                                                              outKey:&localKey
+                                                                           outDigest:&localDigest
+                                                                          useMd5Hash:(remoteDigest.length == 16)];
+        if (!localCiphertext || ![localKey isEqualToData:originKey]) {
+            NSError *encryptionError = OWSErrorMakeFailedToSendOutgoingMessageError();
+            encryptionError.isRetryable = YES;
+            OWSLogError(@"%@ failed to create local ciphertext for rapid upload.", self.logTag);
+            [self reportError:encryptionError];
+            return;
+        }
+
+        // Persist the remote digest sent to recipients, not the new local digest.
+        OWSAssertDebug(localDigest.length > 0);
+        [self persistUploadedAttachmentStream:attachmentStream
+                              localCiphertext:localCiphertext
+                                   localDigest:localDigest
+                                 encryptionKey:originKey
+                                  remoteDigest:remoteDigest
+                         remoteEncryptedLength:entity.fileSize
+                            serverAttachmentId:entity.attachmentId
+                                      serverId:entity.authorizeIdToInt
+                                      waveform:nil
+                                 audioDuration:nil
+                                    completion:^{
+                                        [self fireNotificationWithProgress:1.0];
+                                        if (self.rapidFileInfoBlock) {
+                                            self.rapidFileInfoBlock(@{
+                                                @"rapidHash" : rapidHash,
+                                                @"authorizedId" : entity.authorizeId,
+                                            });
+                                        }
+                                        [self reportSuccess];
+                                    }];
+    });
+}
+
+- (void)persistUploadedAttachmentStream:(TSAttachmentStream *)attachmentStream
+                        localCiphertext:(NSData *)localCiphertext
+                             localDigest:(NSData *)localDigest
+                           encryptionKey:(NSData *)encryptionKey
+                            remoteDigest:(NSData *)remoteDigest
+                   remoteEncryptedLength:(long long)remoteEncryptedLength
+                      serverAttachmentId:(NSString *)serverAttachmentId
+                                serverId:(UInt64)serverId
+                                waveform:(AudioWaveform *_Nullable)waveform
+                           audioDuration:(NSNumber *_Nullable)audioDuration
+                              completion:(dispatch_block_t)completion
+{
+    // Keep full-file write and verification off the main thread.
+    if (NSThread.isMainThread) {
+        dispatch_async([OWSDispatch attachmentsQueue], ^{
+            [self persistUploadedAttachmentStream:attachmentStream
+                                  localCiphertext:localCiphertext
+                                      localDigest:localDigest
+                                    encryptionKey:encryptionKey
+                                     remoteDigest:remoteDigest
+                            remoteEncryptedLength:remoteEncryptedLength
+                               serverAttachmentId:serverAttachmentId
+                                         serverId:serverId
+                                         waveform:waveform
+                                    audioDuration:audioDuration
+                                       completion:completion];
+        });
+        return;
+    }
+
+    BOOL hadPlaintextBeforeWrite = attachmentStream.filePath.length > 0
+        && [[NSFileManager defaultManager] fileExistsAtPath:attachmentStream.filePath];
+    NSError *writeError = nil;
+    if (![attachmentStream writeEncryptedData:localCiphertext error:&writeError]) {
+        writeError = writeError ?: OWSErrorMakeFailedToSendOutgoingMessageError();
+        writeError.isRetryable = YES;
+        OWSLogError(@"%@ failed writing encrypted attachment stream: %@", self.logTag, writeError);
+        [self reportError:writeError];
+        return;
+    }
+
+    NSError *readBackError = nil;
+    NSData *_Nullable writtenCiphertext = [attachmentStream readEncryptedDataFromFileWithError:&readBackError];
+    NSData *_Nullable writtenDigest = nil;
+    if (writtenCiphertext) {
+        writtenDigest = localDigest.length == 16
+            ? [SSKCryptography computeMD5Digest:writtenCiphertext]
+            : [SSKCryptography computeSHA256Digest:writtenCiphertext];
+    }
+    if (!writtenCiphertext || readBackError || ![writtenDigest isEqualToData:localDigest]) {
+        NSError *cleanupError = nil;
+        [attachmentStream removeEncryptedDataWithError:&cleanupError];
+        NSError *verificationError = readBackError ?: OWSErrorMakeFailedToSendOutgoingMessageError();
+        verificationError.isRetryable = YES;
+        OWSLogError(@"%@ encrypted attachment verification failed: %@", self.logTag, verificationError);
+        [self reportError:verificationError];
+        return;
+    }
+
     DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
         [attachmentStream anyUpdateAttachmentStreamWithTransaction:transaction
-                                                             block:^(TSAttachmentStream * instance) {
-            instance.encryptionKey = originKey;
-            instance.digest = [NSData dataFromHexString:cipherHash];
+                                                             block:^(TSAttachmentStream *instance) {
+            instance.encryptionKey = encryptionKey;
+            instance.digest = remoteDigest;
+            if (remoteEncryptedLength > 0) {
+                instance.encryptedDatalength = (NSInteger)remoteEncryptedLength;
+            }
             instance.isUploaded = YES;
-            instance.serverId = serverId;
+            if (DTParamsUtils.validateString(serverAttachmentId)) {
+                instance.serverAttachmentId = serverAttachmentId;
+            }
+            if (serverId > 0) {
+                instance.serverId = serverId;
+            }
+            if (instance.isVoiceMessage && waveform) {
+                instance.decibelSamples = waveform.decibelSamples;
+                instance.cachedAudioDurationSeconds = audioDuration;
+            }
         }];
-        [transaction addAsyncCompletionOnMain:^{
-            [self reportSuccess];
+        [transaction addAsyncCompletionOffMain:^{
+            // Delete plaintext only after canonical metadata is committed.
+            __block TSAttachmentStream *_Nullable persistedStream = nil;
+            [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *readTransaction) {
+                persistedStream = [TSAttachmentStream anyFetchAttachmentStreamWithUniqueId:attachmentStream.uniqueId
+                                                                                 transaction:readTransaction];
+            }];
+            BOOL metadataPersisted = persistedStream.isUploaded
+                && persistedStream.hasEncryptedFile
+                && [persistedStream.encryptionKey isEqualToData:encryptionKey]
+                && [persistedStream.digest isEqualToData:remoteDigest];
+            if (remoteEncryptedLength > 0) {
+                metadataPersisted = metadataPersisted
+                    && persistedStream.encryptedDatalength == (NSInteger)remoteEncryptedLength;
+            }
+            if (!metadataPersisted) {
+                // Roll back uncommitted ciphertext only while plaintext is recoverable.
+                if (hadPlaintextBeforeWrite) {
+                    NSError *rollbackError = nil;
+                    if (![attachmentStream removeEncryptedDataWithError:&rollbackError]) {
+                        OWSLogError(@"%@ failed to roll back uncommitted encrypted attachment: %@",
+                                    self.logTag,
+                                    rollbackError);
+                    }
+                }
+                NSError *persistenceError = OWSErrorMakeFailedToSendOutgoingMessageError();
+                persistenceError.isRetryable = YES;
+                OWSLogError(@"%@ encrypted attachment metadata was not committed.", self.logTag);
+                [self reportError:persistenceError];
+                return;
+            }
+
+            // Cleanup failure does not invalidate a committed upload.
+            NSError *cleanupError = nil;
+            if (![attachmentStream removePlaintextFileWithError:&cleanupError]) {
+                OWSLogError(@"%@ upload succeeded but plaintext cleanup failed for %@: %@",
+                            self.logTag,
+                            attachmentStream.uniqueId,
+                            cleanupError);
+            }
+            dispatch_async(dispatch_get_main_queue(), completion);
         }];
     });
-    
+}
+
+- (void)finishPreviouslyUploadedAttachmentStream:(TSAttachmentStream *)attachmentStream
+{
+    dispatch_async([OWSDispatch attachmentsQueue], ^{
+        // Converge legacy plaintext without blocking a message already on the server.
+        BOOL plaintextExists = attachmentStream.filePath.length > 0
+            && [[NSFileManager defaultManager] fileExistsAtPath:attachmentStream.filePath];
+        if (!attachmentStream.isStoredEncrypted || plaintextExists) {
+            NSData *_Nullable plaintext = attachmentStream.decryptedData;
+            if (!plaintext || !attachmentStream.hasEncryptedFile) {
+                OWSLogError(@"%@ could not converge encrypted-at-rest state for uploaded attachment: %@",
+                            self.logTag,
+                            attachmentStream.uniqueId);
+                [self reportSuccess];
+                return;
+            }
+        }
+
+        NSError *cleanupError = nil;
+        if (![attachmentStream removePlaintextFileWithError:&cleanupError]) {
+            OWSLogError(@"%@ failed to remove plaintext for uploaded attachment: %@", self.logTag, cleanupError);
+        }
+        [self reportSuccess];
+    });
 }
 
 - (BOOL)isSecureURL:(NSString *)urlString {
@@ -860,19 +1075,11 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
                    weakSelf.logTag, (unsigned long)(urlIndex + 1), attachmentStream.uniqueId);
 
         AudioWaveform *waveform = nil;
+        NSNumber *audioDuration = nil;
         if (attachmentStream.isVoiceMessage) {
-            NSError *writeError;
-            [attachmentStream writeEncryptedData:encryptedAttachmentData error:&writeError];
-            if (writeError) {
-                DDLogError(@"%@ send voice Failed writing voice stream with error: %@",
-                           weakSelf.logTag, writeError);
-                writeError.isRetryable = YES;
-                [weakSelf reportError:writeError];
-                return;
-            }
-
             NSError *waveformError;
             waveform = [AudioWaveformManagerImpl.shared audioWaveformSyncForAudioPath:[attachmentStream filePath] error:&waveformError];
+            audioDuration = @([AudioWaveformManagerImpl.shared audioDurationFrom:attachmentStream.filePath]);
             OWSLogInfo(@"send voice get attachmentStream file path: %@", [attachmentStream filePath]);
             OWSLogInfo(@"send voice get attachmentStream file byteCount: %llu", [attachmentStream byteCount]);
             if (waveformError) {
@@ -883,24 +1090,17 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
             }
         }
 
-        DatabaseStorageAsyncWrite(weakSelf.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
-            [attachmentStream anyUpdateAttachmentStreamWithTransaction:transaction
-                                                                 block:^(TSAttachmentStream *instance) {
-                instance.encryptionKey = encryptionKey;
-                instance.digest = digest;
-                instance.encryptedDatalength = encryptedAttachmentData.length;
-                instance.isUploaded = YES;
-                instance.serverAttachmentId = serverAttachmentId;
-                if (instance.isVoiceMessage) {
-                    instance.decibelSamples = waveform.decibelSamples;
-                    instance.cachedAudioDurationSeconds = @([AudioWaveformManagerImpl.shared audioDurationFrom:attachmentStream.filePath]);
-                }
-            }];
-            [transaction addAsyncCompletionOnMain:^{
-                success(digest);
-                [attachmentStream removeVoicePlaintextFile];
-            }];
-        });
+        [weakSelf persistUploadedAttachmentStream:attachmentStream
+                                  localCiphertext:encryptedAttachmentData
+                                       localDigest:digest
+                                     encryptionKey:encryptionKey
+                                      remoteDigest:digest
+                             remoteEncryptedLength:(long long)encryptedAttachmentData.length
+                                serverAttachmentId:serverAttachmentId
+                                          serverId:0
+                                          waveform:waveform
+                                     audioDuration:audioDuration
+                                        completion:^{ success(digest); }];
     }
                             progress:^(NSURLSessionTask *task, NSProgress *progress) {
         [weakSelf fireNotificationWithProgress:progress.fractionCompleted];

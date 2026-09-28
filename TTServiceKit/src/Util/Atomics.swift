@@ -307,12 +307,45 @@ public class AtomicArray<T> {
 }
 
 extension AtomicArray where T: Equatable {
+    @discardableResult
+    public func appendIfAbsent(_ value: T) -> Bool {
+        lock.withLock {
+            guard !values.contains(value) else {
+                return false
+            }
+            values.append(value)
+            return true
+        }
+    }
+
     public func remove(_ valueToRemove: T) {
         lock.withLock {
             self.values = self.values.filter { (value: T) -> Bool in
                 valueToRemove != value
             }
         }
+    }
+}
+
+@objcMembers
+public final class AtomicStringArray: NSObject {
+    private let values = AtomicArray<String>(lock: UnfairLock())
+
+    public func get() -> [String] {
+        values.get()
+    }
+
+    @discardableResult
+    public func appendIfAbsent(_ value: String) -> Bool {
+        values.appendIfAbsent(value)
+    }
+
+    public var count: Int {
+        values.count
+    }
+
+    public func removeAll() {
+        values.removeAll()
     }
 }
 

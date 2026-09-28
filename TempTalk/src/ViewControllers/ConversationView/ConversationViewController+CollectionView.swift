@@ -33,20 +33,7 @@ extension ConversationViewController {
         collectionView.autoPinEdge(toSuperviewSafeArea: .leading)
         collectionView.autoPinEdge(toSuperviewSafeArea: .trailing)
 
-        if showWarningHeader {
-            let headerHeight = warningHeaderView.intrinsicContentSize.height
-            collectionView.addSubview(warningHeaderView)
-            warningHeaderView.frame = CGRect(x: 0, y: -headerHeight, width: collectionView.bounds.width, height: headerHeight)
-            warningHeaderView.autoresizingMask = [.flexibleWidth]
-
-            var currentInset = collectionView.contentInset
-            currentInset.top += headerHeight
-            collectionView.contentInset = currentInset
-
-            var scrollInset = collectionView.scrollIndicatorInsets
-            scrollInset.top += headerHeight
-            collectionView.scrollIndicatorInsets = scrollInset
-        }
+        updateWarningHeaderLayout()
 
         collectionView.applyInsetsFix()
         collectionView.accessibilityIdentifier = "collectionView"
@@ -216,9 +203,84 @@ extension ConversationViewController {
     func reloadData(
         forceRealodRange: ReloadRange = .all,
         animated: Bool = false,
+        viewportAnchorPolicy: ConversationViewportAnchorPolicy = .inherit,
+        invalidateLayout: Bool = false,
+        followToBottom: Bool = false,
+        scrollAction explicitScrollAction: ConversationCollectionScrollAction? = nil,
         completion: ((Bool) -> Void)? = nil
     ) {
-        Logger.info("[Conversation] start items(viewItems)=\(viewItems.count) forceRange=\(forceRealodRange) animated=\(animated)")
+        viewState.collectionReloadGeneration += 1
+        let reloadGeneration = viewState.collectionReloadGeneration
+        let inheritedScrollAction = viewState.collectionScrollActionsByGeneration
+            .max(by: { $0.key < $1.key })?
+            .value
+        var scrollAction = explicitScrollAction
+            ?? (viewState.scrollDownButtonTarget == .latestMessage
+                ? inheritedScrollAction ?? viewState.activeScrollDownCollectionAction
+                : nil)
+        if let candidate = scrollAction,
+           (candidate.userScrollGeneration != viewState.userScrollGeneration
+            || candidate.requestGeneration != viewState.scrollActionRequestGeneration) {
+            scrollAction = nil
+        }
+        if let scrollAction {
+            viewState.collectionScrollActionsByGeneration[reloadGeneration] = scrollAction
+            Logger.info(
+                "[ConversationScrollDown] bind generation=\(reloadGeneration) "
+                    + "animated=\(scrollAction.isAnimated)"
+            )
+        }
+        if invalidateLayout || !viewState.collectionLayoutInvalidationGenerations.isEmpty {
+            viewState.collectionLayoutInvalidationGenerations.insert(reloadGeneration)
+        }
+        if followToBottom {
+            viewState.collectionFollowToBottomUserScrollGenerations[reloadGeneration] =
+                viewState.userScrollGeneration
+        } else if let inheritedUserScrollGeneration = viewState
+            .collectionFollowToBottomUserScrollGenerations
+            .max(by: { $0.key < $1.key })?
+            .value {
+            if inheritedUserScrollGeneration == viewState.userScrollGeneration {
+                viewState.collectionFollowToBottomUserScrollGenerations[reloadGeneration] =
+                    inheritedUserScrollGeneration
+            } else {
+                // A drag after the send is newer user intent; do not let an in-flight send
+                // snapshot pull the user back to the bottom when it eventually commits.
+                viewState.collectionFollowToBottomUserScrollGenerations.removeAll()
+            }
+        }
+        let shouldSuppressViewportAnchor = viewState
+            .collectionFollowToBottomUserScrollGenerations[reloadGeneration] != nil
+            || scrollAction != nil
+            || viewState.scrollDownButtonTarget != nil
+        let canPreserveViewport = !isLoadingOlderItems
+            && !isLoadingNewerItems
+            && !isScrollingToTop
+        var effectiveViewportAnchor: ConversationViewportAnchor?
+        if shouldSuppressViewportAnchor {
+            viewState.collectionViewportAnchorsByGeneration.removeAll()
+        } else if canPreserveViewport {
+            switch viewportAnchorPolicy {
+            case .inherit:
+                effectiveViewportAnchor = viewState.collectionViewportAnchorsByGeneration
+                    .max { $0.key < $1.key }?
+                    .value
+            case .preserve(let viewportAnchor):
+                effectiveViewportAnchor = viewportAnchor
+            case .disabled:
+                // Invalidate every in-flight anchor. Older generations read this
+                // registry again at commit time and therefore cannot snap back
+                // before an explicit scroll-to-bottom request completes.
+                viewState.collectionViewportAnchorsByGeneration.removeAll()
+            }
+            if let effectiveViewportAnchor {
+                viewState.collectionViewportAnchorsByGeneration[reloadGeneration] = effectiveViewportAnchor
+            }
+        } else {
+            // A pagination or explicit-scroll update owns continuity. Never let a pending
+            // ordinary reload anchor leak into a later generation after that update finishes.
+            viewState.collectionViewportAnchorsByGeneration.removeAll()
+        }
         // 默认不进行离线操作
         DatabaseOfflineManager.shared.canOfflineUpdateDatabase = false
         // 每一次都重新获取当前最新数据源的所有 uniqueId，确保外部数据源始终和快照中的数据源一致
@@ -230,7 +292,9 @@ extension ConversationViewController {
         // 获取新旧快照的交集 intersectionUniqueIds，由于 UnreadIndicatorInteractionId 对应的 cell 实际并不需要刷新，所以过滤掉
         let oldSnapshot = dataSource.snapshot()
         let oldUniqueIds = oldSnapshot.itemIdentifiers
-        let intersectionUniqueIds = Set(currentUniqueIds).intersection(Set(oldUniqueIds)).filter { $0 != "UnreadIndicatorInteractionId" }
+        let intersectionUniqueIds = Set(currentUniqueIds).intersection(Set(oldUniqueIds)).filter {
+            $0 != UnreadIndicatorInteraction.UnreadIndicatorInteractionId
+        }
         
         // 根据 forceRealodRange 和 intersectionUniqueIds 找到需要刷新指定的 item
         var forceReloadUniqueIds: [String] = []
@@ -243,9 +307,18 @@ extension ConversationViewController {
             default:
                 break
             }
-            if !forceReloadUniqueIds.isEmpty {
-                newSnapshot.reloadItems(forceReloadUniqueIds)
-            }
+        }
+
+        var pendingReloadIds = viewState.collectionReloadIdsByGeneration.reduce(into: Set<String>()) {
+            $0.formUnion($1.value)
+        }
+        pendingReloadIds.formUnion(forceReloadUniqueIds)
+        // Keep the complete inherited set with every in-flight generation. If an older build
+        // commits first and clears its entry, newer builds must still carry those reloads forward.
+        viewState.collectionReloadIdsByGeneration[reloadGeneration] = pendingReloadIds
+        forceReloadUniqueIds = Array(intersectionUniqueIds.intersection(pendingReloadIds))
+        if !forceReloadUniqueIds.isEmpty {
+            newSnapshot.reloadItems(forceReloadUniqueIds)
         }
         
         // 异步计算 cell 高度
@@ -258,18 +331,214 @@ extension ConversationViewController {
         }.done { [weak self] (renderItems, renderItemsMap) in
             guard let self else { return }
             DispatchMainThreadSafe {
-                self.renderItems = renderItems
-                self.renderItemsMap = renderItemsMap
-                Logger.info("[Conversation] built renderItems=\(renderItems.count), applying snapshot ids=\(newSnapshot.itemIdentifiers.count)")
-                self.dataSource.apply(newSnapshot, animatingDifferences: animated) {
-                    completion?(true)
-                    Logger.info("[Conversation] applied snapshot, contentSize=\(self.collectionView.contentSize) visible=\(self.collectionView.indexPathsForVisibleItems.count)")
+                let commitSnapshot = { [weak self] in
+                    guard let self else { return }
+
+                    let sendingCount = renderItems.reduce(into: 0) { count, renderItem in
+                        guard let message = renderItem.viewItem.interaction as? TSOutgoingMessage,
+                              message.messageState == .sending else { return }
+                        count += 1
+                    }
+
+                    // Async builds may finish out of order. Never let an older result replace a newer
+                    // snapshot that has already been committed.
+                    let committedGeneration = self.viewState.collectionCommittedGeneration
+                    if reloadGeneration < committedGeneration {
+                        self.viewState.collectionScrollActionsByGeneration
+                            .removeValue(forKey: reloadGeneration)
+                        Logger.warn(
+                            "[SendStatusTrace] snapshot superseded generation=\(reloadGeneration) "
+                                + "committed=\(committedGeneration) sendingCount=\(sendingCount)"
+                        )
+
+                        // Queue behind the committed apply so callers observe its final layout. The
+                        // winning generation already inherited this request's cell reloads.
+                        self.dataSource.apply(self.dataSource.snapshot(), animatingDifferences: false) {
+                            completion?(true)
+                        }
+                        return
+                    }
+                    self.viewState.collectionCommittedGeneration = reloadGeneration
+                    let committedScrollAction = self.viewState.collectionScrollActionsByGeneration
+                        .filter { $0.key <= reloadGeneration }
+                        .max(by: { $0.key < $1.key })?
+                        .value
+                    self.viewState.collectionReloadIdsByGeneration.keys
+                        .filter { $0 <= reloadGeneration }
+                        .forEach { self.viewState.collectionReloadIdsByGeneration.removeValue(forKey: $0) }
+                    self.viewState.collectionViewportAnchorsByGeneration.keys
+                        .filter { $0 < reloadGeneration }
+                        .forEach { self.viewState.collectionViewportAnchorsByGeneration.removeValue(forKey: $0) }
+                    let shouldInvalidateLayout = self.viewState.collectionLayoutInvalidationGenerations
+                        .contains { $0 <= reloadGeneration }
+                    self.viewState.collectionLayoutInvalidationGenerations
+                        .filter { $0 <= reloadGeneration }
+                        .forEach { self.viewState.collectionLayoutInvalidationGenerations.remove($0) }
+                    let followToBottomUserScrollGeneration = self.viewState
+                        .collectionFollowToBottomUserScrollGenerations
+                        .first(where: {
+                            $0.key <= reloadGeneration
+                                && $0.value == self.viewState.userScrollGeneration
+                        })?.value
+                    self.renderItems = renderItems
+                    self.renderItemsMap = renderItemsMap
+                    if shouldInvalidateLayout {
+                        self.layout.invalidateLayout()
+                    }
+                    self.dataSource.apply(newSnapshot, animatingDifferences: animated) {
+                        // Keep the action available until apply completes so a newer generation
+                        // starting in the meantime can inherit the same explicit destination.
+                        self.viewState.collectionScrollActionsByGeneration.keys
+                            .filter { $0 <= reloadGeneration }
+                            .forEach {
+                                self.viewState.collectionScrollActionsByGeneration.removeValue(forKey: $0)
+                            }
+                        guard reloadGeneration == self.viewState.collectionCommittedGeneration else {
+                            completion?(true)
+                            return
+                        }
+                        // Consume the anchor only after diffable-data-source apply completes.
+                        // An explicit scroll can clear the registry while apply is in flight and
+                        // must win over this older viewport-preservation request.
+                        let committedViewportAnchor = self.viewState
+                            .collectionViewportAnchorsByGeneration
+                            .removeValue(forKey: reloadGeneration)
+                        self.restoreViewportAnchor(committedViewportAnchor)
+                        // A keyboard can finish presenting while this snapshot is in flight.
+                        // Keep the search focus until the committed layout can center it.
+                        self.finishFocusedMessageKeyboardPresentationIfNeeded()
+                        // Match Signal's load-and-scroll ordering: the winning render state and
+                        // collection update land first, then the associated scroll action runs
+                        // against the committed layout.
+                        if let committedScrollAction {
+                            Logger.info(
+                                "[ConversationScrollDown] land generation=\(reloadGeneration)"
+                            )
+                            self.performCollectionScrollAction(committedScrollAction)
+                        } else if self.viewState.scrollDownButtonTarget == .unreadIndicator {
+                            // An unrelated snapshot may interrupt the shorter unread-divider
+                            // animation; preserve that first-stage destination as well.
+                            self.resumeScrollDownButtonTargetAfterCollectionUpdate()
+                        }
+                        self.viewState.collectionFollowToBottomUserScrollGenerations.keys
+                            .filter { $0 <= reloadGeneration }
+                            .forEach {
+                                self.viewState.collectionFollowToBottomUserScrollGenerations
+                                    .removeValue(forKey: $0)
+                            }
+                        let shouldFollowToBottomAtCompletion = reloadGeneration
+                            == self.viewState.collectionCommittedGeneration
+                            && followToBottomUserScrollGeneration
+                                == self.viewState.userScrollGeneration
+                        if shouldFollowToBottomAtCompletion {
+                            self.scrollToBottom(animated: false)
+                        }
+                        completion?(true)
+                    }
                 }
+
+                commitSnapshot()
             }
-        }.catch { error in
-            Logger.error("[Conversation] failure: \(error)")
-            completion?(false)
+        }.catch { [weak self] error in
+            DispatchMainThreadSafe {
+                self?.viewState.collectionReloadIdsByGeneration.removeValue(forKey: reloadGeneration)
+                self?.viewState.collectionViewportAnchorsByGeneration.removeValue(forKey: reloadGeneration)
+                self?.viewState.collectionLayoutInvalidationGenerations.remove(reloadGeneration)
+                self?.viewState.collectionFollowToBottomUserScrollGenerations
+                    .removeValue(forKey: reloadGeneration)
+                self?.viewState.collectionScrollActionsByGeneration
+                    .removeValue(forKey: reloadGeneration)
+                Logger.error("[Conversation] failure: \(error)")
+                completion?(false)
+            }
         }
+    }
+
+    /// Capture the top edge of the bottom-most stable visible interaction.
+    func captureViewportAnchor(allowBeforeFirstAppearance: Bool = false) -> ConversationViewportAnchor? {
+        AssertIsOnMainThread()
+
+        let canCaptureInitialPosition = allowBeforeFirstAppearance
+            && viewState.hasCompletedInitialScroll
+        guard (viewHasEverAppeared || canCaptureInitialPosition),
+              !isUserScrolling,
+              !isWaitingForDeceleration,
+              !isLoadingOlderItems,
+              !isLoadingNewerItems,
+              !isScrollingToTop,
+              viewState.scrollDownButtonTarget == nil
+        else { return nil }
+
+        // `prepare()` only computes attributes from the in-memory render items. Do not call
+        // `layoutIfNeeded()` here: capture can run inside a read transaction, and laying out
+        // cells may configure one that opens another read transaction.
+        layout.prepare()
+
+        let visibleIndexPaths = collectionView.indexPathsForVisibleItems.sorted { lhs, rhs in
+            let lhsY = collectionView.layoutAttributesForItem(at: lhs)?.frame.minY ?? 0
+            let rhsY = collectionView.layoutAttributesForItem(at: rhs)?.frame.minY ?? 0
+            return lhsY > rhsY
+        }
+
+        for indexPath in visibleIndexPaths {
+            guard
+                let interactionUniqueId = dataSource.itemIdentifier(for: indexPath),
+                interactionUniqueId != UnreadIndicatorInteraction.UnreadIndicatorInteractionId,
+                let attributes = collectionView.layoutAttributesForItem(at: indexPath)
+            else {
+                continue
+            }
+
+            let anchor = ConversationViewportAnchor(
+                interactionUniqueId: interactionUniqueId,
+                distanceFromViewportTop: attributes.frame.minY
+                    - (collectionView.contentOffset.y + collectionView.adjustedContentInset.top),
+                userScrollGeneration: viewState.userScrollGeneration
+            )
+            return anchor
+        }
+
+        return nil
+    }
+
+    func restoreViewportAnchor(_ anchor: ConversationViewportAnchor?) {
+        AssertIsOnMainThread()
+
+        guard let anchor else {
+            return
+        }
+
+        guard !isUserScrolling,
+              !isWaitingForDeceleration,
+              !isLoadingOlderItems,
+              !isLoadingNewerItems,
+              !isScrollingToTop,
+              viewState.scrollDownButtonTarget == nil,
+              anchor.userScrollGeneration == viewState.userScrollGeneration
+        else { return }
+
+        guard let indexPath = dataSource.indexPath(for: anchor.interactionUniqueId) else { return }
+
+        layout.prepare()
+
+        guard let attributes = collectionView.layoutAttributesForItem(at: indexPath) else { return }
+
+        let minimumOffsetY = -collectionView.adjustedContentInset.top
+        let maximumOffsetY = max(minimumOffsetY, maxContentOffsetY)
+        let proposedOffsetY = attributes.frame.minY
+            - anchor.distanceFromViewportTop
+            - collectionView.adjustedContentInset.top
+        let restoredOffsetY = proposedOffsetY.clamp(minimumOffsetY, maximumOffsetY)
+
+        UIView.performWithoutAnimation {
+            collectionView.setContentOffset(CGPoint(x: 0, y: restoredOffsetY), animated: false)
+        }
+        if viewState.initialScrollTargetOffset != nil,
+           let deadline = viewState.initialScrollProtectionDeadline,
+           Date() < deadline {
+            viewState.initialScrollTargetOffset = restoredOffsetY
+        }
+        updateLastKnownDistanceFromBottom()
     }
     
     /// 刷新指定 cell
@@ -356,6 +625,7 @@ extension ConversationViewController: UICollectionViewDelegate {
         targetContentOffsetForProposedContentOffset proposedContentOffset: CGPoint
     ) -> CGPoint {
         guard !isScrollingToTop else { return proposedContentOffset }
+        guard viewState.scrollDownButtonTarget == nil else { return proposedContentOffset }
 
         guard let lastKnownDistanceFromBottom, scrollContinuity == .top else {
             return proposedContentOffset

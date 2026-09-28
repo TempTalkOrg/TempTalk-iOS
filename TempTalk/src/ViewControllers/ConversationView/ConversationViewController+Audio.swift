@@ -91,18 +91,22 @@ extension ConversationViewController {
         }
 
         // 第一次播放，或者当前选中音频和播放器正在使用的不同
-        let filePath = attachmentStream.filePath()
-        guard let filePath, FileManager.default.fileExists(atPath: filePath) else {
-            Logger.error("Missing audio file: \(filePath ?? "file path not found")")
-            return
-        }
         if let _ = audioPlayer {
             stopAudioPlayer()
         }
-        guard let mediaURL = attachmentStream.mediaURL() else {
-            return
+        if attachmentStream.isStoredEncrypted {
+            guard let data = attachmentStream.decryptedData() else {
+                Logger.error("Unable to decrypt audio attachment")
+                return
+            }
+            audioPlayer = OWSAudioPlayer(mediaData: data, delegate: viewItem)
+        } else {
+            guard let mediaURL = attachmentStream.mediaURL() else {
+                Logger.error("Missing legacy audio attachment")
+                return
+            }
+            audioPlayer = OWSAudioPlayer(mediaUrl: mediaURL, delegate: viewItem)
         }
-        audioPlayer = OWSAudioPlayer(mediaUrl: mediaURL, delegate: viewItem)
         // Associate the player with this media adapter.
         audioPlayer?.owner = viewItem.interaction.uniqueId as AnyObject
         // 设置播放速度

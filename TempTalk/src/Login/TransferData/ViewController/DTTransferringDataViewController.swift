@@ -17,6 +17,9 @@ import TTMessaging
     private let oldDevice: Bool
     private var discoveryTimeoutTimer: Timer?
     private var hasStartedTransfer = false
+    /// Held weakly and checked via `presentingViewController` rather than latched on a Bool,
+    /// so a pre-empted presentation cannot leave this screen stuck with no error and no exit.
+    private weak var transferFailureAlert: UIAlertController?
 
     private var progress: Progress? {
         willSet {
@@ -52,15 +55,17 @@ import TTMessaging
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        // Backgrounding aborts an in-flight transfer, so never let auto-lock do it.
+        DeviceSleepManager.shared.addBlock(blockObject: self)
         DeviceTransferService.shared.addObserver(self)
         DeviceTransferService.shared.startListeningForNewDevices()
         startDiscoveryTimeout()
-        Logger.info("[DeviceTransfer] Waiting for new device discovery, expected peer: \(urlComponent.peerId.displayName)")
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         cancelDiscoveryTimeout()
+        DeviceSleepManager.shared.removeBlock(blockObject: self)
         DeviceTransferService.shared.removeObserver(self)
         DeviceTransferService.shared.stopListeningForNewDevices()
         DeviceTransferService.shared.cancelTransferToNewDevice()
@@ -116,13 +121,18 @@ import TTMessaging
         guard !hasStartedTransfer else { return }
         hasStartedTransfer = true
         cancelDiscoveryTimeout()
-        Logger.info("[DeviceTransfer] Peer discovered, beginning transfer")
         DispatchQueue.global().async {
             do {
                 try DeviceTransferService.shared.transferAccountToNewDevice(with: discoveredPeerId, certificateHash: self.urlComponent.certificateHash)
             } catch {
                 Logger.error("[DeviceTransfer] Transfer failed: \(error)")
-                DispatchMainThreadSafe { self.hasStartedTransfer = false }
+                DispatchMainThreadSafe {
+                    self.hasStartedTransfer = false
+                    self.showTransferFailureAndReturnHome(
+                        title: Localized("DEVICE_TRANSFER_CONNECTION_FAILED_TITLE"),
+                        message: Localized("DEVICE_TRANSFER_CONNECTION_FAILED_BODY")
+                    )
+                }
             }
         }
     }
@@ -135,7 +145,10 @@ import TTMessaging
         ) { [weak self] _ in
             guard let self, !self.hasStartedTransfer else { return }
             Logger.warn("[DeviceTransfer] Discovery timed out after \(Self.discoveryTimeoutInterval)s")
-            self.showDiscoveryTimeoutAlert()
+            self.showTransferFailureAndReturnHome(
+                title: Localized("DEVICE_TRANSFER_CONNECTION_FAILED_TITLE"),
+                message: Localized("DEVICE_TRANSFER_CONNECTION_FAILED_BODY")
+            )
         }
     }
 
@@ -144,27 +157,50 @@ import TTMessaging
         discoveryTimeoutTimer = nil
     }
 
-    private func showDiscoveryTimeoutAlert() {
-        let alert = UIAlertController(
-            title: "Connection Failed".localized,
-            message: "Could not find the other device. Make sure both devices have Wi-Fi and Bluetooth enabled and are near each other, then try again.".localized,
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Retry".localized, style: .default) { [weak self] _ in
-            guard let self else { return }
-            self.startDiscoveryTimeout()
-            DeviceTransferService.shared.startListeningForNewDevices()
-            Logger.info("[DeviceTransfer] Retrying discovery")
-        })
-        alert.addAction(UIAlertAction(title: "Cancel".localized, style: .cancel) { [weak self] _ in
-            DeviceTransferService.shared.stopTransfer()
-            self?.dismiss(animated: true)
-        })
-        present(alert, animated: true)
-    }
     @objc private func buttonEvent(cancel sender: UIButton) {
         DeviceTransferService.shared.stopTransfer()
         self.dismiss(animated: true)
+    }
+
+    private func showTransferFailureAndReturnHome(title: String, message: String) {
+        AssertIsOnMainThread()
+        guard transferFailureAlert?.presentingViewController == nil else { return }
+
+        cancelDiscoveryTimeout()
+        DeviceTransferService.shared.stopTransfer()
+
+        let alertController = UIAlertController(
+            title: title,
+            message: message,
+            preferredStyle: .alert
+        )
+        let confirmAction = UIAlertAction(title: "OK".localized, style: .default) { [weak self] _ in
+            self?.dismiss(animated: true)
+        }
+        alertController.addAction(confirmAction)
+        transferFailureAlert = alertController
+        present(alertController, animated: true)
+    }
+
+    private func showLocalNetworkPermissionAlert() {
+        AssertIsOnMainThread()
+        guard transferFailureAlert?.presentingViewController == nil else { return }
+
+        cancelDiscoveryTimeout()
+        DeviceTransferService.shared.stopTransfer()
+
+        let alertController = DeviceTransferUI.localNetworkAlert(
+            cancelHandler: { [weak self] in
+                self?.dismiss(animated: true)
+            },
+            settingsHandler: { [weak self] in
+                self?.dismiss(animated: true) {
+                    DeviceTransferUI.openAppSettings()
+                }
+            }
+        )
+        transferFailureAlert = alertController
+        present(alertController, animated: true)
     }
     
     // MARK: - lazy
@@ -201,7 +237,7 @@ import TTMessaging
         label.font = UIFont.systemFont(ofSize: 14)
         label.textAlignment = .center
         label.numberOfLines = .zero
-        label.text = "Keep both devices on and near each other.".localized
+        label.text = DeviceTransferUI.inProgressInstructions
         return label
     }()
     
@@ -250,20 +286,17 @@ import TTMessaging
 
 extension DTTransferringDataViewController: DeviceTransferServiceObserver {
     func deviceTransferServiceDiscoveredNewDevice(peerId: MCPeerID, discoveryInfo: [String : String]?) {
-        Logger.info("[DeviceTransfer] Discovered peer: \(peerId.displayName), expected: \(urlComponent.peerId.displayName)")
         guard peerId.displayName == urlComponent.peerId.displayName else { return }
         beginTransfer(with: peerId)
     }
     
     func deviceTransferServiceDidStartTransfer(progress: Progress) {
-        Logger.info("[DeviceTransferModule -> DTTransferringDataViewController -> func -> deviceTransferServiceDidStartTransfer (progress:)]")
         self.progress = progress
     }
 
     func deviceTransferServiceDidEndTransfer(error: DeviceTransferService.Error?) {
         DTToastHelper.hide()
         guard let error = error  else {
-            Logger.info("[DeviceTransferModule -> DTTransferringDataViewController -> func -> deviceTransferServiceDidEndTransfer] no error message")
             // Old device data transfer successful - mark as deregistered
             if(self.oldDevice){
                 TSAccountManager.shared.setIsDeregistered(true)
@@ -272,17 +305,32 @@ extension DTTransferringDataViewController: DeviceTransferServiceObserver {
             navigationController?.setViewControllers([DTTransferDataSuccessViewController(logintoken: self.logintoken, oldDevice: self.oldDevice)], animated: true)
             return
         }
-        Logger.info("[DeviceTransferModule -> DTTransferringDataViewController -> func -> deviceTransferServiceDidEndTransfer] error.message: \(String(describing: error.message))")
-        let alertController = UIAlertController(
-            title: "Transfer Failed".localized,
-            message: String(format: "The transfer failed. %1$@.Please try again.".localized, error.message),
-            preferredStyle: .alert
-        )
-        let okAction = UIAlertAction(title: "OK".localized, style: .default) { _ in
-            self.dismiss(animated: true)
+        if case .cancel = error {
+            return
         }
-        alertController.addAction(okAction)
-        navigationController?.present(alertController, animated: true)
+
+        if case .localNetworkPermissionDenied = error {
+            showLocalNetworkPermissionAlert()
+            return
+        }
+
+        switch error {
+        case .backgroundedDevice:
+            showTransferFailureAndReturnHome(
+                title: Localized("DEVICE_TRANSFER_INTERRUPTED_TITLE"),
+                message: Localized("DEVICE_TRANSFER_INTERRUPTED_BODY")
+            )
+        case .advertisingFailed, .assertion, .connectionLost:
+            showTransferFailureAndReturnHome(
+                title: Localized("DEVICE_TRANSFER_CONNECTION_FAILED_TITLE"),
+                message: Localized("DEVICE_TRANSFER_CONNECTION_FAILED_BODY")
+            )
+        default:
+            showTransferFailureAndReturnHome(
+                title: "Transfer Failed".localized,
+                message: error.message
+            )
+        }
     }
 }
 
@@ -324,4 +372,3 @@ extension DTTransferringDataViewController {
         view.backgroundColor = UIColor(rgbHex: Theme.isDarkThemeEnabled ? 0x181A20 : 0xFFFFFF)
     }
 }
-

@@ -8,7 +8,7 @@
 
 import UIKit
 import TTMessaging
-import JXPagingView
+import JXCategoryView
 
 @objcMembers
 class DTBotsViewController: OWSViewController {
@@ -16,8 +16,6 @@ class DTBotsViewController: OWSViewController {
     var contactsManager: OWSContactsManager?
 
     var sortedBots = [SignalAccount]()
-
-    var scrollCallback: ((UIScrollView?) -> Void)?
 
     lazy var tableView: UITableView = {
         let tableView = UITableView(frame: .zero, style: .plain)
@@ -27,6 +25,7 @@ class DTBotsViewController: OWSViewController {
         tableView.estimatedRowHeight = 0
         tableView.rowHeight = 70
         tableView.separatorStyle = .none
+        tableView.showsVerticalScrollIndicator = false
         if #available(iOS 15.0, *) {
             tableView.sectionHeaderTopPadding = 0
         }
@@ -100,18 +99,9 @@ extension DTBotsViewController: UITableViewDelegate, UITableViewDataSource {
         
        
         let bot = sortedBots[indexPath.row]
-        let profileVC = DTPersonalCardController(type: .other, recipientId: bot.recipientId, account: bot)
+        let profileVC = DTPersonalCardController(type: .other, recipientId: bot.recipientId, account: bot, addFriendSource: .unspecified)
         
         navigationController?.pushViewController(profileVC, animated: true)
-    }
-    
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        scrollView.bounces = true
-        scrollView.showsVerticalScrollIndicator = false
-        guard let scrollCallback = scrollCallback else {
-            return
-        }
-        scrollCallback(scrollView)
     }
     
     override func userTakeScreenshotEvent(_ notify: Notification) {
@@ -119,15 +109,11 @@ extension DTBotsViewController: UITableViewDelegate, UITableViewDataSource {
     }
 }
 
-extension DTBotsViewController: JXPagerViewListViewDelegate {
-    
+extension DTBotsViewController: JXCategoryListContentViewDelegate {
+
     func listView() -> UIView! { view }
-    
-    func listScrollView() -> UIScrollView! {
-        tableView
-    }
-    
-    func listViewDidScrollCallback(_ callback: ((UIScrollView?) -> Void)!) {
-        scrollCallback = callback
+
+    func listWillAppear() {
+        loadDataIfNecessary()
     }
 }

@@ -345,6 +345,15 @@ public class DTRTCAudioSession: NSObject {
                 return (false, nil)
             }
 
+            // Recording prewarm touches the capture chain, so it needs the same
+            // authorization as opening the mic. This is an automatic path: skip silently,
+            // never prompt. A later user-initiated unmute re-runs the real gate.
+            let microphoneStatus = CallMediaPermissionCoordinator.currentStatus(of: .microphone)
+            guard microphoneStatus.allowsAutomaticEnable else {
+                Logger.info("connectRoomSuccessConfig skip recording preparation: microphone permission \(microphoneStatus.rawValue)")
+                return (true, nil)
+            }
+
             let request = recordingPreparationRequestState.mutate { $0.request(true) }
             return (true, request)
         }()

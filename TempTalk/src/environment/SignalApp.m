@@ -11,6 +11,7 @@
 #import <TTMessaging/Environment.h>
 #import <TTServiceKit/TSContactThread.h>
 #import <TTServiceKit/TSGroupThread.h>
+#import <TTServiceKit/TTServiceKit-Swift.h>
 #import <SignalCoreKit/Threading.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -275,7 +276,7 @@ NS_ASSUME_NONNULL_BEGIN
 
             dispatch_async(dispatch_get_main_queue(), ^{
                 UIViewController *rootVC = rootNav.viewControllers.firstObject;
-                [rootVC showProfileCardInfoWith:recipientId isFromSameThread:NO isPresent:NO isFromContacts:YES];
+                [rootVC showProfileCardInfoWith:recipientId addFriendSource:DTAddFriendSource.unspecified isFromSameThread:NO isPresent:NO isFromContacts:YES];
             });
         };
 

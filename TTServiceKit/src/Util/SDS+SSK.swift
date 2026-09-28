@@ -26,6 +26,9 @@ extension TSGroupMetaMessage: DatabaseValueConvertible { }
 extension TSAttachmentType: Codable { }
 extension TSAttachmentType: DatabaseValueConvertible { }
 
+extension TSAttachmentPreprocessingKind: Codable { }
+extension TSAttachmentPreprocessingKind: DatabaseValueConvertible { }
+
 //add
 extension SDSRecordType: Codable { }
 extension SDSRecordType: DatabaseValueConvertible { }

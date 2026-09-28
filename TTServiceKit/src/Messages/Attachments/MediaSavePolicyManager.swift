@@ -98,50 +98,56 @@ public class MediaSavePolicyManager: NSObject {
         }
     }
 
-    public func saveImageIfNeeded(_ image: UIImage, threadId: String? = nil) {
-        let shouldSave: Bool
-        if let threadId = threadId {
-            shouldSave = shouldSaveForConversation(threadId: threadId)
-        } else {
-            shouldSave = getSaveToPhotoStatus()
+    /// Checks auto-save policy without reading attachment bytes.
+    @objc(shouldSaveMediaForThreadId:)
+    public func shouldSaveMedia(threadId: String?) -> Bool {
+        guard let threadId else {
+            return getSaveToPhotoStatus()
         }
+        return shouldSaveForConversation(threadId: threadId)
+    }
 
-        guard shouldSave else {
+    public func saveImageIfNeeded(_ image: UIImage, threadId: String? = nil) {
+        guard shouldSaveMedia(threadId: threadId) else {
             return
         }
 
         PHPhotoLibrary.shared().performChanges({
             PHAssetChangeRequest.creationRequestForAsset(from: image)
         }) { success, error in
-            if success {
-                Logger.info("camera image save success")
-            } else {
-                Logger.info("camera image save failed error: \(error?.localizedDescription)")
+            if !success {
+                Logger.error("camera image save failed error: \(String(describing: error))")
             }
         }
     }
 
     public func saveVideoIfNeeded(_ url: URL, threadId: String? = nil) {
-        let shouldSave: Bool
-        if let threadId = threadId {
-            shouldSave = shouldSaveForConversation(threadId: threadId)
-        } else {
-            shouldSave = getSaveToPhotoStatus()
-        }
-
-        guard shouldSave else {
+        guard shouldSaveMedia(threadId: threadId) else {
             return
         }
 
         PHPhotoLibrary.shared().performChanges({
             PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
         }) { success, error in
-            if success {
-                Logger.info("camera video save success")
-            } else {
-                Logger.info("camera video save failed error: \(error?.localizedDescription)")
+            if !success {
+                Logger.error("camera video save failed error: \(String(describing: error))")
+            }
+        }
+    }
+
+    /// Saves decrypted video data directly to PhotoKit.
+    public func saveVideoDataIfNeeded(_ data: Data, contentType: String, threadId: String? = nil) {
+        guard shouldSaveMedia(threadId: threadId) else { return }
+
+        PHPhotoLibrary.shared().performChanges({
+            let request = PHAssetCreationRequest.forAsset()
+            let options = PHAssetResourceCreationOptions()
+            options.uniformTypeIdentifier = MIMETypeUtil.utiType(forMIMEType: contentType)
+            request.addResource(with: .video, data: data, options: options)
+        }) { success, error in
+            if !success {
+                Logger.error("camera video data save failed error: \(String(describing: error))")
             }
         }
     }
 }
-

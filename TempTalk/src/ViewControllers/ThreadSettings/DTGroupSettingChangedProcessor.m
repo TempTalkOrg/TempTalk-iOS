@@ -38,6 +38,19 @@
                                     value:(NSNumber *)value
                                   success:(void(^)(SDSAnyWriteTransaction *writeTransaction))success
                                   failure:(void(^)(void))failure {
+    [self changeGroupSettingWithPropertyName:propertyName
+                                       value:value
+                  successWithServerTimestamp:^(SDSAnyWriteTransaction *writeTransaction, uint64_t serverTimestamp) {
+        success(writeTransaction);
+    }
+                                     failure:failure];
+}
+
+- (void)changeGroupSettingWithPropertyName:(NSString *)propertyName
+                                     value:(NSNumber *)value
+                successWithServerTimestamp:(void(^)(SDSAnyWriteTransaction *writeTransaction,
+                                                     uint64_t serverTimestamp))success
+                                   failure:(void(^)(void))failure {
     
     if(![self.groupThread.groupModel respondsToSelector:NSSelectorFromString(propertyName)] ||
        !DTParamsUtils.validateString(propertyName) ||
@@ -53,7 +66,7 @@
                                                                 block:^(TSGroupThread * instance) {
                     [instance.groupModel setValue:value forKey:propertyName];
                 }];
-                success(writeTransaction);
+                success(writeTransaction, entity.serverTimestamp.unsignedLongLongValue);
             });
         });
     } failure:^(NSError * _Nonnull error) {

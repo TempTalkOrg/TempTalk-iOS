@@ -341,7 +341,7 @@ NS_ASSUME_NONNULL_BEGIN
     TSInfoMessage *infoMsg = nil;
     if (receivedFriendReq) {
         thread.removedFromConversation = NO;
-        uint64_t now = [NSDate ows_millisecondTimeStamp];
+        uint64_t now = [DTTrustedClock clientStampMs];
         infoMsg = [[TSInfoMessage alloc] initWithTimestamp:now
                                                   inThread:thread
                                                messageType:TSInfoMessageAskFriend

@@ -122,7 +122,9 @@ public struct ProxyConfig: Equatable {
     /// coturn TURN REST credential: username = expiry timestamp, password = base64(HMAC-SHA1(secret, username)).
     /// TTL default 24h; coturn only checks expiry at allocation time.
     public func turnCredentials(ttl: TimeInterval = 24 * 3600,
-                                now: Date = Date()) -> (username: String, password: String)? {
+                                now: Date = Date(
+                                    timeIntervalSince1970: TimeInterval(DTTrustedClock.now()) / 1000
+                                )) -> (username: String, password: String)? {
         guard turnEnabled(), let secret = turnSecret else { return nil }
         let expiry = Int(now.addingTimeInterval(ttl).timeIntervalSince1970)
         let username = String(expiry)

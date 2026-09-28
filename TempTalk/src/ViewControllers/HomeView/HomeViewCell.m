@@ -25,6 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) UIStackView *bottomRowView;
 @property (nonatomic) DTConversationNameView *nameView;
 @property (nonatomic) UILabel *snippetLabel;
+@property (nonatomic) UIImageView *sendingStatusView;
 @property (nonatomic) UILabel *dateTimeLabel;
 @property (nonatomic) MessageStatusView *messageStatusView;
 @property (nonatomic) UIView *groupSizeContainer;
@@ -53,6 +54,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic,strong) NSArray <Contact *>*searchedRemarkNameContacts;
 @property (nonatomic,strong) NSArray *searchedReceptIds;
 @property (nonatomic, assign) HomeViewCellStyle cellStyle;
+
+// Snippet tags are dropped based on the label's laid-out width, which isn't known while
+// configuring. We keep the inputs and rebuild in -layoutSubviews once the width settles.
+@property (nonatomic, nullable) HomeViewCellSnippetInput *snippetInput;
+@property (nonatomic, assign) CGFloat lastSnippetWidth;
 @end
 
 #pragma mark -
@@ -152,6 +158,15 @@ NS_ASSUME_NONNULL_BEGIN
     [self.snippetLabel setContentHuggingHorizontalLow];
     [self.snippetLabel setCompressionResistanceHorizontalLow];
     [self.snippetLabel autoSetDimension:ALDimensionHeight toSize:14 relation:NSLayoutRelationGreaterThanOrEqual];
+
+    self.sendingStatusView = [[UIImageView alloc]
+        initWithImage:[[UIImage imageNamed:@"conversation_sending"]
+                          imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]];
+    self.sendingStatusView.hidden = YES;
+    self.sendingStatusView.contentMode = UIViewContentModeCenter;
+    [self.sendingStatusView autoSetDimensionsToSize:CGSizeMake(12, 12)];
+    [self.sendingStatusView setContentHuggingHorizontalHigh];
+    [self.sendingStatusView setCompressionResistanceHorizontalHigh];
     
     self.unreadLabel = [UILabel new];
     self.unreadLabel.textColor = [UIColor ows_whiteColor];
@@ -169,11 +184,12 @@ NS_ASSUME_NONNULL_BEGIN
     [self.unreadBadge autoSetDimension:ALDimensionWidth toSize:27 relation:NSLayoutRelationLessThanOrEqual];
     
     self.bottomRowView = [[UIStackView alloc] initWithArrangedSubviews:@[
+        self.sendingStatusView,
         self.snippetLabel,
         self.unreadBadge,
     ]];
     self.bottomRowView.axis = UILayoutConstraintAxisHorizontal;
-    self.bottomRowView.alignment = UIStackViewAlignmentLastBaseline;
+    self.bottomRowView.alignment = UIStackViewAlignmentCenter;
     self.bottomRowView.spacing = 6.f;
 
     UIStackView *vStackView = [[UIStackView alloc] initWithArrangedSubviews:@[
@@ -248,6 +264,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)resetUIForSearch:(NSString *)searchText thread:(TSThread *)thread cellStyle:(HomeViewCellStyle)cellStyle {
     self.cellStyle = cellStyle;
+    // The search path sets the snippet directly, so the tag-chain input must not linger.
+    self.snippetInput = nil;
+    [self updateSendingStatusVisible:NO];
     self.snippetLabel.font = [UIFont systemFontOfSize:11];
     self.snippetLabel.textColor = Theme.tthirdColor;
     self.snippetLabel.hidden = YES;
@@ -618,10 +637,15 @@ NS_ASSUME_NONNULL_BEGIN
     self.snippetLabel.font = [self snippetFont];
 
     if (overrideSnippet) {
+        self.snippetInput = nil;
         self.snippetLabel.attributedText = overrideSnippet;
+        [self updateSendingStatusVisible:NO];
     } else {
-        self.snippetLabel.attributedText =
-            [self attributedSnippetForThread:thread blockedPhoneNumberSet:blockedPhoneNumberSet];
+        BOOL hasSendingOutgoingMessage = NO;
+        self.snippetInput = [self snippetInputForThread:thread
+                             hasSendingOutgoingMessage:&hasSendingOutgoingMessage];
+        [self updateSendingStatusVisible:hasSendingOutgoingMessage];
+        [self refreshSnippetLabel];
     }
     
     NSDate *sendDate = overrideDate ? overrideDate : thread.lastMessageDate;
@@ -795,204 +819,114 @@ NS_ASSUME_NONNULL_BEGIN
     [self updateGroupSize];
 }
 
-- (NSAttributedString *)attributedSnippetForThread:(ThreadViewModel *)thread
-                             blockedPhoneNumberSet:(NSSet<NSString *> *)blockedPhoneNumberSet
+- (void)layoutSubviews
+{
+    [super layoutSubviews];
+
+    // Rebuild only when the width actually changed — setting attributedText schedules
+    // another layout pass, and the label's width is driven by the stack view (not by its
+    // text), so this converges after one rebuild.
+    CGFloat snippetWidth = self.snippetLabel.bounds.size.width;
+    if (self.snippetInput && fabs(snippetWidth - self.lastSnippetWidth) > 0.5) {
+        [self refreshSnippetLabel];
+    }
+}
+
+- (void)refreshSnippetLabel
+{
+    if (!self.snippetInput) {
+        return;
+    }
+    self.lastSnippetWidth = self.snippetLabel.bounds.size.width;
+    self.snippetLabel.attributedText = [HomeViewCellSnippetBuilder snippetWithInput:self.snippetInput
+                                                                    availableWidth:self.lastSnippetWidth
+                                                                              font:self.snippetFont
+                                                                          tagColor:Theme.errorColor
+                                                                         bodyColor:Theme.tthirdColor];
+}
+
+/// Collects the tags for a thread's preview line. Which tags survive depends on the
+/// label's width, so the trimming happens later in -refreshSnippetLabel.
+- (HomeViewCellSnippetInput *)snippetInputForThread:(ThreadViewModel *)thread
+                         hasSendingOutgoingMessage:(BOOL *)hasSendingOutgoingMessage
 {
     OWSAssertDebug(thread);
 
-    BOOL isBlocked = NO;
-    if (!thread.isGroupThread) {
-        NSString *contactIdentifier = thread.contactIdentifier;
-        isBlocked = [blockedPhoneNumberSet containsObject:contactIdentifier];
-    }
     BOOL hasUnreadMessages = thread.hasUnreadMessages;
+    BOOL isGroupThread = thread.isGroupThread;
+    NSString *localNumber = [TSAccountManager localNumber];
 
-    NSMutableAttributedString *snippetText = [NSMutableAttributedString new];
-    NSString *displayableText = thread.lastMessageText;
-    if (displayableText) {
-        __block NSString *draftString = nil;
-        __block NSString *atPersonStrings = nil;
-        __block BOOL hasCriticalAlertHighlight = NO;
-        [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction * _Nonnull readTransaction) {
-            draftString = [thread.threadRecord currentDraftWithTransaction:readTransaction];
-            atPersonStrings = [thread.threadRecord atPersonsWithTransaction:readTransaction];
-            hasCriticalAlertHighlight = [thread.threadRecord hasCriticalAlertHighlightWithTransaction:readTransaction];
-        }];
-        //TODO: 待优化
-        if (!thread.isGroupThread && draftString.length) {//私聊 草稿展示优先
-            
-            if (hasUnreadMessages && hasCriticalAlertHighlight) {
-                [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                     initWithString:Localized(@"SOMEONE_CRITICAL_ALERT_ALL_TEXT", @"")
-                                                     attributes:@{
-                    NSFontAttributeName : self.snippetFont.ows_semibold,
-                    NSForegroundColorAttributeName : Theme.errorColor,
-                }]];
-                
-                [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                     initWithString:displayableText
-                                                     attributes:@{
-                    NSFontAttributeName :
-                        (hasUnreadMessages ? self.snippetFont
-                        : self.snippetFont),
-                    NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.tthirdColor
-                        : Theme.tthirdColor),
-                }]];
-                return snippetText;
-            }
-            
-            snippetText = [[NSMutableAttributedString alloc]
-                           initWithAttributedString:
-                               [[NSAttributedString alloc]initWithString:Localized(@"HOMEVIEWCELL_DRAFT",
-                                                                                           @"A label for conversations with draft.")
-                                                              attributes:@{
-                                NSFontAttributeName :self.snippetFont.ows_semibold,
-                                NSForegroundColorAttributeName :Theme.errorColor,
-                               }]];
-            [snippetText appendAttributedString:
-             [[NSAttributedString alloc]
-              initWithString:[NSString stringWithFormat:@" %@",draftString]
-              attributes:@{
-                NSFontAttributeName : self.snippetFont,
-                NSForegroundColorAttributeName :
-                    Theme.tthirdColor,
-             }]];
-            
-        } else if (!thread.isGroupThread && !draftString.length) {
-            if (hasUnreadMessages && hasCriticalAlertHighlight) {
-                [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                     initWithString:Localized(@"SOMEONE_CRITICAL_ALERT_ALL_TEXT", @"")
-                                                     attributes:@{
-                    NSFontAttributeName : self.snippetFont.ows_semibold,
-                    NSForegroundColorAttributeName : Theme.errorColor,
-                }]];
-                
-                [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                     initWithString:displayableText
-                                                     attributes:@{
-                    NSFontAttributeName :
-                        (hasUnreadMessages ? self.snippetFont
-                        : self.snippetFont),
-                    NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.tthirdColor
-                        : Theme.tthirdColor),
-                }]];
-                return snippetText;
-            }
-            
-            [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                 initWithString:displayableText
-                                                 attributes:@{
-                NSFontAttributeName :
-                    (hasUnreadMessages ? self.snippetFont
-                    : self.snippetFont),
-                NSForegroundColorAttributeName :
-                    (hasUnreadMessages ? Theme.tthirdColor
-                    : Theme.tthirdColor),
-            }]];
-        } else if(thread.isGroupThread) {//群组中有草稿展示 优先级：Critical alert > @您 > @All > 草稿
-            if (hasUnreadMessages && hasCriticalAlertHighlight) {
-                [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                     initWithString:Localized(@"SOMEONE_CRITICAL_ALERT_ALL_TEXT", @"")
-                                                     attributes:@{
-                    NSFontAttributeName : self.snippetFont.ows_semibold,
-                    NSForegroundColorAttributeName : Theme.errorColor,
-                }]];
-                
-                [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                     initWithString:displayableText
-                                                     attributes:@{
-                    NSFontAttributeName :
-                        (hasUnreadMessages ? self.snippetFont
-                        : self.snippetFont),
-                    NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.tthirdColor
-                        : Theme.tthirdColor),
-                }]];
-                return snippetText;
-            }
-            if (hasUnreadMessages && atPersonStrings && ([TSAccountManager localNumber] && [atPersonStrings containsString:[TSAccountManager localNumber]])) {
-                //@自己
-                [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                     initWithString:Localized(@"SOMEONE_MENTION_YOU_TEXT", @"")
-                                                     attributes:@{
-                    NSFontAttributeName : self.snippetFont.ows_semibold,
-                    NSForegroundColorAttributeName : Theme.errorColor,
-                }]];
-                
-                [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                     initWithString:displayableText
-                                                     attributes:@{
-                    NSFontAttributeName :
-                        (hasUnreadMessages ? self.snippetFont
-                        : self.snippetFont),
-                    NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.tthirdColor
-                        : Theme.tthirdColor),
-                }]];
-                return snippetText;
-                
-            }
-            if (hasUnreadMessages && atPersonStrings && [atPersonStrings containsString:MENTIONS_ALL]) {
-                //@所有人
-                [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                     initWithString:Localized(@"SOMEONE_MENTION_ALL_TEXT", @"")
-                                                     attributes:@{
-                    NSFontAttributeName : self.snippetFont.ows_semibold,
-                    NSForegroundColorAttributeName : Theme.errorColor,
-                }]];
-                
-                [snippetText appendAttributedString:[[NSAttributedString alloc]
-                                                     initWithString:displayableText
-                                                     attributes:@{
-                    NSFontAttributeName :
-                        (hasUnreadMessages ? self.snippetFont
-                        : self.snippetFont),
-                    NSForegroundColorAttributeName :
-                        (hasUnreadMessages ? Theme.tthirdColor
-                        : Theme.tthirdColor),
-                }]];
-                return snippetText;
-            }
-            
-            if (draftString.length) {
-                //草稿展示
-                snippetText = [[NSMutableAttributedString alloc]
-                               initWithAttributedString:
-                                   [[NSAttributedString alloc]initWithString:Localized(@"HOMEVIEWCELL_DRAFT",
-                                                                                               @"A label for conversations with draft.")
-                                                                  attributes:@{
-                                    NSFontAttributeName :self.snippetFont.ows_semibold,
-                                    NSForegroundColorAttributeName :Theme.errorColor,
-                                   }]];
-                [snippetText appendAttributedString:
-                 [[NSAttributedString alloc]
-                  initWithString:[NSString stringWithFormat:@" %@",draftString]
-                  attributes:@{
-                    NSFontAttributeName : self.snippetFont,
-                    NSForegroundColorAttributeName :
-                        Theme.tthirdColor,
-                 }]];
-                
-            } else {
-                UIFont * snippetFont = hasUnreadMessages ? self.snippetFont : self.snippetFont;
-                UIColor *foregroundColor = hasUnreadMessages ? Theme.tthirdColor : Theme.tthirdColor;
-                [self snippetWithOriginString:snippetText AppendText:displayableText font:snippetFont textColor:foregroundColor];
-            }
-            return snippetText;
+    __block NSString *draftString = nil;
+    __block NSString *atPersonStrings = nil;
+    __block BOOL hasCriticalAlertHighlight = NO;
+    __block BOOL hasFailedOutgoingMessage = NO;
+    __block BOOL isSendingOutgoingMessage = NO;
+    [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *_Nonnull readTransaction) {
+        draftString = [thread.threadRecord currentDraftWithTransaction:readTransaction];
+        atPersonStrings = [thread.threadRecord atPersonsWithTransaction:readTransaction];
+        hasCriticalAlertHighlight = [thread.threadRecord hasCriticalAlertHighlightWithTransaction:readTransaction];
+        InteractionFinder *interactionFinder =
+            [[InteractionFinder alloc] initWithThreadUniqueId:thread.threadRecord.uniqueId];
+        hasFailedOutgoingMessage = [interactionFinder hasFailedOutgoingMessageWithTransaction:readTransaction];
+        isSendingOutgoingMessage = [interactionFinder hasSendingOutgoingMessageWithTransaction:readTransaction];
+    }];
+
+    if (hasSendingOutgoingMessage) {
+        *hasSendingOutgoingMessage = isSendingOutgoingMessage;
+    }
+
+    HomeViewCellSnippetInput *input = [HomeViewCellSnippetInput new];
+    input.messageBody = thread.lastMessageText;
+
+    if (hasUnreadMessages && hasCriticalAlertHighlight) {
+        input.criticalAlertText = Localized(@"SOMEONE_CRITICAL_ALERT_ALL_TEXT", @"");
+    }
+
+    // Send failed is about our own outgoing message, so it is independent of unread state.
+    if (hasFailedOutgoingMessage) {
+        input.sendFailedText = Localized(@"HOMEVIEWCELL_SEND_FAILED",
+            @"A label for conversations with a message that failed to send.");
+    }
+
+    // @you wins over @All when both apply; they rank equally when dropping tags.
+    if (isGroupThread && hasUnreadMessages && atPersonStrings.length) {
+        if (localNumber.length && [atPersonStrings containsString:localNumber]) {
+            input.mentionText = Localized(@"SOMEONE_MENTION_YOU_TEXT", @"");
+        } else if ([atPersonStrings containsString:MENTIONS_ALL]) {
+            input.mentionText = Localized(@"SOMEONE_MENTION_ALL_TEXT", @"");
         }
     }
-    return snippetText;
+
+    if (draftString.length) {
+        input.draftText = Localized(@"HOMEVIEWCELL_DRAFT", @"A label for conversations with draft.");
+        input.draftBody = draftString;
+    }
+
+    return input;
 }
 
-- (void)snippetWithOriginString:(NSMutableAttributedString *)originString AppendText:(NSString *)appendString font:(UIFont *)font textColor:(UIColor *)color {
-    [originString appendAttributedString:[[NSAttributedString alloc]
-                                         initWithString:appendString
-                                         attributes:@{
-        NSFontAttributeName : font,
-        NSForegroundColorAttributeName :color,
-    }]];
+- (void)updateSendingStatusVisible:(BOOL)isVisible
+{
+    self.sendingStatusView.tintColor = Theme.tthirdColor;
+    self.sendingStatusView.hidden = !isVisible;
+}
+
+- (void)refreshSendingStatus
+{
+    NSString *threadUniqueId = self.thread.threadRecord.uniqueId;
+    if (!threadUniqueId.length) {
+        [self updateSendingStatusVisible:NO];
+        return;
+    }
+
+    __block BOOL hasSendingOutgoingMessage = NO;
+    [self.databaseStorage uiReadWithBlock:^(SDSAnyReadTransaction *_Nonnull readTransaction) {
+        InteractionFinder *interactionFinder =
+            [[InteractionFinder alloc] initWithThreadUniqueId:threadUniqueId];
+        hasSendingOutgoingMessage =
+            [interactionFinder hasSendingOutgoingMessageWithTransaction:readTransaction];
+    }];
+    [self updateSendingStatusVisible:hasSendingOutgoingMessage];
 }
 
 - (NSString *)criticalAlertIdentifierForThread:(ThreadViewModel *)thread {
@@ -1123,6 +1057,11 @@ NS_ASSUME_NONNULL_BEGIN
 
     self.thread = nil;
     self.contactsManager = nil;
+    // Otherwise a stale input would let -layoutSubviews overwrite a snippet set directly
+    // by the search path, which doesn't go through -configure.
+    self.snippetInput = nil;
+    self.lastSnippetWidth = 0;
+    [self updateSendingStatusVisible:NO];
     [self.avatarView resetForReuse];
     self.groupSizeContainer.hidden = YES;
     self.rightCallView.hidden = YES;

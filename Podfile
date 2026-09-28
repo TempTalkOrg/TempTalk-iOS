@@ -1,4 +1,4 @@
-platform :ios, '14.0'
+platform :ios, '15.0'
 
 #plugin 'cocoapods-binary'
 use_frameworks!
@@ -34,9 +34,9 @@ def shared_pods
 end
 
 def crashlytics_pods
-  pod 'FirebaseAnalytics', '~> 10.24.0'
-  pod 'FirebaseCrashlytics', '~> 10.24.0'
-  pod 'FirebasePerformance', '~> 10.24.0'
+  pod 'FirebaseAnalytics', '~> 10.29.0'
+  pod 'FirebaseCrashlytics', '~> 10.29.0'
+  pod 'FirebasePerformance', '~> 10.29.0'
 end
 
 target 'Yelling' do
@@ -45,7 +45,6 @@ target 'Yelling' do
   pod 'SSZipArchive', '2.4.2', :inhibit_warnings => true
   pod 'ZLPhotoBrowser', :git => 'https://github.com/TempTalkOrg/ZLPhotoBrowser.git', branch: 'temptalk'
   pod 'JXCategoryView', :git => 'https://github.com/TempTalkOrg/JXCategoryView.git', branch: 'temptalk'
-  pod 'JXPagingView/Pager', :git => 'https://github.com/TempTalkOrg/JXPagingView.git', branch: 'temptalk'
   pod 'ZXingObjC', '~> 3.6.4'
   pod 'lottie-ios', '4.5.1'
   pod 'libPhoneNumber-iOS', git: 'https://github.com/signalapp/libPhoneNumber-iOS', branch: 'signal-master'
@@ -188,4 +187,3 @@ def strip_bitcode()
     strip_bitcode_from_framework(bitcode_strip_path, framework_relative_path)
   end
 end
-

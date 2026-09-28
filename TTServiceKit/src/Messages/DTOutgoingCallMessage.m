@@ -7,6 +7,7 @@
 
 #import "DTOutgoingCallMessage.h"
 #import <SignalCoreKit/NSDate+OWS.h>
+#import <TTServiceKit/TTServiceKit-Swift.h>
 #import "OWSDisappearingMessagesConfiguration.h"
 #import "TSThread.h"
 
@@ -34,7 +35,7 @@
     
     uint32_t expiresInSeconds = [thread messageExpiresInSeconds];
     
-    DTOutgoingCallMessage *message = [[DTOutgoingCallMessage alloc] initOutgoingMessageWithTimestamp:[NSDate ows_millisecondTimeStamp]
+    DTOutgoingCallMessage *message = [[DTOutgoingCallMessage alloc] initOutgoingMessageWithTimestamp:[DTTrustedClock clientStampMs]
                                                                                             inThread:thread
                                                                                          messageBody:text
                                                                                            atPersons:atPersons

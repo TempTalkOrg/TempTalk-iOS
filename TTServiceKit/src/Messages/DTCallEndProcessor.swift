@@ -14,7 +14,7 @@ open class DTCallEndProcessor: NSObject {
                                                    serverTimestamp: UInt64,
                                                    transaction: SDSAnyWriteTransaction) {
         
-        let now = NSDate.ows_millisecondTimeStamp()
+        let now = DTTrustedClock.clientStampMs()
         let customMessage = callEndFeedbackAttributeString(duration: duration)
         let infoMessage = TSInfoMessage(actionInfoMessageWith: .callEnd, timestamp: now, serverTimestamp:serverTimestamp, in: thread, customMessage: customMessage)
         infoMessage.anyInsert(transaction: transaction)
@@ -59,7 +59,7 @@ open class DTCallEndProcessor: NSObject {
         guard let joinOrLeft = joinOrLeft else { return }
         
         let customMessage = NSAttributedString(string: "\(name)\(joinOrLeft)\(timeString)")
-        let now = NSDate.ows_millisecondTimeStamp()
+        let now = DTTrustedClock.clientStampMs()
         
         let infoMessage = TSInfoMessage(actionInfoMessageWith: .callEnd, timestamp: now, serverTimestamp: 0, in: thread, customMessage: customMessage)
         infoMessage.anyInsert(transaction: transaction)

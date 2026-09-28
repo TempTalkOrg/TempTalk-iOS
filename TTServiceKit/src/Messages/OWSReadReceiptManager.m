@@ -301,13 +301,13 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
             OWSAssertDebug(messageAuthorId.length > 0);
             
             if (!message.isConfidentialMessage) return;
-            
+
             TSThread *thread = message.threadWithSneakyTransaction;
 
             OWSLinkedDeviceReadReceipt *newReadReceipt =
                 [[OWSLinkedDeviceReadReceipt alloc] initWithSenderId:messageAuthorId
                                                   messageIdTimestamp:message.timestamp
-                                                       readTimestamp:[NSDate ows_millisecondTimeStamp]];
+                                                       readTimestamp:[DTTrustedClock now]];
             newReadReceipt.whisperMessageType = message.whisperMessageType;
             newReadReceipt.isLargeGroupThread = thread.isLargeGroupThread;
             newReadReceipt.associatedUniqueThreadId = message.uniqueThreadId;
@@ -318,9 +318,9 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
             uint64_t notifySequenceId = message.notifySequenceId;
             // ✅ Fix: Use timestampForSorting instead of serverTimestamp
             // timestampForSorting = serverTimestamp ?? timestamp, ensures we always have a valid value
-            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.timestampForSorting notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
+            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[DTTrustedClock now] maxServerTime:message.timestampForSorting notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
             newReadReceipt.readPosition = readPosition;
-            
+
             newReadReceipt.messageModeType = message.messageModeType;
 
             if ([message.messageAuthorId isEqualToString:[TSAccountManager localNumber]]) {
@@ -346,7 +346,7 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
             DTReadReceiptEntity *readReceiptEntity = [DTReadReceiptEntity new];
             readReceiptEntity.associatedUniqueThreadId = message.uniqueThreadId;
             readReceiptEntity.messageModeType = message.messageModeType;
-            readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.serverTimestamp notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
+            readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[DTTrustedClock now] maxServerTime:message.serverTimestamp notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
             readReceiptEntity.readPosition = readPosition;
             TSThread *senderThread = [TSContactThread getOrCreateThreadWithContactId:messageAuthorId];
             OWSReadReceiptsForSenderMessage *receiptMessage = [[OWSReadReceiptsForSenderMessage alloc] initWithThread:senderThread
@@ -403,7 +403,7 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
             OWSLinkedDeviceReadReceipt *newReadReceipt =
                 [[OWSLinkedDeviceReadReceipt alloc] initWithSenderId:messageAuthorId
                                                   messageIdTimestamp:message.timestamp
-                                                       readTimestamp:[NSDate ows_millisecondTimeStamp]];
+                                                       readTimestamp:[DTTrustedClock now]];
             newReadReceipt.whisperMessageType = message.whisperMessageType;
             // TODO: check felix 2022-11-29
             newReadReceipt.isLargeGroupThread = thread.isLargeGroupThread;
@@ -415,9 +415,9 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
             uint64_t notifySequenceId = message.notifySequenceId;
             // ✅ Fix: Use timestampForSorting instead of serverTimestamp
             // timestampForSorting = serverTimestamp ?? timestamp, ensures we always have a valid value
-            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.timestampForSorting notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
+            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[DTTrustedClock now] maxServerTime:message.timestampForSorting notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
             newReadReceipt.readPosition = readPosition;
-            
+
             newReadReceipt.messageModeType = message.messageModeType;
 
             OWSLinkedDeviceReadReceipt *_Nullable oldReadReceipt = self.toLinkedDevicesReadReceiptMap[threadUniqueId];
@@ -454,7 +454,7 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
                 if([maxTimestamp isEqualToNumber:@(message.timestamp)]){
                     // ✅ Fix: Use timestampForSorting instead of serverTimestamp
             // timestampForSorting = serverTimestamp ?? timestamp, ensures we always have a valid value
-            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[NSDate ows_millisecondTimeStamp] maxServerTime:message.timestampForSorting notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
+            DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId readAt:[DTTrustedClock now] maxServerTime:message.timestampForSorting notifySequenceId:notifySequenceId maxSequenceId:message.sequenceId];
                     readReceiptEntity.readPosition = readPosition;
                 }
                 readReceiptEntity.whisperMessageType = TSEncryptedWhisperMessageType;
@@ -498,7 +498,7 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
             groupId = ((TSGroupThread *)thread).groupModel.groupId;
         }
         DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId
-                                                                                    readAt:[NSDate ows_millisecondTimeStamp]
+                                                                                    readAt:[DTTrustedClock now]
                                                                              maxServerTime:message.timestampForSorting
                                                                           notifySequenceId:message.notifySequenceId
                                                                              maxSequenceId:message.sequenceId];
@@ -595,6 +595,7 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
 
 - (void)processReadReceiptsFromLinkedDevice:(NSArray<DSKProtoSyncMessageRead *> *)readReceiptProtos
                               readTimestamp:(uint64_t)readTimestamp
+                     receiptServerTimestamp:(uint64_t)receiptServerTimestamp
                                 transaction:(SDSAnyWriteTransaction *)transaction
 {
     OWSAssertDebug(readReceiptProtos);
@@ -605,9 +606,10 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
         uint64_t messageIdTimestamp = readReceiptProto.timestamp;
         uint64_t serverTimestamp = 0;
         NSData *groupId = nil;
-        
+
         if(readReceiptProto.readPosition){
-            DTReadPositionEntity *readPositionEntity = [DTReadPositionEntity readPostionEntityWithProto:readReceiptProto.readPosition];
+            DTReadPositionEntity *readPositionEntity = [DTReadPositionEntity readPostionEntityWithProto:readReceiptProto.readPosition
+                                                                                receiptServerTimestamp:receiptServerTimestamp];
             if(readPositionEntity.readAt > 0){
                 readTimestamp = readPositionEntity.readAt;
             }
@@ -950,7 +952,6 @@ NSString *const OWSReadReceiptManagerAreReadReceiptsEnabled = @"areReadReceiptsE
         }];
     }
 }
-
 
 - (void)sendReadRecipetWithReadPosition:(DTReadPositionEntity *)readPosition
                                  thread:(TSThread *)thread

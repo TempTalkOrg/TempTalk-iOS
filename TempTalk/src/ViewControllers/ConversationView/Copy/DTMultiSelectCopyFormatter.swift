@@ -95,7 +95,7 @@ enum DTMultiSelectCopyFormatter {
         case .stillImage, .animatedImage:
             return "[\(Localized("SHORT_FOR_IMAGE"))]"
 
-        case .video:
+        case .video, .videoTranscoding:
             return "[\(Localized("SHORT_FOR_VIDEO"))]"
 
         case .audio:

@@ -196,21 +196,46 @@ class DTRequestBar : UIView {
 
 // MARK: - DTConversationWarningHeaderView
 
+enum DTConversationNoticeHeaderStyle {
+    case stranger
+    case endToEndEncryption
+}
+
 class DTConversationWarningHeaderView: UIView {
 
-    private let warningLabel: UILabel = {
-        let label = UILabel()
-        label.textAlignment = .center
-        label.numberOfLines = 0
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
+    var didTapEndToEndEncryption: (() -> Void)?
+
+    private var style: DTConversationNoticeHeaderStyle
+
+    private lazy var warningLabel: UITextView = {
+        let textView = UITextView()
+        textView.backgroundColor = .clear
+        textView.isEditable = false
+        textView.isScrollEnabled = false
+        textView.isSelectable = true
+        textView.textContainerInset = .zero
+        textView.textContainer.lineFragmentPadding = 0
+        textView.textAlignment = .center
+        textView.delegate = self
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        return textView
     }()
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        setupLabel()
+    private let encryptionNoticeView: DTE2EENoticeTextView = {
+        let noticeView = DTE2EENoticeTextView(style: .conversation)
+        noticeView.translatesAutoresizingMaskIntoConstraints = false
+        noticeView.contentInsets = UIEdgeInsets(top: 10, left: 50, bottom: 10, right: 50)
+        return noticeView
+    }()
+
+    init(style: DTConversationNoticeHeaderStyle = .stranger) {
+        self.style = style
+        super.init(frame: .zero)
         initCommonUI()
         configUILayout()
+        encryptionNoticeView.didTapLearnMore = { [weak self] in
+            self?.didTapEndToEndEncryption?()
+        }
         applyTheme()
     }
 
@@ -218,26 +243,77 @@ class DTConversationWarningHeaderView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func setupLabel() {
-        let fullText = Localized("CONVERSATION_WARNING_HEADER", comment: "🔒 Privacy first. Fully anonymous and end-to-end encrypted. DO NOT trust unknown users.")
+    func configure(style: DTConversationNoticeHeaderStyle) {
+        guard self.style != style else { return }
+        self.style = style
+        applyTheme()
+        invalidateIntrinsicContentSize()
+    }
+
+    private func updateAttributedText() {
+        let fullText = Localized("CONVERSATION_WARNING_HEADER", comment: "Privacy first. Fully anonymous and end-to-end encrypted. DO NOT trust unknown users.")
         let boldText = Localized("REQUEST_BAR_WARNING_BOLD", comment: "DO NOT")
+        let learnMoreText = Localized("CONVERSATION_E2EE_LEARN_MORE", comment: "Learn more")
+        let attributedString = NSMutableAttributedString()
 
-        let attributedString = NSMutableAttributedString(string: fullText)
-        let regularFont = UIFont.systemFont(ofSize: 12, weight: .regular)
-        let boldFont = UIFont.systemFont(ofSize: 12, weight: .bold)
+        // Same lock icon as the end-to-end encryption notice.
+        if let icon = UIImage(named: "ic_e2ee_lock")?.withTintColor(
+            Theme.tthirdColor,
+            renderingMode: .alwaysOriginal
+        ) {
+            let attachment = NSTextAttachment()
+            attachment.image = icon
+            attachment.bounds = CGRect(x: 0, y: -2, width: 12, height: 12)
+            attributedString.append(NSAttributedString(attachment: attachment))
+            attributedString.append(NSAttributedString(string: " "))
+        }
 
-        attributedString.addAttribute(.font, value: regularFont, range: NSRange(location: 0, length: fullText.count))
+        let textStartLocation = attributedString.length
+        attributedString.append(NSAttributedString(string: fullText, attributes: [
+            .font: UIFont.systemFont(ofSize: 12),
+            .foregroundColor: Theme.tthirdColor
+        ]))
 
         if let range = fullText.range(of: boldText) {
-            let nsRange = NSRange(range, in: fullText)
-            attributedString.addAttribute(.font, value: boldFont, range: nsRange)
+            let textRange = NSRange(range, in: fullText)
+            attributedString.addAttribute(
+                .font,
+                value: UIFont.systemFont(ofSize: 12, weight: .bold),
+                range: NSRange(
+                    location: textStartLocation + textRange.location,
+                    length: textRange.length
+                )
+            )
         }
+
+        if let range = fullText.range(of: learnMoreText, options: .backwards) {
+            let textRange = NSRange(range, in: fullText)
+            attributedString.addAttributes([
+                .font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+                .foregroundColor: Theme.tinfoColor,
+                .link: URL(string: "quicall-e2ee://info") as Any
+            ], range: NSRange(
+                location: textStartLocation + textRange.location,
+                length: textRange.length
+            ))
+        }
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        paragraphStyle.minimumLineHeight = 16
+        paragraphStyle.maximumLineHeight = 16
+        attributedString.addAttribute(
+            .paragraphStyle,
+            value: paragraphStyle,
+            range: NSRange(location: 0, length: attributedString.length)
+        )
 
         warningLabel.attributedText = attributedString
     }
 
     func initCommonUI() {
         addSubview(warningLabel)
+        addSubview(encryptionNoticeView)
     }
 
     func configUILayout() {
@@ -245,19 +321,56 @@ class DTConversationWarningHeaderView: UIView {
             warningLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 50),
             warningLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
             warningLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -50),
-            warningLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
+            warningLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
+            encryptionNoticeView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            encryptionNoticeView.topAnchor.constraint(equalTo: topAnchor),
+            encryptionNoticeView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            encryptionNoticeView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
     }
 
     @objc func applyTheme() {
         self.backgroundColor = .clear
         warningLabel.backgroundColor = .clear
-        warningLabel.textColor = Theme.tthirdColor
+        warningLabel.linkTextAttributes = [
+            .foregroundColor: Theme.tinfoColor,
+            .underlineStyle: 0
+        ]
+        updateAttributedText()
+        encryptionNoticeView.applyTheme()
+        warningLabel.isHidden = style != .stranger
+        encryptionNoticeView.isHidden = style != .endToEndEncryption
+    }
+
+    func height(fittingWidth width: CGFloat) -> CGFloat {
+        switch style {
+        case .stranger:
+            let labelWidth = max(0, width - 100)
+            let labelHeight = warningLabel.sizeThatFits(
+                CGSize(width: labelWidth, height: .greatestFiniteMagnitude)
+            ).height
+            return ceil(labelHeight) + 20
+        case .endToEndEncryption:
+            return encryptionNoticeView.height(fittingWidth: width)
+        }
     }
 
     override var intrinsicContentSize: CGSize {
-        let labelHeight = warningLabel.intrinsicContentSize.height
-        let totalHeight = labelHeight + 20 // 10 top + 10 bottom padding
-        return CGSize(width: UIView.noIntrinsicMetric, height: totalHeight)
+        let width = bounds.width > 0 ? bounds.width : UIScreen.main.bounds.width
+        return CGSize(width: UIView.noIntrinsicMetric, height: height(fittingWidth: width))
+    }
+
+}
+
+extension DTConversationWarningHeaderView: UITextViewDelegate {
+    func textView(
+        _ textView: UITextView,
+        shouldInteractWith URL: URL,
+        in characterRange: NSRange,
+        interaction: UITextItemInteraction
+    ) -> Bool {
+        guard URL.scheme == "quicall-e2ee" else { return true }
+        didTapEndToEndEncryption?()
+        return false
     }
 }

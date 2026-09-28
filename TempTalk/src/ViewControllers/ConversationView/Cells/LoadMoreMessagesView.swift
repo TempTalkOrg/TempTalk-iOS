@@ -19,9 +19,9 @@ public class LoadMoreMessagesView: UICollectionReusableView {
         label.text = Localized("CONVERSATION_VIEW_LOADING_MORE_MESSAGES",
                                        comment: "Indicates that the app is loading more messages in this conversation.")
         super.init(frame: frame)
+        clipsToBounds = true
         addSubview(label)
         label.autoPinEdgesToSuperviewEdges()
-        label.autoSetDimension(.height, toSize: LoadMoreMessagesView.fixedHeight)
         label.textAlignment = .center
     }
 

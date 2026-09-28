@@ -167,7 +167,7 @@ public class DTLeaveOrDisbandGroup: NSObject {
             ) ?? ""
         }
 
-        let now = NSDate.ows_millisecondTimeStamp()
+        let now = DTTrustedClock.clientStampMs()
         databaseStorage.asyncWrite { transaction in
             groupThread.anyUpdateGroupThread(transaction: transaction) { instance in
                 instance.groupModel = newGroupModel

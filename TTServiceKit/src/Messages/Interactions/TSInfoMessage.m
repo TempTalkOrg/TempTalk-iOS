@@ -382,7 +382,7 @@ const InfoMessageUserInfoKey InfoMessageUserInfoKeyChangePhoneNumberNew = @"Info
     OWSAssertDebug(thread);
     OWSAssertDebug(recipientId);
 
-    return [[self alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
+    return [[self alloc] initWithTimestamp:[DTTrustedClock clientStampMs]
                                   inThread:thread
                                messageType:TSInfoMessageUserNotRegistered
                    unregisteredRecipientId:recipientId];
@@ -393,7 +393,7 @@ const InfoMessageUserInfoKey InfoMessageUserInfoKeyChangePhoneNumberNew = @"Info
     OWSAssertDebug(thread);
     OWSAssertDebug(recipientId);
 
-    return [[self alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
+    return [[self alloc] initWithTimestamp:[DTTrustedClock clientStampMs]
                                   inThread:thread
                                messageType:TSInfoMessageUserPermissionForbidden
                    unregisteredRecipientId:recipientId];

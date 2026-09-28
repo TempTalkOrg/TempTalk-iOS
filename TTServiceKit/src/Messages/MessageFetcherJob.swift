@@ -387,7 +387,8 @@ public class MessageFetcherJob: NSObject {
         )
     }
     
-    private class func buildEnvelope(messageDict: [String: Any]) -> DSKProtoEnvelope? {
+    // Internal so the REST-to-protobuf contract can be covered by regression tests.
+    class func buildEnvelope(messageDict: [String: Any]) -> DSKProtoEnvelope? {
         do {
             
             let builder = DSKProtoEnvelope.builder()
@@ -446,7 +447,9 @@ public class MessageFetcherJob: NSObject {
                         
                     }
                     
-                    if let groupId_string = conversationId["groupId"] as? String, let groupId = Data.init(base64Encoded: groupId_string), groupId.count > 0  {
+                    if let groupId_string = conversationId["groupId"] as? String,
+                       let groupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: groupId_string),
+                       groupId.count > 0 {
                         
                         let conversationBuilder = DSKProtoConversationId.builder()
                         conversationBuilder.setGroupID(groupId)

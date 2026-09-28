@@ -77,9 +77,63 @@ enum ProxyRoutingError: Error {
     case tunnelUnavailable
 }
 
+// MARK: - App-token authentication failure
+
+enum CallAuthenticationFailure {
+    static func isAppTokenRejected(_ error: Error) -> Bool {
+        guard let liveKitError = error as? LiveKitError else { return false }
+        return liveKitError.type == .startCall && liveKitError.response?.base.status == 401
+    }
+}
+
 // MARK: - ConnectOptions adapter
 
+private enum CallConnectionOptionsPolicy {
+    static let quicConnectTimeoutMs = 3_000
+}
+
 extension ConnectOptions {
+    func replacingTTCallToken(with token: String) -> ConnectOptions {
+        guard var request = ttCallRequest else {
+            Logger.error("[newcall] [startcall-auth] cannot replace app token: TTCallRequest is missing")
+            return self
+        }
+        request.token = token
+
+        return ConnectOptions(
+            autoSubscribe: autoSubscribe,
+            reconnectAttempts: reconnectAttempts,
+            reconnectAttemptDelay: reconnectAttemptDelay,
+            reconnectMaxDelay: reconnectMaxDelay,
+            socketConnectTimeoutInterval: socketConnectTimeoutInterval,
+            primaryTransportConnectTimeout: primaryTransportConnectTimeout,
+            publisherTransportConnectTimeout: publisherTransportConnectTimeout,
+            iceServers: iceServers,
+            iceTransportPolicy: iceTransportPolicy,
+            isDscpEnabled: isDscpEnabled,
+            enableMicrophone: enableMicrophone,
+            protocolVersion: protocolVersion,
+            ttCallRequest: request,
+            userAgent: userAgent,
+            transportKind: transportKind,
+            quicDeviceType: quicDeviceType,
+            quicCidTag: quicCidTag,
+            quicConnectTimeoutMs: quicConnectTimeoutMs,
+            caCertPem: caCertPem,
+            serverHost: serverHost,
+            quicProxyUrl: quicProxyUrl,
+            quicProxyHost: quicProxyHost,
+            quicProxyPort: quicProxyPort,
+            quicProxySni: quicProxySni,
+            quicProxyCaCertPem: quicProxyCaCertPem,
+            quicProxySpkiPin: quicProxySpkiPin,
+            webSocketProxyHost: webSocketProxyHost,
+            webSocketProxyPort: webSocketProxyPort,
+            sslCertificateVerifier: sslCertificateVerifier,
+            clientProtocol: clientProtocol
+        )
+    }
+
     func withConnectionAttempt(_ attempt: ConnectionAttempt,
                                quicCidTag: String,
                                quicDeviceType: Int = 1,
@@ -173,6 +227,8 @@ extension ConnectOptions {
             transportKind: attempt.useQuic ? .quic : .websocket,
             quicDeviceType: quicDeviceType,
             quicCidTag: quicCidTag,
+            // The SDK reads this field only for QUIC; WebSocket attempts safely ignore it.
+            quicConnectTimeoutMs: CallConnectionOptionsPolicy.quicConnectTimeoutMs,
             caCertPem: caCertPem,
             serverHost: attempt.serverHost,
             quicProxyHost: quicProxyHost,
@@ -364,6 +420,9 @@ public final class CallConnectionCoordinator {
     }
 
     static func classify(error: Error) -> ErrorCategory {
+        // An expired/revoked app token cannot be healed by switching SFU nodes. Return immediately
+        // so the caller can force-refresh the token and retry the same idempotent startCall once.
+        if CallAuthenticationFailure.isAppTokenRejected(error) { return .fatal }
         // Proxy tunnel unavailable is non-recoverable within a call attempt: don't burn the whole
         // retry budget (2s+5s phases + backoff) hitting the same fail-closed guard — abort now.
         if error is ProxyRoutingError { return .fatal }

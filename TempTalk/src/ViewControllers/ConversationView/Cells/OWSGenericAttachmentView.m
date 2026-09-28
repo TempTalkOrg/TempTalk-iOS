@@ -61,13 +61,14 @@ NS_ASSUME_NONNULL_BEGIN
 {
     CGSize result = CGSizeZero;
 
-    CGFloat labelsHeight = ([OWSGenericAttachmentView topLabelFont].lineHeight +
-        [OWSGenericAttachmentView bottomLabelFont].lineHeight + [OWSGenericAttachmentView labelVSpacing]);
+    CGFloat maxLabelsWidth = MAX(0, maxMessageWidth - self.iconWidth - self.hSpacing - self.hMargin * 2);
+    CGSize topLabelSize = [self.topLabel sizeThatFits:CGSizeMake(maxLabelsWidth, CGFLOAT_MAX)];
+    CGSize bottomLabelSize = [self.bottomLabel sizeThatFits:CGSizeMake(maxLabelsWidth, CGFLOAT_MAX)];
+    CGFloat labelsHeight = topLabelSize.height + bottomLabelSize.height + [OWSGenericAttachmentView labelVSpacing];
     CGFloat contentHeight = MAX(self.iconHeight, labelsHeight);
     result.height = contentHeight + self.vMargin * 2;
 
-    CGFloat labelsWidth
-        = MAX([self.topLabel sizeThatFits:CGSizeZero].width, [self.bottomLabel sizeThatFits:CGSizeZero].width);
+    CGFloat labelsWidth = MAX(topLabelSize.width, bottomLabelSize.width);
     CGFloat contentWidth = (self.iconWidth + labelsWidth + self.hSpacing);
     result.width = MAX(MIN(maxMessageWidth, contentWidth + self.hMargin * 2), minMessageWidth);
 
@@ -155,17 +156,12 @@ NS_ASSUME_NONNULL_BEGIN
     self.topLabel = topLabel;
     topLabel.text = topText;
     topLabel.textColor = [conversationStyle bubbleTextColorWithIsIncoming:self.isIncoming];
+    topLabel.numberOfLines = 2;
     topLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
     topLabel.font = [OWSGenericAttachmentView topLabelFont];
     [labelsView addArrangedSubview:topLabel];
 
-    NSError *error;
-    unsigned long long fileSize =
-        [[NSFileManager defaultManager] attributesOfItemAtPath:[self.attachmentStream filePath] error:&error].fileSize;
-//    OWSAssertDebug(!error);
-    if (error) {
-        OWSLogError(@"attachmentStream filepath error:%@", error);
-    }
+    unsigned long long fileSize = self.attachmentStream.byteCount;
     NSString *bottomText = [OWSFormat formatFileSize:fileSize];
     UILabel *bottomLabel = [UILabel new];
     self.bottomLabel = bottomLabel;

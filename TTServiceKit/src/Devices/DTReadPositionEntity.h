@@ -30,6 +30,9 @@ NS_ASSUME_NONNULL_BEGIN
                   maxSequenceId:(uint64_t)maxSequenceId;
 
 + (DTReadPositionEntity *)readPostionEntityWithProto:(DSKProtoReadPosition *)readPositionProto;
+// Caps client readAt at the receipt's server timestamp.
++ (DTReadPositionEntity *)readPostionEntityWithProto:(DSKProtoReadPosition *)readPositionProto
+                              receiptServerTimestamp:(uint64_t)receiptServerTimestamp;
 + (nullable DSKProtoReadPosition *)readPostionProtoWithEntity:(nullable DTReadPositionEntity *)readPositionEntity;
 
 @end

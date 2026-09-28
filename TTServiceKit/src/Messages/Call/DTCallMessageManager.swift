@@ -33,7 +33,7 @@ public protocol DTCallMessageDelegate: NSObjectProtocol {
     ///   - envelope: The envelope containing additional rejection metadata
     func handleLocalWasRejectedMessage(roomId: String, envelope: DSKProtoEnvelope)
     
-    func handleWasHungupMessage(roomId: String)
+    func handleWasHungupMessage(roomId: String, envelope: DSKProtoEnvelope)
     
 }
 
@@ -133,7 +133,7 @@ public protocol DTCallMessageDelegate: NSObjectProtocol {
             // 1on1 Call, 同步给自己另一端(如果有)和对方；caller 去及时清理数据，callee 关闭弹窗
             // 多人 Call 无需该消息，使用 Server 推送的 Call 结束 notify 消息即可
 
-            guard let roomId = cancel.roomID else {
+            guard let roomId = resolveRoomId(payload: cancel.roomID, envelope: envelopRoomId) else {
                 Logger.error("roomId 为空")
                 return
             }
@@ -143,23 +143,39 @@ public protocol DTCallMessageDelegate: NSObjectProtocol {
             // reject: callee 拒绝加入 Call
             // 1on1 Call, 同步给自己另一端(如果有)和caller；callee去关闭弹窗；caller(仅发起一端)关闭弹窗，caller 两端清理数据
             // 多人 Call, 同步给自己另一端(如果有)
-            guard let roomId = reject.roomID else {
-                Logger.error("roomId 为空")
-                return
-            }
-            
-            delegate?.handleLocalWasRejectedMessage(roomId: roomId, envelope: envelope)
-        } else if let hangup = callMessage.hangup { // 挂断 call
-            // hangup: 1on1 Call一方挂断
-            guard let roomId = hangup.roomID else {
+            guard let roomId = resolveRoomId(payload: reject.roomID, envelope: envelopRoomId) else {
                 Logger.error("roomId 为空")
                 return
             }
 
-            delegate?.handleWasHungupMessage(roomId: roomId)
+            delegate?.handleLocalWasRejectedMessage(roomId: roomId, envelope: envelope)
+        } else if let hangup = callMessage.hangup { // 挂断 call
+            // hangup: 1on1 Call一方挂断
+            guard let roomId = resolveRoomId(payload: hangup.roomID, envelope: envelopRoomId) else {
+                Logger.error("roomId 为空")
+                return
+            }
+
+            delegate?.handleWasHungupMessage(roomId: roomId, envelope: envelope)
         } else {
             let errorPayload = OWSAnalyticsEvents.messageManagerErrorCallMessageNoActionablePayload()
             Logger.error("\(errorPayload) \(envelope)")
         }
+    }
+
+    /// Resolves the room a control message targets. A caller who exits before the start response
+    /// has no roomId yet, so the payload carries none: the server locates the room by
+    /// `clientCallId` and fans out with the real id on `Envelope.roomId`. Prefer the payload id,
+    /// fall back to the envelope, and drop the message when the two disagree.
+    private func resolveRoomId(payload payloadRoomId: String?, envelope envelopeRoomId: String?) -> String? {
+        let payloadId = payloadRoomId?.isEmpty == false ? payloadRoomId : nil
+        let envelopeId = envelopeRoomId?.isEmpty == false ? envelopeRoomId : nil
+
+        if let payloadId, let envelopeId, payloadId != envelopeId {
+            Logger.error("control roomId mismatch")
+            return nil
+        }
+
+        return payloadId ?? envelopeId
     }
 }

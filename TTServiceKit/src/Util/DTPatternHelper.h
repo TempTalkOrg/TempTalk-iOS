@@ -50,8 +50,6 @@ extern NSString *const kFormatSchemaPattern;
 
 + (BOOL)validateSecurityChativeInvitedURL:(NSString *)url;
 
-+ (BOOL)validateChativeInvitedCode:(NSString *)invitedCode;
-
 + (BOOL)validatePeroidChativeInvitedURL:(NSString *)url;
 ///是否是有效的temptalk链接
 + (BOOL)validateTempTalkInvitedURL:(NSString *)url;

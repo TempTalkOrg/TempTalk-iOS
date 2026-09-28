@@ -6,6 +6,7 @@
 #import "AddToGroupViewController.h"
 #import "AvatarViewHelper.h"
 #import "Yelling-Swift.h"
+#import <TTServiceKit/TTServiceKit-Swift.h>
 #import "ViewControllerUtils.h"
 #import <TTMessaging/BlockListUIUtils.h>
 #import <TTMessaging/ContactTableViewCell.h>
@@ -742,7 +743,7 @@ static CGFloat const kHeaderDividerInset = 16;
     NSString *serverGId = [TSGroupThread transformToServerGroupIdWithLocalGroupId:self.thread.groupModel.groupId];
     
     void (^nextBlock)(TSGroupModel *, NSString *, BOOL) = ^(TSGroupModel *newGroupModel, NSString *updateGroupInfo, BOOL shouldAffectThreadSorting) {
-        uint64_t now = [NSDate ows_millisecondTimeStamp];
+        uint64_t now = [DTTrustedClock clientStampMs];
         DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
             [self.thread anyUpdateGroupThreadWithTransaction:writeTransaction
                                                        block:^(TSGroupThread * instance) {
@@ -951,7 +952,7 @@ static CGFloat const kHeaderDividerInset = 16;
 
         TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:self.thread.groupModel];
         newGroupModel.groupImage = newAvatar;
-        uint64_t now = [NSDate ows_millisecondTimeStamp];
+        uint64_t now = [DTTrustedClock clientStampMs];
         DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
             // Compute the update string before mutating the thread, so it still
             // diffs the old model against the new one. Reuse writeTransaction for

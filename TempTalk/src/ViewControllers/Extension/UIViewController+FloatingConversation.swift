@@ -13,19 +13,24 @@ extension UIViewController {
 
     @nonobjc func showFloatingConversation(
         with thread: TSThread,
-        configuration: FloatingConversationConfiguration = .default
+        configuration: FloatingConversationConfiguration = .default,
+        addFriendSource: AddFriendSource = .unspecified
     ) {
         let floatingVC = FloatingConversationViewController(
             thread: thread,
-            configuration: configuration
+            configuration: configuration,
+            addFriendSource: addFriendSource
         )
         present(floatingVC, animated: true)
     }
 
+    /// Objective-C entry point. It carries no provenance, so a friend request sent from the
+    /// resulting chat reports none — call the Swift overload when the caller knows the source.
     @objc func showFloatingConversation(with thread: TSThread) {
         let floatingVC = FloatingConversationViewController(
             thread: thread,
-            configuration: .default
+            configuration: .default,
+            addFriendSource: .unspecified
         )
         present(floatingVC, animated: true)
     }

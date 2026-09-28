@@ -21,6 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)sharedManager;
 
 - (void)processConversationPreviewProto:(DSKProtoConversationPreview *)conversationPreviewProto
+                 receiptServerTimestamp:(uint64_t)receiptServerTimestamp
                             transaction:(SDSAnyWriteTransaction *)writeTransaction;
 
 - (void)reportConversationWithThread:(nullable TSThread *)thread;

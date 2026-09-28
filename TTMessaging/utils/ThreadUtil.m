@@ -112,7 +112,9 @@ NS_ASSUME_NONNULL_BEGIN
             __block BOOL isFriend = NO;
             [self.databaseStorage readWithBlock:^(SDSAnyReadTransaction *transaction) {
                 SignalAccount *account = [SignalAccount anyFetchWithUniqueId:recipientId transaction:transaction];
-                isFriend = account.isFriend;
+                NSString *_Nullable localNumber =
+                    [[TSAccountManager sharedInstance] localNumberWithTransaction:transaction];
+                isFriend = [account isFriendWithLocalNumber:localNumber];
             }];
 
             // Only use confidential mode if recipient is a friend
@@ -188,7 +190,7 @@ NS_ASSUME_NONNULL_BEGIN
     uint32_t expiresInSeconds = [thread messageExpiresInSeconds];
     
     TSOutgoingMessage *message =
-    [[TSOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[NSDate ows_millisecondTimeStamp]
+    [[TSOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[DTTrustedClock clientStampMs]
                                                        inThread:thread
                                                     messageBody:attachment.captionText
                                                       atPersons:nil
@@ -207,6 +209,8 @@ NS_ASSUME_NONNULL_BEGIN
     [messageSender enqueueAttachment:attachment.dataSource
                          contentType:attachment.mimeType
                       sourceFilename:attachment.filenameOrDefault
+                   preprocessingKind:attachment.preprocessingKind
+                 preprocessingParams:attachment.preprocessingParams
                            inMessage:message
               preSendMessageCallBack:^(TSOutgoingMessage * _Nonnull preSendMessage) {
         if (preSendMessageCallBack) {
@@ -247,7 +251,7 @@ NS_ASSUME_NONNULL_BEGIN
     uint32_t expiresInSeconds = [thread messageExpiresInSeconds];
     
     TSOutgoingMessage *message =
-    [[TSOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[NSDate ows_millisecondTimeStamp]
+    [[TSOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[DTTrustedClock clientStampMs]
                                                        inThread:thread
                                                     messageBody:nil
                                                       atPersons:nil
@@ -480,7 +484,7 @@ NS_ASSUME_NONNULL_BEGIN
     
     uint32_t expiresInSeconds = [thread messageExpiresInSeconds];
     
-    uint64_t timestamp = [NSDate ows_millisecondTimeStamp];
+    uint64_t timestamp = [DTTrustedClock clientStampMs];
     DTRealSourceEntity *realSource = [[DTRealSourceEntity alloc] initSourceWithTimestamp:timestamp
                                                                             sourceDevice:[OWSDevice currentDeviceId]
                                                                                   source:[TSAccountManager localNumber]];
@@ -491,7 +495,7 @@ NS_ASSUME_NONNULL_BEGIN
         DDLogInfo(@"%@ Successfully sent screenshot message.", self.logTag);
         
         DatabaseStorageAsyncWrite(self.databaseStorage, (^(SDSAnyWriteTransaction *writeTransaction) {
-            TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
+            TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:[DTTrustedClock clientStampMs]
                                                                          inThread:thread
                                                                       messageType:TSInfoMessageScreenshotMessage
                                                                  expiresInSeconds:expiresInSeconds
@@ -522,7 +526,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                   failure:(void (^)(NSError *error))failureHandler{
     return [self sendRecallMessageWithOriginMessage:originMessage
                                            inThread:thread
-                                  explicitTimestamp:[NSDate ows_millisecondTimeStamp]
+                                  explicitTimestamp:[DTTrustedClock clientStampMs]
                                             success:successHandler
                                             failure:failureHandler];
 }

@@ -32,7 +32,8 @@ enum DTCallEndpoint {
     
     case callList
     
-    case controlMessage(roomId: String,
+    case controlMessage(roomId: String?,
+                        clientCallId: String?,
                         msgType: DTCallMessageType,
                         timestamp: UInt64,
                         cipherMessages: [[String: Any]],
@@ -118,15 +119,22 @@ enum DTCallEndpoint {
                     "notification": notification,
                     "cipherMessages": cipherMessages]
         case .controlMessage(let roomId,
+                             let clientCallId,
                              let msgType,
                              let timestamp,
                              let cipherMessages,
                              let forceEndGroupMeeting,
                              let callType):
 
-            var params = ["roomId": roomId,
-                          "timestamp": timestamp,
+            var params = ["timestamp": timestamp,
                           "cipherMessages": cipherMessages] as [String : Any]
+
+            if let roomId, !roomId.isEmpty {
+                params["roomId"] = roomId
+            }
+            if let clientCallId, !clientCallId.isEmpty {
+                params["clientCallId"] = clientCallId
+            }
 
             let detailMessageType: Int
             if forceEndGroupMeeting && msgType == .hangup && callType != .private {
@@ -161,7 +169,18 @@ enum DTCallEndpoint {
     
 }
 
+/// Result of a call/check probe.
+/// `unknown` means the probe itself failed (transport/decode) and says nothing about the room.
+enum CallRoomAvailability {
+    case valid(anotherDeviceJoined: Bool, userStopped: Bool)
+    case gone
+    case unknown
+}
+
 struct DTCallAPIManager {
+
+    /// Error domain for a server-returned business status (not a transport failure).
+    static let serverStatusErrorDomain = "com.temptalk.call.serverStatus"
     
     var callUrlSession: OWSURLSession {
         OWSSignalService.signalService.urlSessionForCallService()
@@ -182,7 +201,42 @@ struct DTCallAPIManager {
         while attempt < maxRetryCount {
             do {
                 let token = try await requestAuthToken()
-                let result = try await sendRequestWithAuth(endpoint: endpoint, authToken: token)
+                let metaData = try await sendMetaRequestWithAuth(endpoint: endpoint, authToken: token)
+                guard metaData.status == 0 || metaData.status == 11001 else {
+                    let error = NSError(domain: Self.serverStatusErrorDomain,
+                                        code: metaData.status,
+                                        userInfo: [NSLocalizedDescriptionKey: metaData.reason])
+                    throw error
+                }
+
+                return .success(metaData.data)
+            } catch {
+                attempt += 1
+                let asNSError = error as NSError
+                Logger.error("\(logTag) \(endpoint.path) attempt \(attempt) error: \(asNSError.localizedDescription)")
+
+                if attempt == maxRetryCount {
+                    return .failure(asNSError)
+                }
+
+                try? await Task.sleep(nanoseconds: UInt64(1_000_000_000))
+            }
+        }
+
+        let error = NSError(domain: domain,
+                            code: -10999,
+                            userInfo: [NSLocalizedDescriptionKey: "retry upper limit."])
+        return .failure(error)
+
+    }
+
+    private func sendMetaRequest(endpoint: DTCallEndpoint, maxRetryCount: Int = 3) async -> Result<APIMetaData, Error> {
+        var attempt = 0
+
+        while attempt < maxRetryCount {
+            do {
+                let token = try await requestAuthToken()
+                let result = try await sendMetaRequestWithAuth(endpoint: endpoint, authToken: token)
                 
                 return .success(result)
             } catch {
@@ -205,7 +259,7 @@ struct DTCallAPIManager {
         
     }
         
-    private func sendRequestWithAuth(endpoint: DTCallEndpoint, authToken: String? = nil) async throws -> Dictionary<String, AnyCodable>? {
+    private func sendMetaRequestWithAuth(endpoint: DTCallEndpoint, authToken: String? = nil) async throws -> APIMetaData {
         
         guard let request = endpoint.request else {
             throw NSError(domain: "\(domain).request",
@@ -227,16 +281,7 @@ struct DTCallAPIManager {
 
                 do {
                     let metaData = try JSONDecoder().decode(APIMetaData.self, from: responseBodyData)
-                    guard metaData.status == 0 || metaData.status == 11001 else {
-                        let error = NSError(domain: "\(domain).response",
-                                            code: metaData.status,
-                                            userInfo: [NSLocalizedDescriptionKey: metaData.reason])
-
-                        continuation.resume(throwing: error)
-                        return
-                    }
-                    
-                    continuation.resume(returning: metaData.data)
+                    continuation.resume(returning: metaData)
                 } catch {
                     let error = NSError(domain: "\(domain).response",
                                         code: -10003,
@@ -276,37 +321,44 @@ extension DTCallAPIManager {
 
     /// 启动/回前台是同步sever calls
     /// - Returns: calls
-    func getActiveCallList() async -> [[String: Any]] {
-        
+    func getActiveCallList() async throws -> [[String: Any]] {
         let result = await DTCallAPIManager().sendRequest(endpoint: .callList)
         switch result {
         case .success(let data):
-            guard let data, !data.isEmpty,
-                  let tmpCalls = data["calls"],
-                  let calls = tmpCalls.value as? [[String: Any]] else {
-                return []
+            guard let calls = data?["calls"]?.value as? [[String: Any]] else {
+                throw NSError(
+                    domain: "\(domain).response",
+                    code: -10004,
+                    userInfo: [NSLocalizedDescriptionKey: "Invalid active call list response"]
+                )
             }
-            
             return calls
-        case .failure(let error as NSError):
-            Logger.error("\(logTag) getActiveCallList error: \(error.localizedDescription)")
-            return []
+        case .failure(let error):
+            throw error
         }
-        
     }
     
     /// 发送call消息
     func controlCallMessage(
-        roomId: String,
+        roomId: String?,
+        clientCallId: String?,
         msgType: DTCallMessageType,
         cipherMessages: [[String: Any]],
         forceEndGroupMeeting: Bool = false,
         callType: CallType = .instant
     ) async -> Dictionary<String, AnyCodable> {
 
-        let timestamp = Date.ows_millisecondTimestamp()
+        let hasRoomId = roomId?.isEmpty == false
+        let hasClientCallId = clientCallId?.isEmpty == false
+        guard hasRoomId || hasClientCallId else {
+            Logger.error("sendCallMessageError: roomId and clientCallId are both empty")
+            return [:]
+        }
+
+        let timestamp = DTTrustedClock.clientStampMs()
         let endpoint: DTCallEndpoint = .controlMessage(
             roomId: roomId,
+            clientCallId: clientCallId,
             msgType: msgType,
             timestamp: timestamp,
             cipherMessages: cipherMessages,
@@ -323,7 +375,11 @@ extension DTCallAPIManager {
             
             return data
         case .failure(let error as NSError):
-            Logger.error("sendCallMessageError: \(error.code) - \(error.localizedDescription)")
+            Logger.error(
+                "\(logTag) control message failed: msgType=\(msgType), " +
+                "hasClientCallId=\(hasClientCallId), hasRoomId=\(hasRoomId), " +
+                "error=\(error.code) - \(error.localizedDescription)"
+            )
             return [:]
         }
         
@@ -360,17 +416,25 @@ extension DTCallAPIManager {
 
     }
     
-    /// 检查roomId是否可用
-    /// - Parameter roomId: roomId
-    /// - Returns: 返回为nil roomId无效;
-    ///            返回不为nil roomId有效, 同时返回anotherDeviceJoined/userStopped
-    func checkRoomIdValid(_ roomId: String) async -> (anotherDeviceJoined: Bool, userStopped: Bool)? {
-        
-        let result = await sendRequest(endpoint: .checkCall(roomId: roomId))
+    /// Probe whether a room is still available on the server.
+    /// - Returns: `.valid` when check-call returns status 0; `.gone` when check-call returns any
+    ///            non-zero status; `.unknown` when the probe fails (auth/transport/decode) and the
+    ///            room state cannot be inferred — callers must NOT treat `.unknown` as invalid.
+    func checkRoomAvailability(_ roomId: String) async -> CallRoomAvailability {
+
+        let result = await sendMetaRequest(endpoint: .checkCall(roomId: roomId))
         switch result {
-        case .success(let data):
+        case .success(let metaData):
+            // Match sendRequest's success whitelist: 0 and 11001 are both non-error statuses.
+            // Only a status outside that set means the room is genuinely gone.
+            guard metaData.status == 0 || metaData.status == 11001 else {
+                Logger.info("\(logTag) roomId=\(roomId) gone status=\(metaData.status) reason=\(metaData.reason)")
+                return .gone
+            }
+
+            let data = metaData.data
             guard let data else {
-                return (false, false)
+                return .valid(anotherDeviceJoined: false, userStopped: false)
             }
             var anotherDeviceJoined = false, userStopped = false
             if let tempJoined = data["anotherDeviceJoined"],
@@ -381,12 +445,23 @@ extension DTCallAPIManager {
                let stopped = tempStopped.value as? Bool {
                 userStopped = stopped
             }
-            
-            Logger.info("\(logTag) request success anotherDeviceJoined\(anotherDeviceJoined) userStopped\(userStopped)")
-            
-            return (anotherDeviceJoined: anotherDeviceJoined, userStopped: userStopped)
+
+            Logger.info("\(logTag) roomId=\(roomId) valid anotherDeviceJoined=\(anotherDeviceJoined) userStopped=\(userStopped)")
+
+            return .valid(anotherDeviceJoined: anotherDeviceJoined, userStopped: userStopped)
         case .failure(let error as NSError):
-            Logger.error("\(logTag) request roomId valid error: \(error.localizedDescription)")
+            Logger.error("\(logTag) roomId=\(roomId) unknown, probe failed: \(error.localizedDescription)")
+            return .unknown
+        }
+    }
+
+    /// 检查roomId是否可用(兼容旧调用方,`.gone`/`.unknown` 都塌为 nil)
+    /// - Returns: 返回为nil roomId无效;返回不为nil roomId有效
+    func checkRoomIdValid(_ roomId: String) async -> (anotherDeviceJoined: Bool, userStopped: Bool)? {
+        switch await checkRoomAvailability(roomId) {
+        case .valid(let anotherDeviceJoined, let userStopped):
+            return (anotherDeviceJoined: anotherDeviceJoined, userStopped: userStopped)
+        case .gone, .unknown:
             return nil
         }
         

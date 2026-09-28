@@ -79,8 +79,12 @@ extension DTMeetingManager {
 
         // 清理参会人相关数据
         isFromCallkit = false
+        // Reset the speaker-grid scheduler state on teardown. Hop to main explicitly: this can run
+        // off-main via performResourceCleanup, and resetActiveSpeakerGridState() asserts main-thread.
+        DispatchMainThreadSafe { [weak self] in
+            self?.resetActiveSpeakerGridState()
+        }
 
-        setVisibleParticipants([])
         startCallThread = nil
         startCallRecipientIds = nil
         fromSource = nil

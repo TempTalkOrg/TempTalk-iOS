@@ -287,6 +287,12 @@ CREATE
         WHERE "recordType" = 14
 ;
 
+CREATE
+    INDEX "index_interaction_on_failed_outgoing"
+        ON "model_TSInteraction"("uniqueThreadId", "serverTimestamp")
+        WHERE "storedMessageState" = 1
+;
+
 
 CREATE
     TABLE
@@ -420,6 +426,8 @@ CREATE
             ,"decibelSamples" BLOB
             ,"height" INTEGER
             ,"width" INTEGER
+            ,"preprocessingKind" INTEGER NOT NULL DEFAULT 0
+            ,"preprocessingParams" BLOB
         )
 ;
 

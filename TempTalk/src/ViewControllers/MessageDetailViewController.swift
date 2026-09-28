@@ -862,7 +862,7 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
             return
         }
         let shareContactId = contact.phoneNumber
-        self.showProfileCardInfo(with: shareContactId)
+        self.showProfileCardInfo(with: shareContactId, addFriendSource: AddFriendHandler.shareContactSource(for: viewItem))
     }
 
     var audioAttachmentPlayer: OWSAudioPlayer?
@@ -874,21 +874,6 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
     ) {
         AssertIsOnMainThread()
         
-        if attachmentStream.isVoiceMessage() {
-            OWSAttachmentsProcessor.decryptVoiceAttachment(attachmentStream)
-        }
-            
-
-        guard let mediaURL = attachmentStream.mediaURL() else {
-            owsFailDebug("\(logTag) in \(#function) mediaURL was unexpectedly nil for attachment: \(attachmentStream)")
-            return
-        }
-
-        guard FileManager.default.fileExists(atPath: mediaURL.path) else {
-            owsFailDebug("\(logTag) in \(#function) audio file missing at path: \(mediaURL)")
-            return
-        }
-
         if let audioAttachmentPlayer = self.audioAttachmentPlayer {
             // Is this player associated with this media adapter?
             if let owner = audioAttachmentPlayer.owner as? ConversationViewItem {
@@ -907,7 +892,20 @@ class MessageDetailViewController: OWSViewController, MediaGalleryDataSourceDele
             self.audioAttachmentPlayer = nil
         }
 
-        let audioAttachmentPlayer = OWSAudioPlayer(mediaUrl: mediaURL, delegate: viewItem)
+        let audioAttachmentPlayer: OWSAudioPlayer
+        if attachmentStream.isStoredEncrypted {
+            guard let data = attachmentStream.decryptedData() else {
+                owsFailDebug("\(logTag) failed to decrypt audio attachment")
+                return
+            }
+            audioAttachmentPlayer = OWSAudioPlayer(mediaData: data, delegate: viewItem)
+        } else {
+            guard let mediaURL = attachmentStream.mediaURL() else {
+                owsFailDebug("\(logTag) missing legacy audio attachment")
+                return
+            }
+            audioAttachmentPlayer = OWSAudioPlayer(mediaUrl: mediaURL, delegate: viewItem)
+        }
         self.audioAttachmentPlayer = audioAttachmentPlayer
 
         // Associate the player with this media adapter.

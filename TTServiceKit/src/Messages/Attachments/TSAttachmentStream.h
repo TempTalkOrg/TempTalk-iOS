@@ -15,6 +15,15 @@ NS_ASSUME_NONNULL_BEGIN
 @class DSKProtoAttachmentPointer;
 @class TSAttachmentPointer;
 @class SDSAnyWriteTransaction;
+@class AVAsset;
+
+FOUNDATION_EXPORT NSErrorDomain const TSAttachmentStreamErrorDomain;
+
+typedef NS_ERROR_ENUM(TSAttachmentStreamErrorDomain, TSAttachmentStreamErrorCode) {
+    /// A ciphertext file exists, but this model instance does not have the
+    /// committed key/digest required to authenticate and decrypt it.
+    TSAttachmentStreamErrorMissingEncryptionMetadata = 1,
+};
 
 @interface TSAttachmentStream : TSAttachment
 
@@ -36,6 +45,8 @@ NS_ASSUME_NONNULL_BEGIN
                    encryptionKey:(NSData *)encryptionKey
                           height:(unsigned int)height
                     isDownloaded:(BOOL)isDownloaded
+               preprocessingKind:(TSAttachmentPreprocessingKind)preprocessingKind
+             preprocessingParams:(nullable NSData *)preprocessingParams
                         serverId:(unsigned long long)serverId
                   sourceFilename:(nullable NSString *)sourceFilename
                            width:(unsigned int)width
@@ -50,7 +61,7 @@ NS_ASSUME_NONNULL_BEGIN
            lazyRestoreFragmentId:(nullable NSString *)lazyRestoreFragmentId
            localRelativeFilePath:(nullable NSString *)localRelativeFilePath
               serverAttachmentId:(NSString *)serverAttachmentId
-NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessageId:appearInMediaGallery:attachmentSchemaVersion:attachmentType:byteCount:contentType:encryptionKey:height:isDownloaded:serverId:sourceFilename:width:cachedAudioDurationSeconds:cachedImageHeight:cachedImageWidth:creationTimestamp:decibelSamples:digest:encryptedDatalength:isUploaded:lazyRestoreFragmentId:localRelativeFilePath:serverAttachmentId:));
+NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessageId:appearInMediaGallery:attachmentSchemaVersion:attachmentType:byteCount:contentType:encryptionKey:height:isDownloaded:preprocessingKind:preprocessingParams:serverId:sourceFilename:width:cachedAudioDurationSeconds:cachedImageHeight:cachedImageWidth:creationTimestamp:decibelSamples:digest:encryptedDatalength:isUploaded:lazyRestoreFragmentId:localRelativeFilePath:serverAttachmentId:));
 
 // clang-format on
 
@@ -87,6 +98,12 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessag
 - (nullable UIImage *)thumbnailImage;
 - (nullable NSData *)thumbnailData;
 - (nullable NSData *)validStillImageData;
+/// Generates a video still asynchronously; completion runs on an unspecified queue.
+- (void)videoStillImageWithMaxSize:(CGSize)maxSize
+                        completion:(void (^)(UIImage *_Nullable image))completion;
+/// Writes the 512pt thumbnail if absent. Idempotent, but synchronous and slow for
+/// video (hardware decode) — call off the main thread and outside a write transaction.
+- (void)ensureThumbnail;
 #endif
 
 - (BOOL)isAnimated;
@@ -100,14 +117,31 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessag
 
 // TODO: rename to originalFilePath 避免歧义
 - (nullable NSString *)filePath;
+- (nullable NSString *)encryptedFilePath;
 - (nullable NSString *)thumbnailPath;
 
+/// Whether the canonical ciphertext file exists.
+@property (nonatomic, readonly) BOOL hasEncryptedFile;
+/// Whether this instance has a complete key and digest.
+@property (nonatomic, readonly) BOOL hasUsableEncryptionMetadata;
+/// Whether ciphertext exists and can be decrypted by this instance.
+@property (nonatomic, readonly) BOOL isStoredEncrypted;
+
 - (nullable NSData *)readDataFromFileWithError:(NSError **)error;
+/// Convenience wrapper for UI consumers. Returns nil on authentication/decryption failure.
+- (nullable NSData *)decryptedData;
 - (BOOL)writeData:(NSData *)data error:(NSError **)error;
 - (nullable NSData *)readEncryptedDataFromFileWithError:(NSError **)error;
 - (BOOL)writeEncryptedData:(NSData *)data error:(NSError **)error;
+- (BOOL)removeEncryptedDataWithError:(NSError **)error;
 - (void)removeVoicePlaintextFile;
+/// Removes the plaintext payload and derived thumbnail.
+- (BOOL)removePlaintextFileWithError:(NSError **)error;
+- (void)removePlaintextFile;
 - (BOOL)writeDataSource:(id <DataSource>)dataSource;
+
+/// A seekable, memory-backed AVAsset for encrypted-at-rest audio/video.
+- (nullable AVAsset *)decryptedMediaAsset;
 
 - (BOOL)isOversizeText;
 - (nullable NSString *)readOversizeText;
@@ -133,6 +167,27 @@ NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessag
 - (void)updateWithLazyRestoreComplete;
 
 - (nullable TSAttachmentStream *)cloneAsThumbnail;
+
+/// Inserts a display-ready thumbnail without generating another derivative.
+- (void)anyInsertPreparedThumbnailWithTransaction:(SDSAnyWriteTransaction *)transaction;
+
+#pragma mark - Preprocessing
+
+/// Apply the result of video compression preprocessing.
+///
+/// Updates the file path, byte count, content type, and (when non-zero) the
+/// cached display dimensions. Also rewrites `sourceFilename`'s extension to
+/// match the new contentType, so receivers picking a handler by filename
+/// extension don't get an `IMG_xxxx.MOV` name advertising `video/mp4` bytes.
+///
+/// Does NOT touch upload state (`isUploaded`, `serverId`, ...) or the
+/// preprocessing fields — those are the caller's responsibility.
+- (void)applyCompressedVideoPayloadWithRelativePath:(NSString *)relativeFilePath
+                                          byteCount:(UInt32)byteCount
+                                        contentType:(NSString *)contentType
+                                              width:(UInt32)width
+                                             height:(UInt32)height
+    NS_SWIFT_NAME(applyCompressedVideoPayload(relativePath:byteCount:contentType:width:height:));
 
 #pragma mark - Protobuf
 

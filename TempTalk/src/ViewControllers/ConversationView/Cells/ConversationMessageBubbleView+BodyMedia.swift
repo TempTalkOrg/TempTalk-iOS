@@ -7,9 +7,102 @@
 //
 
 import UIKit
+import ImageIO
 import SnapKit
 import TTMessaging
 import TTServiceKit
+
+/// Coalesces and caches off-main encrypted attachment decodes.
+enum EncryptedAttachmentThumbnailLoader {
+    private static let queue = DispatchQueue(
+        label: "org.temptalk.attachment-thumbnail.decrypt",
+        qos: .userInitiated
+    )
+    private static let lock = NSLock()
+    private static var completions: [String: [(UIImage?) -> Void]] = [:]
+
+    private static let sharedCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.totalCostLimit = 32 * 1024 * 1024
+        return cache
+    }()
+
+    private static func cacheKey(attachmentId: String, maxPixelSize: Int) -> String {
+        "\(attachmentId)@\(maxPixelSize)"
+    }
+
+    static func cachedImage(attachmentId: String, maxPixelSize: Int) -> UIImage? {
+        sharedCache.object(forKey: cacheKey(attachmentId: attachmentId, maxPixelSize: maxPixelSize) as NSString)
+    }
+
+    static func store(_ image: UIImage, attachmentId: String, maxPixelSize: Int) {
+        let key = cacheKey(attachmentId: attachmentId, maxPixelSize: maxPixelSize)
+        let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
+        sharedCache.setObject(image, forKey: key as NSString, cost: cost)
+    }
+
+    static func loadCached(
+        attachmentId: String,
+        maxPixelSize: Int,
+        work: @escaping () -> UIImage?,
+        completion: @escaping (UIImage?) -> Void
+    ) {
+        let cacheKey = Self.cacheKey(attachmentId: attachmentId, maxPixelSize: maxPixelSize)
+        if let cached = sharedCache.object(forKey: cacheKey as NSString) {
+            completion(cached)
+            return
+        }
+        load(attachmentId: cacheKey, work: work) { image in
+            if let image {
+                let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
+                sharedCache.setObject(image, forKey: cacheKey as NSString, cost: cost)
+            }
+            completion(image)
+        }
+    }
+
+    static func load(
+        attachmentId: String,
+        work: @escaping () -> UIImage?,
+        completion: @escaping (UIImage?) -> Void
+    ) {
+        lock.lock()
+        if completions[attachmentId] != nil {
+            completions[attachmentId]?.append(completion)
+            lock.unlock()
+            return
+        }
+        completions[attachmentId] = [completion]
+        lock.unlock()
+
+        queue.async {
+            let image = autoreleasepool(invoking: work)
+            DispatchQueue.main.async {
+                lock.lock()
+                let callbacks = completions.removeValue(forKey: attachmentId) ?? []
+                lock.unlock()
+                callbacks.forEach { $0(image) }
+            }
+        }
+    }
+
+    static func downsampledImage(data: Data, maxPixelSize: Int = 512) -> UIImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
+            return nil
+        }
+        let thumbnailOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ] as CFDictionary
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else {
+            return nil
+        }
+        return UIImage(cgImage: image)
+    }
+}
 
 // MARK: - Body Media
 
@@ -104,6 +197,8 @@ extension ConversationMessageBubbleView {
             bodyMediaView = createAudioView(viewItem: viewItem, style: style)
         case .video:
             bodyMediaView = createVideoView(viewItem: viewItem)
+        case .videoTranscoding:
+            bodyMediaView = createVideoTranscodingView(viewItem: viewItem)
         case .genericAttachment:
             bodyMediaView = createGenericAttachmentView(viewItem: viewItem, style: style)
         case .downloadingAttachment:
@@ -129,13 +224,64 @@ extension ConversationMessageBubbleView {
         
         addAttachmentUploadViewIfNecessary(viewItem: viewItem)
         
-        self.loadCellContentBlock = { [weak self] in
+        var encryptedThumbnailLoadInFlight = false
+        var shouldDisplayThumbnail = false
+
+        self.loadCellContentBlock = { [weak self, weak stillImageView] in
             guard let self else { return }
+            guard let stillImageView else { return }
+            shouldDisplayThumbnail = true
             guard stillImageView.image == nil else { return }
-            guard let attachmentStream = viewItem.attachmentStream(),
-                  let thumbnailPath = attachmentStream.thumbnailPath() else {
+            guard let attachmentStream = viewItem.attachmentStream() else {
                 return
             }
+
+            // hasEncryptedFile also covers retained pre-commit instances.
+            if attachmentStream.hasEncryptedFile {
+                let attachmentId = attachmentStream.uniqueId
+                let cacheKey = attachmentId as NSString
+                if let cachedImage = self.mediaCache?.object(forKey: cacheKey) as? UIImage {
+                    stillImageView.image = cachedImage
+                    return
+                }
+                guard viewItem.cellMediaLoadFailureCount < Self.maxMediaLoadRetries else { return }
+                guard !encryptedThumbnailLoadInFlight else { return }
+                encryptedThumbnailLoadInFlight = true
+
+                let mediaCache = self.mediaCache
+                EncryptedAttachmentThumbnailLoader.load(
+                    attachmentId: attachmentId,
+                    work: {
+                        guard let data = attachmentStream.decryptedData() else { return nil }
+                        return EncryptedAttachmentThumbnailLoader.downsampledImage(data: data)
+                    },
+                    completion: { [weak self, weak stillImageView] image in
+                        encryptedThumbnailLoadInFlight = false
+                        guard let self else { return }
+
+                        if let image {
+                            viewItem.cellMediaLoadFailureCount = 0
+                            mediaCache?.setObject(image, forKey: cacheKey)
+                        }
+
+                        guard shouldDisplayThumbnail else { return }
+                        guard viewItem.attachmentStream()?.uniqueId == attachmentId else { return }
+                        guard let stillImageView, stillImageView.image == nil else { return }
+                        guard let image else {
+                            viewItem.cellMediaLoadFailureCount += 1
+                            Logger.error("Failed to asynchronously load encrypted thumbnail (attempt \(viewItem.cellMediaLoadFailureCount)/\(Self.maxMediaLoadRetries))")
+                            if viewItem.cellMediaLoadFailureCount >= Self.maxMediaLoadRetries {
+                                self.showAttachmentErrorView(on: stillImageView)
+                            }
+                            return
+                        }
+                        stillImageView.image = image
+                    }
+                )
+                return
+            }
+
+            guard let thumbnailPath = attachmentStream.thumbnailPath() else { return }
             let kMaxCachableSize = 1024 * 1024
             let thumbnailSize = OWSFileSystem.fileSize(ofPath: thumbnailPath)?.int64Value ?? 0
             let shouldSkipCache = thumbnailSize < kMaxCachableSize
@@ -152,12 +298,84 @@ extension ConversationMessageBubbleView {
         }
         
         self.unloadCellContentBlock = {
+            shouldDisplayThumbnail = false
             stillImageView.image = nil
         }
         
         return stillImageView
     }
     
+    /// Loads encrypted animated media off the main thread.
+    private func loadAnimatedImage(
+        viewItem: ConversationViewItem,
+        into imageView: YYAnimatedImageView
+    ) {
+        guard let attachmentStream = viewItem.attachmentStream() else { return }
+        let attachmentId = attachmentStream.uniqueId
+        let cacheKey = attachmentId as NSString
+
+        if let cached = self.mediaCache?.object(forKey: cacheKey) as? UIImage {
+            imageView.image = cached
+            return
+        }
+
+        guard attachmentStream.hasEncryptedFile else {
+            imageView.image = self.tryToLoadMedia(
+                viewItem: viewItem,
+                loadMedia: {
+                    if attachmentStream.isValidImage(), let data = attachmentStream.decryptedData() {
+                        return YYImage(data: data)
+                    }
+                    return nil
+                },
+                mediaView: imageView,
+                cache: self.mediaCache,
+                cacheKey: attachmentId,
+                shouldSkipCache: false
+            )
+            return
+        }
+
+        guard viewItem.cellMediaLoadFailureCount < Self.maxMediaLoadRetries else { return }
+
+        // Register once per attachment and target view.
+        let decodeToken = AnimatedDecodeToken(attachmentId: attachmentId, viewId: ObjectIdentifier(imageView))
+        guard animatedDecodeInFlight != decodeToken else { return }
+        animatedDecodeInFlight = decodeToken
+
+        let mediaCache = self.mediaCache
+        EncryptedAttachmentThumbnailLoader.load(
+            attachmentId: "gif:\(attachmentId)",
+            work: {
+                guard let data = attachmentStream.decryptedData() else { return nil }
+                return YYImage(data: data)
+            },
+            completion: { [weak self, weak imageView] image in
+                guard let self else { return }
+                if self.animatedDecodeInFlight == decodeToken {
+                    self.animatedDecodeInFlight = nil
+                }
+
+                if let image {
+                    viewItem.cellMediaLoadFailureCount = 0
+                    mediaCache?.setObject(image, forKey: cacheKey)
+                }
+
+                guard viewItem.attachmentStream()?.uniqueId == attachmentId else { return }
+                guard let imageView, imageView.image == nil else { return }
+                guard let image else {
+                    viewItem.cellMediaLoadFailureCount += 1
+                    Logger.error("Failed to asynchronously load encrypted animated image (attempt \(viewItem.cellMediaLoadFailureCount)/\(Self.maxMediaLoadRetries))")
+                    if viewItem.cellMediaLoadFailureCount >= Self.maxMediaLoadRetries {
+                        self.showAttachmentErrorView(on: imageView)
+                    }
+                    return
+                }
+                imageView.image = image
+            }
+        )
+    }
+
     private func createAnimatedImageView(viewItem: ConversationViewItem) -> UIView {
         let uniqueId = viewItem.attachmentStream()?.uniqueId
 
@@ -177,23 +395,7 @@ extension ConversationMessageBubbleView {
             let reloadBlock: () -> Void = { [weak self, weak reused] in
                 guard let self, let reused else { return }
                 guard reused.image == nil else { return }
-                guard let attachmentStream = viewItem.attachmentStream(),
-                      let filePath = attachmentStream.filePath() else {
-                    return
-                }
-                reused.image = self.tryToLoadMedia(
-                    viewItem: viewItem,
-                    loadMedia: {
-                        if attachmentStream.isValidImage() {
-                            return YYImage(contentsOfFile: filePath)
-                        }
-                        return nil
-                    },
-                    mediaView: reused,
-                    cache: self.mediaCache,
-                    cacheKey: attachmentStream.uniqueId,
-                    shouldSkipCache: false
-                )
+                self.loadAnimatedImage(viewItem: viewItem, into: reused)
             }
             self.loadCellContentBlock = reloadBlock
             // Do NOT nil the image on unload: keep the frame so re-adding resumes cleanly.
@@ -215,23 +417,7 @@ extension ConversationMessageBubbleView {
         let loadBlock: () -> Void = { [weak self, weak animatedImageView] in
             guard let self, let animatedImageView else { return }
             guard animatedImageView.image == nil else { return }
-            guard let attachmentStream = viewItem.attachmentStream(),
-                  let filePath = attachmentStream.filePath() else {
-                return
-            }
-            animatedImageView.image = self.tryToLoadMedia(
-                viewItem: viewItem,
-                loadMedia: {
-                    if attachmentStream.isValidImage() {
-                        return YYImage(contentsOfFile: filePath)
-                    }
-                    return nil
-                },
-                mediaView: animatedImageView,
-                cache: self.mediaCache,
-                cacheKey: attachmentStream.uniqueId,
-                shouldSkipCache: false
-            )
+            self.loadAnimatedImage(viewItem: viewItem, into: animatedImageView)
         }
 
         self.loadCellContentBlock = loadBlock
@@ -289,44 +475,187 @@ extension ConversationMessageBubbleView {
         stillImageView.layer.minificationFilter = CALayerContentsFilter.trilinear
         stillImageView.layer.magnificationFilter = CALayerContentsFilter.trilinear
         
-        let playIcon = UIImage(named: "play_button")
-        let playImageView = UIImageView(image: playIcon)
-        stillImageView.addSubview(playImageView)
-        playImageView.snp.makeConstraints { make in
+        let playButton = makeVideoPlayButton()
+        stillImageView.addSubview(playButton)
+        playButton.snp.makeConstraints { make in
             make.center.equalToSuperview()
         }
-        
-        addAttachmentUploadViewIfNecessary(viewItem: viewItem) { isAttachmentReady in
-            playImageView.isHidden = !isAttachmentReady
+
+        // Same overlay the compression placeholder uses, driven by upload state
+        // instead. The play button stays put underneath so the only thing that
+        // changes on completion is the arc going away.
+        //
+        // Gated on the send still being live: a failed message never finishes
+        // uploading, so the arc would spin forever. `ConversationViewItem` routes
+        // failed placeholders here precisely so the standard failure UI can show.
+        let isFailedSend = (viewItem.interaction as? TSOutgoingMessage)?.messageState == .failed
+        let processingOverlay = makeVideoProcessingOverlay()
+        processingOverlay.isHidden = true
+        stillImageView.addSubview(processingOverlay)
+        processingOverlay.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        addAttachmentUploadViewIfNecessary(viewItem: viewItem, suppressesProgressUI: true) { isAttachmentReady in
+            processingOverlay.isHidden = isAttachmentReady || isFailedSend
         }
         
+        var isVideoStillLoadInFlight = false
+        var shouldDisplayVideoStill = false
+
         self.loadCellContentBlock = { [weak self] in
             guard let self else { return }
+            shouldDisplayVideoStill = true
             guard stillImageView.image == nil else {
                 return
             }
             guard let attachmentStream = viewItem.attachmentStream() else {
                 return
             }
-            stillImageView.image = self.tryToLoadMedia(
-                viewItem: viewItem,
-                loadMedia: {
-                    return attachmentStream.image()
-                },
-                mediaView: stillImageView,
-                cache: self.mediaCache,
-                cacheKey: attachmentStream.uniqueId,
-                shouldSkipCache: false
-            )
+            let cacheKey = attachmentStream.uniqueId as NSString
+            if let cachedImage = self.mediaCache?.object(forKey: cacheKey) as? UIImage {
+                stillImageView.image = cachedImage
+                return
+            }
+            guard viewItem.cellMediaLoadFailureCount < Self.maxMediaLoadRetries else {
+                return
+            }
+            guard !isVideoStillLoadInFlight else {
+                return
+            }
+            isVideoStillLoadInFlight = true
+
+            attachmentStream.videoStillImage(withMaxSize: CGSize(width: 512, height: 512)) { [weak self, weak stillImageView] image in
+                DispatchQueue.main.async {
+                    isVideoStillLoadInFlight = false
+                    guard let self, let stillImageView else { return }
+                    guard shouldDisplayVideoStill else { return }
+                    guard viewItem.attachmentStream()?.uniqueId == attachmentStream.uniqueId else { return }
+                    guard stillImageView.image == nil else { return }
+
+                    guard let image else {
+                        viewItem.cellMediaLoadFailureCount += 1
+                        Logger.error("Failed to asynchronously load video still (attempt \(viewItem.cellMediaLoadFailureCount)/\(Self.maxMediaLoadRetries))")
+                        if viewItem.cellMediaLoadFailureCount >= Self.maxMediaLoadRetries {
+                            self.showAttachmentErrorView(on: stillImageView)
+                        }
+                        return
+                    }
+
+                    viewItem.cellMediaLoadFailureCount = 0
+                    self.mediaCache?.setObject(image, forKey: cacheKey)
+                    stillImageView.image = image
+                }
+            }
         }
-        
+
+        self.unloadCellContentBlock = {
+            shouldDisplayVideoStill = false
+            stillImageView.image = nil
+        }
+
+        return stillImageView
+    }
+
+    /// Dim layer plus spinning arc, shown while a video is being processed. One
+    /// treatment covers both compression and upload: they're separate phases
+    /// internally, but the user has no reason to tell them apart, and switching
+    /// visuals midway just looks like a glitch.
+    private func makeVideoProcessingOverlay() -> UIView {
+        let container = UIView()
+        container.isUserInteractionEnabled = false
+
+        let dim = UIView()
+        dim.backgroundColor = UIColor(white: 0, alpha: 0.3)
+        container.addSubview(dim)
+        dim.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        let arc = SpinningArcView(lineWidth: 2)
+        container.addSubview(arc)
+        arc.snp.makeConstraints { make in
+            make.center.equalToSuperview()
+            make.size.equalTo(40)
+        }
+
+        return container
+    }
+
+    /// Translucent dark disc around a white play triangle. Shared with the
+    /// transcoding placeholder so it doesn't change appearance when compression ends.
+    private func makeVideoPlayButton() -> UIView {
+        let diameter: CGFloat = 48
+        let circle = UIView()
+        circle.backgroundColor = .black.withAlphaComponent(0.7)
+        circle.isUserInteractionEnabled = false
+        circle.clipsToBounds = true
+        circle.layer.cornerRadius = diameter / 2
+        circle.snp.makeConstraints { make in
+            make.size.equalTo(diameter)
+        }
+
+        let triangle = UIImageView(image: UIImage(named: "video_play_triangle"))
+        triangle.contentMode = .scaleAspectFit
+        circle.addSubview(triangle)
+        triangle.snp.makeConstraints { make in
+            make.center.equalToSuperview()
+            make.size.equalTo(24)
+        }
+
+        return circle
+    }
+
+    /// Placeholder counterpart to `createVideoView`, shown while the video is still
+    /// compressing: the 512pt thumbnail, the same play button plus a spinning arc,
+    /// and no upload progress view (uploads only start after preprocessing). The
+    /// cell is rebuilt on every observer reload, so the arc goes away on its own
+    /// once the op clears the placeholder state.
+    private func createVideoTranscodingView(viewItem: ConversationViewItem) -> UIView {
+        let stillImageView = UIImageView()
+        stillImageView.contentMode = .scaleAspectFill
+        stillImageView.layer.minificationFilter = CALayerContentsFilter.trilinear
+        stillImageView.layer.magnificationFilter = CALayerContentsFilter.trilinear
+        stillImageView.backgroundColor = .black
+
+        // Same button and overlay as the playable cell, so the only visible
+        // change when compression ends is the arc going away.
+        let playButton = makeVideoPlayButton()
+        stillImageView.addSubview(playButton)
+        playButton.snp.makeConstraints { make in
+            make.center.equalToSuperview()
+        }
+
+        let processingOverlay = makeVideoProcessingOverlay()
+        stillImageView.addSubview(processingOverlay)
+        processingOverlay.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        self.loadCellContentBlock = {
+            guard stillImageView.image == nil else {
+                return
+            }
+            guard let attachmentStream = viewItem.attachmentStream() else {
+                return
+            }
+            // Thumbnail only, never `image()` — that decodes a full-resolution still
+            // off the uncompressed source on the main thread. Written
+            // off-transaction, so early reloads may find it missing; the dark
+            // backdrop stands in until the touch after generation. Not routed
+            // through `tryToLoadMedia` (a nil there trips its retry counter into an
+            // error view) and not cached (the swap keeps the same uniqueId, so a
+            // low-res still would leak into the playable cell).
+            stillImageView.image = attachmentStream.thumbnailImage()
+        }
+
         self.unloadCellContentBlock = {
             stillImageView.image = nil
         }
-        
+
         return stillImageView
     }
-    
+
     private func createGenericAttachmentView(viewItem: ConversationViewItem, style: ConversationStyle) -> UIView? {
         guard let attachmentStream = viewItem.attachmentStream() else {
             return nil
@@ -431,6 +760,7 @@ extension ConversationMessageBubbleView {
     
     private func addAttachmentUploadViewIfNecessary(
         viewItem: ConversationViewItem,
+        suppressesProgressUI: Bool = false,
         stateCallback: ((Bool) -> Void)? = nil
     ) {
         guard viewItem.interaction.interactionType() == .outgoingMessage else { return }
@@ -441,6 +771,7 @@ extension ConversationMessageBubbleView {
             attachment: attachmentStream,
             attachmentStateCallback: stateCallback
         )
+        attachmentUploadView.suppressesProgressUI = suppressesProgressUI
         bubbleView.addSubview(attachmentUploadView)
         attachmentUploadView.snp.makeConstraints { make in
             make.edges.equalToSuperview()

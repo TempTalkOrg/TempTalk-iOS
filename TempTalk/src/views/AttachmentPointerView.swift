@@ -111,6 +111,7 @@ class AttachmentPointerView: UIStackView {
 
         
         // truncate middle to be sure we include file extension
+        nameLabel.numberOfLines = 2
         nameLabel.lineBreakMode = .byTruncatingMiddle
         nameLabel.textAlignment = .center
         nameLabel.textColor = self.textColor

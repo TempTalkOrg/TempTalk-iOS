@@ -73,8 +73,10 @@ extension ConversationViewController {
         bubbleView: ConversationMessageBubbleView
     ) {
         // 需要支持部分复制文本，全选文本
+        // A failed message offers only Resend / Delete, so text selection stays off —
+        // otherwise selecting text would rebuild the menu with the regular actions.
         var textSelectionView: DTTextSelectionView?
-        if messageType == .text || messageType == .card {
+        if messageType == .text || messageType == .card, !isSendFailed(viewItem: viewItem) {
             bubbleView.textDelegate = self
             bubbleView.textViewSelectAll()
             textSelectionView = bubbleView.bodyTextSelectionView
@@ -99,17 +101,15 @@ extension ConversationViewController {
             }
         }
         
-        let actions: [MenuAction]
-        if viewItem.isConfidentialMessage {
-            actions = messageType.confidentialActions(viewItem: viewItem, delegate: self)
+        let builtActions: [MenuAction]
+        if isSendFailed(viewItem: viewItem) {
+            builtActions = ConversationViewItemActions.sendFailedActions(conversationViewItem: viewItem, delegate: self)
+        } else if viewItem.isConfidentialMessage {
+            builtActions = messageType.confidentialActions(viewItem: viewItem, delegate: self)
         } else {
-            actions = messageType.messageActions(viewItem: viewItem, delegate: self)
+            builtActions = messageType.messageActions(viewItem: viewItem, delegate: self)
         }
-        
-        var emojiAction: MenuEmojiAction? = nil
-        if viewItem.allowEmojiReaction() {
-            emojiAction = ConversationViewItemActions.emojiReaction(conversationViewItem: viewItem, delegate: self)
-        }
+        let (actions, emojiAction) = menuRulesApplied(actions: builtActions, viewItem: viewItem)
         let menuVC = ConversationActionMenuController(
             actions: actions,
             emojiAction: emojiAction,
@@ -130,6 +130,34 @@ extension ConversationViewController {
         navigationController?.present(menuVC, animated: true)
         
         actionMenuController = menuVC
+    }
+
+    /// Applies Saved (Note-to-Self) menu rules to a freshly built action set: the
+    /// self-targeting "Add to Saved" action is dropped and the reaction row is
+    /// suppressed. Shared by the initial present and the text-selection refresh
+    /// paths so both stay consistent.
+    private func menuRulesApplied(
+        actions: [MenuAction],
+        viewItem: ConversationViewItem
+    ) -> (actions: [MenuAction], emojiAction: MenuEmojiAction?) {
+        var actions = actions
+        if viewItem.thread.isNoteToSelf {
+            actions = actions.filter { $0.kind != .addToSaved }
+        }
+        var emojiAction: MenuEmojiAction? = nil
+        if viewItem.allowEmojiReaction(), !viewItem.thread.isNoteToSelf, !isSendFailed(viewItem: viewItem) {
+            emojiAction = ConversationViewItemActions.emojiReaction(conversationViewItem: viewItem, delegate: self)
+        }
+        return (actions, emojiAction)
+    }
+
+    /// A message is "send failed" once any of its recipients failed — the same
+    /// judgement the bubble's hint row uses.
+    private func isSendFailed(viewItem: ConversationViewItem) -> Bool {
+        guard let outgoingMessage = viewItem.interaction as? TSOutgoingMessage else {
+            return false
+        }
+        return outgoingMessage.messageState == .failed
     }
 }
 
@@ -207,11 +235,14 @@ extension ConversationViewController: MessageActionsDelegate {
         // 检查消息是否超过了可撤回的时间
         func checkIfTimeout() -> Bool {
             let timeoutInterval = DTRecallConfig.fetch().timeoutInterval
-            let messageDuration = Double(Date.ows_millisecondTimestamp() - conversationViewItem.interaction.timestamp)
-            if messageDuration <= (timeoutInterval * 1000) {
+            let now = DTTrustedClock.now()
+            // Server axis on both sides, same as the menu gate.
+            let msgTimestamp = conversationViewItem.interaction.timestampForSorting()
+            if now >= msgTimestamp,
+               Double(now - msgTimestamp) <= (timeoutInterval * 1000) {
                 return false
             }
-            
+
             let title = String(format: Localized("RECALL_PASSED_TIME"), DateUtil.formatToMinuteHourDayWeek(withTimeInterval: timeoutInterval))
             let alertController = UIAlertController(
                 title: title,
@@ -274,6 +305,17 @@ extension ConversationViewController: MessageActionsDelegate {
         showOriginalLanguage(conversationViewItem: conversationViewItem)
     }
     
+    /// 重发
+    func messageActionsResendItem(_ conversationViewItem: ConversationViewItem) {
+        guard let outgoingMessage = conversationViewItem.interaction as? TSOutgoingMessage else {
+            return
+        }
+        // Enqueue first, then close the menu — the send must not wait on the dismiss animation,
+        // so this action opts out of `dismissBeforePerformAction`.
+        resendFailedMessage(outgoingMessage)
+        actionMenuController?.dismissMenu(animation: true)
+    }
+
     /// 删除
     func messageActionDeleteItem(_ conversationViewItem: ConversationViewItem) {
         let actionSheet = ActionSheetController(message: Localized("MESSAGE_ACTION_DELETE_MESSAGE_TIPS"))
@@ -373,10 +415,10 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
         var actions: [MenuAction] = []
         var emojiAction: MenuEmojiAction? = nil
         if isSelectedAll {
-            actions = actionMessageType.messageActions(viewItem: viewItem, delegate: self)
-            if viewItem.allowEmojiReaction() {
-                emojiAction = ConversationViewItemActions.emojiReaction(conversationViewItem: viewItem, delegate: self)
-            }
+            (actions, emojiAction) = menuRulesApplied(
+                actions: actionMessageType.messageActions(viewItem: viewItem, delegate: self),
+                viewItem: viewItem
+            )
         } else {
             let copyAction = MenuAction(
                 image: #imageLiteral(resourceName: "ic_longpress_copy"),
@@ -419,11 +461,10 @@ extension ConversationViewController: ConversationMessageBubbleViewTextDelegate 
                     
                     selectionView.selectAll(animated: true)
                     
-                    let newActions = actionMessageType.messageActions(viewItem: viewItem, delegate: self)
-                    var newEmojiAction: MenuEmojiAction? = nil
-                    if viewItem.allowEmojiReaction() {
-                        newEmojiAction = ConversationViewItemActions.emojiReaction(conversationViewItem: viewItem, delegate: self)
-                    }
+                    let (newActions, newEmojiAction) = self.menuRulesApplied(
+                        actions: actionMessageType.messageActions(viewItem: viewItem, delegate: self),
+                        viewItem: viewItem
+                    )
                     menuVC.update(actions: newActions, emojiAction: newEmojiAction)
                     menuVC.isSelectedAll = true
                 }

@@ -6,11 +6,11 @@
 //
 
 #import <TTMessaging/TTMessaging.h>
-#import <JXPagingView/JXPagerView.h>
+#import <JXCategoryView/JXCategoryView.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface DTGroupsViewController : OWSViewController<JXPagerViewListViewDelegate>
+@interface DTGroupsViewController : OWSViewController<JXCategoryListContentViewDelegate>
 
 @end
 

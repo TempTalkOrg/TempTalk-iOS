@@ -57,7 +57,7 @@
     card.appId = @"";
     card.content = finalText;
     
-    DTHyperlinkOutgoingMessage *message = [[DTHyperlinkOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[NSDate ows_millisecondTimeStamp]
+    DTHyperlinkOutgoingMessage *message = [[DTHyperlinkOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[DTTrustedClock clientStampMs]
                                                                                                  inThread:thread
                                                                                               messageBody:text
                                                                                                 atPersons:atPersons
@@ -160,7 +160,7 @@
     
     uint32_t expiresInSeconds = [thread messageExpiresInSeconds];
 
-    DTHyperlinkOutgoingMessage *message = [[DTHyperlinkOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[NSDate ows_millisecondTimeStamp]
+    DTHyperlinkOutgoingMessage *message = [[DTHyperlinkOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[DTTrustedClock clientStampMs]
                                                                                                       inThread:thread
                                                                                                    messageBody:body
                                                                                                      atPersons:atPersons

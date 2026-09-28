@@ -109,6 +109,7 @@ import TTServiceKit
     }
 
     var threadType: InputToolbarThreadType
+    private let usesEndToEndEncryptionPlaceholder: Bool
 
     /// Whether confidential message button should be hidden (for groups with ≥20 members)
     var shouldHideConfidentialButton: Bool = false {
@@ -130,13 +131,15 @@ import TTServiceKit
         inputTextViewDelegate: ConversationInputTextViewDelegate,
         inputToolbarState: InputToolbarState,
         relationship: InputToolbarRelationship,
-        threadType: InputToolbarThreadType
+        threadType: InputToolbarThreadType,
+        usesEndToEndEncryptionPlaceholder: Bool
     ) {
         self.conversationStyle = conversationStyle
         self.inputToolbarDelegate = inputToolbarDelegate
         self.inputToolbarState = inputToolbarState
         self.relationship = relationship
         self.threadType = threadType
+        self.usesEndToEndEncryptionPlaceholder = usesEndToEndEncryptionPlaceholder
         
         super.init(frame: .zero)
 
@@ -259,18 +262,6 @@ import TTServiceKit
         return button
     }()
 
-    // Standalone GIF entry, sits to the right of the + attachment button (see Figma 16746-18110).
-    private lazy var gifButton: UIButton = {
-        let button = UIButton(type: .custom)
-        button.tintColor = Theme.iconColor
-        button.accessibilityIdentifier = UIView.accessibilityIdentifier(in: self, name: "gifButton")
-        button.addTarget(self, action: #selector(gifButtonTapped), for: .touchUpInside)
-        button.setImage(UIImage(named: "input_attachment_gif")?.withRenderingMode(.alwaysTemplate), for: .normal)
-        button.setContentHuggingHorizontalHigh()
-        button.setCompressionResistanceHorizontalHigh()
-        return button
-    }()
-
     public lazy var inputTextView: ConversationInputTextView = {
         let inputTextView = ConversationInputTextView()
         inputTextView.textViewToolbarDelegate = self
@@ -281,8 +272,8 @@ import TTServiceKit
         return inputTextView
     }()
     
-    private lazy var confideButton: UIButton = {
-        let button = UIButton(type: .custom)
+    private lazy var confideButton: ExpandedHitAreaButton = {
+        let button = ExpandedHitAreaButton(type: .custom)
         button.tintColor = Theme.iconColor
         button.accessibilityLabel = OWSLocalizedString(
             "INPUT_TOOLBAR_CONFIDE_BUTTON_ACCESSIBILITY_LABEL",
@@ -292,7 +283,6 @@ import TTServiceKit
         button.addTarget(self, action: #selector(confideButtonPressed), for: .touchUpInside)
         button.setImage(UIImage(named: "input_attachment_confide"), for: .normal)
         button.setImage(UIImage(named: "input_attachment_confide_select"), for: .selected)
-        button.autoSetDimensions(to: CGSize(square: LayoutMetrics.minToolbarItemHeight))
 
         return button
     }()
@@ -336,9 +326,9 @@ import TTServiceKit
 
     private var addOrCancelButtonConstraints: [NSLayoutConstraint] = []
 
-    private var gifButtonConstraints: [NSLayoutConstraint] = []
-
-    private var lastNumberOflines = 0
+    private var isExpandLayoutActive = false
+    private var expandLayoutNeedsResolution = true
+    private var lastResolvedTextWidth: CGFloat = 0
     
     private let mainPanelView: UIView = {
         let view = UIView()
@@ -417,7 +407,9 @@ import TTServiceKit
         messageContentVStack.autoPinEdgesToSuperviewEdges(with: UIEdgeInsets.zero, excludingEdge: .right)
         // Use a lower priority constraint to avoid conflicts when confideButton is repositioned
         msgContentRConstraint = messageContentVStack.autoPinEdge(toSuperviewMargin: .right, withInset: 52)
-        setupConfideButtonLayout(showExpand: false)
+        // Keep the text width identical in collapsed and expanded layouts. Changing this
+        // inset based on the measured line count creates a width -> line count feedback loop.
+        msgContentRConstraint?.constant = -28
         
         
         // Voice Message UI is added to the same vertical stack, but not as arranged subview.
@@ -444,16 +436,6 @@ import TTServiceKit
         let heightConstraint = addOrCancelButton.autoSetDimension(.height, toSize: addOrCancelButtonSize.height)
         addOrCancelButtonConstraints = [leftConstraint, bottomConstraint, widthConstraint, heightConstraint]
 
-        // GIF button: pinned to the right of the + attachment button (collapsed when not a friend).
-        mainPanelView.addSubview(gifButton)
-        let gifLeftConstraint = gifButton.autoPinEdge(.left, to: .right, of: addOrCancelButton, withOffset: -10)
-        let gifBottomConstraint = gifButton.autoPinEdge(toSuperviewEdge: .bottom)
-        let gifButtonSize = isFriend ? LayoutMetrics.minToolbarItemHeight : CGFLOAT_MIN
-        let gifWidthConstraint = gifButton.autoSetDimension(.width, toSize: gifButtonSize)
-        let gifHeightConstraint = gifButton.autoSetDimension(.height, toSize: gifButtonSize)
-        gifButton.isHidden = !isFriend
-        gifButtonConstraints = [gifLeftConstraint, gifBottomConstraint, gifWidthConstraint, gifHeightConstraint]
-
         // Voice Message | Keyboard | Send: pinned to the bottom right corner.
         mainPanelView.addSubview(rightEdgeControlsView)
         rightEdgeControlsView.autoPinEdge(toSuperviewMargin: .right)
@@ -464,7 +446,13 @@ import TTServiceKit
         mainPanelView.addSubview(messageContentView)
         messageContentView.autoPinHeightToSuperview()
         messageContentView.autoPinEdge(.right, to: .left, of: rightEdgeControlsView)
-        messageContentView.autoPinEdge(.left, to: .right, of: gifButton)
+        messageContentView.autoPinEdge(.left, to: .right, of: addOrCancelButton)
+
+        // Keep the control in a non-clipping parent. Its visual size is 40pt while its
+        // hit area expands to 52pt, matching the other toolbar controls.
+        mainPanelView.addSubview(confideButton)
+        confideButton.autoSetDimensions(to: CGSize(square: LayoutMetrics.minTextViewHeight))
+        setupConfideButtonLayout(showExpand: false)
 
         // Put main panel view into a wrapper view that would also contain background view.
         mainPanelWrapperView.addSubview(mainPanelView)
@@ -532,33 +520,49 @@ import TTServiceKit
         isConfigurationComplete = true
     }
     
-    func setupConfideButtonLayout(showExpand: Bool) {
-        // Remove old constraints first to avoid conflicts
+    private func setupConfideButtonLayout(showExpand: Bool) {
         NSLayoutConstraint.deactivate(confideButtonConstraints)
         confideButtonConstraints.removeAll()
 
-        confideButton.removeFromSuperview()
+        let hitAreaExpansion = 0.5 * (LayoutMetrics.minToolbarItemHeight - LayoutMetrics.minTextViewHeight)
         if showExpand {
-            mainPanelView.addSubview(confideButton)
-            let verticalConstraint = confideButton.autoAlignAxis(.vertical, toSameAxisOf: rightEdgeControlsView.sendButton)
-            let topConstraint = confideButton.autoPinEdge(toSuperviewEdge: .top)
-            let widthConstraint = confideButton.autoSetDimension(.width, toSize: LayoutMetrics.minTextViewHeight)
-            let heightConstraint = confideButton.autoSetDimension(.height, toSize: LayoutMetrics.minTextViewHeight)
-
-            confideButtonConstraints = [verticalConstraint, topConstraint, widthConstraint, heightConstraint]
-            msgContentRConstraint?.constant = -6
-
+            // Center the 40pt visual control in the top 52pt toolbar row so the expanded
+            // hit area remains inside mainPanelView.
+            confideButton.hitAreaInsets = UIEdgeInsets(
+                top: -hitAreaExpansion,
+                left: -hitAreaExpansion,
+                bottom: -hitAreaExpansion,
+                right: -hitAreaExpansion
+            )
+            confideButtonConstraints = [
+                confideButton.centerXAnchor.constraint(equalTo: rightEdgeControlsView.sendButton.centerXAnchor),
+                confideButton.topAnchor.constraint(
+                    equalTo: mainPanelView.topAnchor,
+                    constant: 0.5 * (LayoutMetrics.minToolbarItemHeight - LayoutMetrics.minTextViewHeight)
+                )
+            ]
         } else {
-            vStackRoundingView.addSubview(confideButton)
-            let rightConstraint = confideButton.autoPinEdge(toSuperviewEdge: .right)
-            let bottomConstraint = confideButton.autoPinEdge(toSuperviewEdge: .bottom)
-            let widthConstraint = confideButton.autoSetDimension(.width, toSize: LayoutMetrics.minTextViewHeight)
-            let heightConstraint = confideButton.autoSetDimension(.height, toSize: LayoutMetrics.minTextViewHeight)
-
-            confideButtonConstraints = [rightConstraint, bottomConstraint, widthConstraint, heightConstraint]
-            msgContentRConstraint?.constant = -28
-
+            // Expand toward the text field instead of across the boundary with the
+            // send/voice control. This preserves a 52pt target without overlapping it.
+            confideButton.hitAreaInsets = UIEdgeInsets(
+                top: -hitAreaExpansion,
+                left: -2 * hitAreaExpansion,
+                bottom: -hitAreaExpansion,
+                right: 0
+            )
+            confideButtonConstraints = [
+                confideButton.centerXAnchor.constraint(
+                    equalTo: vStackRoundingView.trailingAnchor,
+                    constant: -0.5 * LayoutMetrics.minTextViewHeight
+                ),
+                confideButton.centerYAnchor.constraint(
+                    equalTo: vStackRoundingView.bottomAnchor,
+                    constant: -0.5 * LayoutMetrics.minTextViewHeight
+                )
+            ]
         }
+
+        NSLayoutConstraint.activate(confideButtonConstraints)
     }
 
     @discardableResult
@@ -601,7 +605,17 @@ import TTServiceKit
         }
         
         let isConfidentialMode = .confidential == inputToolbarState
-        let placeholderText: String = isConfidentialMode ? OWSLocalizedString("Confidential_message", comment: "") : OWSLocalizedString("new_message", comment: "")
+        let placeholderText: String
+        if isConfidentialMode {
+            placeholderText = OWSLocalizedString("Confidential_message", comment: "")
+        } else if usesEndToEndEncryptionPlaceholder {
+            placeholderText = OWSLocalizedString(
+                "CONVERSATION_E2EE_INPUT_PLACEHOLDER",
+                comment: "Placeholder for an end-to-end encrypted conversation input"
+            )
+        } else {
+            placeholderText = OWSLocalizedString("new_message", comment: "")
+        }
         if inputTextView.text.count == 0 {
             inputTextView.placeholder = placeholderText
         }
@@ -642,14 +656,6 @@ import TTServiceKit
             addOrCancelButtonConstraints[3].constant = addOrCancelButtonSize.height
         }
         addOrCancelButton.isHidden = !isFriend
-
-        // GIF button mirrors the + attachment button's friend/not-friend state.
-        if gifButtonConstraints.count >= 4 {
-            let gifButtonSize = isFriend ? LayoutMetrics.minToolbarItemHeight : CGFLOAT_MIN
-            gifButtonConstraints[2].constant = gifButtonSize
-            gifButtonConstraints[3].constant = gifButtonSize
-        }
-        gifButton.isHidden = !isFriend
 
         // Hide text input field if Voice Message UI is presented or make it visible otherwise.
         // Do not change "isHidden" because that'll cause inputTextView to lose focus.
@@ -721,8 +727,8 @@ import TTServiceKit
 
     @objc func updateFontSizes() {
         inputTextView.font = .ows_dynamicTypeBodyFont()
-        // Recompute height: the scaled max changes with the font, so re-clamp.
-        ensureTextViewHeight()
+        expandLayoutNeedsResolution = true
+        refreshTextViewLayout(adjustScrollPosition: true)
     }
 
     // MARK: hold to talk Button
@@ -1122,6 +1128,10 @@ import TTServiceKit
     @objc func setMessageBody(_ messageBody: String?, selectRange: NSRange, animated: Bool, doLayout: Bool = true) {
         self.inputTextView.text = messageBody
 
+        if selectRange.location > 0 {
+            inputTextView.selectedRange = selectRange
+        }
+
         // It's important that we set the textViewHeight before
         // doing any animation in `ensureButtonVisibility(withAnimation:doLayout)`
         // Otherwise, the resultant keyboard frame posted in `keyboardWillChangeFrame`
@@ -1138,21 +1148,20 @@ import TTServiceKit
         // Presumably this bug only surfaced when an animation coincides with more complicated layout
         // changes (in this case while simultaneous with removing quoted reply subviews, hiding the
         // wrapper view *and* changing the height of the input textView
-        ensureTextViewHeight()
+        expandLayoutNeedsResolution = true
+        refreshTextViewLayout(adjustScrollPosition: true)
 
         if let text = messageBody, !text.isEmpty {
             clearDesiredKeyboard()
         }
 
         ensureButtonVisibility(withAnimation: animated, doLayout: doLayout)
-        
-        if selectRange.location > 0  {
-            inputTextView.selectedRange = selectRange
-        }
     }
 
     @objc func ensureTextViewHeight() {
-        updateHeightWithTextView(inputTextView)
+        // This is also called from viewDidLayoutSubviews. Expand-state resolution is
+        // dirty/width guarded, so ordinary height rechecks cannot rebuild constraints.
+        refreshTextViewLayout(adjustScrollPosition: false)
     }
 
     func acceptAutocorrectSuggestion() {
@@ -1587,6 +1596,11 @@ import TTServiceKit
     // MARK: Keyboards
 
     private(set) var isMeasuringKeyboardHeight = false
+    /// Stays true after the invisible preload until a genuine input request supersedes it.
+    /// Keyboard notification ordering is not reliable enough to delimit the preload cycle.
+    private(set) var hasUnsupersededKeyboardPreload = false
+    /// Distinguishes the toolbar's synchronous become/resign pair from a later genuine focus.
+    private var isPerformingKeyboardPreloadResponderTransition = false
     private var hasMeasuredKeyboardHeight = false
 
     // Measured system-keyboard content height (excludes the toolbar accessory).
@@ -1750,6 +1764,8 @@ import TTServiceKit
         // even if though it won't be the first responder by the time
         // the notifications fire, we'll still read its measurement
         isMeasuringKeyboardHeight = true
+        hasUnsupersededKeyboardPreload = true
+        isPerformingKeyboardPreloadResponderTransition = true
 
         UIView.setAnimationsEnabled(false)
 
@@ -1757,6 +1773,7 @@ import TTServiceKit
         _ = inputTextView.resignFirstResponder()
 
         UIView.setAnimationsEnabled(true)
+        isPerformingKeyboardPreloadResponderTransition = false
     }
 
     @objc var isInputViewFirstResponder: Bool {
@@ -1787,6 +1804,10 @@ import TTServiceKit
     }
 
     @objc func beginEditingMessage() {
+        // This public entry point represents a genuine request to present an input view.
+        // It supersedes an incomplete or late preload notification cycle.
+        isMeasuringKeyboardHeight = false
+        hasUnsupersededKeyboardPreload = false
         guard let responder = desiredFirstResponder else { return }
         guard !responder.isFirstResponder else { return }
         responder.becomeFirstResponder()
@@ -1935,12 +1956,6 @@ extension ConversationInputToolbar {
     }
 
     @objc
-    private func gifButtonTapped() {
-        ImpactHapticFeedback.impactOccurred(style: .light)
-        toggleKeyboardType(.gif, animated: false)
-    }
-
-    @objc
     private func confideButtonPressed() {
         // Prevent toggling if button should be hidden (for groups with ≥20 members)
         guard !shouldHideConfidentialButton else {
@@ -1980,10 +1995,18 @@ extension ConversationInputToolbar {
 }
 
 extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
+    private struct TextViewMeasurement {
+        let contentSize: CGSize
+        let height: CGFloat
+    }
+
     public func textViewDidBeginEditing(_ textView: UITextView) {
-        if !isMeasuringKeyboardHeight, let inputToolbarDelegate = inputToolbarDelegate {
-            inputToolbarDelegate.beginInput()
-        }
+        guard !isPerformingKeyboardPreloadResponderTransition else { return }
+        // A focus acquired outside the preload's own synchronous transition is real user/app
+        // intent, even if the preload's frame or hide notifications are still outstanding.
+        isMeasuringKeyboardHeight = false
+        hasUnsupersededKeyboardPreload = false
+        inputToolbarDelegate?.beginInput()
     }
     
     public func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
@@ -2033,64 +2056,92 @@ extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
         return maxLinesHeight + bottomInset
     }
 
-    private func updateHeightWithTextView(_ textView: UITextView) {
-        var maxLines = 4
-        if !expandButton.isHidden {
-            maxLines = 3
+    private func refreshTextViewLayout(adjustScrollPosition: Bool) {
+        updateExpandLayoutIfNeeded()
+
+        guard let measurement = measureAndApplyTextViewHeight() else { return }
+        if adjustScrollPosition {
+            updateTextViewScrollPositionIfNeeded(measurement)
         }
-        let currentLines = numberOfLines(in: textView)
-        let showExpand = currentLines >= maxLines
+    }
 
-        // Update expand button visibility based on line count
-        expandButton.isHidden = !showExpand
-
-        if lastNumberOflines != currentLines {
-            lastNumberOflines = currentLines
-            setupConfideButtonLayout(showExpand: showExpand)
+    private func updateExpandLayoutIfNeeded() {
+        let width = inputTextView.bounds.width
+        guard width.isFinite, width > 0 else {
+            // Drafts can be installed before the inputAccessoryView has a width. Keep
+            // this dirty so the first valid layout resolves the expand state.
+            expandLayoutNeedsResolution = true
+            return
         }
 
-        DispatchQueue.main.async {
-            let contentSize = textView.sizeThatFits(CGSizeMake(textView.width, CGFLOAT_MAX))
+        let widthChanged = abs(width - lastResolvedTextWidth) > 0.5
+        guard expandLayoutNeedsResolution || widthChanged else { return }
 
-            let newHeight = CGFloat.clamp(
-                contentSize.height,
-                min: LayoutMetrics.minTextViewHeight,
-                max: self.maxTextViewHeight(for: textView)
-            )
+        inputTextView.layoutManager.ensureLayout(for: inputTextView.textContainer)
+        let currentLines = numberOfLines(in: inputTextView)
+        let shouldShowExpand = isExpandLayoutActive ? currentLines >= 3 : currentLines >= 4
 
-            self.inputTextView.contentSize = CGSize(width: .zero, height: contentSize.height)
+        expandLayoutNeedsResolution = false
+        lastResolvedTextWidth = width
 
-            // Once the text exceeds the line cap, pin the scroll to the bottom so the latest
-            // line / caret stays visible AND the top edge lands exactly on a line boundary
-            // (no partial line peeking above). Runs before the height guard below, because
-            // when the height is already saturated newHeight stops changing yet new lines
-            // still need to be scrolled into view.
-            if contentSize.height > newHeight {
-                let caretAtEnd = textView.selectedRange.location + textView.selectedRange.length >= (textView.text as NSString).length
-                if caretAtEnd {
-                    // Appending at the tail: pin to bottom so the latest line stays visible and
-                    // the top edge lands on a line boundary (no partial line peeking above).
-                    textView.contentOffset = CGPoint(x: 0, y: contentSize.height - newHeight)
-                } else {
-                    // Editing above the tail: keep the caret's line visible instead of snapping
-                    // to the bottom, which would scroll the line being edited off screen.
-                    textView.scrollRangeToVisible(textView.selectedRange)
-                }
+        guard shouldShowExpand != isExpandLayoutActive else { return }
+
+        isExpandLayoutActive = shouldShowExpand
+        expandButton.isHidden = !shouldShowExpand
+        setupConfideButtonLayout(showExpand: shouldShowExpand)
+    }
+
+    private func measureAndApplyTextViewHeight() -> TextViewMeasurement? {
+        let width = inputTextView.bounds.width
+        guard width.isFinite, width > 0 else { return nil }
+
+        let contentSize = inputTextView.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude)
+        )
+        let maxHeight = maxTextViewHeight(for: inputTextView)
+        guard contentSize.height.isFinite, maxHeight.isFinite else {
+            owsFailDebug("[keyboard] invalid text view measurement")
+            return nil
+        }
+
+        let newHeight = CGFloat.clamp(
+            contentSize.height,
+            min: LayoutMetrics.minTextViewHeight,
+            max: maxHeight
+        )
+        let measurement = TextViewMeasurement(contentSize: contentSize, height: newHeight)
+
+        guard abs(newHeight - textViewHeight) > 0.5 else { return measurement }
+        guard let textViewHeightConstraint else {
+            owsFailDebug("[keyboard] textViewHeightConstraint == nil")
+            return measurement
+        }
+
+        Logger.debug("\(logTag) newHeight: \(newHeight)")
+        textViewHeight = newHeight
+        textViewHeightConstraint.constant = newHeight
+        invalidateIntrinsicContentSize()
+
+        return measurement
+    }
+
+    private func updateTextViewScrollPositionIfNeeded(_ measurement: TextViewMeasurement) {
+        guard measurement.contentSize.height > measurement.height + 0.5 else { return }
+
+        let selectedRange = inputTextView.selectedRange
+        let textLength = (inputTextView.text as NSString).length
+        let caretAtEnd = selectedRange.location + selectedRange.length >= textLength
+
+        if caretAtEnd {
+            // Keep the latest complete line visible after the five-line height cap.
+            let targetOffsetY = max(0, measurement.contentSize.height - measurement.height)
+            if abs(inputTextView.contentOffset.y - targetOffsetY) > 0.5 {
+                inputTextView.contentOffset = CGPoint(x: 0, y: targetOffsetY)
             }
-
-            Logger.debug("\(self.logTag) newHeight: \(newHeight)")
-
-            guard newHeight != self.textViewHeight else { return }
-
-            guard let textViewHeightConstraint = self.textViewHeightConstraint else {
-                owsFailDebug("[keyboard] textViewHeightConstraint == nil")
-                return
-            }
-
-            self.textViewHeight = newHeight
-            textViewHeightConstraint.constant = newHeight
-
-            self.invalidateIntrinsicContentSize()
+        } else {
+            // Editing above the tail must follow the caret even when the capped height
+            // itself no longer changes.
+            inputTextView.scrollRangeToVisible(selectedRange)
         }
     }
 
@@ -2100,7 +2151,8 @@ extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
         // Ignore change events during configuration.
         guard isConfigurationComplete else { return }
 
-        updateHeightWithTextView(textView)
+        expandLayoutNeedsResolution = true
+        refreshTextViewLayout(adjustScrollPosition: true)
         ensureButtonVisibility(withAnimation: true, doLayout: true)
     }
 
@@ -2109,6 +2161,7 @@ extension ConversationInputToolbar: ConversationTextViewToolbarDelegate {
         
         let textContainer = textView.textContainer
         let layoutManager = textView.layoutManager
+        layoutManager.ensureLayout(for: textContainer)
         let glyphRange = layoutManager.glyphRange(for: textContainer)
         
         var lineCount = 0
@@ -2204,6 +2257,17 @@ extension ConversationInputToolbar: RecordingLimitProcessorDelegate {
 
     func recordingLimitProcessorDidReachLimit() {
         stopRecording()
+    }
+}
+
+private final class ExpandedHitAreaButton: UIButton {
+    var hitAreaInsets = UIEdgeInsets.zero
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        guard !isHidden, isUserInteractionEnabled, alpha > 0.01 else { return false }
+
+        let expandedBounds = bounds.inset(by: hitAreaInsets)
+        return expandedBounds.contains(point)
     }
 }
 

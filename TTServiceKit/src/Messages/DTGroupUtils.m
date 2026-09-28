@@ -700,7 +700,7 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
         [customMessage appendAttributedString:remindedMsg];
     }
     
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    uint64_t now = [DTTrustedClock clientStampMs];
         
     TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initActionInfoMessageWithType:TSInfoMessageGroupReminder
                                                                             timestamp:now
@@ -802,7 +802,7 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
     }
     
     if (customMessage) {
-        uint64_t now = [NSDate ows_millisecondTimeStamp];
+        uint64_t now = [DTTrustedClock clientStampMs];
         TSInfoMessage *infoMessage = [[TSInfoMessage alloc]
                                       initMeetingInfoMessageWithType:TSInfoMessageMeetingReminder
                                       timestamp:now
@@ -828,7 +828,7 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
     NSAttributedString *undo = [[NSAttributedString alloc] initWithString:Localized(@"GROUP_REMOVE_MEMBER_REJOIN", @"") attributes:@{NSForegroundColorAttributeName : DTGroupUtils.attributeInfoMessageHighlightColor}];
     [attributedInfo appendAttributedString:undo];
     
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    uint64_t now = [DTTrustedClock clientStampMs];
     TSInfoMessage *actionSystemMessage = [[TSInfoMessage alloc] initActionInfoMessageWithType:TSInfoMessageGroupRemoveMember
                                                                                     timestamp:now
                                                                               serverTimestamp:0
@@ -855,11 +855,14 @@ NSString *const DTRapidRolesKey = @"DTRapidRolesKey";
 //    }
     NSString *otherName = [self.contactsManager displayNameForPhoneIdentifier:otherMemberId transaction:transaction];
     NSString *info = [rapidRole isEqualToString:@"None"] ? [NSString stringWithFormat:Localized(@"RAPID_REMOVE_SYSTEM_MESSAGE", @""), operatorName, otherName] : [NSString stringWithFormat:Localized(@"RAPID_SET_SYSTEM_MESSAGE", @""), operatorName, otherName, rapidRole];
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    uint64_t now = [DTTrustedClock clientStampMs];
     TSInfoMessage *systemMessage = [[TSInfoMessage alloc] initWithTimestamp:now
                                                                    inThread:thread
                                                                 messageType:TSInfoMessageTypeGroupUpdate
                                                               customMessage:info];
+    if (serverTimestamp > 0) {
+        systemMessage.serverTimestamp = serverTimestamp;
+    }
     [systemMessage anyInsertWithTransaction:transaction];
 }
 

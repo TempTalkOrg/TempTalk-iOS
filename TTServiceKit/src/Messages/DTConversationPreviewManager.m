@@ -52,8 +52,9 @@
 }
 
 - (void)processConversationPreviewProto:(DSKProtoConversationPreview *)conversationPreviewProto
+                 receiptServerTimestamp:(uint64_t)receiptServerTimestamp
                             transaction:(SDSAnyWriteTransaction *)writeTransaction{
-    
+
     if (!conversationPreviewProto.conversationID){
         OWSProdError(@"conversationId is empty.")
         return;
@@ -85,7 +86,8 @@
     
     DTReadPositionEntity *readPosition = nil;
     if(conversationPreviewProto.readPosition){
-        readPosition = [DTReadPositionEntity readPostionEntityWithProto:conversationPreviewProto.readPosition];
+        readPosition = [DTReadPositionEntity readPostionEntityWithProto:conversationPreviewProto.readPosition
+                                                receiptServerTimestamp:receiptServerTimestamp];
         if(readPosition.maxServerTime <=0 || readPosition.readAt <= 0) {
             readPosition = nil;
             OWSProdError(@"conversationPreview, invalid readPosition: maxServerTime or readAt <= 0!")
@@ -114,9 +116,12 @@
             DSKProtoEnvelopeBuilder *lastestMsgBuilder = conversationPreviewProto.lastestMsg.asBuilder;
             lastestMsgBuilder.lastestMsgFlag = YES;
             NSData *encryptedEnvelopeData = [lastestMsgBuilder buildSerializedDataAndReturnError:nil];
+            uint64_t serverDeliveryTimestamp = receiptServerTimestamp > 0
+                ? receiptServerTimestamp
+                : [DTTrustedClock now];
             
             [self.messageProcessor processEncryptedEnvelopeData:encryptedEnvelopeData
-                                        serverDeliveryTimestamp:[NSDate ows_millisecondTimeStamp]
+                                        serverDeliveryTimestamp:serverDeliveryTimestamp
                                                  envelopeSource:envelopeSource
                                              hotDataDestination:nil
                                                  hotdataMsgFlag:YES

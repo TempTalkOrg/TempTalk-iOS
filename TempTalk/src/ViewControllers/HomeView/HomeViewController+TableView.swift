@@ -69,6 +69,7 @@ extension HomeViewController {
         static var dataSource: UInt8 = 0
         static var hasVisibleReminders: UInt8 = 1
         static var hasArchivedThreadsRow: UInt8 = 2
+        static var encryptionFooterView: UInt8 = 3
     }
     
     private var dataSource: HomePageDataSource {
@@ -180,6 +181,25 @@ extension HomeViewController {
 
 // MARK: - TableView
 extension HomeViewController {
+
+    private var encryptionFooterView: DTE2EENoticeTextView {
+        if let footerView = objc_getAssociatedObject(
+            self,
+            &AssociatedKeys.encryptionFooterView
+        ) as? DTE2EENoticeTextView {
+            return footerView
+        }
+
+        let footerView = DTE2EENoticeTextView(style: .chatList)
+        footerView.contentInsets = UIEdgeInsets(top: 8, left: 16, bottom: 12, right: 16)
+        objc_setAssociatedObject(
+            self,
+            &AssociatedKeys.encryptionFooterView,
+            footerView,
+            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        )
+        return footerView
+    }
     
     @objc func createTableView() -> UITableView {
         let tableView = UITableView(frame: .zero, style: .plain)
@@ -211,6 +231,41 @@ extension HomeViewController {
             Logger.info("ending refreshing")
             sender.endRefreshing()
         }.cauterize()
+    }
+
+    @objc func updateEncryptionFooter() {
+        guard homeViewMode == .inbox else {
+            tableView.tableFooterView = UIView(frame: .zero)
+            return
+        }
+
+        let hasVisibleListContent = !threadMapping.threadIds.isEmpty
+            || !threadMapping.virtualThreadIds.isEmpty
+            || threadMapping.archiveCount > 0
+        guard hasVisibleListContent else {
+            // The empty-state background owns this hint when there are no conversations.
+            tableView.tableFooterView = UIView(frame: .zero)
+            return
+        }
+
+        let footerView = encryptionFooterView
+        footerView.didTapLearnMore = { [weak self] in
+            self?.presentEndToEndEncryptionInfoFromHome()
+        }
+        footerView.applyTheme()
+
+        let width = tableView.bounds.width > 0 ? tableView.bounds.width : UIScreen.main.bounds.width
+        footerView.frame = CGRect(
+            x: 0,
+            y: 0,
+            width: width,
+            height: footerView.height(fittingWidth: width)
+        )
+        tableView.tableFooterView = footerView
+    }
+
+    @objc func presentEndToEndEncryptionInfoFromHome() {
+        present(E2EEInfoViewController(), animated: false)
     }
     
     @objc func resetLastViewedThreadPosition() {

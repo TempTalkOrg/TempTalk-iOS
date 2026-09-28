@@ -34,6 +34,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 NSString *const kTSOutgoingMessageSentRecipientAll = @"kTSOutgoingMessageSentRecipientAll";
 
+NSString *const DTOutgoingMessageSendFailureDidChangeNotification
+    = @"DTOutgoingMessageSendFailureDidChangeNotification";
+NSString *const DTOutgoingMessageSendFailureThreadIdKey = @"DTOutgoingMessageSendFailureThreadIdKey";
+NSString *const DTOutgoingMessageSendStateDidChangeNotification
+    = @"DTOutgoingMessageSendStateDidChangeNotification";
+NSString *const DTOutgoingMessageSendStateThreadIdKey = @"DTOutgoingMessageSendStateThreadIdKey";
+
 NSString *NSStringForOutgoingMessageState(TSOutgoingMessageState value)
 {
     switch (value) {
@@ -265,7 +272,7 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
         [attachmentIds addObject:attachmentId];
     }
     
-    return [[TSOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[NSDate ows_millisecondTimeStamp]
+    return [[TSOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[DTTrustedClock clientStampMs]
                                                               inThread:thread
                                                            messageBody:body
                                                              atPersons:atPersons
@@ -286,7 +293,7 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
                                mentions:(nullable NSArray <DTMention *> *)mentions
                        expiresInSeconds:(uint32_t)expiresInSeconds;
 {
-    return [[TSOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[NSDate ows_millisecondTimeStamp]
+    return [[TSOutgoingMessage alloc] initOutgoingMessageWithTimestamp:[DTTrustedClock clientStampMs]
                                                               inThread:thread
                                                            messageBody:nil
                                                              atPersons:atPersons
@@ -564,6 +571,62 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
 
 #pragma mark - Update With... Methods
 
+/// Applies `block` through -anyUpdateOutgoingMessageWithTransaction:block:, then posts a send-state
+/// notification once the persisted message's derived state changes. The legacy failure-only
+/// notification remains available to existing observers.
+///
+/// Any method that mutates recipientStateMap should update through here — messageState is derived
+/// from that map, so any change to it can flip either pending state.
+- (void)anyUpdateOutgoingMessageNotifyingSendStateChangeWithTransaction:(SDSAnyWriteTransaction *)transaction
+                                                                  block:(void (^)(TSOutgoingMessage *message))block
+{
+    // `self` may be stale. Read the small persisted state column directly so receipt updates that
+    // don't change the derived message state remain notification-free, while a real transition on
+    // the up-to-date database copy is never missed.
+    NSNumber *_Nullable persistedStateBefore = nil;
+    if (self.shouldBeSaved) {
+        persistedStateBefore =
+            [InteractionFinder outgoingMessageStateWithUniqueId:self.uniqueId transaction:transaction];
+    }
+
+    [self anyUpdateOutgoingMessageWithTransaction:transaction block:block];
+
+    NSNumber *_Nullable persistedStateAfter = nil;
+    if (persistedStateBefore) {
+        persistedStateAfter =
+            [InteractionFinder outgoingMessageStateWithUniqueId:self.uniqueId transaction:transaction];
+    }
+    if (!persistedStateBefore || !persistedStateAfter
+        || [persistedStateBefore isEqualToNumber:persistedStateAfter]) {
+        return;
+    }
+
+    TSOutgoingMessageState stateBefore = (TSOutgoingMessageState)persistedStateBefore.integerValue;
+    TSOutgoingMessageState stateAfter = (TSOutgoingMessageState)persistedStateAfter.integerValue;
+    NSString *threadUniqueId = self.uniqueThreadId;
+    if (threadUniqueId.length == 0) {
+        return;
+    }
+
+    BOOL didChangeFailure = ((stateBefore == TSOutgoingMessageStateFailed)
+        != (stateAfter == TSOutgoingMessageStateFailed));
+    OWSLogInfo(@"[sendState] %@ %@ -> %@ thread=%@", self.uniqueId,
+        NSStringForOutgoingMessageState(stateBefore), NSStringForOutgoingMessageState(stateAfter), threadUniqueId);
+
+    [transaction addAsyncCompletionOnMain:^{
+        [[NSNotificationCenter defaultCenter]
+            postNotificationName:DTOutgoingMessageSendStateDidChangeNotification
+                          object:nil
+                        userInfo:@{ DTOutgoingMessageSendStateThreadIdKey : threadUniqueId }];
+        if (didChangeFailure) {
+            [[NSNotificationCenter defaultCenter]
+                postNotificationName:DTOutgoingMessageSendFailureDidChangeNotification
+                              object:nil
+                            userInfo:@{ DTOutgoingMessageSendFailureThreadIdKey : threadUniqueId }];
+        }
+    }];
+}
+
 - (void)updateWithSendingError:(NSError *)error
 {
     OWSAssertDebug(error);
@@ -571,8 +634,8 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
     [DatabaseOfflineManager shared].canOfflineUpdateDatabase = true;
     
     DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-        [self anyUpdateOutgoingMessageWithTransaction:writeTransaction
-                                                block:^(TSOutgoingMessage *message) {
+        [self anyUpdateOutgoingMessageNotifyingSendStateChangeWithTransaction:writeTransaction
+                                                                        block:^(TSOutgoingMessage *message) {
             // Mark any "sending" recipients as "failed."
             for (TSOutgoingMessageRecipientState *recipientState in message.recipientStateMap.allValues) {
                 if (recipientState.state == OWSOutgoingMessageRecipientStateSending) {
@@ -588,8 +651,8 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
 {
     OWSAssertDebug(transaction);
     
-    [self anyUpdateOutgoingMessageWithTransaction:transaction
-                                            block:^(TSOutgoingMessage *message) {
+    [self anyUpdateOutgoingMessageNotifyingSendStateChangeWithTransaction:transaction
+                                                                    block:^(TSOutgoingMessage *message) {
         // Mark any "sending" recipients as "failed."
         for (TSOutgoingMessageRecipientState *recipientState in message
              .recipientStateMap.allValues) {
@@ -619,8 +682,8 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
         targetMessage = syncMsg.message;
     }
 
-    [targetMessage anyUpdateOutgoingMessageWithTransaction:transaction
-                                                     block:^(TSOutgoingMessage *message) {
+    [targetMessage anyUpdateOutgoingMessageNotifyingSendStateChangeWithTransaction:transaction
+                                                                             block:^(TSOutgoingMessage *message) {
         message.serverTimestamp = serverReceipts.systemShowTimestamp;
         message.sequenceId = serverReceipts.sequenceId;
         message.notifySequenceId = serverReceipts.notifySequenceId;
@@ -629,6 +692,24 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
             recipientState.state = OWSOutgoingMessageRecipientStateSent;
         }
     }];
+
+    if (!targetMessage.shouldBeSaved || targetMessage.uniqueId.length == 0) {
+        return;
+    }
+
+    // The preview path may skip this ack, so update the read position explicitly.
+    TSOutgoingMessage *confirmedMessage =
+        [TSOutgoingMessage anyFetchWithUniqueId:targetMessage.uniqueId transaction:transaction];
+    if (!confirmedMessage || confirmedMessage.uniqueThreadId.length == 0) {
+        return;
+    }
+
+    TSThread *thread = [TSThread anyFetchWithUniqueId:confirmedMessage.uniqueThreadId transaction:transaction];
+    if (thread && [thread getUnreadMessageCountWithTransaction:transaction] == 0) {
+        [thread generateReadPositionForOutgoingMessageIfNeeded:confirmedMessage
+                                                        thread:thread
+                                                   transaction:transaction];
+    }
 }
 
 - (void)updateWithMarkingAllUnsentRecipientsAsSendingWithTransaction:(SDSAnyWriteTransaction *)transaction
@@ -645,8 +726,8 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
     // when the socket is closed and the user sees no state change.
     [DatabaseOfflineManager shared].canOfflineUpdateDatabase = true;
 
-    [self anyUpdateOutgoingMessageWithTransaction:transaction
-                                            block:^(TSOutgoingMessage *message) {
+    [self anyUpdateOutgoingMessageNotifyingSendStateChangeWithTransaction:transaction
+                                                                    block:^(TSOutgoingMessage *message) {
         // Mark any "sending" recipients as "failed."
         if ([message isKindOfClass:[TSOutgoingMessage class]]) {
             for (TSOutgoingMessageRecipientState *recipientState in message.recipientStateMap
@@ -683,8 +764,8 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
     OWSAssertDebug(recipientId.length > 0);
     OWSAssertDebug(transaction);
     
-    [self anyUpdateOutgoingMessageWithTransaction:transaction
-                                            block:^(TSOutgoingMessage *message) {
+    [self anyUpdateOutgoingMessageNotifyingSendStateChangeWithTransaction:transaction
+                                                                    block:^(TSOutgoingMessage *message) {
         TSOutgoingMessageRecipientState *_Nullable recipientState
         = message.recipientStateMap[recipientId];
         if (!recipientState) {
@@ -704,11 +785,11 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
     
     // If delivery notification doesn't include timestamp, use "now" as an estimate.
     if (!deliveryTimestamp) {
-        deliveryTimestamp = @([NSDate ows_millisecondTimeStamp]);
+        deliveryTimestamp = @([DTTrustedClock now]);
     }
     
-    [self anyUpdateOutgoingMessageWithTransaction:transaction
-                                            block:^(TSOutgoingMessage *message) {
+    [self anyUpdateOutgoingMessageNotifyingSendStateChangeWithTransaction:transaction
+                                                                    block:^(TSOutgoingMessage *message) {
         TSOutgoingMessageRecipientState *_Nullable recipientState
         = message.recipientStateMap[recipientId];
         if (!recipientState) {
@@ -771,8 +852,8 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
     OWSAssertDebug(singleGroupRecipient.length > 0);
     
     
-    [self anyUpdateOutgoingMessageWithTransaction:transaction
-                                            block:^(TSOutgoingMessage *message) {
+    [self anyUpdateOutgoingMessageNotifyingSendStateChangeWithTransaction:transaction
+                                                                    block:^(TSOutgoingMessage *message) {
         TSOutgoingMessageRecipientState *recipientState =
         [TSOutgoingMessageRecipientState new];
         recipientState.state = OWSOutgoingMessageRecipientStateSending;
@@ -802,8 +883,8 @@ NSString *NSStringForOutgoingMessageRecipientState(OWSOutgoingMessageRecipientSt
 {
     OWSAssertDebug(transaction);
     
-    [self anyUpdateOutgoingMessageWithTransaction:transaction
-                                            block:^(TSOutgoingMessage *message) {
+    [self anyUpdateOutgoingMessageNotifyingSendStateChangeWithTransaction:transaction
+                                                                    block:^(TSOutgoingMessage *message) {
         for (TSOutgoingMessageRecipientState *recipientState in message.recipientStateMap
              .allValues) {
                  switch (messageState) {

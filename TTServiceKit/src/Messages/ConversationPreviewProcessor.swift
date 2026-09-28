@@ -141,7 +141,7 @@ public class ConversationPreviewProcessor: NSObject {
     private func processConversation(_ conversationPreview: ConversationPreview, transaction: SDSAnyWriteTransaction) {
         assertOnQueue(serialQueue)
         
-        Self.conversationPreviewManager.processConversationPreviewProto(conversationPreview.conversationPreviewProto, transaction: transaction)
+        Self.conversationPreviewManager.processConversationPreviewProto(conversationPreview.conversationPreviewProto, receiptServerTimestamp: conversationPreview.serverDeliveryTimestamp, transaction: transaction)
         
         transaction.addAsyncCompletionOffMain {
             conversationPreview.completion(nil)

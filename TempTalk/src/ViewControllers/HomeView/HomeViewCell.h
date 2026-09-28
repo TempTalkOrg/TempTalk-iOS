@@ -57,6 +57,10 @@ typedef enum : NSUInteger {
 
 - (void)showMeetingBar;
 
+/// Re-queries only the conversation-level sending state. Used by HomeVC to update a visible row
+/// immediately without waiting for a diffable-data-source snapshot to finish applying.
+- (void)refreshSendingStatus;
+
 @end
 
 NS_ASSUME_NONNULL_END

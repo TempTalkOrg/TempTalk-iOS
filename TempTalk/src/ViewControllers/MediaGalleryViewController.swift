@@ -85,7 +85,7 @@ public struct GalleryDate: Hashable, Comparable, Equatable {
     }
 
     private var isThisMonth: Bool {
-        let now = Date()
+        let now = Date(millisecondsSince1970: DTTrustedClock.now())
         let year = Calendar.current.component(.year, from: now)
         let month = Calendar.current.component(.month, from: now)
         let thisMonth = GalleryDate(year: year, month: month)
@@ -102,7 +102,7 @@ public struct GalleryDate: Hashable, Comparable, Equatable {
     }
 
     private var isThisYear: Bool {
-        let now = Date()
+        let now = Date(millisecondsSince1970: DTTrustedClock.now())
         let thisYear = Calendar.current.component(.year, from: now)
 
         return self.year == thisYear
@@ -263,8 +263,10 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
         presentationView.contentMode = .scaleAspectFit
         presentationView.backgroundColor = Theme.isDarkThemeEnabled ? .ows_black : .ows_white
 
-        // 机密照片阅后即焚：查看时立即删除消息
-        if let message = self.initialDetailItem?.message as? TSIncomingMessage, message.messageModeType == .confidential {
+        // Video is burned after its in-memory asset is ready.
+        if let message = self.initialDetailItem?.message as? TSIncomingMessage,
+           message.messageModeType == .confidential,
+           self.initialDetailItem?.isVideo != true {
             OWSReadReceiptManager.shared().confidentialMessageWasReadLocally(message)
             self.databaseStorage.asyncWrite { wTransaction in
                 message.anyRemove(transaction: wTransaction)
@@ -282,6 +284,8 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
     private var replacingView: UIView?
     private var presentationView: UIImageView!
     private var presentationViewConstraints: [NSLayoutConstraint] = []
+    private var presentationAttachmentId: String?
+    private var presentationImageAttachmentId: String?
 
     // TODO rename to replacingOriginRect
     private var originRect: CGRect?
@@ -321,7 +325,10 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
 
         // loadView hasn't necessarily been called yet.
         self.loadViewIfNeeded()
-        self.presentationView.image = initialDetailItem.fullSizedImage
+        self.loadPresentationImage(
+            for: initialDetailItem,
+            fallbackImage: (replacingView as? UIImageView)?.image
+        )
         self.applyInitialMediaViewConstraints()
 
         // Restore presentationView.alpha in case a previous dismiss left us in a bad state.
@@ -494,18 +501,24 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
             return
         }
 
-        mediaPageViewController.currentViewController?.view.isHidden = true
-        self.presentationView.isHidden = false
-
         // Move the presentationView back to it's initial position, i.e. where
         // it sits on the screen in the conversation view.
         let changedItems = currentItem != self.initialDetailItem
         if changedItems, let currentItem = currentItem {
-            self.presentationView.image = currentItem.fullSizedImage
+            self.loadPresentationImage(for: currentItem)
             self.applyOffscreenMediaViewConstraints()
         } else {
             self.applyInitialMediaViewConstraints()
         }
+
+        // Never animate a stale still from a previously viewed attachment. If the
+        // current encrypted video's asynchronous still is not ready, fading the
+        // live detail view is preferable to showing either a blank or wrong frame.
+        let currentAttachmentId = currentItem?.attachmentStream.uniqueId
+        let canUsePresentationView = presentationView.image != nil
+            && presentationImageAttachmentId == currentAttachmentId
+        mediaPageViewController.currentViewController?.view.isHidden = canUsePresentationView
+        self.presentationView.isHidden = !canUsePresentationView
 
         if isAnimated {
             UIView.animate(withDuration: changedItems ? 0.25 : 0.18,
@@ -555,6 +568,31 @@ class MediaGalleryViewController: OWSNavigationController, MediaGalleryDataSourc
             }
             replacingView.alpha = 1.0
             self.presentingViewController?.dismiss(animated: false, completion: completion)
+        }
+    }
+
+    private func loadPresentationImage(for item: MediaGalleryItem, fallbackImage: UIImage? = nil) {
+        let attachmentId = item.attachmentStream.uniqueId
+        presentationAttachmentId = attachmentId
+
+        guard item.isVideo && item.attachmentStream.isStoredEncrypted else {
+            presentationView.image = item.fullSizedImage
+            presentationImageAttachmentId = attachmentId
+            return
+        }
+
+        // Keep the source thumbnail visible while the video still loads.
+        if let fallbackImage {
+            presentationView.image = fallbackImage
+            presentationImageAttachmentId = attachmentId
+        }
+        item.attachmentStream.videoStillImage(withMaxSize: .zero) { [weak self] image in
+            DispatchQueue.main.async {
+                guard let self, self.presentationAttachmentId == attachmentId else { return }
+                guard let image else { return }
+                self.presentationView.image = image
+                self.presentationImageAttachmentId = attachmentId
+            }
         }
     }
 

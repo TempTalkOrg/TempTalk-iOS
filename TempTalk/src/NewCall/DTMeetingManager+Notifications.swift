@@ -252,6 +252,19 @@ extension DTMeetingManager {
             } else if callType == 2 {
                 callModel.callType = .group
                 SDSDatabaseStorage.shared.read { tx in
+                    // Same early verdict as the calling-message path. The push payload carries no
+                    // controlType, so an undecidable verdict keeps the group type for the
+                    // connect-time re-check to correct.
+                    guard let groupId,
+                          !self.shouldTreatGroupCallAsInstant(
+                              serverGroupId: groupId,
+                              controlType: nil,
+                              transaction: tx
+                          )
+                    else {
+                        callModel.callType = .instant
+                        return
+                    }
                     callModel.roomName = DTGroupCryptoDisplayHelper.shared.resolveGroupDisplayName(
                         serverGroupId: groupId,
                         fallbackName: fallbackRoomName,
@@ -293,8 +306,10 @@ extension DTMeetingManager {
         }
         
         if isGid(conversationId) {
-            if let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId) {
-                let groupThread = TSGroupThread.getOrCreateThread(withGroupId: localGroupId, transaction: transation)
+            // Fetch, never create: a group we have left has no local thread, and creating one would
+            // leave a placeholder listing only ourselves that later reads as a real membership.
+            if let localGroupId = TSGroupThread.transformToLocalGroupId(withServerGroupId: conversationId),
+               let groupThread = TSGroupThread(groupId: localGroupId, transaction: transation) {
                 process(thread: groupThread)
             }
         } else {

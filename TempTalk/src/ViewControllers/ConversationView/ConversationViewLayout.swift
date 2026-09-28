@@ -67,7 +67,7 @@ class ConversationViewLayout: UICollectionViewLayout {
     override func prepare() {
         super.prepare()
         
-        guard let delegate else {
+        guard delegate != nil else {
             owsFailDebug("ConversationViewLayout missing delegate")
             clearState()
             return
@@ -133,6 +133,8 @@ class ConversationViewLayout: UICollectionViewLayout {
     private func clearState() {
         contentSize = .zero
         itemAttributesMap.removeAll()
+        headerLayoutAttributes = nil
+        footerLayoutAttributes = nil
         hasLayout = false
         lastViewWidth = .zero
     }
@@ -146,7 +148,8 @@ class ConversationViewLayout: UICollectionViewLayout {
         let layoutItems = delegate.layoutItems
         var y: CGFloat = 0
         
-        if layoutItems.isEmpty {
+        let headerHeight = delegate.layoutHeaderHeight
+        if layoutItems.isEmpty || headerHeight <= 0 {
             headerLayoutAttributes = nil
         } else {
             let headerIndexPath = IndexPath(row: 0, section: 0)
@@ -154,7 +157,6 @@ class ConversationViewLayout: UICollectionViewLayout {
                 forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader,
                 with: headerIndexPath
             )
-            let headerHeight = delegate.layoutHeaderHeight
             headerAttributes.frame = CGRect(x: 0, y: y, width: viewWidth, height: headerHeight)
             self.headerLayoutAttributes = headerAttributes
             y += headerHeight
@@ -184,7 +186,8 @@ class ConversationViewLayout: UICollectionViewLayout {
         }
         contentBottom += conversationStyle.contentMarginBottom
         
-        if layoutItems.isEmpty {
+        let footerHeight = delegate.layoutFooterHeight
+        if layoutItems.isEmpty || footerHeight <= 0 {
             self.footerLayoutAttributes = nil
         } else {
             let footerIndexPath = IndexPath(row: layoutItems.count - 1, section: 0)
@@ -192,7 +195,6 @@ class ConversationViewLayout: UICollectionViewLayout {
                 forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter,
                 with: footerIndexPath
             )
-            let footerHeight = delegate.layoutFooterHeight
             footerAttributes.frame = CGRectMake(0, contentBottom, viewWidth, footerHeight)
             self.footerLayoutAttributes = footerAttributes
             contentBottom += footerHeight

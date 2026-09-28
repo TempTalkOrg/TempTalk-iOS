@@ -5,11 +5,20 @@
 import Foundation
 import TTServiceKit
 
+func isRecallableByTrustedTime(_ interaction: TSInteraction, now: UInt64) -> Bool {
+    guard interaction is TSOutgoingMessage else { return false }
+    let base = interaction.timestampForSorting()
+    guard now >= base else { return false }
+    let thresholdMs = UInt64(max(0, DTRecallConfig.fetch().timeoutInterval * 1000))
+    return now - base <= thresholdMs
+}
+
 @objc
 protocol MessageActionsDelegate: AnyObject {
     func messageActionsShowDetailsForItem(_ conversationViewItem: ConversationViewItem)
     func messageActionsQuoteToItem(_ conversationViewItem: ConversationViewItem)
     func messageActionsForwardItem(_ conversationViewItem: ConversationViewItem)
+    func messageActionsResendItem(_ conversationViewItem: ConversationViewItem)
     func messageActionsRecallItem(_ conversationViewItem: ConversationViewItem)
     func messageActionsForwardItemToNote(_ conversationViewItem: ConversationViewItem)
     func messageActionsMultiSelectItem(_ conversationViewItem: ConversationViewItem)
@@ -42,9 +51,10 @@ struct MenuActionBuilder {
     }
 
     static func quote(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "ic_quote"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_quote"),
                           title: Localized("MESSAGE_ACTION_QUOTE", comment: "Action sheet button title"),
                           subtitle: nil,
+                          kind: .quote,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsQuoteToItem(conversationViewItem)
             
@@ -52,9 +62,10 @@ struct MenuActionBuilder {
     }
     
     static func copyText(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "ic_longpress_copy"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_copy"),
                           title: Localized("MESSAGE_ACTION_COPY_TEXT", comment: "Action sheet button title"),
                           subtitle: nil,
+                          kind: .copy,
                           block: { (_) in
             conversationViewItem.copyTextAction()
             DTToastHelper.toast(withText: Localized("COPY_SUCCESS_TOAST"), durationTime: 1)
@@ -63,63 +74,83 @@ struct MenuActionBuilder {
     }
     
     static func translateText(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "ic_inputbar_translate"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_translate"),
                           title: Localized("MESSAGE_ACTION_TRANSLATE_TEXT", comment: "Action sheet button title"),
                           subtitle: nil,
+                          kind: .convert,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsTranslateForItem(conversationViewItem)
         })
     }
     
     static func translateWithOriginalText(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "ic_inputbar_translate"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_translate"),
                           title: Localized("MESSAGE_ACTION_TRANSLATE_ORIGINE", comment: "Action sheet button title"),
                           subtitle: nil,
+                          kind: .convert,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsOriginalTranslateForItem(conversationViewItem)
         })
     }
     
     static func convertSpeechToText(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "convert_speechtotext"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_speech_to_text"),
                           title: Localized("MESSAGE_ACTION_SPEECHTOTEXT", comment: "Action sheet button title"),
                           subtitle: nil,
+                          kind: .convert,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsTranslateForItem(conversationViewItem)
         })
     }
     
     static func convertSpeechToTextWithOriginalText(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "convert_speechtotext_origin"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_speech_to_text_origin"),
                           title: Localized("MESSAGE_ACTION_SPEECHTOTEXT_ORIGIN", comment: "Action sheet button title"),
                           subtitle: nil,
+                          kind: .convert,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsOriginalTranslateForItem(conversationViewItem)
         })
     }
     
     static func showDetails(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "ic_longpress_more"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_info"),
                           title: Localized("MESSAGE_ACTION_DETAILS", comment: "Action sheet button title"),
                           subtitle: nil,
+                          kind: .info,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsShowDetailsForItem(conversationViewItem)
         })
     }
     
+    static func resend(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
+        // Runs before the menu dismisses: waiting for the dismiss animation to finish would
+        // delay the send by a visible amount. The delegate closes the menu itself.
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_resend"),
+                          title: Localized("MESSAGE_ACTION_RESEND", comment: "Action sheet button title for resending a failed message"),
+                          subtitle: nil,
+                          dismissBeforePerformAction: false,
+                          kind: .resend,
+                          block: { [weak delegate] (_) in
+            delegate?.messageActionsResendItem(conversationViewItem)
+        })
+    }
+
     static func deleteMessage(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "ic_trash"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_delete"),
                           title: Localized("MESSAGE_ACTION_DELETE_MESSAGE", comment: "Action sheet button title"),
                           subtitle: Localized("MESSAGE_ACTION_DELETE_MESSAGE_SUBTITLE", comment: "Action sheet button subtitle"),
+                          kind: .delete,
                           block: { [weak delegate] (_) in
             delegate?.messageActionDeleteItem(conversationViewItem)
         })
     }
     
     static func copyMedia(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "ic_longpress_copy"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_copy"),
                           title: Localized("MESSAGE_ACTION_COPY_MEDIA", comment: "Action sheet button title"),
                           subtitle: nil,
+                          kind: .copy,
                           block: { (_) in
             conversationViewItem.copyMediaAction()
             DTToastHelper.toast(withText: Localized("COPY_SUCCESS_TOAST"), durationTime: 1)
@@ -128,34 +159,42 @@ struct MenuActionBuilder {
     }
     
     static func saveMedia(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate, isImage: Bool = false) -> MenuAction {
+        // A generic file (not image / video / audio) downloads via the share sheet — label it "Download".
+        let stream = conversationViewItem.attachmentStream()
+        let isFile = stream != nil && !stream!.isImage() && !stream!.isVideo() && !stream!.isAudio()
         let title: String
-        if isImage {
+        if isFile {
+            title = Localized("MESSAGE_ACTION_DOWNLOAD_FILE", comment: "Action sheet button title for downloading a file attachment")
+        } else if isImage {
             title = Localized("MESSAGE_ACTION_SAVE_MEDIA_IMAGE", comment: "Action sheet button title for saving image")
         } else {
             title = Localized("MESSAGE_ACTION_SAVE_MEDIA", comment: "Action sheet button title")
         }
 
-        return MenuAction(image: #imageLiteral(resourceName: "ic_download"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_save"),
                           title: title,
                           subtitle: nil,
+                          kind: .save,
                           block: { (_) in
             conversationViewItem.saveMediaAction()
         })
     }
     
     static func forward(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "ic_forward"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_forward"),
                           title: Localized("MESSAGE_ACTION_FORWARD", comment: "Action sheet button title"),
                           subtitle: nil,
+                          kind: .forward,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsForwardItem(conversationViewItem)
         })
     }
     
     static func recall(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "ic_recall_action"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_recall"),
                           title: Localized("MESSAGE_ACTION_RECALL", comment: ""),
                           subtitle: nil,
+                          kind: .recall,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsRecallItem(conversationViewItem)
         })
@@ -169,9 +208,10 @@ struct MenuActionBuilder {
             title = Localized("MESSAGE_ACTION_FORWARD_TO_NOTE", comment: "Action sheet button title")
         }
 
-        return MenuAction(image: #imageLiteral(resourceName: "ic_saveNote"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_add_to_saved"),
                           title: title,
                           subtitle: nil,
+                          kind: .addToSaved,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsForwardItemToNote(conversationViewItem)
         })
@@ -180,18 +220,20 @@ struct MenuActionBuilder {
     static func addToFavorite(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
         // Five-pointed star; MenuAction renders it as a template and MenuActionView tints it,
         // same as the other menu icons — no per-mode asset needed.
-        return MenuAction(image: #imageLiteral(resourceName: "gif_fav_star_solid"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_favorite"),
                           title: Localized("MESSAGE_ACTION_ADD_TO_FAVORITE", comment: "Action sheet button: add GIF to favorites"),
                           subtitle: nil,
+                          kind: .favorite,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsAddToFavorite?(conversationViewItem)
         })
     }
 
     static func multiSelect(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> MenuAction {
-        return MenuAction(image: #imageLiteral(resourceName: "ic_multi_select"),
+        return MenuAction(image: #imageLiteral(resourceName: "msg_menu_select"),
                           title: Localized("MESSAGE_ACTION_MULTI_SELECT", comment: "Action sheet button title"),
                           subtitle: nil,
+                          kind: .select,
                           block: { [weak delegate] (_) in
             delegate?.messageActionsMultiSelectItem(conversationViewItem)
         })
@@ -217,28 +259,8 @@ class ConversationViewItemActions: NSObject {
 
     // TODO: 逻辑放到 conversationViewItem 里
     class func showRecallAction(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> Bool{
-                
-        if !(conversationViewItem.interaction is TSOutgoingMessage) {
-            return false
-        }
-        
-//        guard let conversationVC = delegate as? ConversationViewController else {
-//            return false
-//        }
-//        let containsBot = conversationVC.recipientsContainsBot()
-//        if containsBot {
-//            return false
-//        }
-        let currentTimestamp = NSDate.ows_millisecondTimeStamp()
-        let msgTimestamp = conversationViewItem.interaction.timestamp
-        let recallThreshold = UInt64(DTRecallConfig.fetch().timeoutInterval)
-        // 3.1.3 防止用户修改本地时间，导致 arithmetic-overflow crash
-        if currentTimestamp < msgTimestamp {
-            return false
-        }
-        return (currentTimestamp - msgTimestamp)/1000 < recallThreshold
-        
-//        return (!containsBot && conversationViewItem.interaction is TSOutgoingMessage && NSDate.ows_millisecondTimeStamp() - conversationViewItem.interaction.timestamp < Int(DTRecallConfig.fetch().timeoutInterval)*1000);
+        let now = DTTrustedClock.now()
+        return isRecallableByTrustedTime(conversationViewItem.interaction, now: now)
     }
     
     class func showDeleteAction(conversationViewItem: ConversationViewItem) -> Bool{
@@ -248,6 +270,15 @@ class ConversationViewItemActions: NSObject {
         return false
     }
     
+    /// A failed outgoing message never reached the server, so the only meaningful
+    /// actions are retrying the send and dropping it locally.
+    @objc class func sendFailedActions(conversationViewItem: ConversationViewItem, delegate: MessageActionsDelegate) -> [MenuAction] {
+        return [
+            MenuActionBuilder.resend(conversationViewItem: conversationViewItem, delegate: delegate),
+            MenuActionBuilder.deleteMessage(conversationViewItem: conversationViewItem, delegate: delegate)
+        ]
+    }
+
     @objc class func confidentialActions(conversationViewItem: ConversationViewItem ,delegate: MessageActionsDelegate) -> [MenuAction] {
         
         var actions: [MenuAction] = []
@@ -618,4 +649,3 @@ class ConversationViewItemActions: NSObject {
     }
     
 }
-

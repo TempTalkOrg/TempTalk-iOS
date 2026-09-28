@@ -126,7 +126,7 @@ class DTGroupReminderController: OWSTableViewController {
                     instance.groupModel.remindCycle = cycle
                 }
                 DTGroupUtils.sendGroupReminderMessage(withSource: localNumber,
-                                                      serverTimestamp: NSDate.ows_millisecondTimeStamp(),
+                                                      serverTimestamp: (entity.serverTimestamp as NSNumber?)?.uint64Value ?? 0,
                                                       isChanged: true,
                                                       thread: groupThread,
                                                       remindCycle: cycle,

@@ -30,6 +30,9 @@ public struct BottomToolbarView: View {
     // Observe the call model so callType changes (1v1 → instant) re-render the toolbar.
     @ObservedObject private var currentCall = DTMeetingManager.shared.currentCall
 
+    // Drives the microphone permission badge; the camera stays badge-free by design.
+    @ObservedObject private var mediaPermissions = CallMediaPermissionCoordinator.shared
+
     @State var isCameraPublishingBusy = false
     @State var isMicrophonePublishingBusy = false
     
@@ -139,7 +142,9 @@ public struct BottomToolbarView: View {
                         : nil
                 )
 
-            if isVoiceChangerActive, !voiceChangerEmoji.isEmpty {
+            if mediaPermissions.showsMicrophonePermissionBadge {
+                microphonePermissionBadge
+            } else if isVoiceChangerActive, !voiceChangerEmoji.isEmpty {
                 Text(voiceChangerEmoji)
                     .font(.system(size: 10))
                     .frame(width: 18, height: 18)
@@ -158,7 +163,24 @@ public struct BottomToolbarView: View {
             voiceChangerPreset = DTMeetingManager.shared.roomContext?.currentVoicePreset() ?? "original"
         }
         .onDisappear { hasTriggerCloseNoise = false }
+        // The badge must be right the moment the toolbar shows, not only after the next
+        // foreground transition: permission can have changed since the last call.
+        .onAppear { mediaPermissions.refreshStatuses(reason: "call toolbar appeared") }
         .accessibilityIdentifier(DTCallAccessibilityID.mic)
+    }
+
+    /// Persistent "microphone access is denied" mark, pinned to the button's top-right
+    /// corner. Only the microphone gets one: a call without it is crippled, while camera
+    /// and screen share are optional and stay dialog-only.
+    private var microphonePermissionBadge: some View {
+        ZStack {
+            Circle().fill(Color(hex: 0xF84135))
+            Text("!")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .frame(width: 16, height: 16)
+        .accessibilityIdentifier(DTCallAccessibilityID.micPermissionBadge)
     }
 
     private var cameraButton: some View {
@@ -257,7 +279,8 @@ public struct BottomToolbarView: View {
     
     @MainActor
     func didTapMicrophone(isMicrophoneEnabled: Bool) {
-        if !isMicrophoneEnabled {
+        let enable = !isMicrophoneEnabled
+        if enable {
             if let metadata = RoomDataProcessor.parseMetadata(from: room),
                !metadata.canPublishAudio {
                 if room.localParticipant.localAudioTracks.isEmpty {
@@ -265,46 +288,67 @@ public struct BottomToolbarView: View {
                     return
                 }
             }
+
+            // This tap is the user asking for the microphone, so it may prompt: an
+            // unasked permission gets the system dialog, a denied one the settings guide.
+            // Nothing reaches LiveKit until access is actually granted.
+            if mediaPermissions.microphoneStatus != .authorized {
+                Task {
+                    guard await mediaPermissions.requestAccessForUserAction(of: .microphone) else { return }
+                    applyMicrophoneChange(enable: true)
+                }
+                return
+            }
         }
-        
-        let localParticipant = room.localParticipant
+
+        applyMicrophoneChange(enable: enable)
+    }
+
+    @MainActor
+    private func applyMicrophoneChange(enable: Bool) {
         let portName = roomCtx.lastPortName ?? ""
-        if DTMeetingManager.shared.deferMicrophoneChangeIfConnecting(enable: !isMicrophoneEnabled,
+        if DTMeetingManager.shared.deferMicrophoneChangeIfConnecting(enable: enable,
                                                                      reason: "bottom toolbar tap while connecting") {
-            DTMeetingManager.shared.roomContext?.syncLocalMicrophoneStateToCallKit(muted: isMicrophoneEnabled)
+            DTMeetingManager.shared.roomContext?.syncLocalMicrophoneStateToCallKit(muted: !enable)
             return
         }
         // User is driving the mic here; suppress the CallKit mute echoes iOS
         // mirrors back from the resulting VPIO hardware change so they don't
         // feed back into LiveKit.
-        DTMeetingManager.shared.beginCallKitMuteSuppression(1.0, mutedTarget: isMicrophoneEnabled)
+        DTMeetingManager.shared.beginCallKitMuteSuppression(1.0, mutedTarget: !enable)
         Task {
             isMicrophonePublishingBusy = true
             defer { Task { @MainActor in isMicrophonePublishingBusy = false } }
 
-            do {
-                try await localParticipant.setMicrophone(enabled: !isMicrophoneEnabled)
-
-                if !isMicrophoneEnabled, !hasTriggerCloseNoise, DTMeetingManager.shared.isInputAirPods(portName: portName) {
+            let didApplyMicrophoneChange = await roomCtx.setLocalMicrophone(
+                enable: enable,
+                userInitiated: true
+            )
+            if didApplyMicrophoneChange {
+                if enable, !hasTriggerCloseNoise, DTMeetingManager.shared.isInputAirPods(portName: portName) {
                     hasTriggerCloseNoise = true
                     DTMeetingManager.shared.roomContext?.setDenoiseFilter(enabled: false)
                 }
-                Logger.info("\(logTag) Successfully Microphone muted track \(isMicrophoneEnabled)")
+                Logger.info("\(logTag) Successfully Microphone enabled \(enable)")
                 // The mic bullet is emitted by the SDK's `didUpdateIsMuted` delegate
                 // (fires on the real mute-state change, and only then — reconnect
                 // republish reuses the existing track without changing mute state, so
                 // it won't spam). Do NOT bullet here too, or every toggle double-fires.
                 RoomDataManager.shared.updateSeakingParticipant()
-            } catch {
-                Logger.error("\(logTag) Failed to Microphone mute track: \(error)")
             }
 
-            DTMeetingManager.shared.roomContext?.syncLocalMicrophoneStateToCallKit(muted: isMicrophoneEnabled)
+            // LiveKit is the source of truth. A permission or publishing failure must
+            // restore CallKit's indicator instead of reporting the requested state.
+            roomCtx.syncLocalMicrophoneStateToCallKit(
+                muted: !room.localParticipant.isMicrophoneEnabled()
+            )
         }
     }
-    
+
+    @MainActor
     func didTapCamera(isCameraEnabled: Bool) {
-        if !isCameraEnabled {
+        let enable = !isCameraEnabled
+        if enable {
             if let metadata = RoomDataProcessor.parseMetadata(from: room),
                 !metadata.canPublishVideo {
                 if room.localParticipant.localVideoTracks.isEmpty {
@@ -312,10 +356,25 @@ public struct BottomToolbarView: View {
                     return
                 }
             }
+
+            // Dialog-only: a refused camera never leaves a badge behind, the user just
+            // stays camera-off until they tap again.
+            if mediaPermissions.cameraStatus != .authorized {
+                Task {
+                    guard await mediaPermissions.requestAccessForUserAction(of: .camera) else { return }
+                    applyCameraChange(enable: true)
+                }
+                return
+            }
         }
-        
-        DTMeetingManager.shared.openCallCamera = !isCameraEnabled
-        
+
+        applyCameraChange(enable: enable)
+    }
+
+    @MainActor
+    private func applyCameraChange(enable: Bool) {
+        DTMeetingManager.shared.openCallCamera = enable
+
         let localParticipant = room.localParticipant
         Task {
             isCameraPublishingBusy = true
@@ -325,10 +384,10 @@ public struct BottomToolbarView: View {
                cameraCapturer.position != .front {
                 try await cameraCapturer.switchCameraPosition()
             }
-            
-            try await localParticipant.setCamera(enabled: !isCameraEnabled)
-            
-            cameraPublishHandler(!isCameraEnabled)
+
+            guard await roomCtx.setLocalCamera(enable: enable, userInitiated: true) else { return }
+
+            cameraPublishHandler(enable)
         }
     }
 }

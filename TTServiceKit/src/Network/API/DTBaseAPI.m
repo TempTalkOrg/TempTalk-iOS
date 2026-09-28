@@ -134,6 +134,11 @@ NSError *DTRequestErrorWithCodeDescription(DTAPIRequestStatus code, NSString *de
                     failure(DTErrorWithCodeDescription(DTAPIRequestResponseStatusDataError, kDTAPIDataErrorDescription));
                 }else{
                     if(entity.status == DTAPIRequestResponseStatusOK){
+                        // BaseResponse is the only trusted-clock anchor source.
+                        if (entity.serverTimestamp != nil) {
+                            [[DTTrustedClock shared] updateWithServerTimeMs:entity.serverTimestamp.unsignedLongLongValue
+                                                                     source:DTTrustedClockSourceBaseResponse];
+                        }
                         success(entity);
                     }else{
                         failure(DTErrorWithCodeDescription(entity.status, entity.reason));

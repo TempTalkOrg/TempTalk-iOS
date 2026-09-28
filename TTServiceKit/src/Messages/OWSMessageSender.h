@@ -4,6 +4,7 @@
 
 #import "DataSource.h"
 #import "ContactsManagerProtocol.h"
+#import "TSAttachment.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -68,6 +69,23 @@ NS_SWIFT_NAME(MessageSender)
 - (void)enqueueAttachment:(id <DataSource>)dataSource
               contentType:(NSString *)contentType
            sourceFilename:(nullable NSString *)sourceFilename
+                inMessage:(TSOutgoingMessage *)message
+   preSendMessageCallBack:(nullable void (^)(TSOutgoingMessage *))preSendMessageCallBack
+                  success:(void (^)(void))successHandler
+                  failure:(void (^)(NSError *error))failureHandler;
+
+/**
+ * Same as the base `enqueueAttachment:` but tags the persisted
+ * `TSAttachmentStream` with a preprocessing intent, so the dispatched
+ * preparation operation (e.g. video compression) runs before the usual upload
+ * path. Pass `TSAttachmentPreprocessingKindNone` and nil params to fall back
+ * to the standard flow.
+ */
+- (void)enqueueAttachment:(id <DataSource>)dataSource
+              contentType:(NSString *)contentType
+           sourceFilename:(nullable NSString *)sourceFilename
+        preprocessingKind:(TSAttachmentPreprocessingKind)preprocessingKind
+      preprocessingParams:(nullable NSData *)preprocessingParams
                 inMessage:(TSOutgoingMessage *)message
    preSendMessageCallBack:(nullable void (^)(TSOutgoingMessage *))preSendMessageCallBack
                   success:(void (^)(void))successHandler

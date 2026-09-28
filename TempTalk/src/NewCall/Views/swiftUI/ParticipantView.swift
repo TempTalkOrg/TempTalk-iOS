@@ -19,6 +19,7 @@ import SFSafeSymbols
 import SwiftUI
 import Lottie
 import TTServiceKit
+import TTMessaging
 
 struct ParticipantView: View {
     @ObservedObject var participant: Participant
@@ -28,6 +29,7 @@ struct ParticipantView: View {
     /// Compact avatar info for the 1v1 floating window.
     var compact: Bool = false
     var videoViewMode: VideoView.LayoutMode = .fit
+    var showsPoorNetworkBadge: Bool = false
 
     @State private var isRendering: Bool = false
     @State private var didRenderFirstFrame: Bool = false
@@ -57,7 +59,7 @@ struct ParticipantView: View {
                 if is1on1 {
                     Color.dtBackground
                 } else {
-                    Color(hex:0x181A20)
+                    Color(Theme.dark.bg1Color)
                 }
                 
                 if let publication = participant.firstCameraPublication,
@@ -157,7 +159,9 @@ struct ParticipantView: View {
                     }
                     .padding(6)
                     .background(
-                        Color.dtBackground.opacity(0.8)
+                        // Darker than the bg1 tile behind it, otherwise the plate vanishes
+                        // into it when the participant has no video.
+                        Color(Theme.dark.bgelevateColor)
                             .cornerRadius(4)
                     )
                     .padding(.leading, 5)
@@ -167,6 +171,16 @@ struct ParticipantView: View {
             }
             .cornerRadius(8)
             .overlay(speakingBorderOverlay)
+            .overlay(alignment: .topTrailing) {
+                if showsPoorNetworkBadge {
+                    PoorNetworkBadge(
+                        participantName: DTLiveKitCallModel.getDisplayName(
+                            recipientId: recipientId(participant)
+                        )
+                    )
+                        .padding(6)
+                }
+            }
             .onAppear {
                 if cachedIdentity == nil, let id = participant.identity {
                     cachedIdentity = id.stringValue.components(separatedBy: ".").first
@@ -194,9 +208,10 @@ struct ParticipantView: View {
             Color.dtBackground
             avatar1on1Column(geometry: geometry)
         } else {
-            Color(hex: 0x181A20)
+            Color(Theme.dark.bg1Color)
             AvatarImageViewRepresentable(recipientId: recipientId)
-                .padding(EdgeInsets(top: 20, leading: 22, bottom: 24, trailing: 22))
+                .frame(width: meetingAvatarSize(geometry: geometry), height: meetingAvatarSize(geometry: geometry))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -207,8 +222,14 @@ struct ParticipantView: View {
             avatar1on1Column(geometry: geometry)
         } else {
             AvatarImageViewRepresentable(recipientId: recipientId)
-                .padding(EdgeInsets(top: 20, leading: 22, bottom: 24, trailing: 22))
+                .frame(width: meetingAvatarSize(geometry: geometry), height: meetingAvatarSize(geometry: geometry))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private func meetingAvatarSize(geometry: GeometryProxy) -> CGFloat {
+        let shortSide = min(geometry.size.width, geometry.size.height)
+        return min(120, max(56, shortSide * 0.46))
     }
 
     /// 1v1 avatar column: full-size by default, scaled down + mic status when compact.
@@ -283,7 +304,32 @@ struct ParticipantView: View {
         if !is1on1, let publication = participant.firstAudioPublication, !publication.isMuted, participant.isSpeaking {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.lkBlue, lineWidth: 3)
+                .allowsHitTesting(false)
         }
+    }
+}
+
+struct PoorNetworkBadge: View {
+    let participantName: String
+
+    var body: some View {
+        Image("ic_call_network_poor")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 14, height: 14)
+            .foregroundColor(Color(Theme.dark.tprimaryColor))
+            .frame(width: 20, height: 20)
+            .background(Color(Theme.dark.bgelevateColor))
+            .cornerRadius(4)
+            .accessibilityLabel(
+                Text(
+                    String(
+                        format: Localized("MEETING_PARTICIPANT_NETWORK_POOR_ACCESSIBILITY"),
+                        participantName
+                    )
+                )
+            )
     }
 }
 
@@ -368,5 +414,3 @@ extension Color {
     
 }
     
-
-

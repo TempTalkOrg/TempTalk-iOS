@@ -129,22 +129,29 @@ class AttachmentCollectionView: UICollectionView {
                                                                   comment: "Input bar action button title when start mention"),
                                         imageName:"input_attachment_at",
                                         itemType: DTToolBarMoreItemTypeMention)
-                    
-        
+
+        let gif = DTInputToolBarMoreItem(title: OWSLocalizedString("INPUTTOOL_ATTACHMENT_GIF_BUTTON",
+                                                                   comment: "input bar action button title when open GIF picker"),
+                                         imageName:"input_attachment_gif",
+                                         itemType: DTToolBarMoreItemTypeGif)
+
+
         if threadType == .group {
             collectionContents.append(contentsOf: [
                 photo,
                 camera,
-                contact,
+                gif,
+                at,
                 file,
-                at
+                contact
             ])
         } else {
             collectionContents.append(contentsOf: [
                 photo,
                 camera,
-                contact,
-                file
+                gif,
+                file,
+                contact
             ])
         }
 

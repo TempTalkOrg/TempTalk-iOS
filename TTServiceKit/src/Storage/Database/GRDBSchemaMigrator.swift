@@ -19,15 +19,6 @@ public class GRDBSchemaMigrator: NSObject {
     public func runSchemaMigrations() -> Bool {
         let didPerformIncrementalMigrations: Bool
         
-        //MARK GRDB need to focus on
-//        do {
-//            Logger.info("Using newUserMigrator.")
-//            try newUserMigrator.migrate(grdbStorageAdapter.pool)
-//            didPerformIncrementalMigrations = false
-//        } catch {
-//            owsFail("New user migrator failed: \(error.grdbErrorForLogging)")
-//        }
-        
         if hasCreatedInitialSchema {
             do {
                 Logger.info("Using incrementalMigrator.")
@@ -126,6 +117,8 @@ public class GRDBSchemaMigrator: NSObject {
         case createSSKJobRecordV2       // Persistent JobRecord table with payload-based design
         case addGroupCryptoKeyVersion   // Add keyVersion column to model_DTGroupCryptoKeyRecord
         case addIncomingCallMessageFields   // Add callState/roomId to model_TSInteraction
+        case addFailedOutgoingIndex   // Partial index for the oldest-failed-outgoing query
+        case addPreprocessingFieldsOnAttachment   // preprocessingKind/preprocessingParams on model_TSAttachment
 
         //MARK GRDB need to focus on
 
@@ -161,7 +154,7 @@ public class GRDBSchemaMigrator: NSObject {
 
     /// Attention: matters
     ///model_TSMessageSecondary_virtual 虚表，集成自定义 FTS5 分词器 simple
-    public static let grdbSchemaVersionLatest: UInt = 9
+    public static let grdbSchemaVersionLatest: UInt = 11
 
     // An optimization for new users, we have the first migration import the latest schema
     // and mark any other migrations as "already run".
@@ -210,13 +203,6 @@ public class GRDBSchemaMigrator: NSObject {
     }
 
     private func registerSchemaMigrations(migrator: DatabaseMigratorWrapper) {
-
-        // The migration blocks should never throw. If we introduce a crashing
-        // migration, we want the crash logs reflect where it occurred.
-
-        //        migrator.registerMigration(.createInitialSchema) { _ in
-        //            owsFail("This migration should have already been run by the last YapDB migration.")
-        //        }
         
         // MARK: - Schema Migration Insertion Point
         migrator.registerMigration(.addTranslateMessageColum) { db in
@@ -502,6 +488,37 @@ public class GRDBSchemaMigrator: NSObject {
                 owsFail("Error adding incoming call message fields: \(error)")
             }
         }
+
+        // Partial index backing `oldestFailedOutgoingInteraction`. Without it that query has to
+        // walk every row of the thread in serverTimestamp order until it reaches the first failed
+        // send — and when the thread has no failed message, or the failed one is the newest (the
+        // common case, since sends fail while offline), it walks the whole thread.
+        // Restricting the index to failed rows keeps it near-empty, so write amplification and
+        // disk cost stay negligible compared with indexing storedMessageState across every row.
+        migrator.registerMigration(.addFailedOutgoingIndex) { db in
+            do {
+                try db.create(index: "index_interaction_on_failed_outgoing",
+                              on: "model_TSInteraction",
+                              columns: ["uniqueThreadId", "serverTimestamp"],
+                              options: .ifNotExists,
+                              condition: Column("storedMessageState") == TSOutgoingMessageState.failed.rawValue)
+                Logger.info("Created partial index for failed outgoing message query")
+            } catch {
+                owsFail("Error creating failed outgoing index: \(error)")
+            }
+        }
+
+        migrator.registerMigration(.addPreprocessingFieldsOnAttachment) { db in
+            do {
+                try db.alter(table: "model_TSAttachment") { table in
+                    table.add(column: "preprocessingKind", .integer).notNull().defaults(to: 0)
+                    table.add(column: "preprocessingParams", .blob)
+                }
+                Logger.info("Added preprocessing fields on model_TSAttachment")
+            } catch {
+                owsFail("Error adding preprocessing fields: \(error)")
+            }
+        }
     }
     
     
@@ -734,10 +751,6 @@ public class GRDBSchemaMigrator: NSObject {
                 Logger.info("YDBDataMigrator \(attachmentCount) attachments.")
                 
                 ydbMigrator.yapdatabaseRegister = true
-                
-//                try ydbMigrator.close()
-//                
-//                Logger.info("YDBDataMigrator close")
                                 
             } catch {
                 owsFailDebug("YDBDataMigrator Error: \(error)")

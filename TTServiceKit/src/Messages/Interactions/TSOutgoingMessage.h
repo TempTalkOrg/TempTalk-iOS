@@ -25,6 +25,25 @@ typedef NS_ENUM(NSInteger, TSOutgoingMessageState) {
 
 NSString *NSStringForOutgoingMessageState(TSOutgoingMessageState value);
 
+/// Posted on the main queue after the write commits, when an outgoing message moves into or out
+/// of the failed state. `userInfo` carries the thread id under
+/// `DTOutgoingMessageSendFailureThreadIdKey`.
+///
+/// A send-state flip writes no column on TSThread, so the thread row stays byte-identical and
+/// `-[TSThread previewEqualTo:]` drops the change before it reaches the conversation list. Views
+/// that render per-thread send-failure state have to be woken up explicitly.
+extern NSString *const DTOutgoingMessageSendFailureDidChangeNotification;
+extern NSString *const DTOutgoingMessageSendFailureThreadIdKey;
+
+/// Posted on the main queue after a persisted outgoing message's derived send state changes.
+/// `userInfo` carries the thread id under `DTOutgoingMessageSendStateThreadIdKey`.
+///
+/// Conversation-list send indicators are derived from all messages in a thread, so a message
+/// state change must explicitly invalidate that thread even when the TSThread row itself is
+/// unchanged.
+extern NSString *const DTOutgoingMessageSendStateDidChangeNotification;
+extern NSString *const DTOutgoingMessageSendStateThreadIdKey;
+
 typedef NS_ENUM(NSInteger, OWSOutgoingMessageRecipientState) {
     // Message could not be sent to recipient.
     OWSOutgoingMessageRecipientStateFailed = 0,

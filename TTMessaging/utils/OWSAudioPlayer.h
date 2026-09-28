@@ -38,6 +38,9 @@ typedef NS_ENUM(NSInteger, AudioPlaybackState) {
 
 - (instancetype)initWithMediaUrl:(NSURL *)mediaUrl delegate:(id<OWSAudioPlayerDelegate>)delegate;
 
+/// Plays an attachment from memory.
+- (instancetype)initWithMediaData:(NSData *)mediaData delegate:(id<OWSAudioPlayerDelegate>)delegate;
+
 // respects silent switch
 - (void)playWithCurrentAudioCategory;
 

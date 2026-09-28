@@ -10,9 +10,13 @@ import SwiftUI
 import LiveKit
 
 struct Room1on1ContentView: View {
-    
+
     let logTag: String = "[newcall][view]"
-    
+
+    /// Default top edge of the floating preview, so it starts below the navigation row instead of
+    /// covering it (the camera-rotate button appears under exactly the same condition).
+    let previewTopInset: CGFloat
+
     @EnvironmentObject var appCtx: LiveKitContext
     @EnvironmentObject var roomCtx: RoomContext
     @EnvironmentObject var room: Room
@@ -55,6 +59,7 @@ struct Room1on1ContentView: View {
                             // Compact avatar info when the swapped-in remote has its camera off.
                             compact: videoPositionExchange,
                             containerSize: geometry.size,
+                            topInset: previewTopInset,
                             // Insets let the drag range reach the physical screen edges.
                             safeAreaInsets: geometry.safeAreaInsets,
                             onTap: { videoPositionExchange.toggle() }
@@ -133,13 +138,15 @@ struct FloatingPreviewWindow: View {
     @ObservedObject var participant: Participant
     var compact: Bool = false
     let containerSize: CGSize
+    /// Default distance from the container top, chosen by the caller so the window clears the
+    /// navigation row. Only the default position: dragging can still take it anywhere.
+    let topInset: CGFloat
     /// Safe-area insets, used to extend the drag range to the physical screen edges.
     var safeAreaInsets: EdgeInsets = EdgeInsets()
     let onTap: () -> Void
 
     private let windowSize = CGSize(width: 120, height: 214)
     private let edgeInset: CGFloat = 12
-    private let topInset: CGFloat = 40
     /// Tap vs drag threshold: movement below this counts as a tap.
     private let tapSlop: CGFloat = 10
 
@@ -198,8 +205,8 @@ struct FloatingPreviewWindow: View {
     }
 
     /// Clamp the center within the screen (edgeInset margin per side) so the window stays fully visible.
-    /// Origin is the safe-area top-left, so insets extend the range to the physical edges — letting it
-    /// reach top/bottom like left/right (into the full-screen video under status bar / home indicator).
+    /// The insets widen the range so the window can be dragged over the full-screen video that runs
+    /// under the status bar / home indicator, instead of stopping at the safe area.
     private func clamp(_ point: CGPoint) -> CGPoint {
         let halfW = windowSize.width / 2
         let halfH = windowSize.height / 2

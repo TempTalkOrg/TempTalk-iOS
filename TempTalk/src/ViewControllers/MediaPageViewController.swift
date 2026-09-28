@@ -50,6 +50,7 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
     private weak var mediaGalleryDataSource: MediaGalleryDataSource?
 
     private var initialPage: MediaDetailViewController?
+    private var consumedConfidentialMessageIds = Set<String>()
 
     // Full images decoded ahead of time so a freshly built neighbor page shows
     // instantly instead of flashing its background while it decodes on swipe.
@@ -599,6 +600,26 @@ class MediaPageViewController: UIPageViewController, UIPageViewControllerDataSou
     }
 
     // MARK: MediaDetailViewControllerDelegate
+
+    public func mediaDetailViewControllerDidPrepareVideo(_ mediaDetailViewController: MediaDetailViewController) {
+        guard mediaDetailViewController == currentViewController,
+              let message = currentItem?.message as? TSIncomingMessage,
+              message.messageModeType == .confidential,
+              consumedConfidentialMessageIds.insert(message.uniqueId).inserted else {
+            return
+        }
+
+        OWSReadReceiptManager.shared().confidentialMessageWasReadLocally(message)
+        databaseStorage.asyncWrite { transaction in
+            guard let storedMessage = TSInteraction.anyFetch(
+                uniqueId: message.uniqueId,
+                transaction: transaction
+            ) as? TSIncomingMessage else {
+                return
+            }
+            storedMessage.anyRemove(transaction: transaction)
+        }
+    }
 
     @objc
     public func mediaDetailViewControllerDidTapMedia(_ mediaDetailViewController: MediaDetailViewController) {

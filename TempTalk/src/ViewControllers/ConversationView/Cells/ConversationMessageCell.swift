@@ -222,12 +222,9 @@ class ConversationMessageCell: ConversationCell {
         }
         
         if let outgoingMessage = viewItem.interaction as? TSOutgoingMessage {
-            if outgoingMessage.messageState == .failed {
-                // 对于语音消息，不弹出alert，让它继续传递到 handleTapGesture 进行播放
-                if viewItem.messageCellType() != .audio {
-                    delegate?.messageCell?(self, didTapFailedOutgoingMessage: outgoingMessage)
-                }
-            } else if outgoingMessage.messageState == .sending, !outgoingMessage.isPinnedMessage {
+            // A failed message resends from its "Tap to retry" hint row, not from the
+            // bubble itself — tapping the bubble keeps its normal behaviour.
+            if outgoingMessage.messageState == .sending, !outgoingMessage.isPinnedMessage {
                 // Ignore taps on outgoing messages being sent.
                 return
             }
@@ -277,8 +274,9 @@ class ConversationMessageCell: ConversationCell {
         }
         
         if let outgoingMessage = viewItem.interaction as? TSOutgoingMessage {
-            if outgoingMessage.messageState == .failed || outgoingMessage.messageState == .sending {
-                // Ignore long press on unsent messages or being sent.
+            // A failed message long-presses into its own Resend / Delete menu.
+            // A message still being sent has nothing actionable yet.
+            if outgoingMessage.messageState == .sending {
                 return
             }
         }

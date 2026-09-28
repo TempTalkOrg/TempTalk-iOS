@@ -1113,3 +1113,14 @@ extension LongMessageViewController: UIGestureRecognizerDelegate {
         return nil
     }
 }
+
+// MARK: - DTAddFriendSourceProviding
+
+extension LongMessageViewController: DTAddFriendSourceProviding {
+
+    /// The @mentions rendered here belong to the message's own conversation, so a personal card
+    /// opened from this screen reports the same provenance it would in the conversation itself.
+    @objc public var contextualAddFriendSource: AddFriendSource {
+        AddFriendSource.from(thread: viewItem?.thread) ?? .unspecified
+    }
+}

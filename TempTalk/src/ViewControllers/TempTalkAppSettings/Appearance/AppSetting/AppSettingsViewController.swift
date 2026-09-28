@@ -461,7 +461,7 @@ extension AppSettingsViewController : UITableViewDelegate,UITableViewDataSource 
     }
     
     func presentFeedbackView() {
-        showProfileCardInfo(with: TSConstants.officialBotId, isFromSameThread: false, isPresent: false, isFromContacts: true)
+        showProfileCardInfo(with: TSConstants.officialBotId, addFriendSource: .unspecified, isFromSameThread: false, isPresent: false, isFromContacts: true)
     }
 }
 

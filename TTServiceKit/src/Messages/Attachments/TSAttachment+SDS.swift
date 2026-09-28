@@ -57,6 +57,8 @@ public struct AttachmentRecord: SDSRecord {
     public let decibelSamples: Data?
     public let height: UInt32
     public let width: UInt32
+    public let preprocessingKind: TSAttachmentPreprocessingKind
+    public let preprocessingParams: Data?
 
     public enum CodingKeys: String, CodingKey, ColumnExpression, CaseIterable {
         case id
@@ -89,6 +91,8 @@ public struct AttachmentRecord: SDSRecord {
         case decibelSamples
         case height
         case width
+        case preprocessingKind
+        case preprocessingParams
     }
 
     public static func columnName(_ column: AttachmentRecord.CodingKeys, fullyQualified: Bool = false) -> String {
@@ -142,6 +146,8 @@ public extension AttachmentRecord {
         decibelSamples = row[27]
         height = row[28]
         width = row[29]
+        preprocessingKind = row[30]
+        preprocessingParams = row[31]
     }
 }
 
@@ -186,6 +192,8 @@ extension TSAttachment {
             let serverId: UInt64 = record.serverId
             let sourceFilename: String? = record.sourceFilename
             let width: UInt32 = record.width
+            let preprocessingKind: TSAttachmentPreprocessingKind = record.preprocessingKind
+            let preprocessingParams: Data? = SDSDeserialization.optionalData(record.preprocessingParams, name: "preprocessingParams")
 
             return TSAttachment(grdbId: recordId,
                                 uniqueId: uniqueId,
@@ -199,6 +207,8 @@ extension TSAttachment {
                                 encryptionKey: encryptionKey,
                                 height: height,
                                 isDownloaded: isDownloaded,
+                                preprocessingKind: preprocessingKind,
+                                preprocessingParams: preprocessingParams,
                                 serverId: serverId,
                                 sourceFilename: sourceFilename,
                                 width: width)
@@ -219,6 +229,8 @@ extension TSAttachment {
             let serverId: UInt64 = record.serverId
             let sourceFilename: String? = record.sourceFilename
             let width: UInt32 = record.width
+            let preprocessingKind: TSAttachmentPreprocessingKind = record.preprocessingKind
+            let preprocessingParams: Data? = SDSDeserialization.optionalData(record.preprocessingParams, name: "preprocessingParams")
             let digest: Data? = SDSDeserialization.optionalData(record.digest, name: "digest")
             let mostRecentFailureLocalizedText: String? = record.mostRecentFailureLocalizedText
             let relay: String = try SDSDeserialization.required(record.relay, name: "relay")
@@ -238,6 +250,8 @@ extension TSAttachment {
                                        encryptionKey: encryptionKey,
                                        height: height,
                                        isDownloaded: isDownloaded,
+                                       preprocessingKind: preprocessingKind,
+                                       preprocessingParams: preprocessingParams,
                                        serverId: serverId,
                                        sourceFilename: sourceFilename,
                                        width: width,
@@ -262,6 +276,8 @@ extension TSAttachment {
             let serverId: UInt64 = record.serverId
             let sourceFilename: String? = record.sourceFilename
             let width: UInt32 = record.width
+            let preprocessingKind: TSAttachmentPreprocessingKind = record.preprocessingKind
+            let preprocessingParams: Data? = SDSDeserialization.optionalData(record.preprocessingParams, name: "preprocessingParams")
             let cachedAudioDurationSeconds: NSNumber? = SDSDeserialization.optionalNumericAsNSNumber(record.cachedAudioDurationSeconds, name: "cachedAudioDurationSeconds", conversion: { NSNumber(value: $0) })
             let cachedImageHeight: NSNumber? = SDSDeserialization.optionalNumericAsNSNumber(record.cachedImageHeight, name: "cachedImageHeight", conversion: { NSNumber(value: $0) })
             let cachedImageWidth: NSNumber? = SDSDeserialization.optionalNumericAsNSNumber(record.cachedImageWidth, name: "cachedImageWidth", conversion: { NSNumber(value: $0) })
@@ -290,6 +306,8 @@ extension TSAttachment {
                                       encryptionKey: encryptionKey,
                                       height: height,
                                       isDownloaded: isDownloaded,
+                                      preprocessingKind: preprocessingKind,
+                                      preprocessingParams: preprocessingParams,
                                       serverId: serverId,
                                       sourceFilename: sourceFilename,
                                       width: width,
@@ -372,6 +390,8 @@ extension TSAttachment: DeepCopyable {
             let serverId: UInt64 = modelToCopy.serverId
             let sourceFilename: String? = modelToCopy.sourceFilename
             let width: UInt32 = modelToCopy.width
+            let preprocessingKind: TSAttachmentPreprocessingKind = modelToCopy.preprocessingKind
+            let preprocessingParams: Data? = modelToCopy.preprocessingParams
             let cachedAudioDurationSeconds: NSNumber? = modelToCopy.cachedAudioDurationSeconds
             let cachedImageHeight: NSNumber? = modelToCopy.cachedImageHeight
             let cachedImageWidth: NSNumber? = modelToCopy.cachedImageWidth
@@ -408,6 +428,8 @@ extension TSAttachment: DeepCopyable {
                                       encryptionKey: encryptionKey,
                                       height: height,
                                       isDownloaded: isDownloaded,
+                                      preprocessingKind: preprocessingKind,
+                                      preprocessingParams: preprocessingParams,
                                       serverId: serverId,
                                       sourceFilename: sourceFilename,
                                       width: width,
@@ -440,6 +462,8 @@ extension TSAttachment: DeepCopyable {
             let serverId: UInt64 = modelToCopy.serverId
             let sourceFilename: String? = modelToCopy.sourceFilename
             let width: UInt32 = modelToCopy.width
+            let preprocessingKind: TSAttachmentPreprocessingKind = modelToCopy.preprocessingKind
+            let preprocessingParams: Data? = modelToCopy.preprocessingParams
             let digest: Data? = modelToCopy.digest
             let mostRecentFailureLocalizedText: String? = modelToCopy.mostRecentFailureLocalizedText
             let relay: String = modelToCopy.relay
@@ -457,6 +481,8 @@ extension TSAttachment: DeepCopyable {
                                        encryptionKey: encryptionKey,
                                        height: height,
                                        isDownloaded: isDownloaded,
+                                       preprocessingKind: preprocessingKind,
+                                       preprocessingParams: preprocessingParams,
                                        serverId: serverId,
                                        sourceFilename: sourceFilename,
                                        width: width,
@@ -483,6 +509,8 @@ extension TSAttachment: DeepCopyable {
             let serverId: UInt64 = modelToCopy.serverId
             let sourceFilename: String? = modelToCopy.sourceFilename
             let width: UInt32 = modelToCopy.width
+            let preprocessingKind: TSAttachmentPreprocessingKind = modelToCopy.preprocessingKind
+            let preprocessingParams: Data? = modelToCopy.preprocessingParams
 
             return TSAttachment(grdbId: id,
                                 uniqueId: uniqueId,
@@ -496,6 +524,8 @@ extension TSAttachment: DeepCopyable {
                                 encryptionKey: encryptionKey,
                                 height: height,
                                 isDownloaded: isDownloaded,
+                                preprocessingKind: preprocessingKind,
+                                preprocessingParams: preprocessingParams,
                                 serverId: serverId,
                                 sourceFilename: sourceFilename,
                                 width: width)
@@ -541,6 +571,8 @@ extension TSAttachmentSerializer {
     static var decibelSamplesColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "decibelSamples", columnType: .blob, isOptional: true) }
     static var heightColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "height", columnType: .int64) }
     static var widthColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "width", columnType: .int64) }
+    static var preprocessingKindColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "preprocessingKind", columnType: .int) }
+    static var preprocessingParamsColumn: SDSColumnMetadata { SDSColumnMetadata(columnName: "preprocessingParams", columnType: .blob, isOptional: true) }
 
     // TODO: We should decide on a naming convention for
     //       tables that store models.
@@ -577,7 +609,9 @@ extension TSAttachmentSerializer {
         appearInMediaGalleryColumn,
         decibelSamplesColumn,
         heightColumn,
-        widthColumn
+        widthColumn,
+        preprocessingKindColumn,
+        preprocessingParamsColumn
         ])
     }
 }
@@ -1019,8 +1053,10 @@ class TSAttachmentSerializer: SDSSerializer {
         let decibelSamples: Data? = nil
         let height: UInt32 = model.height
         let width: UInt32 = model.width
+        let preprocessingKind: TSAttachmentPreprocessingKind = model.preprocessingKind
+        let preprocessingParams: Data? = model.preprocessingParams
 
-        return AttachmentRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, attachmentSchemaVersion: attachmentSchemaVersion, attachmentType: attachmentType, byteCount: byteCount, cachedAudioDurationSeconds: cachedAudioDurationSeconds, cachedImageHeight: cachedImageHeight, cachedImageWidth: cachedImageWidth, contentType: contentType, creationTimestamp: creationTimestamp, digest: digest, encryptedDatalength: encryptedDatalength, encryptionKey: encryptionKey, isDownloaded: isDownloaded, isUploaded: isUploaded, lazyRestoreFragmentId: lazyRestoreFragmentId, localRelativeFilePath: localRelativeFilePath, mostRecentFailureLocalizedText: mostRecentFailureLocalizedText, relay: relay, serverAttachmentId: serverAttachmentId, serverId: serverId, sourceFilename: sourceFilename, state: state, albumId: albumId, albumMessageId: albumMessageId, appearInMediaGallery: appearInMediaGallery, decibelSamples: decibelSamples, height: height, width: width)
+        return AttachmentRecord(delegate: model, id: id, recordType: recordType, uniqueId: uniqueId, attachmentSchemaVersion: attachmentSchemaVersion, attachmentType: attachmentType, byteCount: byteCount, cachedAudioDurationSeconds: cachedAudioDurationSeconds, cachedImageHeight: cachedImageHeight, cachedImageWidth: cachedImageWidth, contentType: contentType, creationTimestamp: creationTimestamp, digest: digest, encryptedDatalength: encryptedDatalength, encryptionKey: encryptionKey, isDownloaded: isDownloaded, isUploaded: isUploaded, lazyRestoreFragmentId: lazyRestoreFragmentId, localRelativeFilePath: localRelativeFilePath, mostRecentFailureLocalizedText: mostRecentFailureLocalizedText, relay: relay, serverAttachmentId: serverAttachmentId, serverId: serverId, sourceFilename: sourceFilename, state: state, albumId: albumId, albumMessageId: albumMessageId, appearInMediaGallery: appearInMediaGallery, decibelSamples: decibelSamples, height: height, width: width, preprocessingKind: preprocessingKind, preprocessingParams: preprocessingParams)
     }
 }
 

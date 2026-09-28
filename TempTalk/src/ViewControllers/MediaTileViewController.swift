@@ -932,9 +932,61 @@ private class MediaGalleryCell: UICollectionViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
+    private static let thumbnailPixelSize = 512
+
     public func configure(item: MediaGalleryItem) {
         self.item = item
-        self.imageView.image = item.thumbnailImage
+        // Encrypted attachments have no disk thumbnail, so both stills and video frames
+        // cost a full decrypt. Keep that off the main thread and cache it, or scrolling
+        // re-decrypts the same files on every cell reconfigure.
+        if item.attachmentStream.hasEncryptedFile {
+            let attachmentStream = item.attachmentStream
+            let attachmentId = attachmentStream.uniqueId
+            let maxPixelSize = Self.thumbnailPixelSize
+            let cached = EncryptedAttachmentThumbnailLoader.cachedImage(
+                attachmentId: attachmentId,
+                maxPixelSize: maxPixelSize
+            )
+            self.imageView.image = cached
+            if cached == nil {
+                let display: (UIImage?) -> Void = { [weak self] image in
+                    if let image {
+                        EncryptedAttachmentThumbnailLoader.store(
+                            image,
+                            attachmentId: attachmentId,
+                            maxPixelSize: maxPixelSize
+                        )
+                    }
+                    guard let self, self.item?.attachmentStream.uniqueId == attachmentId else { return }
+                    self.imageView.image = image
+                }
+                if item.isVideo {
+                    attachmentStream.videoStillImage(
+                        withMaxSize: CGSize(width: maxPixelSize, height: maxPixelSize)
+                    ) { image in
+                        DispatchQueue.main.async { display(image) }
+                    }
+                } else {
+                    EncryptedAttachmentThumbnailLoader.loadCached(
+                        attachmentId: attachmentId,
+                        maxPixelSize: maxPixelSize,
+                        work: {
+                            guard let data = attachmentStream.decryptedData() else { return nil }
+                            return EncryptedAttachmentThumbnailLoader.downsampledImage(
+                                data: data,
+                                maxPixelSize: maxPixelSize
+                            )
+                        },
+                        completion: { [weak self] image in
+                            guard let self, self.item?.attachmentStream.uniqueId == attachmentId else { return }
+                            self.imageView.image = image
+                        }
+                    )
+                }
+            }
+        } else {
+            self.imageView.image = item.thumbnailImage
+        }
         if item.isVideo {
             self.contentTypeBadgeView.isHidden = false
             self.contentTypeBadgeView.image = MediaGalleryCell.videoBadgeImage

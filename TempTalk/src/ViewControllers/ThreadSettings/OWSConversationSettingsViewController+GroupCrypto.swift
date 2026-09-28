@@ -265,7 +265,7 @@ extension OWSConversationSettingsViewController {
                             }
                         }
 
-                        let upgradeInfoMessage = TSInfoMessage(timestamp: Date.ows_millisecondTimestamp(),
+                        let upgradeInfoMessage = TSInfoMessage(timestamp: DTTrustedClock.clientStampMs(),
                                                                in: groupThread,
                                                                messageType: .groupCryptoUpgrade,
                                                                customMessage: Localized("GROUP_CRYPTO_UPGRADE_SYSTEM_MSG"))
@@ -438,7 +438,7 @@ extension OWSConversationSettingsViewController {
                             }
                         }
 
-                        let resetInfoMessage = TSInfoMessage(timestamp: Date.ows_millisecondTimestamp(),
+                        let resetInfoMessage = TSInfoMessage(timestamp: DTTrustedClock.clientStampMs(),
                                                              in: groupThread,
                                                              messageType: .groupCryptoUpgrade,
                                                              customMessage: Localized("GROUP_CRYPTO_RESET_SYSTEM_MSG"))

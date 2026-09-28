@@ -24,6 +24,8 @@ typedef NS_OPTIONS(NSInteger, MediaGalleryOption) {
 - (void)mediaDetailViewController:(MediaDetailViewController *)mediaDetailViewController
                    isPlayingVideo:(BOOL)isPlayingVideo;
 
+- (void)mediaDetailViewControllerDidPrepareVideo:(MediaDetailViewController *)mediaDetailViewController;
+
 - (void)mediaDetailViewControllerDidTapMedia:(MediaDetailViewController *)mediaDetailViewController;
 
 - (void)mediaDetailViewController:(MediaDetailViewController *)mediaDetailViewController didChangeRecognizedViewStatus:(BOOL)isShow;

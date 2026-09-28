@@ -7,6 +7,23 @@
 
 import Foundation
 
+final class DTTokenMemoryStore {
+    private let lock = NSLock()
+    private var entitiesByAppId: [String: DTTokenEntity] = [:]
+
+    func read(for appId: String) -> DTTokenEntity? {
+        lock.lock()
+        defer { lock.unlock() }
+        return entitiesByAppId[appId]
+    }
+
+    func set(_ entity: DTTokenEntity?, for appId: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        entitiesByAppId[appId] = entity
+    }
+}
+
 @objcMembers
 public class DTTokenHelper: NSObject {
     
@@ -21,7 +38,15 @@ public class DTTokenHelper: NSObject {
         "[DTTokenHelper]"
     }
     
-    private var globalTokenEnity: DTTokenEntity?
+    private let tokenMemoryStore = DTTokenMemoryStore()
+
+    private func inMemoryTokenEntity(for appId: String) -> DTTokenEntity? {
+        tokenMemoryStore.read(for: appId)
+    }
+
+    private func setInMemoryTokenEntity(_ tokenEntity: DTTokenEntity?, for appId: String) {
+        tokenMemoryStore.set(tokenEntity, for: appId)
+    }
     
     /// 是否已经缓存了全局通用 token
     @objc
@@ -74,7 +99,7 @@ public class DTTokenHelper: NSObject {
     /// 异步获取 appId 对应的 token，先从本地缓存获取，若没有或缓存过期，再从网络获取
     @objc
     public func asyncFetchAuthToken(appId: String, completion: @escaping (String?, NSError?) -> Void) {
-        if let tokenEntity = globalTokenEnity, !tokenEntity.isExpired {
+        if let tokenEntity = inMemoryTokenEntity(for: appId), !tokenEntity.isExpired {
             // 如果内存中的 token 有效，直接返回
             Logger.info("\(self.logTag) Using token from memory for appId: \(appId)")
             if appId.isEmpty {
@@ -102,7 +127,7 @@ public class DTTokenHelper: NSObject {
             TSAccountManager.sharedInstance().authtoken = tokenEntity.authToken
         }
         // 能正确获取缓存就保存一份到内存
-        globalTokenEnity = tokenEntity
+        setInMemoryTokenEntity(tokenEntity, for: appId)
         completion(tokenEntity.authToken, nil)
     }
     
@@ -142,13 +167,14 @@ public class DTTokenHelper: NSObject {
         self.networkManager.makeRequest(request) { [weak self] response in
             guard let self else { return }
             let responseObj = response.responseBodyJson
-            Logger.debug("\(self.logTag) appid = \(appId), response = \(responseObj ?? "")")
+            Logger.debug("\(self.logTag) auth token response received for appId: \(appId)")
             
             guard let responseDic = responseObj as? [String: Any], let status = responseDic["status"] as? Int else {
                 let error = NSError(domain: "AuthTokenError", code: -20000, userInfo: [NSLocalizedDescriptionKey: "Invalid response format"])
                 completion(nil, error)
                 return
             }
+            Logger.debug("\(self.logTag) auth token response status=\(status) for appId: \(appId)")
             
             guard status == 0 else {
                 let reason = (responseDic["reason"] as? String) ?? "Unknown error"
@@ -176,6 +202,7 @@ public class DTTokenHelper: NSObject {
     /// 删除全局通用的 token 缓存
     @objc
     public func removeGlobalAuthTokenFormLocalCache() {
+        setInMemoryTokenEntity(nil, for: "")
         DTTokenKeychainStore.setPassword("", forAccount: Constants.globalAuthToken)
     }
     
@@ -186,6 +213,7 @@ public class DTTokenHelper: NSObject {
             Logger.error("\(self.logTag) remove auth token failed, appId is empty")
             return
         }
+        setInMemoryTokenEntity(nil, for: appId)
         DTTokenKeychainStore.setPassword("", forAccount: appId)
     }
     
@@ -205,7 +233,11 @@ public class DTTokenHelper: NSObject {
     private func cacheAuthToken(_ token: String, appId: String) {
         Logger.info("\(self.logTag) cache auth token for appId: \(appId)")
         
-        TSAccountManager.sharedInstance().authtoken = token
+        // `authtoken` represents the app-wide token. A platform-specific token must stay
+        // isolated under its appId and must not replace the global credential.
+        if appId.isEmpty {
+            TSAccountManager.sharedInstance().authtoken = token
+        }
         
         guard let dict = decodeJWTString(token), let tokenEntity = DTTokenEntity.signal_model(with: dict) else {
             Logger.error("\(self.logTag) cache auth token failed for appId: \(appId), reason: decode jwt string failed")
@@ -215,12 +247,12 @@ public class DTTokenHelper: NSObject {
         let expTimeInterval = tokenEntity.exp.doubleValue - tokenEntity.iat.doubleValue
         tokenEntity.expLocalTime = Int(localCurrentTime + expTimeInterval)
         tokenEntity.authToken = token
-        globalTokenEnity = tokenEntity
+        setInMemoryTokenEntity(tokenEntity, for: appId)
         guard let tokenEntityJson = tokenEntity.signal_modelToJSONString() else {
             Logger.error("\(self.logTag) cache auth token failed for appId: \(appId), reason: convert model to json failed")
             return
         }
-        Logger.debug("\(self.logTag) cache auth token for appId: \(appId), tokenEntityJson: \(tokenEntityJson)")
+        Logger.debug("\(self.logTag) cached auth token metadata for appId: \(appId), expLocalTime=\(tokenEntity.expLocalTime)")
         
         if appId.isEmpty {
             DTTokenKeychainStore.setPassword(tokenEntityJson, forAccount: Constants.globalAuthToken)
@@ -271,6 +303,31 @@ public class DTTokenHelper: NSObject {
         try await asyncFetchAuthTokenAsync(appId: "")
     }
 
+    /// Fetches a new global token without consulting the in-memory or keychain cache.
+    /// Use only after the server explicitly rejects the cached token.
+    public func forceRefreshGlobalAuthToken() async throws -> String {
+        Logger.warn("\(self.logTag) [startcall-auth] force-refresh global auth token: bypassing memory and keychain cache")
+        return try await withCheckedThrowingContinuation { continuation in
+            requestAuthToken(appId: "") { token, error in
+                if let token, !token.isEmpty {
+                    Logger.info("\(self.logTag) [startcall-auth] force-refresh global auth token succeeded")
+                    continuation.resume(returning: token)
+                } else if let error {
+                    Logger.error("\(self.logTag) [startcall-auth] force-refresh global auth token failed, code=\(error.code)")
+                    continuation.resume(throwing: error)
+                } else {
+                    let error = NSError(
+                        domain: "AuthTokenError",
+                        code: -20000,
+                        userInfo: [NSLocalizedDescriptionKey: "token is empty"]
+                    )
+                    Logger.error("\(self.logTag) [startcall-auth] force-refresh global auth token failed, code=\(error.code)")
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     /// 异步获取 appId 对应的 token (async/await 版本)
     private func asyncFetchAuthTokenAsync(appId: String) async throws -> String {
         return try await withCheckedThrowingContinuation { continuation in
@@ -299,8 +356,15 @@ extension DTTokenEntity {
     // token 是否过期了
     var isExpired: Bool {
         // 设置弹性安全时间，防止 token 临近过期，在执行后续动作过程中过期了
-        let localCurrentTime = Date().timeIntervalSince1970 + Self.safeTimeInterval
-        return localCurrentTime >= Double(expLocalTime)
+        // Server axis: trusted now vs JWT `exp`. Local axis: lifetime countdown from cache time,
+        // which survives a steady clock offset while the trusted clock is still on L3. Either axis
+        // saying "expired" wins — one extra refresh is cheaper than a request that 401s.
+        let trustedCurrentTime = TimeInterval(DTTrustedClock.now()) / 1000 + Self.safeTimeInterval
+        if trustedCurrentTime >= exp.doubleValue {
+            return true
+        }
+        guard expLocalTime > 0 else { return false }
+        return Date().timeIntervalSince1970 + Self.safeTimeInterval >= Double(expLocalTime)
     }
 }
 

@@ -6,6 +6,7 @@
 #import "AddToGroupViewController.h"
 #import "AvatarViewHelper.h"
 #import "Yelling-Swift.h"
+#import <TTServiceKit/TTServiceKit-Swift.h>
 #import "SignalApp.h"
 #import <TTMessaging/BlockListUIUtils.h>
 #import <TTMessaging/ContactTableViewCell.h>
@@ -123,7 +124,13 @@ static CGFloat const kHeaderDividerInset = 16;
     _avatarViewHelper = [AvatarViewHelper new];
     _avatarViewHelper.delegate = self;
     self.memberRecipientIds = [NSMutableSet new];
-    self.memberIds = @[self.contactsViewHelper.localNumber].mutableCopy;
+    self.memberIds = [NSMutableArray array];
+    NSString *localNumber = self.contactsViewHelper.localNumber;
+    if (localNumber.length > 0) {
+        [self.memberIds addObject:localNumber];
+    } else {
+        OWSLogError(@"%@ localNumber is unavailable while initializing group creation", self.logTag);
+    }
     self.selectedMemberOrder = [NSMutableArray array];
 }
 
@@ -1064,7 +1071,7 @@ static CGFloat const kHeaderDividerInset = 16;
             [OWSProfileManager.sharedManager addThreadToProfileWhitelist:thread transaction:writeTransaction];
 
             NSString *updateGroupInfo = Localized(@"GROUP_CREATED", nil);
-            uint64_t now = [NSDate ows_millisecondTimeStamp];
+            uint64_t now = [DTTrustedClock clientStampMs];
 
             TSInfoMessage *systemMessage = [[TSInfoMessage alloc] initWithTimestamp:now
                                                                            inThread:thread
@@ -1174,7 +1181,7 @@ static CGFloat const kHeaderDividerInset = 16;
             [OWSProfileManager.sharedManager addThreadToProfileWhitelist:thread transaction:writeTransaction];
 
             NSString *updateGroupInfo = Localized(@"GROUP_CREATED", nil);
-            uint64_t now = [NSDate ows_millisecondTimeStamp];
+            uint64_t now = [DTTrustedClock clientStampMs];
 
             TSInfoMessage *systemMessage = [[TSInfoMessage alloc] initWithTimestamp:now
                                                                            inThread:thread
@@ -1483,4 +1490,3 @@ static CGFloat const kHeaderDividerInset = 16;
 @end
 
 NS_ASSUME_NONNULL_END
-

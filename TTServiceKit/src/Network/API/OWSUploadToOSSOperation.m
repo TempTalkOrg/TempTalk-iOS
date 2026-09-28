@@ -207,7 +207,9 @@ static const CGFloat kAttachmentUploadProgressTheta = 0.001f;
                                                            transaction:transaction];
     }];
     
-    if(self.attachment){
+    // Prefer the just-fetched canonical row so a retained pre-commit instance
+    // cannot hide newly committed encryption metadata.
+    if (!attachmentStream && self.attachment) {
         attachmentStream = self.attachment;
     }
 

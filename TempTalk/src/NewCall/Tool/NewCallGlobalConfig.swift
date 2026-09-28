@@ -325,6 +325,10 @@ enum DTCallAccessibilityID {
     /// Bottom-toolbar microphone toggle button.
     static let mic = "call.btn.mic"
 
+    /// Red "microphone access denied" mark on the microphone button. Present only while
+    /// the microphone permission is denied / restricted.
+    static let micPermissionBadge = "call.badge.micPermission"
+
     /// Bottom-toolbar camera toggle button.
     static let camera = "call.btn.camera"
 

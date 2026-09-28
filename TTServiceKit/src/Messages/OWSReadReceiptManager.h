@@ -54,6 +54,7 @@ extern NSString *const kIncomingMessageMarkedAsReadNotification;
 
 - (void)processReadReceiptsFromLinkedDevice:(NSArray<DSKProtoSyncMessageRead *> *)readReceiptProtos
                               readTimestamp:(uint64_t)readTimestamp
+                     receiptServerTimestamp:(uint64_t)receiptServerTimestamp
                                 transaction:(SDSAnyWriteTransaction *)transaction;
 
 - (void)applyEarlyReadReceiptsForIncomingMessage:(TSIncomingMessage *)message

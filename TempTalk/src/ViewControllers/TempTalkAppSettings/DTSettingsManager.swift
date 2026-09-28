@@ -240,7 +240,7 @@ extension DTSettingsManager {
         if let contactThread = thread as? TSContactThread {
             self.databaseStorage.asyncWrite { transaction in
                 let systemMessage = TSInfoMessage(
-                    timestamp: Date.ows_millisecondTimestamp(),
+                    timestamp: DTTrustedClock.clientStampMs(),
                     in: contactThread,
                     messageType: .resetIdentityKey,
                     expiresInSeconds: contactThread.messageExpiresInSeconds(),

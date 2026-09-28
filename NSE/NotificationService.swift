@@ -645,6 +645,30 @@ class NotificationService: UNNotificationServiceExtension {
                 return
             }
 
+            let isSelfSync = envelope.source?.isEmpty == false
+                && envelope.source == TSAccountManager.localNumber()
+            if !isSelfSync {
+                let conversationMatches: Bool
+                if let groupID = dataMessage.group?.id, !groupID.isEmpty {
+                    conversationMatches = DTEnvelopeConversationValidator.isEnvelope(
+                        envelope,
+                        consistentWithGroupID: groupID,
+                        context: "NSE.DataMessage"
+                    )
+                } else {
+                    conversationMatches = DTEnvelopeConversationValidator.isEnvelope(
+                        envelope,
+                        consistentWithOneToOneNumber: envelope.source,
+                        context: "NSE.DataMessage"
+                    )
+                }
+                guard conversationMatches else {
+                    Logger.error("[NSE] DataMessage conversation mismatch; hiding notification details")
+                    configWithNoNameNoPreView()
+                    return
+                }
+            }
+
             Logger.info("Msg.timestamp = \(envelope.timestamp), source device: \(envelope.sourceDevice)")
             var displayName = ""
             if let source = envelope.source {

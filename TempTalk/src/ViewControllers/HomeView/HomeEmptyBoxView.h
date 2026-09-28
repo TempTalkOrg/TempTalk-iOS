@@ -12,6 +12,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface HomeEmptyBoxView : UIView
 
 @property (nonatomic, copy) NSString *emptyText;
+@property (nonatomic, assign) BOOL showsEncryptionHint;
+@property (nonatomic, copy, nullable) void (^didTapEncryptionHint)(void);
 
 - (void)applyTheme;
 

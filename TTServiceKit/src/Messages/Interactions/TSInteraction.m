@@ -106,7 +106,7 @@ NSString *NSStringFromOWSInteractionType(OWSInteractionType value)
     _sequenceId = sequenceId;
     _notifySequenceId = notifySequenceId;
     _uniqueThreadId = thread.uniqueId;
-    _receivedAtTimestamp = [NSDate ows_millisecondTimeStamp];
+    _receivedAtTimestamp = [DTTrustedClock now];
 
     return self;
 }

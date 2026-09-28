@@ -8,8 +8,64 @@
 
 import Foundation
 import LiveKit
+import TTServiceKit
 
 extension DTMeetingManager {
+    static func shouldCommitGroupStartCallMessageDuringTeardown(
+        call: DTLiveKitCallModel,
+        source: String?,
+        acceptedRoomId: String
+    ) -> Bool {
+        source == "startCall" &&
+            !acceptedRoomId.isEmpty &&
+            call.isInitiator &&
+            call.callType == .group &&
+            call.controlType == sourceControlStart &&
+            !call.createCallMsg
+    }
+
+    /// A successful start-call can race with a local hangup. In teardown we must not resume the
+    /// meeting flow, but the accepted call still needs the same ordinary-IM CallMsg as the normal
+    /// `createCallMsg == false` success path.
+    @MainActor
+    func commitAcceptedGroupStartCallMessageDuringTeardown(
+        call: DTLiveKitCallModel,
+        thread: TSThread?,
+        source: String?,
+        body: Livekit_TTCallResponseBody
+    ) {
+        let shouldCommit = Self.shouldCommitGroupStartCallMessageDuringTeardown(
+            call: call,
+            source: source,
+            acceptedRoomId: body.roomID
+        )
+        guard shouldCommit else {
+            return
+        }
+
+        let redactedClientCallId = Self.redactedCallLogIdentifier(call.clientCallId)
+        let redactedRoomId = Self.redactedCallLogIdentifier(body.roomID)
+        Logger.info(
+            "\(logTag)[callmsg-bind] accepted group start during teardown " +
+                "clientCallId=\(redactedClientCallId) roomId=\(redactedRoomId)"
+        )
+
+        guard let thread else {
+            Logger.error(
+                "\(logTag)[callmsg-bind] cannot enqueue CallMsg: missing thread " +
+                    "clientCallId=\(redactedClientCallId) roomId=\(redactedRoomId)"
+            )
+            return
+        }
+
+        sendGroupCallMessage(
+            thread: thread,
+            call: call,
+            acceptedRoomId: body.roomID,
+            trigger: "teardown-success"
+        )
+    }
+
     @MainActor func showScreenShareAlertVC(_ participantId: String) {
         roomContext?.presentMuteAlertVC(participantId)
     }
@@ -49,13 +105,14 @@ extension DTMeetingManager {
         rootNav.present(inviteNav, animated: true)
     }
     
+    @MainActor
     func dealConnetedSuccess(with body: Livekit_TTCallResponseBody) {
 
         if DTParamsUtils.validateString(body.roomID).boolValue {
             Logger.info("\(logTag) current call add roomId = \(body.roomID)")
             currentCall.roomId = body.roomID
 
-            if !(currentCall.callType == .private && currentCall.isCaller) {
+            if !(usesOneToOneConnectionFlow && currentCall.isCaller) {
                 stopCallTimeoutTimer()
             }
 
@@ -64,7 +121,7 @@ extension DTMeetingManager {
                 body.roomID,
                 callType: currentCall.callType,
                 conversationId: currentCall.conversationId,
-                timestamp: currentCall.timestamp ?? Date.ows_millisecondTimestamp()
+                timestamp: currentCall.timestamp ?? DTTrustedClock.now()
             )
         }
 

@@ -155,83 +155,80 @@ static const NSUInteger kArchivedMessageBatchSize = 30;
 - (void)slowlyArchiveMessages:(NSMutableArray<TSMessage *> *)messages
                     batchSize:(NSUInteger)batchSize
                    completion:(void (^)(void))completion{
-    
+
     dispatch_async([[self class] serialQueue], ^{
-        
+
         if(messages.count <= 0 || ![self shouldHandelMessages]){
             if(completion){
                 completion();
             }
             return;
         }
-        
+
         __block NSUInteger loopBatchIndex = 0;
         [BenchManager benchWithTitle:@"slowlyArchiveMessages" block:^{
             DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
                 NSMutableSet<NSString *> *archivedThreadIds = [NSMutableSet set];
+                NSMutableDictionary *maxDeletedTsByThread = [NSMutableDictionary dictionary];
                 [Batching loopObjcWithBatchSize:batchSize loopBlock:^(BOOL * _Nonnull stop) {
                     TSMessage *lastMessage = messages.lastObject;
                     if (loopBatchIndex == batchSize || lastMessage == nil || ![self shouldHandelMessages]) {
                         *stop = YES;
                         return;
                     }
-                    
+
                     [self archiveMessage:lastMessage transaction:writeTransaction];
-                    [archivedThreadIds addObject:lastMessage.uniqueThreadId];
-                    OWSLogInfo(@"archive message timestamp for sorting: %llu", lastMessage.timestampForSorting);
+                    NSString *threadId = lastMessage.uniqueThreadId;
+                    [archivedThreadIds addObject:threadId];
+                    uint64_t tsForSorting = lastMessage.timestampForSorting;
+                    NSNumber *cur = maxDeletedTsByThread[threadId];
+                    if (!cur || tsForSorting > cur.unsignedLongLongValue) {
+                        maxDeletedTsByThread[threadId] = @(tsForSorting);
+                    }
+                    OWSLogInfo(@"archive message timestamp for sorting: %llu", tsForSorting);
                     [messages removeLastObject];
                     loopBatchIndex += 1;
                 }];
-                
-                [writeTransaction addAsyncCompletionOnMain:^{
-                    [self dealThreadDataWithArchivedThreadIds:archivedThreadIds];
-                }];
+                [self dealThreadDataWithArchivedThreadIds:archivedThreadIds
+                                     maxDeletedTsByThread:maxDeletedTsByThread
+                                             transaction:writeTransaction];
             });
         }];
-        
+
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kArchivedMessageFrequency * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self slowlyArchiveMessages:messages batchSize:batchSize completion:completion];
         });
-        
+
     });
-    
+
 }
 
-- (void)dealThreadDataWithArchivedThreadIds:(NSMutableSet<NSString *> *)archivedThreadIds {
+- (void)dealThreadDataWithArchivedThreadIds:(NSMutableSet<NSString *> *)archivedThreadIds
+                       maxDeletedTsByThread:(NSDictionary<NSString *, NSNumber *> *)maxDeletedTsByThread
+                               transaction:(SDSAnyWriteTransaction *)transaction {
     if (archivedThreadIds.count == 0) {
         return;
     }
 
     OWSLogInfo(@"[Archive] processing %lu threads after message archiving", (unsigned long)archivedThreadIds.count);
 
-    // 使用异步写操作，避免在主线程上阻塞
-    // 这个方法由 addAsyncCompletionOnMain 调用，已经在主线程上
-    // 如果使用 DatabaseStorageWrite 会导致主线程卡顿
-    DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
-        // Track which threads already have the system message to avoid duplicates
-        NSMutableSet<NSString *> *threadsWithSystemMessage = [NSMutableSet set];
-
-        for (NSString *threadId in archivedThreadIds) {
-            TSThread *thread = [TSThread anyFetchWithUniqueId:threadId transaction:transaction];
-            if (!thread) {
-                OWSLogWarn(@"[Archive] thread not found: %@", threadId);
-                continue;
-            }
-
-            // 更新会话的归档状态
-            [thread anyUpdateWithTransaction:transaction block:^(TSThread * _Nonnull t) {
-                [t updateArchiveStateWithTransaction:transaction];
-            }];
-
-            if (![threadsWithSystemMessage containsObject:threadId]) {
-                [self genrateSystemMessageWithThread:thread transaction:transaction];
-                [threadsWithSystemMessage addObject:threadId];
-            }
+    for (NSString *threadId in archivedThreadIds) {
+        TSThread *thread = [TSThread anyFetchWithUniqueId:threadId transaction:transaction];
+        if (!thread) {
+            OWSLogWarn(@"[Archive] thread not found: %@", threadId);
+            continue;
         }
-    });
+
+        [thread anyUpdateWithTransaction:transaction block:^(TSThread * _Nonnull t) {
+            [t updateArchiveStateWithTransaction:transaction];
+        }];
+
+        uint64_t clearBoundary = maxDeletedTsByThread[thread.uniqueId].unsignedLongLongValue;
+        [self genrateSystemMessageWithThread:thread clearBoundary:clearBoundary transaction:transaction];
+    }
 }
 
-- (void)genrateSystemMessageWithThread:(TSThread *)thread transaction:(SDSAnyWriteTransaction *)transaction {
+- (void)genrateSystemMessageWithThread:(TSThread *)thread clearBoundary:(uint64_t)clearBoundary transaction:(SDSAnyWriteTransaction *)transaction {
     NSString *threadID = [TSContactThread threadIdFromContactId:TSAccountManager.localNumber];
     if ([thread.uniqueId isEqualToString:threadID]) {
         // 备忘录不会生成系统消息
@@ -255,25 +252,36 @@ static const NSUInteger kArchivedMessageBatchSize = 30;
         return;
     }
 
-    uint64_t finalTimestamp = (uint64_t)([thread.creationDate timeIntervalSince1970] * 1000);
+    // Keep the marker below surviving messages.
+    uint64_t finalTimestamp = clearBoundary > 1 ? clearBoundary - 1 : clearBoundary;
+    if (finalTimestamp == 0) {
+        finalTimestamp = (uint64_t)([thread.creationDate timeIntervalSince1970] * 1000); // defensive fallback
+    }
     if (finalTimestamp <= 0) {
         return;
     }
 
-    // 创建新的系统消息
-    TSInfoMessage *info = [[TSInfoMessage alloc] initWithTimestamp:finalTimestamp
-                                                          inThread:thread
-                                                       messageType:TSInfoMessageArchiveMessage
-                                                     customMessage:Localized(@"EXPIRE_SYSTEM_MESSAGE",
-                                                                                                                                                                               @"Message for the 'app launch failed' alert.")];
-    [info anyInsertWithTransaction:transaction];
+    while (finalTimestamp > 0) {
+        TSInfoMessage *info = [[TSInfoMessage alloc] initWithTimestamp:finalTimestamp
+                                                              inThread:thread
+                                                           messageType:TSInfoMessageArchiveMessage
+                                                         customMessage:Localized(@"EXPIRE_SYSTEM_MESSAGE",
+                                                                                 @"Message for the 'app launch failed' alert.")];
+        if (![TSInteraction anyFetchWithUniqueId:info.uniqueId transaction:transaction]) {
+            [info anyInsertWithTransaction:transaction];
+            return;
+        }
+        finalTimestamp--;
+    }
 }
-
 
 - (void)fallbackTimerDidFire {
 
     if (![self shouldHandelMessages]) return;
-    
+
+    // Best-effort anchor; deletion still uses L2/L3 on failure.
+    [DTTrustedClock ensureAnchored];
+
     OWSLogInfo(@"%@ OWSArchivedMessageJob fallbackTimerDidFire", self.logTag);
 
     dispatch_async([[self class] serialQueue], ^{
@@ -281,7 +289,7 @@ static const NSUInteger kArchivedMessageBatchSize = 30;
         __block OWSBackgroundTask *_Nullable backgroundTask = [OWSBackgroundTask backgroundTaskWithLabelStr:"archivedMessages"];
         NSMutableArray *archivedMessages = @[].mutableCopy;
         NSMutableArray *archivedMessageIds = @[].mutableCopy;
-        uint64_t now = [NSDate ows_millisecondTimeStamp];
+        uint64_t now = [DTTrustedClock now]; // P0-08: server-axis trusted time (was wall clock)
         NSString *receipt = [TSAccountManager localNumber];
 
         [BenchManager benchWithTitle:@"enumerateNeedArchivedInteractionsWithNow" block:^{
@@ -318,6 +326,9 @@ static const NSUInteger kArchivedMessageBatchSize = 30;
 
         NSUInteger count = archivedMessages.count;
         if(count > 0){
+            [archivedMessages sortUsingComparator:^NSComparisonResult(TSMessage *left, TSMessage *right) {
+                return [left compareForSorting:right];
+            }];
             OWSLogInfo(@"[Archive] begin archiving %lu messages", (unsigned long)count);
             [self slowlyArchiveMessages:archivedMessages
                               batchSize:kArchivedMessageBatchSize

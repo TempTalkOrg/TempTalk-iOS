@@ -93,14 +93,16 @@ fileprivate extension OWSSignalService {
         let baseUrl = signalServiceInfo.baseUrl
         let securityPolicy: OWSHTTPSecurityPolicy
         switch signalServiceType {
-        // GIF proxy rides the self-hosted chat domain (chative-CA self-signed),
-        // so it needs the pinned policy just like the chat/call/file/root tunnels.
-        // systemDefault() would reject the self-signed cert during the TLS
-        // handshake and surface as invalidResponse before the request is sent.
-        case .mainSignalService, .callService, .fileShareService, .rootService, .gifService:
-            securityPolicy = OWSURLSession.signalServiceSecurityPolicy
-        default:
+        // Pinned is the default: every service rides the self-hosted chat domain
+        // (chative-CA self-signed), which systemDefault() would reject at the TLS
+        // handshake (surfacing as invalidResponse). New chat-domain services fall
+        // here and stay correct without touching this switch. Only public-CA hosts
+        // are exceptions: avatar storage rides an external CDN (CloudFront), and
+        // the speedtest probe (noneService) isn't pinned.
+        case .storageService, .noneService:
             securityPolicy = OWSURLSession.defaultSecurityPolicy
+        default:
+            securityPolicy = OWSURLSession.signalServiceSecurityPolicy
         }
         
         var sessionConfiguration = OWSURLSession.defaultConfigurationWithoutCaching

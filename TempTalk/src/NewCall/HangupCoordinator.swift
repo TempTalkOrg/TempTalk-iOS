@@ -8,6 +8,9 @@ enum HangupReason: String, CustomStringConvertible {
     case remoteHangup
     case remoteReject
     case remoteCancel
+    /// Another device of this account answered. The room stays alive, so this only tears down
+    /// the local ringing state — it must not remove the meeting bar or send control messages.
+    case answeredOnLinkedDevice
     case meetingEnded
     case startCallFailed
     case connectError
@@ -31,6 +34,7 @@ protocol HangupCoordinatorDependencies: AnyObject {
     var roomContext: RoomContext? { get set }
     var lifecycleState: DTMeetingManager.MeetingLifecycleState { get }
     var hasEverConnectedToRoom: Bool { get }
+    var usesOneToOneConnectionFlow: Bool { get }
 
     func transitionToDisconnecting()
     func forceTransitionToIdle()
@@ -115,15 +119,22 @@ final class HangupCoordinator {
         switch reason {
         case .localHangup:
             guard let roomId = options.roomId else { return }
+            // Effective type, not origin: once a 1v1 has become instant, leaving follows group
+            // semantics, so the bar stays as this device's way back into a live call.
             let shouldRemove = deps.currentCall.callType == .private || options.forceEndGroupMeeting
             if shouldRemove {
                 deps.handleMeetingBar(roomId: roomId, action: .remove, transaction: nil)
             }
 
         case .localCancel, .localReject, .remoteReject, .remoteCancel:
-            if deps.currentCall.callType == .private, let roomId = deps.currentCall.roomId {
+            if deps.usesOneToOneConnectionFlow, let roomId = deps.currentCall.roomId {
                 deps.handleMeetingBar(roomId: roomId, action: .remove, transaction: nil)
             }
+
+        case .answeredOnLinkedDevice:
+            // Keep the bar: the call is live on another device, and this bar is the only way
+            // back into it from here.
+            break
 
         case .remoteHangup:
             if let roomId = options.roomId, DTParamsUtils.validateString(roomId).boolValue {
@@ -153,6 +164,8 @@ final class HangupCoordinator {
 
         switch reason {
         case .localHangup:
+            // Effective type: an instant call must not send the 1v1 hangup, which would end the
+            // call for everyone left in the room instead of just removing this device.
             if deps.currentCall.callType == .private {
                 await deps.sendCallMessage(.hangup, forceEndGroupMeeting: false)
             } else if options.forceEndGroupMeeting {
@@ -160,14 +173,15 @@ final class HangupCoordinator {
             }
 
         case .localCancel:
-            if deps.currentCall.callType == .private {
+            if deps.usesOneToOneConnectionFlow {
                 await deps.sendCallMessage(.cancel, forceEndGroupMeeting: false)
             }
 
         case .localReject:
             await deps.sendCallMessage(.reject, forceEndGroupMeeting: false)
 
-        case .remoteHangup, .remoteReject, .remoteCancel,
+        // answeredOnLinkedDevice sends nothing: the answering device already sent `joined`.
+        case .remoteHangup, .remoteReject, .remoteCancel, .answeredOnLinkedDevice,
              .meetingEnded, .startCallFailed, .connectError,
              .callError, .appWillTerminate:
             break
@@ -200,6 +214,7 @@ final class HangupCoordinator {
         case .remoteHangup:      needSync = true
         case .remoteReject:      needSync = false
         case .remoteCancel:      needSync = true
+        case .answeredOnLinkedDevice: needSync = true
         case .meetingEnded:      needSync = true
         case .startCallFailed:   needSync = true
         case .connectError:      needSync = true
@@ -247,7 +262,7 @@ final class HangupCoordinator {
             }
 
         case .localCancel, .localReject, .remoteReject, .remoteCancel,
-             .meetingEnded, .callError, .appWillTerminate:
+             .answeredOnLinkedDevice, .meetingEnded, .callError, .appWillTerminate:
             break
         }
 

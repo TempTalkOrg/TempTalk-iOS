@@ -190,7 +190,7 @@ public class NotificationActionHandler: Dependencies {
 
     class func presentEventDetail(_ event: DTListMeeting) {
         if let channelName = event.channelName, !channelName.isEmpty {
-            let now = Date().timeIntervalSince1970
+            let now = TimeInterval(DTTrustedClock.now()) / 1000
             guard now - event.start < 70 else {
                 Logger.info("click meeting popups late: \(event.topic), \(channelName)")
                 return

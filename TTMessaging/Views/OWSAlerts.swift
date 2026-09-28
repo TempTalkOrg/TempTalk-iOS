@@ -22,6 +22,21 @@ import Foundation
         CurrentAppContext().frontmostViewController()?.present(alertController, animated: true, completion: nil)
     }
 
+    /// Cleanup and present alert for no photo library permissions
+    @objc
+    public class func showNoPhotoLibraryPermissionAlert() {
+        let alertTitle = Localized("MISSING_MEDIA_LIBRARY_PERMISSION_TITLE", comment: "Alert title when user has previously denied media library access")
+        let alertMessage = Localized("MISSING_MEDIA_LIBRARY_PERMISSION_MESSAGE", comment: "Alert body when user has previously denied media library access")
+        let alertController = UIAlertController(title: alertTitle, message: alertMessage, preferredStyle: .alert)
+        let dismissAction = UIAlertAction(title: CommonStrings.dismissButton(), style: .cancel)
+
+        alertController.addAction(dismissAction)
+        if let settingsAction = CurrentAppContext().openSystemSettingsAction {
+            alertController.addAction(settingsAction)
+        }
+        CurrentAppContext().frontmostViewController()?.present(alertController, animated: true, completion: nil)
+    }
+
     @objc
     public class func showAlert(title: String) {
         self.showAlert(title: title, message: nil, buttonTitle: nil)

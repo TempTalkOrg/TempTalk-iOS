@@ -39,9 +39,9 @@ public class DTDeletedRecordsApi: DTBaseAPI {
 
         let serverNowRaw = (json["serverTimestamp"] as? NSNumber)?.int64Value
         if serverNowRaw == nil {
-            Logger.error("[WeakContact] deletedRecords missing serverTimestamp; countdown anchored to device clock")
+            Logger.error("[WeakContact] deletedRecords missing serverTimestamp; using trusted clock")
         }
-        let serverNow = serverNowRaw ?? Int64(NSDate.ows_millisecondTimeStamp())
+        let serverNow = serverNowRaw ?? Int64(DTTrustedClock.now())
         let uptime = ProcessInfo.processInfo.systemUptime
         let items = json["data"] as? [[AnyHashable: Any]] ?? []
         Logger.info("[WeakContact] deletedRecords parsed count=\(items.count) anchor=\(serverNow)")

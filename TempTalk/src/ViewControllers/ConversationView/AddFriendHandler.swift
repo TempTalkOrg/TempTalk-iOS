@@ -24,6 +24,19 @@ class AddFriendHandler: NSObject {
         case accountUnavailable
     }
 
+    /// Source for a tap on a shared contact card. The `uid` the server wants is the person who
+    /// shared the card with us — the author of an incoming message.
+    ///
+    /// A card we sent ourselves has no such person: reporting our own id would make the server
+    /// resolve the sharer to the requester, which reads as self-referential on the other side. That
+    /// is the same unresolvable-source defect this type exists to prevent, so it stays unspecified.
+    static func shareContactSource(for viewItem: any ConversationViewItem) -> AddFriendSource {
+        guard let incomingMessage = viewItem.interaction as? TSIncomingMessage else {
+            return .unspecified
+        }
+        return .shareContact(uid: incomingMessage.authorId)
+    }
+
     /// Present the unified "account unavailable" result. Offers "Delete Contact" only when the
     /// target is still in our contacts (a weak / pending-removal contact); otherwise just a toast.
     private static func handleAccountUnavailable(identifier: String) {
@@ -102,16 +115,35 @@ class AddFriendHandler: NSObject {
         return vc
     }
 
+    /// Sent when accepting an incoming request. The server establishes the relationship outright
+    /// instead of queueing another request, so a successful response is itself the confirmation.
+    static let acceptAction = "accept"
+
+    /// Main-actor bound: the `await` releases the main thread for the network round trip, while the
+    /// continuation — `markAsFriend` and the account-unavailable alert — resumes where UIKit and the
+    /// contacts manager expect to be. Callers must keep their own `Task { @MainActor in }`; dropping
+    /// the isolation here would silently push their post-await UI work onto a background thread.
+    @MainActor
     static func requestAddFriend(
         identifier: String,
-        source: AddFriendSource
+        source: AddFriendSource,
+        action: String? = nil
     ) async throws {
+        // The server renders "How you met" from what we report here, and every entry point funnels
+        // through this call — so this line is the one place that shows what was actually sent.
+        OWSLogger.info("[AddFriend] request uid=…\(identifier.suffix(4)) source=\(source) action=\(action ?? "none")")
+
         do {
             let api = DTAskAddFriendsApi()
-            let entity = try await api.askAddContacts(uid: identifier, source: source)
+            let entity = try await api.askAddContacts(uid: identifier, source: source, action: action)
 
-            if entity.data["id"] as? Int32 == -1 {
-                markAsFriend(identifier: identifier)
+            // Accepting is authoritative — matches Android, which flips the local friend flag on a
+            // successful accept without reading the response id. `id == -1` stays for the other
+            // path: a plain request that crosses one already sent by the other side, and is only
+            // evaluated when this is not an accept.
+            if action == acceptAction || entity.data["id"] as? Int32 == -1 {
+                OWSLogger.info("[AddFriend] became friends immediately uid=…\(identifier.suffix(4))")
+                await markAsFriend(identifier: identifier)
             }
         } catch let error as NSError where error.code == accountUnavailableErrorCode {
             handleAccountUnavailable(identifier: identifier)
@@ -119,14 +151,19 @@ class AddFriendHandler: NSObject {
         }
     }
 
+    /// Drives the request plus its toasts and info message, so it is pinned to the main actor for
+    /// the same reason as `requestAddFriend` — a nonisolated async function does not inherit its
+    /// caller's actor, which would put `DTToastHelper` on a background thread.
+    @MainActor
     static func handleRequestAddFriend(
         identifier: String,
-        source: AddFriendSource
+        source: AddFriendSource,
+        action: String? = nil
     ) async throws {
         DTToastHelper.show()
 
         do {
-            try await requestAddFriend(identifier: identifier, source: source)
+            try await requestAddFriend(identifier: identifier, source: source, action: action)
             DTToastHelper.hide()
             DTToastHelper.toast(
                 withText: Localized("CONTACT_REQUEST_SENTED"),
@@ -141,7 +178,7 @@ class AddFriendHandler: NSObject {
                     transaction: wTransaction
                 )
                 latestThread.isRemovedFromConversation = false
-                let now = NSDate.ows_millisecondTimeStamp()
+                let now = DTTrustedClock.clientStampMs()
                 let infoMsg = TSInfoMessage(
                     timestamp: now,
                     in: latestThread,
@@ -183,126 +220,12 @@ class AddFriendHandler: NSObject {
         }
     }
 
-    @objc
-    static func requestAddFriend(identifier: String,
-                                 sourceType: DTSourceToPersonalCardType,
-                                 sourceConversationID: String?,
-                                 shareContactCardUId: String?,
-                                 action: String?,
-                                 success: (() -> Void)? = nil,
-                                 failure: ((_ errorString: String) -> Void)? = nil) {
-        // 从 DTAddFriendSourceManager 获取上下文信息
-        let sourceManager = DTAddFriendSourceManager.shared
-        let finalSourceType = sourceType
-        var finalSourceConversationID = sourceConversationID
-        var finalShareContactCardUId = shareContactCardUId
-
-        // 根据来源类型获取对应的上下文信息
-        switch finalSourceType {
-        case .inGroupUserIcon, .inGroupUserID, .inGroupMemberUserIcon:
-            // 从群相关来源获取群ID
-            if finalSourceConversationID == nil {
-                finalSourceConversationID = sourceManager.groupId
-            }
-        case .inUserCard:
-            // 从分享名片来源获取分享者的用户ID
-            if finalShareContactCardUId == nil {
-                finalShareContactCardUId = sourceManager.shareContactCardUid
-            }
-        default:
-            break
-        }
-
-        var type = ""
-
-        switch finalSourceType {
-        case .inGroupUserIcon, .inGroupUserID, .inGroupMemberUserIcon:
-            type = "fromGroup"
-        case .inUserCard:
-            type = "shareContact"
-        case .inSearchUserId:
-            type = "search"
-        case .randomCode:
-            type = "randomCode"
-        case .unknow:
-            type = ""
-        @unknown default:
-            type = ""
-        }
-
-        let api = DTAskAddFriendsApi()
-        api.askAddContacts(identifier,
-                           sourceType: type.isEmpty ? nil : type,
-                           sourceConversationID: finalSourceConversationID,
-                           shareContactCardUid: finalShareContactCardUId,
-                           action: action) { metaEntity in
-            success?()
-
-            guard let askId = metaEntity?.data["id"] as? Int32 else {
-                return
-            }
-
-            // id 为 -1说明是相互请求为好友
-            if askId == -1 {
-                markAsFriend(identifier: identifier)
-            }
-
-        } failure: { error, entity in
-            if let nsError = error as? NSError, nsError.code == Self.accountUnavailableErrorCode {
-                OWSLogger.info("add friend: account unavailable (19009) for \(identifier)")
-                Self.handleAccountUnavailable(identifier: identifier)
-                return
-            }
-            let errorString = NSError.errorDesc(error, errResponse: entity)
-            failure?(errorString)
-        }
-
-    }
-
-    /// `proceedHandler` fires only when the request succeeds, so the caller can open the
-    /// conversation on success and stay put on any failure (including the account-unavailable
-    /// alert). Matches Android: navigate on success, don't navigate on failure.
-    @objc
-    static func handleRequestAddFriend(identifier: String,
-                                       sourceType: DTSourceToPersonalCardType,
-                                       sourceConversationID: String?,
-                                       shareContactCardUId: String?,
-                                       action: String?,
-                                       success: (() -> Void)? = nil,
-                                       failure: ((_ errorString: String) -> Void)? = nil,
-                                       proceedHandler: (() -> Void)? = nil) {
-        DTToastHelper.show()
-
-        self.requestAddFriend(identifier: identifier,
-                              sourceType: sourceType,
-                              sourceConversationID: sourceConversationID,
-                              shareContactCardUId: shareContactCardUId,
-                              action: action) {
-            DTToastHelper.hide()
-            DTToastHelper.toast(withText: Localized("CONTACT_REQUEST_SENTED"), in: DTToastHelper.shared().frontWindow(), durationTime: 2.0, afterDelay: 0.2)
-            proceedHandler?()
-            var contactThread: TSContactThread?
-            self.databaseStorage.asyncWrite { wTransaction in
-                let latestThread = TSContactThread.getOrCreateThread(withContactId: identifier, transaction: wTransaction)
-                latestThread.isRemovedFromConversation = false
-                let now = NSDate.ows_millisecondTimeStamp()
-                let infoMsg = TSInfoMessage.init(timestamp: now, in: latestThread, messageType: .askFriend, customMessage: Localized("CONTACT_REQUEST"))
-                latestThread.update(withUpdatedMessage: infoMsg, transaction: wTransaction)
-                contactThread = latestThread
-            } completion: {
-                if let contactThread {
-                    let message = ThreadUtil.sendMessage(withText: Localized("CONTACT_REQUEST"), atPersons: nil, mentions: nil, in: contactThread, quotedReplyModel: nil, messageSender: self.messageSender)
-                }
-            }
-        } failure: { errorString in
-            DTToastHelper.hide()
-            DTToastHelper.toast(withText: errorString, in: DTToastHelper.shared().frontWindow(), durationTime: 2.0, afterDelay: 0.2)
-        }
-
-    }
-
-    @objc
-    static func markAsFriend(identifier: String) {
+    /// Awaits its own write. Callers re-read friend state right after this returns (the conversation
+    /// header reads `TSContactThread.isFriend` through a fresh `databaseStorage.read`), and nothing
+    /// observes the database to correct them later — resuming before the commit would leave a
+    /// just-accepted friend rendered as a stranger until the screen is rebuilt.
+    @MainActor
+    static func markAsFriend(identifier: String) async {
 
         let contactManager = Environment.shared.contactsManager
         var newAccount: SignalAccount
@@ -316,17 +239,17 @@ class AddFriendHandler: NSObject {
             newAccount.contact = Contact(fullName: identifier, phoneNumber: identifier)
         }
         newAccount.contact?.isExternal = false
-        self.databaseStorage.asyncWrite { wTransaction in
-            contactManager?.updateSignalAccount(withRecipientId: identifier, withNewSignalAccount: newAccount, with: wTransaction)
-            let contactThread = TSContactThread.getOrCreateThread(withContactId: identifier, transaction: wTransaction)
-            contactThread.anyUpdateContactThread(transaction: wTransaction) { latestThread in
-                latestThread.receivedFriendReq = false
+        await withCheckedContinuation { continuation in
+            self.databaseStorage.asyncWrite { wTransaction in
+                contactManager?.updateSignalAccount(withRecipientId: identifier, withNewSignalAccount: newAccount, with: wTransaction)
+                let contactThread = TSContactThread.getOrCreateThread(withContactId: identifier, transaction: wTransaction)
+                contactThread.anyUpdateContactThread(transaction: wTransaction) { latestThread in
+                    latestThread.receivedFriendReq = false
+                }
+                DTWeakContactManager.shared.clearWeakPlaceholder(uid: identifier, transaction: wTransaction)
+            } completion: {
+                continuation.resume()
             }
-            DTWeakContactManager.shared.clearWeakPlaceholder(uid: identifier, transaction: wTransaction)
-        } completion: {
-
         }
-
     }
 }
-

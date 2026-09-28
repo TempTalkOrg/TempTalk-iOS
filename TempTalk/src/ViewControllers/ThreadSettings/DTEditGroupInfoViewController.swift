@@ -352,7 +352,7 @@ extension DTEditGroupInfoViewController: InfoEditingViewDelegate {
         }
 
         let infoMessage = TSInfoMessage(
-            timestamp: NSDate.ows_millisecondTimeStamp(),
+            timestamp: DTTrustedClock.clientStampMs(),
             in: groupThread,
             messageType: .typeGroupUpdate,
             customMessage: customMessage
@@ -459,7 +459,7 @@ extension DTEditGroupInfoViewController: AvatarViewHelperDelegate {
 
     private func sendGroupAvatarDidChangeMessage(transaction: SDSAnyWriteTransaction) {
         let infoMessage = TSInfoMessage(
-            timestamp: NSDate.ows_millisecondTimeStamp(),
+            timestamp: DTTrustedClock.clientStampMs(),
             in: groupThread,
             messageType: .typeGroupUpdate,
             customMessage: Localized("GROUP_AVATAR_CHANGED", comment: "")

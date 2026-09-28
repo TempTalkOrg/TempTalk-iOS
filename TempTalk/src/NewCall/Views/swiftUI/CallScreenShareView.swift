@@ -14,6 +14,7 @@ import SnapKit
 struct CallScreenShareView: View {
     
     @EnvironmentObject var roomCtx: RoomContext
+    @EnvironmentObject var room: Room
     @State private var isRendering = false
     @State private var isGroupMembers: Bool = false
     // 展示快速点击的弹幕
@@ -37,62 +38,101 @@ struct CallScreenShareView: View {
     @State private var showCriticalAlertConfirm = false
     @State private var raiseHandsWidth: CGFloat = DTMeetingManager.shared.calculateRaiseHandsWidth()
     @State private var quickPanelHeight: CGFloat = 170
+    @State private var healthBannerHeight: CGFloat = 0
 
     public var body: some View {
         GeometryReader { geometry in
             let containerSize = geometry.size
             let safeAreaInsets = geometry.safeAreaInsets
+            CallStatusPresentationReader(
+                currentCall: roomCtx.currentCall,
+                room: room,
+                roomCtx: roomCtx
+            ) { callStatusPresentation in
+                let healthBannerBottom = safeAreaInsets.top + 50
+                    + max(healthBannerHeight, CallConnectionHealthBanner.minimumPillHeight)
+                    + 8
+                let poorNetworkBadgeTop = callStatusPresentation.healthStatus == nil
+                    ? safeAreaInsets.top + 70
+                    : max(safeAreaInsets.top + 70, healthBannerBottom)
 
-            ZStack {
-                screenShareContentView(geometry: geometry)
+                ZStack {
+                    screenShareContentView(geometry: geometry)
 
-                topBarView(safeAreaInsets: safeAreaInsets)
+                    topBarView(
+                        safeAreaInsets: safeAreaInsets,
+                        presentation: callStatusPresentation
+                    )
                     .opacity(viewModel.showControls ? 1 : 0)
                     .allowsHitTesting(viewModel.showControls)
                     .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
 
-                // 举手入口已下掉，注释保留逻辑
-                // 右上角”举手”按钮
-                // if roomDataManager.hasRaiseHands {
-                //     raiseHandButtonView
-                // }
-
-                bulletChatOverlay(containerSize: containerSize)
-
-                bottomToolbarView(containerSize: containerSize, bottomSafeAreaInset: safeAreaInsets.bottom)
-                    .opacity(viewModel.showControls ? 1 : 0)
-                    .allowsHitTesting(viewModel.showControls)
-                    .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
-                
-                if isPopupPresented {
-                    BottomPopupView(
-                        onDismiss: {
-                            isPopupPresented = false
-                        },
-                        onShowCriticalAlertConfirm: {
-                            showCriticalAlertConfirm = true
-                        },
-                        containerSize: containerSize
+                    CallConnectionHealthBanner(
+                        presentation: callStatusPresentation,
+                        topInset: safeAreaInsets.top + 50,
+                        onHeightChange: { height in
+                            guard abs(healthBannerHeight - height) > 0.5 else { return }
+                            healthBannerHeight = height
+                        }
                     )
-                    .transition(.move(edge: .bottom))
-                    .animation(.easeOut(duration: 0.3), value: isPopupPresented)
-                    .allowsHitTesting(isPopupPresented)
-                }
+                    .padding(.leading, safeAreaInsets.leading)
+                    .padding(.trailing, safeAreaInsets.trailing)
+                    .zIndex(20)
 
-                if showCriticalAlertConfirm {
-                    CriticalAlertConfirmBottomPopupView(
-                        onDismiss: {
-                            showCriticalAlertConfirm = false
-                        },
-                        invitedUserIds: Array(DTMeetingManager.shared.currentCall.invitedCriticalAlertUsers),
-                        callType: DTMeetingManager.shared.currentCall.callType,
-                        containerSize: containerSize
-                    )
-                    .transition(.opacity)
-                    .animation(.easeOut(duration: 0.3), value: showCriticalAlertConfirm)
+                    if let participant = roomCtx.screenShareParticipant,
+                       !roomCtx.usesOneToOneNetworkQualityPresentation,
+                       roomCtx.isNetworkPoor(for: participant) {
+                        PoorNetworkBadge(participantName: displayName(for: participant))
+                            .padding(.top, poorNetworkBadgeTop)
+                            .padding(.trailing, safeAreaInsets.trailing + 16)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                            .allowsHitTesting(false)
+                            .zIndex(19)
+                    }
+
+                    // 举手入口已下掉，注释保留逻辑
+                    // 右上角”举手”按钮
+                    // if roomDataManager.hasRaiseHands {
+                    //     raiseHandButtonView
+                    // }
+
+                    bulletChatOverlay(containerSize: containerSize)
+
+                    bottomToolbarView(containerSize: containerSize, bottomSafeAreaInset: safeAreaInsets.bottom)
+                        .opacity(viewModel.showControls ? 1 : 0)
+                        .allowsHitTesting(viewModel.showControls)
+                        .animation(.easeInOut(duration: 0.2), value: viewModel.showControls)
+
+                    if isPopupPresented {
+                        BottomPopupView(
+                            onDismiss: {
+                                isPopupPresented = false
+                            },
+                            onShowCriticalAlertConfirm: {
+                                showCriticalAlertConfirm = true
+                            },
+                            containerSize: containerSize
+                        )
+                        .transition(.move(edge: .bottom))
+                        .animation(.easeOut(duration: 0.3), value: isPopupPresented)
+                        .allowsHitTesting(isPopupPresented)
+                    }
+
+                    if showCriticalAlertConfirm {
+                        CriticalAlertConfirmBottomPopupView(
+                            onDismiss: {
+                                showCriticalAlertConfirm = false
+                            },
+                            invitedUserIds: Array(DTMeetingManager.shared.currentCall.invitedCriticalAlertUsers),
+                            callType: DTMeetingManager.shared.currentCall.callType,
+                            containerSize: containerSize
+                        )
+                        .transition(.opacity)
+                        .animation(.easeOut(duration: 0.3), value: showCriticalAlertConfirm)
+                    }
+
+                    memberListOverlay(containerSize: containerSize)
                 }
-                
-                memberListOverlay(containerSize: containerSize)
             }
             .frame(width: containerSize.width, height: containerSize.height)
             .onAppear {
@@ -118,6 +158,11 @@ struct CallScreenShareView: View {
     private func handleAppDidBecomeActive() {
         Logger.info("[newcall] screen share view did become active, refreshing reference")
         roomCtx.refreshScreenShareReference()
+    }
+
+    private func displayName(for participant: Participant) -> String {
+        let recipientId = participant.identity?.stringValue.components(separatedBy: ".").first ?? ""
+        return DTLiveKitCallModel.getDisplayName(recipientId: recipientId)
     }
     
     private func screenShareContentView(geometry: GeometryProxy) -> some View {
@@ -194,7 +239,10 @@ struct CallScreenShareView: View {
     }
     
     
-    private func topBarView(safeAreaInsets: EdgeInsets) -> some View {
+    private func topBarView(
+        safeAreaInsets: EdgeInsets,
+        presentation: CallStatusPresentation
+    ) -> some View {
         let barHeight = 62 + safeAreaInsets.top
         return ZStack {
             LinearGradient(
@@ -220,14 +268,17 @@ struct CallScreenShareView: View {
                             .truncationMode(.tail)
                     }
 
-                    let isReconnecting = roomCtx.isRoomReconnecting
-                    if isReconnecting {
-                        Text(Localized("MEETING_NAVAGATION_CONNECTING"))
-                    } else if let duration = timerManager.duration, duration > 0 {
+                    if presentation.showsDisconnectingStatus {
+                        Text(Localized("MEETING_NAVAGATION_DISCONNECTING"))
+                    } else if presentation.showsDuration,
+                              let duration = timerManager.duration {
                         let stringDuration = DTLiveKitCallModel.stringDuration(duration)
-                        Text(stringDuration)
-                    } else if roomCtx.currentCall.callType == .private {
-                        Text(Localized("MEETING_NAVAGATION_CONNECTING"))
+                        HStack(spacing: 4) {
+                            EncryptionInfoButton {
+                                roomCtx.presentEndToEndEncryptionInfo()
+                            }
+                            Text(stringDuration)
+                        }
                     }
                 }
                 .font(.system(size: 16, weight: .medium))

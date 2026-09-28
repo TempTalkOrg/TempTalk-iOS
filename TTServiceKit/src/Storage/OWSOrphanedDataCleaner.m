@@ -80,10 +80,17 @@ NS_ASSUME_NONNULL_BEGIN
             attachmentStreamCount++;
             NSString *_Nullable filePath = [attachmentStream filePath];
             OWSAssertDebug(filePath);
-            [attachmentFilePaths addObject:filePath];
+            if (attachmentStream.isStoredEncrypted) {
+                NSString *_Nullable encryptedFilePath = attachmentStream.encryptedFilePath;
+                if (encryptedFilePath) {
+                    [attachmentFilePaths addObject:encryptedFilePath];
+                }
+            } else {
+                [attachmentFilePaths addObject:filePath];
+            }
 
             NSString *_Nullable thumbnailPath = [attachmentStream thumbnailPath];
-            if (thumbnailPath.length > 0) {
+            if (!attachmentStream.isStoredEncrypted && thumbnailPath.length > 0) {
                 [attachmentFilePaths addObject:thumbnailPath];
             }
         }];

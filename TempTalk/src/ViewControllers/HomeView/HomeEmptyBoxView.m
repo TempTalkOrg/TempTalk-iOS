@@ -10,12 +10,15 @@
 #import "UIFont+OWS.h"
 #import "UIColor+OWS.h"
 #import <TTMessaging/TTMessaging-Swift.h>
+#import <TTServiceKit/Localize_Swift.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
+#import "Yelling-Swift.h"
 
 @interface HomeEmptyBoxView ()
 
 @property (nonatomic, strong) UIImageView *appIcon;
 @property (nonatomic, strong) UILabel *lbEmptyBox;
+@property (nonatomic, strong) DTE2EENoticeTextView *encryptionNoticeView;
 
 @end
 
@@ -27,6 +30,7 @@
         self.backgroundColor = UIColor.clearColor;
         [self addSubview:self.appIcon];
         [self addSubview:self.lbEmptyBox];
+        [self addSubview:self.encryptionNoticeView];
         
         [self.appIcon autoSetDimensionsToSize:CGSizeMake(80, 80)];
         [self.appIcon autoAlignAxisToSuperviewAxis:ALAxisVertical];
@@ -34,6 +38,12 @@
         
         [self.lbEmptyBox autoAlignAxisToSuperviewAxis:ALAxisVertical];
         [self.lbEmptyBox autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.appIcon withOffset:10];
+
+        [self.encryptionNoticeView autoPinEdge:ALEdgeTop toEdge:ALEdgeBottom ofView:self.lbEmptyBox withOffset:20];
+        [self.encryptionNoticeView autoPinEdgeToSuperviewEdge:ALEdgeLeading withInset:24];
+        [self.encryptionNoticeView autoPinEdgeToSuperviewEdge:ALEdgeTrailing withInset:24];
+
+        _showsEncryptionHint = YES;
     }
     
     return self;
@@ -67,9 +77,27 @@
     return _lbEmptyBox;
 }
 
+- (DTE2EENoticeTextView *)encryptionNoticeView {
+    if (!_encryptionNoticeView) {
+        _encryptionNoticeView = [[DTE2EENoticeTextView alloc] initWithStyle:DTE2EENoticeStyleChatList];
+    }
+    return _encryptionNoticeView;
+}
+
+- (void)setShowsEncryptionHint:(BOOL)showsEncryptionHint {
+    _showsEncryptionHint = showsEncryptionHint;
+    self.encryptionNoticeView.hidden = !showsEncryptionHint;
+}
+
+- (void)setDidTapEncryptionHint:(void (^)(void))didTapEncryptionHint {
+    _didTapEncryptionHint = [didTapEncryptionHint copy];
+    self.encryptionNoticeView.didTapLearnMore = _didTapEncryptionHint;
+}
+
 - (void)applyTheme {
     
     self.lbEmptyBox.textColor = Theme.tprimaryColor;
+    [self.encryptionNoticeView applyTheme];
 }
 
 @end

@@ -9,6 +9,7 @@
 #import <CoreServices/CoreServices.h>
 #import "ConversationViewItem.h"
 #import "Yelling-Swift.h"
+#import <TTServiceKit/OWSError.h>
 
 @implementation DTForwardMessageHelper
 
@@ -58,7 +59,7 @@
                 OWSFailDebug(@"%@ Unknown MIME type: %@", self, viewItem.attachmentStream.contentType);
                 utiType = (NSString *)kUTTypeGIF;
             }
-            NSData *data = [NSData dataWithContentsOfURL:[viewItem.attachmentStream mediaURL]];
+            NSData *data = viewItem.attachmentStream.decryptedData;
             if (!data) {
                 OWSFailDebug(@"%@ Could not load attachment data: %@", self, [viewItem.attachmentStream mediaURL]);
             } else {
@@ -297,6 +298,14 @@
                 forwardingMessage = [DTCombinedForwardingMessage buildCombinedForwardingMessageForSendingWithMessages:messages isFromGroup:isFromGroup transaction:transaction];
             }
         });
+        if (!forwardingMessage) {
+            NSError *error = OWSErrorMakeFailedToSendOutgoingMessageError();
+            OWSLogError(@"Failed to prepare attachments for forwarded message: %@", error);
+            if (failure) {
+                failure(error);
+            }
+            return;
+        }
         [ThreadUtil sendMessageWithCombinedForwardingMessage:forwardingMessage
                                                    atPersons:nil
                                                     mentions:nil

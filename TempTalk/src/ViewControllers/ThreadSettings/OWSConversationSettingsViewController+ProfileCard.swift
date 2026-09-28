@@ -10,7 +10,7 @@ import Foundation
 
 @objc
 extension OWSConversationSettingsViewController {
-    func showProfileCardInfo(_ recipientId: String) {
+    func showProfileCardInfo(_ recipientId: String, addFriendSource: AddFriendSource) {
         assert(recipientId.count > 0)
         guard !recipientId.isEmpty ,
               let localNumber = TSAccountManager.shared.localNumber(),
@@ -26,9 +26,9 @@ extension OWSConversationSettingsViewController {
             DTToastHelper.hide()
             var profileCardVC: DTPersonalCardController
             if recipientId == localNumber {
-                profileCardVC = DTPersonalCardController(type: .selfNoneEdit, recipientId: recipientId, account: account)
+                profileCardVC = DTPersonalCardController(type: .selfNoneEdit, recipientId: recipientId, account: account, addFriendSource: addFriendSource)
             } else {
-                profileCardVC = DTPersonalCardController(type: .other, recipientId: recipientId, account: account)
+                profileCardVC = DTPersonalCardController(type: .other, recipientId: recipientId, account: account, addFriendSource: addFriendSource)
             }
             profileCardVC.isFromContacts = true
             self.navigationController?.pushViewController(profileCardVC, animated: true)

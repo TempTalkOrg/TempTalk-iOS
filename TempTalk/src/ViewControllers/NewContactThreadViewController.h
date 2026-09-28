@@ -4,13 +4,13 @@
 
 #import "ConversationItemMacro.h"
 #import <TTMessaging/OWSViewController.h>
-#import <JXPagingView/JXPagerView.h>
+#import <JXCategoryView/JXCategoryView.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 @class TSThread;
 
-@interface NewContactThreadViewController : OWSViewController<JXPagerViewListViewDelegate>
+@interface NewContactThreadViewController : OWSViewController<JXCategoryListContentViewDelegate>
 
 - (void)presentThread:(TSThread *)thread
                action:(ConversationViewAction)action

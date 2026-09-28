@@ -144,11 +144,6 @@ class ConversationIncomingMessageCell: ConversationMessageCell {
         guard !isTouchInHeaderView(gesture: sender) else {
             return
         }
-        //通过用户头像进入
-        if let groupThread = self.renderItem?.viewItem.thread as? TSGroupThread {
-            let groupIdStr = TSGroupThread.transformToServerGroupId(withLocalGroupId: groupThread.groupModel.groupId)
-            DTAddFriendSourceManager.shared.setGroupSource(.inGroupUserIcon, groupId: groupIdStr ?? "")
-        }
         delegate?.messageCell?(self, didTapAvatarWith: recipientId)
     }
     

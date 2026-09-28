@@ -453,7 +453,6 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
             sourceName = TextSecureKitEnv.shared().contactsManager.displayName(forPhoneIdentifier: groupNotifyEntity.source, transaction: transaction)
         }
         
-        let timestamp = Date.ows_millisecondTimestamp()
         let customMessage: String
         if privateChat  {
             customMessage = String(format: NSLocalizedString("GROUP_UPDATE_OPEN_EXT_PRIVATE_CHAT_INFO_MESSAGE", comment: ""), sourceName)
@@ -461,7 +460,7 @@ class GroupNotifyGroupInfoHandler : GroupNotifyHandler {
             customMessage = String(format: NSLocalizedString("GROUP_UPDATE_CLOSE_EXT_PRIVATE_CHAT_INFO_MESSAGE", comment: ""), sourceName)
         }
         
-        let systemMsg = TSInfoMessage(timestamp: timestamp,
+        let systemMsg = TSInfoMessage(timestamp: timeStamp,
                                       in: newGroupThread,
                                       messageType: .typeGroupUpdate,
                                       customMessage: customMessage)

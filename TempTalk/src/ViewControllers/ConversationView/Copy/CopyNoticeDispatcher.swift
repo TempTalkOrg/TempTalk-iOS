@@ -38,7 +38,10 @@ enum CopyNoticeDispatcher {
         messageCount: UInt32,
         combinedForwardMode: DTForwardNoticeCombinedForwardMode = .unknown
     ) {
-        let noticeScope = makeNoticeConversation(for: sourceConversation)
+        guard let noticeScope = makeNoticeConversation(for: sourceConversation) else {
+            Logger.warn("[CopyNotice] skip unsupported thread=\(sourceConversation.uniqueId)")
+            return
+        }
 
         Logger.info("[CopyNotice] send thread=\(sourceConversation.uniqueId) count=\(messageCount) authors=\(sourceAuthorIds.count) combinedForwardMode=\(combinedForwardMode.rawValue)")
 
@@ -111,7 +114,7 @@ enum CopyNoticeDispatcher {
         }
     }
 
-    private static func makeNoticeConversation(for thread: TSThread) -> DTForwardNoticeConversation {
+    private static func makeNoticeConversation(for thread: TSThread) -> DTForwardNoticeConversation? {
         if let group = thread as? TSGroupThread {
             return .group(groupId: group.groupModel.groupId)
         }
@@ -122,7 +125,6 @@ enum CopyNoticeDispatcher {
             }
             return .oneOnOne(number: peer)
         }
-        owsFailDebug("Unexpected thread type: \(type(of: thread))")
-        return .oneOnOne(number: "")
+        return nil
     }
 }

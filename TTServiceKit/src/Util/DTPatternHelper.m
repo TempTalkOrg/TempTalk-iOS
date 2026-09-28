@@ -255,12 +255,6 @@ options: NSRegularExpressionCaseInsensitive error:nil];
     return [invitedCodPredicate evaluateWithObject:url];
 }
 
-+ (BOOL)validateChativeInvitedCode:(NSString *)invitedCode {
-    NSString *invitedCodeRegex = @"^(CHATIVE)\?[0-9a-zA-Z]{8,32}$";
-    NSPredicate *invitedCodPredicate = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", invitedCodeRegex];
-    return [invitedCodPredicate evaluateWithObject:invitedCode];
-}
-
 + (BOOL)validatePeroidChativeInvitedURL:(NSString *)url {
     NSString *invitedCodeRegex = @"^https://chative\\.com/.+\?a=pi&pi=[0-9a-zA-Z_-]{8,32}.*";
     NSPredicate *invitedCodPredicate = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", invitedCodeRegex];
@@ -283,4 +277,3 @@ options: NSRegularExpressionCaseInsensitive error:nil];
 }
 
 @end
-

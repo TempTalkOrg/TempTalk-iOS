@@ -21,6 +21,8 @@
     "AttachmentRecord.lazyRestoreFragmentId": 14,
     "AttachmentRecord.localRelativeFilePath": 15,
     "AttachmentRecord.mostRecentFailureLocalizedText": 16,
+    "AttachmentRecord.preprocessingKind": 28,
+    "AttachmentRecord.preprocessingParams": 29,
     "AttachmentRecord.relay": 17,
     "AttachmentRecord.serverAttachmentId": 18,
     "AttachmentRecord.serverId": 19,

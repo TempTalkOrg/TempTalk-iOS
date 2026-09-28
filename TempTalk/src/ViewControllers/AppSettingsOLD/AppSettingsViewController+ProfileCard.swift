@@ -21,7 +21,7 @@ extension AppSettingsViewController {
         DTToastHelper.showHud(in: self.view)
         DTPersonalCardController.preConfigure(withRecipientId: localNumber) { account in
             DTToastHelper.hide()
-            let profileCardVc = DTPersonalCardController(type: .selfCanEdit, recipientId: localNumber, contact: account?.contact)
+            let profileCardVc = DTPersonalCardController(type: .selfCanEdit, recipientId: localNumber, account: account, addFriendSource: .unspecified)
             profileCardVc.modalPresentationStyle = .popover
             
             let profileCardNav =  DTPanModalNavController.init()

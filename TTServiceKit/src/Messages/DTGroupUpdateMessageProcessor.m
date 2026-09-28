@@ -376,7 +376,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
     
     NSString *updateGroupInfo = nil;
     BOOL tmpShouldAffectSorting = NO;
-    uint64_t timestamp = [NSDate ows_millisecondTimeStamp];
+    uint64_t timestamp = [DTTrustedClock clientStampMs];
     if(envelope.hasSystemShowTimestamp && envelope.systemShowTimestamp > 0){
         timestamp = envelope.systemShowTimestamp;
     } else if (envelope.hasTimestamp && envelope.timestamp > 0) {
@@ -412,7 +412,11 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
         systemMsg.shouldAffectThreadSorting = tmpShouldAffectSorting;
         [systemMsg anyInsertWithTransaction:transaction];
         if([whoJoined containsObject:[TSAccountManager sharedInstance].localNumber] && DTParamsUtils.validateNumber(newGroupModel.publishRule) && ([newGroupModel.publishRule intValue] == 0 || [newGroupModel.publishRule intValue] == 1)){
-            TSInfoMessage * publishRuleUpdateInfoMessage  = [DTGroupUpdateInfoMessageHelper groupUpdatePublishRuleInfoMessage:newGroupModel.publishRule timestamp:[NSDate ows_millisecondTimeStamp] serverTimestamp:envelope.systemShowTimestamp inThread:newGroupThread];
+            uint64_t publishRuleTimestamp = [DTTrustedClock clientStampMs];
+            if (publishRuleTimestamp == timestamp) {
+                publishRuleTimestamp++;
+            }
+            TSInfoMessage * publishRuleUpdateInfoMessage  = [DTGroupUpdateInfoMessageHelper groupUpdatePublishRuleInfoMessage:newGroupModel.publishRule timestamp:publishRuleTimestamp serverTimestamp:envelope.systemShowTimestamp inThread:newGroupThread];
             if(publishRuleUpdateInfoMessage){
                 [publishRuleUpdateInfoMessage anyInsertWithTransaction:transaction];
             }
@@ -491,7 +495,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
         groupNotifyEntity.sourceDeviceId == OWSDevice.currentDeviceId) {
         
         
-        uint64_t timestamp = [NSDate ows_millisecondTimeStamp];
+        uint64_t timestamp = [DTTrustedClock clientStampMs];
         TSGroupModel *newGroupModel = [DTGroupUtils createNewGroupModelWithGroupModel:oldGroupModel];
         [self processGroupUpdateDetailNotifyForSelfHandlerWithEnvelope:envelope
                                                      groupNotifyEntity:groupNotifyEntity
@@ -556,10 +560,9 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
             if (groupNotifyEntity.groupNotifyDetailedType == DTGroupNotifyDetailTypeUpgradeGroupCrypto
                 && display
                 && oldGroupModel.groupCryptoMode == 0) {
-                uint64_t ts = [NSDate ows_millisecondTimeStamp];
-                if (envelope.hasSystemShowTimestamp && envelope.systemShowTimestamp > 0) {
-                    ts = envelope.systemShowTimestamp;
-                }
+                uint64_t ts = envelope.hasSystemShowTimestamp && envelope.systemShowTimestamp > 0
+                    ? envelope.systemShowTimestamp
+                    : [DTTrustedClock clientStampMs];
                 TSInfoMessage *upgradeMsg = [[TSInfoMessage alloc] initWithTimestamp:ts
                                                                             inThread:newGroupThread
                                                                          messageType:TSInfoMessageGroupCryptoUpgrade
@@ -594,10 +597,9 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
         }
     }
     
-    uint64_t timestamp = [NSDate ows_millisecondTimeStamp];
-    if(envelope.hasSystemShowTimestamp && envelope.systemShowTimestamp > 0){
-        timestamp = envelope.systemShowTimestamp;
-    }
+    uint64_t timestamp = envelope.hasSystemShowTimestamp && envelope.systemShowTimestamp > 0
+        ? envelope.systemShowTimestamp
+        : [DTTrustedClock clientStampMs];
     
     [self processGroupUpdateDetailNotifyHandlerWithEnvelope:envelope
                                           groupNotifyEntity:groupNotifyEntity
@@ -714,7 +716,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                     }
 
                     if(needSystemMessage && updateGroupSting.length){
-                        uint64_t timestamp = [NSDate ows_millisecondTimeStamp];
+                        uint64_t timestamp = [DTTrustedClock clientStampMs];
                         if(envelope.hasSystemShowTimestamp && envelope.systemShowTimestamp > 0){
                             timestamp = envelope.systemShowTimestamp;
                         }
@@ -875,7 +877,8 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                                                                       shouldAffectThreadSorting:&tmpShouldAffectSorting
                                                                                     transaction:transaction];
         if(!isNewGroupThread && [joinedMemberIds containsObject:[TSAccountManager sharedInstance].localNumber] && DTParamsUtils.validateNumber(newGroupModel.publishRule) && ([newGroupModel.publishRule intValue] == 0 || [newGroupModel.publishRule intValue] == 1)){
-            TSInfoMessage * publishRuleUpdateInfoMessage  = [DTGroupUpdateInfoMessageHelper groupUpdatePublishRuleInfoMessage:newGroupModel.publishRule timestamp:[NSDate ows_millisecondTimeStamp] serverTimestamp:envelope.systemShowTimestamp inThread:thread];
+            uint64_t timestamp = [DTTrustedClock clientStampMs];
+            TSInfoMessage * publishRuleUpdateInfoMessage  = [DTGroupUpdateInfoMessageHelper groupUpdatePublishRuleInfoMessage:newGroupModel.publishRule timestamp:timestamp serverTimestamp:envelope.systemShowTimestamp inThread:thread];
             if(publishRuleUpdateInfoMessage){
                 [publishRuleUpdateInfoMessage anyInsertWithTransaction:transaction];
             }
@@ -1073,7 +1076,7 @@ NSString *const DTGroupMessageExpiryConfigChangedNotification = @"kGroupMessageE
                                groupNotifyEntity:nil
                                      transaction:transaction];
     
-    uint64_t timestamp = [NSDate ows_millisecondTimeStamp];
+    uint64_t timestamp = [DTTrustedClock clientStampMs];
     NSString *customMessage = [NSString stringWithFormat:Localized(@"GROUP_MEMBER_JOINED", @""), Localized(@"YOU", @"")];
 
     TSInfoMessage *systemMsg = [[TSInfoMessage alloc] initWithTimestamp:timestamp

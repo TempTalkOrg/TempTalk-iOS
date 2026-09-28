@@ -116,7 +116,7 @@ public final class DTGifFavoriteSendManager: NSObject {
             Logger.error("[GifFav] message favorite skipped — missing encryption key")
             return
         }
-        let localPath = stream.filePath()
+        let localPath = stream.isStoredEncrypted ? nil : stream.filePath()
         if let localPath {
             DTGifFavoriteAssetLoader.shared.seedLocalAsset(fileHash: fileHash, sourcePath: localPath)
         }

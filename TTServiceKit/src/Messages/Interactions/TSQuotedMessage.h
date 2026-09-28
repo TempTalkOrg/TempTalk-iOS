@@ -76,10 +76,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (atomic, readonly) NSArray<OWSAttachmentInfo *> *quotedAttachments;
 
-// Before sending, persist a thumbnail attachment derived from the quoted attachment
-- (NSArray<TSAttachmentStream *> *)createThumbnailAttachmentsIfNecessaryWithTransaction:
-    (SDSAnyWriteTransaction *)transaction;
-
 - (instancetype)init NS_UNAVAILABLE;
 
 // used when receiving quoted messages

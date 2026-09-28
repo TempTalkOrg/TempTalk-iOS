@@ -273,7 +273,7 @@ static const NSUInteger OWSMessageSchemaVersion = 4;
         return;
     }
     
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    uint64_t now = [DTTrustedClock now];
     if (expireStartedAt > now) {
         DDLogWarn(@"%@ in %s using `now` instead of future time", self.logTag, __PRETTY_FUNCTION__);
     }

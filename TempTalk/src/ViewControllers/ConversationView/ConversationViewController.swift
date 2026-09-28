@@ -28,6 +28,12 @@ final class ConversationViewController: OWSViewController {
     var curRecipientId: String?
     var curCallModel: DTLiveKitCallModel?
 
+    /// Provenance carried in from whatever opened this conversation — a personal card reached from
+    /// a group or from an invite link keeps its source across the jump into the chat, so a friend
+    /// request sent here still reports how we actually met. Group threads answer for themselves;
+    /// see `contextualAddFriendSource`.
+    var enteredFromAddFriendSource: AddFriendSource?
+
     /// 标记是否已经执行过未读数矫正（每次会话打开时重置）
     private var hasCorrectUnreadCount = false
 
@@ -131,10 +137,34 @@ final class ConversationViewController: OWSViewController {
         updateBarButtonItems()
         updateNavigationTitle()
 
-        // If a pending initial-load snapshot is waiting, refreshing it already runs resetContentAndLayout,
-        // so skip the sneaky reset to avoid two back-to-back resets.
-        if !processPendingInitialMessagesIfNeeded() {
-            resetContentAndLayoutWithSneakyTransaction()
+        // Initial presentation still needs a complete snapshot. On subsequent
+        // appearances, only apply database changes accumulated while off-screen;
+        // opening and closing a card/viewer without changes does not touch cells.
+        if processPendingInitialMessagesIfNeeded() {
+            viewState.pendingConversationCollectionUpdate = .none
+            viewState.pendingConversationShouldScrollToBottom = false
+            viewState.pendingConversationLoadMoreHeaderLayoutUpdate = false
+        } else if !viewHasEverAppeared {
+            // Signal keeps the conversation content suppressed until its first
+            // render state is ready. The initial-load callback owns that one full
+            // snapshot; applying a provisional snapshot here causes a second reload
+            // and a visible position jump when the real data arrives.
+            viewState.pendingConversationCollectionUpdate = .none
+            viewState.pendingConversationShouldScrollToBottom = false
+            viewState.pendingConversationLoadMoreHeaderLayoutUpdate = false
+        } else if viewState.isNeedReloadAfterAppEnterForeground {
+            // A foreground notification may have arrived while this controller was covered by
+            // another screen. Perform the deferred full reload only after it is visible again.
+            reloadAfterAppEnterForegroundIfNeed()
+        } else {
+            let didChangeLoadMoreHeaderState = updateShowLoadMoreHeaders()
+            let forceLoadMoreHeaderLayoutUpdate =
+                viewState.pendingConversationLoadMoreHeaderLayoutUpdate
+                || didChangeLoadMoreHeaderState
+            viewState.pendingConversationLoadMoreHeaderLayoutUpdate = false
+            applyPendingCollectionUpdateIfNeeded(
+                forceLoadMoreHeaderLayoutUpdate: forceLoadMoreHeaderLayoutUpdate
+            )
         }
         
         updateLastVisibleSortIdWithSneakyAsyncTransaction()
@@ -666,7 +696,7 @@ extension ConversationViewController {
         
         let readPosition = DTReadPositionEntity(
             groupId: groupId,
-            readAt: NSDate.ows_millisecondTimeStamp(),
+            readAt: DTTrustedClock.now(),
             maxServerTime: lastVisibleSortId,
             notifySequenceId: self.lastNotifySequenceId,
             maxSequenceId: self.lastMsgSequenceId
@@ -793,6 +823,7 @@ extension ConversationViewController {
         collectionView.backgroundColor = Theme.bg1Color
 
         headerView.applyTheme()
+        joinCallView.applyTheme()
         updateNavigationBarSubtitleLabel()
 
         applyThemeForForwardToolbar()

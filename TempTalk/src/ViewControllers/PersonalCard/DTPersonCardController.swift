@@ -26,7 +26,11 @@ class DTPersonalCardController: OWSTableViewController,
     var recipientId: String?
     var account: SignalAccount
     var type: DTPersonalCardType
-    
+
+    /// How the local user got to this card. Reported verbatim when the card sends a friend request,
+    /// so it must be supplied by whoever opened the card — this screen cannot infer it.
+    let addFriendSource: AddFriendSource
+
     var iconImage: DTAvatarImageView?
     let avatarViewHelper: AvatarViewHelper = AvatarViewHelper()
     var alertController: UIAlertController?
@@ -62,7 +66,10 @@ class DTPersonalCardController: OWSTableViewController,
         self.avatarViewHelper.delegate = self
     }
     
-    @objc init(type: DTPersonalCardType, recipientId: String, account: SignalAccount?) {
+    @objc init(type: DTPersonalCardType,
+               recipientId: String,
+               account: SignalAccount?,
+               addFriendSource: AddFriendSource) {
         self.type = type
         self.recipientId = recipientId
         if let account {
@@ -70,6 +77,7 @@ class DTPersonalCardController: OWSTableViewController,
         } else {
             self.account = SignalAccount(recipientId: recipientId)
         }
+        self.addFriendSource = addFriendSource
         self.viewDidAppear = false
         super.init()
     }
@@ -1266,6 +1274,7 @@ extension DTPersonalCardController : DTQuickActionCellDelegate {
     
     func pushConversation(thread: TSThread) {
         let conversationVC = ConversationViewController(thread: thread, action: .none)
+        conversationVC.enteredFromAddFriendSource = addFriendSource
 
         // 优先使用当前的 navigationController（处理从通讯录push进来的情况）
         if let nav = self.navigationController {
@@ -1286,7 +1295,8 @@ extension DTPersonalCardController : DTQuickActionCellDelegate {
     func showFloatingConversation(thread: TSThread, config: FloatingConversationConfiguration) {
         topViewController()?.showFloatingConversation(
             with: thread,
-            configuration: config
+            configuration: config,
+            addFriendSource: addFriendSource
         )
     }
     
@@ -1332,16 +1342,21 @@ extension DTPersonalCardController : DTQuickActionCellDelegate {
             if self.contactRelation != .friend {
                 // Navigate only when the friend request succeeds; on any failure (incl. the
                 // account-unavailable alert) stay on this page. Matches Android behavior.
-                AddFriendHandler.handleRequestAddFriend(identifier: recipientId,
-                                                        sourceType: .inUserCard,
-                                                        sourceConversationID: nil,
-                                                        shareContactCardUId: nil,
-                                                        action: nil,
-                                                        proceedHandler: { [weak self] in
-                    DispatchQueue.main.async {
-                        self?.openConversation(recipientId: recipientId)
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    do {
+                        try await AddFriendHandler.handleRequestAddFriend(
+                            identifier: recipientId,
+                            source: self.addFriendSource
+                        )
+                        self.openConversation(recipientId: recipientId)
+                    } catch AddFriendHandler.AddFriendError.accountUnavailable {
+                        // Unified account-unavailable UI already shown by AddFriendHandler.
+                        OWSLogger.info("[AddFriend] personal card: account unavailable (19009)")
+                    } catch {
+                        OWSLogger.error("[AddFriend] personal card error: \((error as NSError).localizedDescription)")
                     }
-                })
+                }
                 return
             }
 

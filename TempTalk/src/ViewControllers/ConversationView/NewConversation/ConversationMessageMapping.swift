@@ -133,14 +133,15 @@ public class ConversationMessageMapping: NSObject {
     @objc
     public func loadInitialMessagePage(focusMessageId: String?, transaction: SDSAnyReadTransaction) throws {
         try updateOldestUnreadInteraction(transaction: transaction)
-        Logger.info("[Conversation] begin focusId=\(focusMessageId ?? "nil") oldestUnread=\(self.oldestUnreadInteraction?.uniqueId ?? "nil") thread=\(thread.uniqueId)")
+        updateOldestFailedOutgoingInteraction(transaction: transaction)
+        Logger.info("[Conversation] begin focusId=\(focusMessageId ?? "nil") oldestUnread=\(self.oldestUnreadInteraction?.uniqueId ?? "nil") oldestFailed=\(self.oldestFailedOutgoingInteraction?.uniqueId ?? "nil") thread=\(thread.uniqueId)")
 
         if let focusMessageId = focusMessageId {
             try ensureLoaded(.around(interactionUniqueId: focusMessageId),
                              count: initialLoadCount * 2,
                              transaction: transaction)
-        } else if let oldestUnreadInteraction = self.oldestUnreadInteraction {
-            try ensureLoaded(.around(interactionUniqueId: oldestUnreadInteraction.uniqueId),
+        } else if let anchorInteraction = oldestUnreadOrFailedAnchor {
+            try ensureLoaded(.around(interactionUniqueId: anchorInteraction.uniqueId),
                              count: initialLoadCount * 2,
                              transaction: transaction)
         } else {
@@ -412,9 +413,33 @@ public class ConversationMessageMapping: NSObject {
         }
     }
     private var _oldestUnreadInteraction: AtomicOptional<TSInteraction> = .init(nil, lock: .sharedGlobal)
-    
+
     private func updateOldestUnreadInteraction(transaction: SDSAnyReadTransaction) throws {
         self.oldestUnreadInteraction = try interactionFinder.oldestUnseenInteraction(transaction: transaction)
+    }
+
+    @objc
+    var oldestFailedOutgoingInteraction: TSInteraction? {
+        get {
+            _oldestFailedOutgoingInteraction.get()
+        }
+        set {
+            _oldestFailedOutgoingInteraction.set(newValue)
+        }
+    }
+    private var _oldestFailedOutgoingInteraction: AtomicOptional<TSInteraction> = .init(nil, lock: .sharedGlobal)
+
+    private func updateOldestFailedOutgoingInteraction(transaction: SDSAnyReadTransaction) {
+        self.oldestFailedOutgoingInteraction = interactionFinder.oldestFailedOutgoingInteraction(transaction: transaction)
+    }
+
+    /// Unread messages and failed sends rank equally when opening a conversation, so we
+    /// anchor the load window on whichever is older — otherwise the newer of the two
+    /// would scroll past the older one, which the user would never see.
+    private var oldestUnreadOrFailedAnchor: TSInteraction? {
+        return [oldestUnreadInteraction, oldestFailedOutgoingInteraction]
+            .compactMap { $0 }
+            .min { $0.timestampForSorting() < $1.timestampForSorting() }
     }
 
     private func reloadInteractions(transaction: SDSAnyReadTransaction) throws {

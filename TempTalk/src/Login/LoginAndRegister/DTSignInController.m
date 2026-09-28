@@ -246,7 +246,7 @@ NSString *const kSendEmailCodeForChangePhoneSucess = @"kSendEmailCodeForChangePh
             [DTChatLoginUtils checkOrResetTimeStampWith:tfText key:kSendEmailCodeForLoginSucess];
             DTVerificationCodeController *verificationCodeVC = [[DTVerificationCodeController alloc] initWithEmail:tfText];
             ///需要知道是Email 还是 Phone
-            if(self.signInModeType == DTSignInModeTypeLogin || self.signInModeType == DTSignInModeTypeRegisterViaInviteCode){
+            if(self.signInModeType == DTSignInModeTypeLogin){
                 verificationCodeVC.loginModeType = DTLoginModeTypeRegisterEmailFromLogin;
             } else {
                 verificationCodeVC.loginModeType = DTLoginModeTypeChangeEmailFromMe;

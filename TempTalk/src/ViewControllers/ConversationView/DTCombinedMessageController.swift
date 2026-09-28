@@ -807,6 +807,10 @@ extension DTCombinedMessageController: MessageActionsDelegate {
         // Combined message controller 中不支持引用
     }
 
+    func messageActionsResendItem(_ conversationViewItem: ConversationViewItem) {
+        // Combined message controller 中只展示已送达的消息，不存在发送失败的场景
+    }
+
     func messageActionsForwardItem(_ conversationViewItem: ConversationViewItem) {
         // 转发整条消息
         guard let message = conversationViewItem.interaction as? TSMessage else {

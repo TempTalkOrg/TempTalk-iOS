@@ -21,14 +21,23 @@ extension DTMeetingManager {
 
     // MARK: - endCallAction (caller-side top-level exit)
 
+    @MainActor
     func endCallAction(forceEndGroupMeeting: Bool = false) async {
         Logger.info("Actively end the call")
 
-        if currentCall.callType == .private, currentCall.isCaller, !inMeeting {
+        let effectiveForceEndGroupMeeting = Self.resolveForceEndGroupMeetingOnExit(
+            requestedForceEnd: forceEndGroupMeeting,
+            call: currentCall
+        )
+        if effectiveForceEndGroupMeeting && !forceEndGroupMeeting {
+            Logger.info("\(logTag) early initiator exit upgraded to end")
+        }
+
+        if usesOneToOneConnectionFlow, currentCall.isCaller, !inMeeting {
             await cancelLocalCall()
         } else {
             var roomId: String?
-            if currentCall.callType == .private {
+            if usesOneToOneConnectionFlow {
                 roomId = currentCall.roomId
             } else if let roomContext, roomContext.room.remoteParticipants.isEmpty {
                 roomId = currentCall.roomId
@@ -40,21 +49,36 @@ extension DTMeetingManager {
             {
                 await hangupCall(needSyncCallKit: true,
                                  isByLocal: true,
-                                 forceEndGroupMeeting: forceEndGroupMeeting,
+                                 forceEndGroupMeeting: effectiveForceEndGroupMeeting,
                                  roomId: roomId)
                 Logger.info("endcall need remove join")
             } else {
                 await hangupCall(needSyncCallKit: true,
                                  isByLocal: true,
-                                 forceEndGroupMeeting: forceEndGroupMeeting,
+                                 forceEndGroupMeeting: effectiveForceEndGroupMeeting,
                                  roomId: currentCall.roomId)
                 Logger.info("endcall hangup exception")
             }
         }
     }
 
+    /// A start that never came back has no room and no joiners, so an early initiator exit must
+    /// end the call to stop the invitees ringing. `roomId == nil` bounds this to that window: a
+    /// rejoin always knows the room, so it can never end a live meeting. 1v1 cancels above.
+    static func resolveForceEndGroupMeetingOnExit(
+        requestedForceEnd: Bool,
+        call: DTLiveKitCallModel
+    ) -> Bool {
+        requestedForceEnd ||
+            (call.isInitiator &&
+             call.callType != .private &&
+             call.roomId == nil &&
+             call.ttcalResponseBody == nil)
+    }
+
     // MARK: - hangupCall
 
+    @MainActor
     func hangupCall(needSyncCallKit: Bool,
                     isByLocal: Bool = false,
                     forceEndGroupMeeting: Bool = false,
@@ -70,7 +94,7 @@ extension DTMeetingManager {
 
         // roomId mismatch guard (non-CallKit: skip hangup for other meeting)
         if let roomId, !isFromCallKit, let currentRoomId = currentCall.roomId, roomId != currentRoomId {
-            if currentCall.callType == .private || forceEndGroupMeeting {
+            if usesOneToOneConnectionFlow || forceEndGroupMeeting {
                 handleMeetingBar(roomId: roomId, action: .remove)
             }
             Logger.info("\(logTag) roomId != currentCall.roomId, skip hangup for other meeting. roomId: \(roomId), currentRoomId: \(currentRoomId)")
@@ -106,11 +130,12 @@ extension DTMeetingManager {
 
     // MARK: - othersideHungupCall
 
+    @MainActor
     func othersideHungupCall(roomId: String) async {
         Logger.info("\(logTag) otherside HungupCall, current state: \(lifecycleState)")
 
         let wasInMeeting: Bool = {
-            if currentCall.callType == .private {
+            if usesOneToOneConnectionFlow {
                 let remoteJoined = roomContext?.room.remoteParticipants.isEmpty == false
                 let hasAnswered = currentCall.callState == .answering
                 return lifecycleState == .connected || remoteJoined || hasAnswered
@@ -168,6 +193,13 @@ extension DTMeetingManager {
     func remoteCallHaveBeenCanceled() async {
         Logger.info("\(logTag) cancel remote call, current state: \(lifecycleState)")
         await hangupCoordinator.terminate(reason: .remoteCancel)
+    }
+
+    /// Another device of this account answered: stop ringing here, but leave the meeting bar in
+    /// place so this device can still join the still-live call.
+    func answeredOnLinkedDevice() async {
+        Logger.info("\(logTag) answered on linked device, current state: \(lifecycleState)")
+        await hangupCoordinator.terminate(reason: .answeredOnLinkedDevice)
     }
 }
 
@@ -298,6 +330,10 @@ extension DTMeetingManager {
 
     static func checkRoomIdValid(_ roomId: String) async -> (anotherDeviceJoined: Bool, userStopped: Bool)? {
         await DTCallAPIManager().checkRoomIdValid(roomId)
+    }
+
+    static func checkRoomAvailability(_ roomId: String) async -> CallRoomAvailability {
+        await DTCallAPIManager().checkRoomAvailability(roomId)
     }
 
     private func hideToast() {

@@ -241,8 +241,7 @@ private extension ConversationViewController {
         }
         if let attachmentStream = attachment as? TSAttachmentStream {
             var text: String?
-            if let mediaURL = attachmentStream.mediaURL(),
-                let data = try? Data(contentsOf: mediaURL) {
+            if let data = attachmentStream.decryptedData() {
                 text = String(data: data, encoding: .utf8)
             }
             if attachmentStream.contentType == OWSMimeTypeOversizeTextMessage, let text {
@@ -334,8 +333,7 @@ private extension ConversationViewController {
     ) {
         let attachmentStream = conversationViewItem.attachmentStream()
         var text: String?
-        if let mediaURL = attachmentStream?.mediaURL(),
-            let data = try? Data(contentsOf: mediaURL) {
+        if let data = attachmentStream?.decryptedData() {
             text = String(data: data, encoding: .utf8)
         }
         if let attachmentStream, attachmentStream.contentType == OWSMimeTypeOversizeTextMessage, let text,
@@ -425,6 +423,8 @@ private extension ConversationViewController {
             }
             
         } failure: { error in
+            // Surface the network error (invalidResponse / serviceResponse(status)) for diagnosis.
+            Logger.error("\(self.logTag) translate request failed: \(error)")
             self.handleTranslateState(
                 message: message,
                 languageType: targetLanguage,
@@ -477,7 +477,7 @@ private extension ConversationViewController {
         databaseStorage.write { writeTransaction in
             let upinfo = DTGroupUtils.getTranslateSettingChangedInfoString(withUserChange: type)
             if !upinfo.isEmpty {
-                let now = Date.ows_millisecondTimestamp()
+                let now = DTTrustedClock.clientStampMs()
                 let infoMessage = TSInfoMessage(
                     timestamp: now,
                     in: self.thread,

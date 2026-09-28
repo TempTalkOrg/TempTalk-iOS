@@ -15,8 +15,7 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
     @objc
     static let reuseIdentifier = "ConversationOutgoingMessageCell"
     
-    private var sendFailedBadgeView: UIImageView?
-    private var sendFailedLeftView: UIImageView?
+    private var sendFailedTipView: ConversationSendFailedTipView?
     private var audioControlButton: UIView?
     
     // MARK: - Override
@@ -85,10 +84,9 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
         guard let outgoingRenderItem = renderItem as? ConversationOutgoingMessageRenderItem else {
             return
         }
-//        configureSendFailureBadgeView(renderItem: outgoingRenderItem)
         configureReadStatusImageView(renderItem: outgoingRenderItem)
         configureAudioControlButton(renderItem: outgoingRenderItem)
-        configureSendFailureLeftView(renderItem: outgoingRenderItem)
+        configureSendFailedTipView(renderItem: outgoingRenderItem)
 
         // 关联 cell 到 viewItem，以便在音频播放状态改变时更新按钮
         renderItem.viewItem.associateAudioCell(self)
@@ -101,6 +99,7 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
     
     override func refreshTheme() {
         super.refreshTheme()
+        sendFailedTipView?.refreshTheme()
         if footerView.isHidden {
             readStatusImageView.tintColor = Theme.tthirdColor
             readStatusImageView.titleLable.textColor = Theme.tthirdColor
@@ -122,8 +121,6 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
             return
         }
         configureAudioControlButton(renderItem: renderItem)
-        // 音频控制按钮状态改变后，需要更新失败标记的位置
-        configureSendFailureLeftView(renderItem: renderItem)
     }
     
     // MARK: - Actions
@@ -133,7 +130,7 @@ class ConversationOutgoingMessageCell: ConversationMessageCell {
         delegate?.messageCell?(self, didTapReadStatusWith: viewItem)
     }
     
-    @objc private func sendFailedBridgeViewDidClick() {
+    private func sendFailedTipViewDidClick() {
         guard let outgoingMessage = renderItem?.viewItem.interaction as? TSOutgoingMessage else {
             return
         }
@@ -227,87 +224,38 @@ extension ConversationOutgoingMessageCell {
         }
     }
     
-    private func configureSendFailureBadgeView(renderItem: ConversationOutgoingMessageRenderItem) {
+    private func configureSendFailedTipView(renderItem: ConversationOutgoingMessageRenderItem) {
         guard renderItem.shouldDisplaySendFailedBadge else {
-            if let sendFailedBadgeView, !sendFailedBadgeView.isHidden {
-                sendFailedBadgeView.isHidden = true
+            if let sendFailedTipView, !sendFailedTipView.isHidden {
+                sendFailedTipView.isHidden = true
             }
             return
         }
-        let badgeView: UIImageView = {
-            guard let sendFailedBadgeView else {
-                let imageView = UIImageView()
-                let image = UIImage(named: "message_status_failed_red")?.withRenderingMode(.alwaysTemplate)
-                imageView.image = image
-                imageView.isUserInteractionEnabled = true
-                let tap = UITapGestureRecognizer(target: self, action: #selector(sendFailedBridgeViewDidClick))
-                imageView.addGestureRecognizer(tap)
-                messageContainerView.addSubview(imageView)
-                if footerView.isHidden {
-                    imageView.snp.remakeConstraints { make in
-                        make.width.height.equalTo(ConversationOutgoingMessageRenderItem.readStatusImageSize)
-                        make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace)
-                        make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace)
-                    }
-                } else {
-                    imageView.snp.remakeConstraints { make in
-                        make.width.height.equalTo(ConversationOutgoingMessageRenderItem.readStatusImageSize)
-                        make.trailing.equalTo(messageBubbleView.snp.trailing).offset(-CVMessageFooterRenderItem.footerViewSpace*2.0)
-                        make.bottom.equalTo(messageBubbleView.snp.bottom).offset(-CVMessageFooterRenderItem.footerViewSpace*1.5)
-                    }
+        let tipView: ConversationSendFailedTipView = {
+            guard let sendFailedTipView else {
+                let tipView = ConversationSendFailedTipView()
+                tipView.tapHandler = { [weak self] in
+                    self?.sendFailedTipViewDidClick()
                 }
-                
-                self.sendFailedBadgeView = imageView
-                return imageView
-            }
-            return sendFailedBadgeView
-        }()
-        badgeView.isHidden = false
-        badgeView.tintColor = .ows_destructiveRed
-    }
-    
-    private func configureSendFailureLeftView(renderItem: ConversationOutgoingMessageRenderItem) {
-        guard renderItem.shouldDisplaySendFailedBadge else {
-            if let sendFailedLeftView, !sendFailedLeftView.isHidden {
-                sendFailedLeftView.isHidden = true
-            }
-            return
-        }
-        let badgeView: UIImageView = {
-            guard let sendFailedLeftView else {
-                let imageView = UIImageView()
-                let image = UIImage(named: "Conversation_send_failed")?.withRenderingMode(.alwaysTemplate)
-                imageView.image = image
-                imageView.isUserInteractionEnabled = true
-                let tap = UITapGestureRecognizer(target: self, action: #selector(sendFailedBridgeViewDidClick))
-                imageView.addGestureRecognizer(tap)
-                contentView.addSubview(imageView)
+                contentView.addSubview(tipView)
 
-                self.sendFailedLeftView = imageView
-                return imageView
+                tipView.snp.makeConstraints { make in
+                    make.height.equalTo(ConversationSendFailedTipView.viewHeight)
+                    make.trailing.equalTo(messageBubbleView.snp.trailing)
+                    make.top.equalTo(messageBubbleView.snp.bottom).offset(ConversationSendFailedTipView.bubbleSpacing)
+                    // The row sizes to its text, so a long localization must stop at the
+                    // avatar gutter instead of running off the leading edge.
+                    make.leading.greaterThanOrEqualTo(contentView.snp.leading).offset(52)
+                }
+
+                self.sendFailedTipView = tipView
+                return tipView
             }
-            return sendFailedLeftView
+            return sendFailedTipView
         }()
 
-        // 根据音频控制按钮的状态来调整失败标记的位置
-        let viewItem = renderItem.viewItem
-        let isAudioMessage = viewItem.messageCellType() == .audio
-        let isAudioPlaying = viewItem.audioPlaybackState() == .playing
-
-        badgeView.snp.remakeConstraints { make in
-            make.size.width.height.equalTo(16)
-            if isAudioMessage && isAudioPlaying, let audioControlButton = self.audioControlButton, !audioControlButton.isHidden {
-                // 音频消息且控制按钮显示时，失败标记在控制按钮左边
-                make.trailing.equalTo(audioControlButton.snp.leading).offset(-8)
-            } else {
-                // 其他情况，失败标记在气泡左边
-                make.trailing.equalTo(messageBubbleView.snp.leading).offset(-8)
-            }
-            make.centerY.equalTo(messageBubbleView)
-        }
-
-        badgeView.isHidden = false
-        badgeView.tintColor = .ows_destructiveRed
+        tipView.refreshTheme()
+        tipView.isHidden = false
     }
     
     private func configureReadStatusImageView(renderItem: ConversationOutgoingMessageRenderItem) {

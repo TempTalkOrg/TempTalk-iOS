@@ -27,7 +27,7 @@ extension ConversationViewController: ConversationMessageCellDelegate {
         // 如果是从 PersonalCard 打开的浮动窗口，不弹出个人卡
         guard !isFromPersonalCard else { return }
 
-        showPersonalInfoCard(recipientId: recipientId)
+        showPersonalInfoCard(recipientId: recipientId, addFriendSource: contextualAddFriendSource)
     }
     
     func messageCell(_ cell: ConversationMessageCell, didLongPressAvatarWith recipientId: String, senderName: String?) {
@@ -79,15 +79,24 @@ extension ConversationViewController: ConversationMessageCellDelegate {
     }
     
     func messageCell(_ cell: ConversationMessageCell, didTapFailedOutgoingMessage message: TSOutgoingMessage) {
+        resendFailedMessage(message)
+    }
+
+    /// Shared by the bubble's "Tap to retry" hint row and the long-press menu's Resend action.
+    func resendFailedMessage(_ message: TSOutgoingMessage) {
         AssertIsOnMainThread()
 
         guard isCanSpeak else { return }
 
         dismissKeyBoard(byUserAction: true)  // 用户点击重发，标记为用户操作
+        OWSLogger.info("[SendStatusTrace] retry started id=\(message.uniqueId) state=\(NSStringForOutgoingMessageState(message.messageState))")
         messageSender.enqueue(message) { [weak self] in
-            OWSLogger.info("\(self?.logTag ?? "") Successfully resent failed message.")
+            OWSLogger.info("[SendStatusTrace] \(self?.logTag ?? "") retry succeeded id=\(message.uniqueId)")
+            DispatchMainThreadSafe { [weak self] in
+                self?.conversationViewModel.refreshInteraction(withUniqueId: message.uniqueId)
+            }
         } failure: { [weak self] error in
-            OWSLogger.info("\(self?.logTag ?? "") Failed to send message with error: \(error.localizedDescription)")
+            OWSLogger.error("[SendStatusTrace] \(self?.logTag ?? "") retry failed id=\(message.uniqueId) error=\(error.localizedDescription)")
         }
     }
     

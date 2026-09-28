@@ -18,6 +18,7 @@
 #import "TSThread.h"
 #import "DTFileRequestHandler.h"
 #import "DTFileDownloader.h"
+#import <AVFoundation/AVFoundation.h>
 #import <TTServiceKit/TTServiceKit-Swift.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -168,11 +169,23 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
 
             successHandler(attachmentStream);
 
-            if (message.messageModeType == TSMessageModeTypeNormal) {
+            // Auto-save is off by default. Consult the policy before decrypting: both
+            // branches below materialize the whole attachment in memory, and discarding
+            // that work is a needless 2x spike on every received photo and video.
+            if (message.messageModeType == TSMessageModeTypeNormal
+                && [[MediaSavePolicyManager shared] shouldSaveMediaForThreadId:message.uniqueThreadId]) {
                 if (attachmentStream.isImage) {
                     [[MediaSavePolicyManager shared] saveImageIfNeeded:attachmentStream.image threadId:message.uniqueThreadId];
                 } else if (attachmentStream.isVideo) {
-                    [[MediaSavePolicyManager shared] saveVideoIfNeeded:attachmentStream.mediaURL threadId:message.uniqueThreadId];
+                    NSError *readError = nil;
+                    NSData *_Nullable videoData = [attachmentStream readDataFromFileWithError:&readError];
+                    if (videoData && !readError) {
+                        [[MediaSavePolicyManager shared] saveVideoDataIfNeeded:videoData
+                                                                  contentType:attachmentStream.contentType
+                                                                     threadId:message.uniqueThreadId];
+                    } else {
+                        OWSLogError(@"%@ could not read video to auto-save: %@", self.logTag, readError);
+                    }
                 }
             }
 
@@ -344,35 +357,13 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
 
 + (void)decryptVoiceAttachment:(TSAttachmentStream *)attachment
 {
-    
     if (!attachment.isVoiceMessage) {
         DDLogInfo(@"%@ is not a voice message.", self.logTag);
         return;
     }
-    
-    if ([[NSFileManager defaultManager] fileExistsAtPath:attachment.filePath]) {
-        DDLogInfo(@"%@ plaintext voice message exists.", self.logTag);
-        return;
-    }
-    
-    NSError *error;
-    NSData *encryptedData = [attachment readEncryptedDataFromFileWithError:&error];
-    if (error) {
-        OWSLogError(@"%@ Failed to read voice attachment data with error: %@", self.logTag, error);
-        return;
-    }
-    
-    NSError *decryptError;
-    NSData *_Nullable plaintext = [SSKCryptography decryptAttachment:encryptedData
-                                                             withKey:attachment.encryptionKey
-                                                           digest:attachment.digest
-                                                       useMd5Hash:YES
-                                                     unpaddedSize:attachment.byteCount
-                                                            error:&decryptError];
-    NSError *writeError;
-    [attachment writeData:plaintext error:&writeError];
-    if (writeError) {
-        DDLogError(@"%@ Failed writing voice attachment with error: %@", self.logTag, writeError);
+    // Compatibility shim; encrypted audio is played from memory.
+    if (attachment.isStoredEncrypted) {
+        [attachment removePlaintextFile];
     }
 }
 
@@ -425,61 +416,79 @@ static const CGFloat kAttachmentDownloadProgressTheta = 0.001f;
 
     TSAttachmentStream *stream = [[TSAttachmentStream alloc] initWithPointer:attachment albumMessageId:attachment.albumMessageId albumId:attachment.albumId];
 
-    NSError *writeError;
-    [stream writeData:plaintext error:&writeError];
+    // Persist only authenticated ciphertext.
+    NSError *writeError = nil;
+    [stream writeEncryptedData:cipherText error:&writeError];
     if (writeError) {
-        DDLogError(@"%@ Failed writing attachment stream with error: %@", self.logTag, writeError);
+        DDLogError(@"%@ Failed writing encrypted attachment stream with error: %@", self.logTag, writeError);
         failureHandler(writeError);
         return;
     }
-    
-    if (attachment.isVoiceMessage) {
-        [stream writeEncryptedData:cipherText error:&writeError];
-        if (writeError) {
-            DDLogError(@"%@ Failed writing voice stream with error: %@", self.logTag, writeError);
-            failureHandler(writeError);
-            return;
+    stream.encryptedDatalength = (NSInteger)cipherText.length;
+    // A forced re-download may replace legacy plaintext.
+    [stream removePlaintextFile];
+
+    void (^finishAttachment)(void) = ^{
+        DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
+            // Preserve the existing row id so the attachment cache can refresh.
+            if (!stream.grdbId) {
+                TSAttachment *existingAttachment = [TSAttachment anyFetchWithUniqueId:stream.uniqueId
+                                                                           transaction:transaction];
+                if (existingAttachment.grdbId) {
+                    [stream updateRowId:existingAttachment.grdbId.longLongValue];
+                }
+            }
+
+            [stream anyUpsertWithTransaction:transaction];
+
+            if (!stream.grdbId) {
+                OWSLogError(@"decryptAttachment: missing grdbId after upsert for stream: %@", stream.uniqueId);
+            }
+
+        });
+        successHandler(stream);
+    };
+
+    if (!attachment.isVoiceMessage) {
+        finishAttachment();
+        return;
+    }
+
+    NSError *audioError = nil;
+    AVAudioPlayer *audioPlayer = [[AVAudioPlayer alloc] initWithData:plaintext error:&audioError];
+    if (audioPlayer && !audioError) {
+        stream.cachedAudioDurationSeconds = @(audioPlayer.duration);
+    }
+
+    // Keep download completion independent from waveform sampling.
+    void (^finishWithFallbackWaveform)(NSError *_Nullable) = ^(NSError *_Nullable waveformError) {
+        OWSLogError(@"%@ falling back to a flat voice waveform: %@",
+                    self.logTag,
+                    waveformError ?: @"no decryptable audio asset");
+        NSMutableArray<NSNumber *> *samples = [NSMutableArray arrayWithCapacity:100];
+        for (NSUInteger index = 0; index < 100; index++) {
+            [samples addObject:@(-50.0f)];
         }
-        
-        NSError *error;
-        AudioWaveform *waveform = [AudioWaveformManagerImpl.shared audioWaveformSyncForAudioPath:[stream filePath] error:&error];
-        OWSLogInfo(@"get attachmentStream file path: %@", [stream filePath]);
-        OWSLogInfo(@"get attachmentStream file byteCount: %d", [stream byteCount]);
-        if (error) {
-            OWSLogError(@"voice draw error:%@.", error);
-            failureHandler(error);
+        stream.decibelSamples = samples;
+        finishAttachment();
+    };
+
+    AVAsset *_Nullable asset = stream.decryptedMediaAsset;
+    if (!asset) {
+        finishWithFallbackWaveform(nil);
+        return;
+    }
+
+    [AudioWaveformManagerImpl.shared audioWaveformForAsset:asset
+                                                completion:^(AudioWaveform *_Nullable waveform,
+                                                             NSError *_Nullable waveformError) {
+        if (!waveform) {
+            finishWithFallbackWaveform(waveformError);
             return;
         }
         stream.decibelSamples = waveform.decibelSamples;
-        stream.cachedAudioDurationSeconds = @([AudioWaveformManagerImpl.shared audioDurationFrom:stream.filePath]);
-        [stream removeVoicePlaintextFile];
-    }
-    
-
-    DatabaseStorageWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *transaction) {
-        // Backfill grdbId BEFORE upsert: initWithPointer: doesn't inherit the row id, and
-        // anyDidUpdateWithTransaction skips the attachmentReadCache refresh for grdbId-nil
-        // instances — leaving a stale TSAttachmentPointer cached and the voice message
-        // stuck in the "downloading" UI until next cold launch.
-        if (!stream.grdbId) {
-            TSAttachment *existingAttachment = [TSAttachment anyFetchWithUniqueId:stream.uniqueId
-                                                                       transaction:transaction];
-            if (existingAttachment.grdbId) {
-                [stream updateRowId:existingAttachment.grdbId.longLongValue];
-                OWSLogInfo(@"decryptAttachment: backfilled stream grdbId from DB: %@", stream.grdbId);
-            }
-        }
-
-        [stream anyUpsertWithTransaction:transaction];
-
-        if (!stream.grdbId) {
-            OWSLogError(@"decryptAttachment: missing grdbId after upsert for stream: %@", stream.uniqueId);
-        }
-
-        OWSLogInfo(@"decryptAttachment: upserted stream=%@ grdbId=%@ contentType=%@",
-                   stream.uniqueId, stream.grdbId, stream.contentType);
-    });
-    successHandler(stream);
+        finishAttachment();
+    }];
 }
 
 - (void)fireProgressNotification:(CGFloat)progress attachmentId:(NSString *)attachmentId

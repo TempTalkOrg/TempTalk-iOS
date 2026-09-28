@@ -12,6 +12,19 @@ public class GRDBDatabaseStorageAdapter: NSObject {
     // 256 bit key + 128 bit salt
     public static let kSQLCipherKeySpecLength: UInt = 48
 
+    /// Flushes dirty database pages through the SQLCipher library used by GRDB.
+    ///
+    /// Keep this C API call in TTServiceKit. The main app also links the system
+    /// SQLite library for unrelated dependencies, so calling `sqlite3_db_cacheflush`
+    /// there can bind to libsqlite3 instead of SQLCipher and crash when handed a
+    /// SQLCipher connection.
+    public static func flushDatabaseCache(_ database: Database) throws {
+        let result = sqlite3_db_cacheflush(database.sqliteConnection)
+        guard result == SQLITE_OK else {
+            throw OWSAssertionError("Failed to flush database cache: \(result)")
+        }
+    }
+
     @objc
     public enum DirectoryMode: Int {
         public static let commonGRDBPrefix = "grdb"

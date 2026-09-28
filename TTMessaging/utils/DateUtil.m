@@ -6,6 +6,7 @@
 #import <SignalCoreKit/NSDate+OWS.h>
 #import <SignalCoreKit/NSString+OWS.h>
 #import <TTMessaging/TTMessaging-Swift.h>
+#import <TTServiceKit/TTServiceKit-Swift.h>
 
 
 NS_ASSUME_NONNULL_BEGIN
@@ -14,6 +15,11 @@ static NSString *const DATE_FORMAT_WEEKDAY = @"EEEE";
 NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}";
 
 @implementation DateUtil
+
++ (NSDate *)trustedNowDate
+{
+    return [NSDate ows_dateWithMillisecondsSince1970:[DTTrustedClock now]];
+}
 
 + (NSDateFormatter *)dateFormatter {
     NSDateFormatter *formatter = [NSDateFormatter new];
@@ -70,7 +76,7 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
 
 + (BOOL)dateIsOlderThanToday:(NSDate *)date
 {
-    return [self dateIsOlderThanToday:date now:[NSDate date]];
+    return [self dateIsOlderThanToday:date now:[self trustedNowDate]];
 }
 
 + (BOOL)dateIsOlderThanToday:(NSDate *)date now:(NSDate *)now
@@ -81,7 +87,7 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
 
 + (BOOL)dateIsOlderThanYesterday:(NSDate *)date
 {
-    return [self dateIsOlderThanYesterday:date now:[NSDate date]];
+    return [self dateIsOlderThanYesterday:date now:[self trustedNowDate]];
 }
 
 + (BOOL)dateIsOlderThanYesterday:(NSDate *)date now:(NSDate *)now
@@ -92,7 +98,7 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
 
 + (BOOL)dateIsOlderThanOneWeek:(NSDate *)date
 {
-    return [self dateIsOlderThanOneWeek:date now:[NSDate date]];
+    return [self dateIsOlderThanOneWeek:date now:[self trustedNowDate]];
 }
 
 + (BOOL)dateIsOlderThanOneWeek:(NSDate *)date now:(NSDate *)now
@@ -103,7 +109,7 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
 
 + (BOOL)dateIsToday:(NSDate *)date
 {
-    return [self dateIsToday:date now:[NSDate date]];
+    return [self dateIsToday:date now:[self trustedNowDate]];
 }
 
 + (BOOL)dateIsToday:(NSDate *)date now:(NSDate *)now
@@ -114,7 +120,7 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
 
 + (BOOL)dateIsThisYear:(NSDate *)date
 {
-    return [self dateIsThisYear:date now:[NSDate date]];
+    return [self dateIsThisYear:date now:[self trustedNowDate]];
 }
 
 + (BOOL)dateIsThisYear:(NSDate *)date now:(NSDate *)now
@@ -126,7 +132,7 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
 
 + (BOOL)dateIsYesterday:(NSDate *)date
 {
-    return [self dateIsYesterday:date now:[NSDate date]];
+    return [self dateIsYesterday:date now:[self trustedNowDate]];
 }
 
 + (BOOL)dateIsYesterday:(NSDate *)date now:(NSDate *)now
@@ -139,14 +145,15 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
 {
     OWSCAssertDebug(pastTimestamp > 0);
     
-    uint64_t nowTimestamp = [NSDate ows_millisecondTimeStamp];
+    uint64_t nowTimestamp = [DTTrustedClock now];
     BOOL isFutureTimestamp = pastTimestamp >= nowTimestamp;
     
     NSDate *pastDate = [NSDate ows_dateWithMillisecondsSince1970:pastTimestamp];
+    NSDate *nowDate = [NSDate ows_dateWithMillisecondsSince1970:nowTimestamp];
     NSString *dateString;
-    if (isFutureTimestamp || [self dateIsToday:pastDate]) {
+    if (isFutureTimestamp || [self dateIsToday:pastDate now:nowDate]) {
         dateString = Localized(@"DATE_TODAY", @"The current day.");
-    } else if ([self dateIsYesterday:pastDate]) {
+    } else if ([self dateIsYesterday:pastDate now:nowDate]) {
         dateString = Localized(@"DATE_YESTERDAY", @"The day before today.");
     } else {
         dateString = [[self dateFormatter] stringFromDate:pastDate];
@@ -164,7 +171,7 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
 {
     OWSAssertDebug(date);
     
-    NSDate *now = [NSDate date];
+    NSDate *now = [self trustedNowDate];
     NSInteger dayDifference = [self daysFromFirstDate:date toSecondDate:now];
     BOOL dateIsOlderThanToday = dayDifference > 0;
     BOOL dateIsOlderThanOneWeek = dayDifference > 6;
@@ -186,7 +193,7 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
 + (NSString *)formatMessageTimestamp:(uint64_t)timestamp
 {
     NSDate *date = [NSDate ows_dateWithMillisecondsSince1970:timestamp];
-    uint64_t nowTimestamp = [NSDate ows_millisecondTimeStamp];
+    uint64_t nowTimestamp = [DTTrustedClock now];
     NSDate *nowDate = [NSDate ows_dateWithMillisecondsSince1970:nowTimestamp];
     
     NSCalendar *calendar = [NSCalendar currentCalendar];
@@ -248,7 +255,7 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
     
     NSString *dateTimeString;
     
-    NSInteger yearsDiff = [self yearsFromFirstDate:date toSecondDate:[NSDate new]];
+    NSInteger yearsDiff = [self yearsFromFirstDate:date toSecondDate:[self trustedNowDate]];
     if (yearsDiff > 0) {
         dateTimeString = [[DateUtil otherYearMessageFormatter] stringFromDate:date];
     } else {
@@ -297,7 +304,7 @@ NSString *const kBotTimeIntervalPattern = @"\\$FORMAT-LOCAL-TIME\\{(\\d{10}?)\\}
 + (BOOL)isTimestampFromLastHour:(uint64_t)timestamp
 {
     NSDate *date = [NSDate ows_dateWithMillisecondsSince1970:timestamp];
-    uint64_t nowTimestamp = [NSDate ows_millisecondTimeStamp];
+    uint64_t nowTimestamp = [DTTrustedClock now];
     NSDate *nowDate = [NSDate ows_dateWithMillisecondsSince1970:nowTimestamp];
     
     NSCalendar *calendar = [NSCalendar currentCalendar];

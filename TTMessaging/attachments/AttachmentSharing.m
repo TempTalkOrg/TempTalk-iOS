@@ -5,6 +5,8 @@
 #import "AttachmentSharing.h"
 #import "UIUtil.h"
 #import <TTServiceKit/AppContext.h>
+#import <TTServiceKit/MIMETypeUtil.h>
+#import <TTServiceKit/OWSDispatch.h>
 #import <TTServiceKit/TSAttachmentStream.h>
 #import <SignalCoreKit/Threading.h>
 
@@ -15,8 +17,37 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)showShareUIForAttachment:(TSAttachmentStream *)stream
 {
     OWSAssertDebug(stream);
+    NSString *uti = [MIMETypeUtil utiTypeForMIMEType:stream.contentType] ?: @"public.data";
+    NSItemProvider *provider = [[NSItemProvider alloc] init];
+    // Preserve the normalized attachment filename without creating a plaintext file.
+    NSString *_Nullable suggestedName = stream.filePath.lastPathComponent;
+    provider.suggestedName = suggestedName.length > 0 ? suggestedName : stream.uniqueId;
+    [provider registerDataRepresentationForTypeIdentifier:uti
+                                                visibility:NSItemProviderRepresentationVisibilityAll
+                                               loadHandler:^NSProgress *_Nullable(void (^completionHandler)(NSData *_Nullable,
+                                                                                                               NSError *_Nullable)) {
+        NSProgress *progress = [NSProgress progressWithTotalUnitCount:1];
+        // Decrypt lazily so presenting a large encrypted file never freezes the UI.
+        dispatch_async([OWSDispatch attachmentsQueue], ^{
+            NSData *_Nullable data = stream.decryptedData;
+            if (data) {
+                progress.completedUnitCount = 1;
+                completionHandler(data, nil);
+                return;
+            }
 
-    [self showShareUIForURL:stream.mediaURL];
+            NSError *error = [NSError errorWithDomain:@"AttachmentSharing"
+                                                 code:1
+                                             userInfo:@{
+                                                 NSLocalizedDescriptionKey : NSLocalizedString(
+                                                     @"ERROR_DESCRIPTION_UNKNOWN_ERROR", nil)
+                                             }];
+            OWSLogError(@"%@ Could not decrypt attachment for sharing.", self.logTag);
+            completionHandler(nil, error);
+        });
+        return progress;
+    }];
+    [AttachmentSharing showShareUIForActivityItems:@[ provider ] completion:nil];
 }
 
 + (void)showShareUIForURL:(NSURL *)url

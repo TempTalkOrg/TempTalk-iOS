@@ -33,6 +33,13 @@ extern NSErrorUserInfoKey const OWSOperationIsRetryableKey;
 // Defaults to 0, set to greater than 0 in init if you'd like the operation to be retryable.
 @property NSUInteger remainingRetries;
 
+/// Opt in to cancelling this operation when any dependency is cancelled.
+///
+/// `checkForPreconditionError` already propagates a dependency's `failingError`,
+/// but cancellation never sets `failingError` — without this flag a cancelled
+/// dependency would silently let downstream work run on stale state.
+@property (nonatomic) BOOL cascadesCancellationFromDependencies;
+
 #pragma mark - Mandatory Subclass Overrides
 
 // Called every retry, this is where the bulk of the operation's work should go.

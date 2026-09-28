@@ -37,6 +37,48 @@ static dispatch_queue_t callKitQueue(void) {
     return queue;
 }
 
+/// Stable tag for the full incoming VoIP Push pipeline. Keep stage/result as
+/// structured fields so one filter captures deduplication and CallKit.
+static NSString *const DTVoipPushLogTag = @"[voip-push]";
+
+DTCallKitMuteActionClassification DTClassifyCallKitMuteAction(
+    BOOL hasPendingAppAction,
+    BOOL appActionSuperseded,
+    BOOL actionMatchesAppActionUUID,
+    BOOL actionMuted,
+    BOOL appActionTarget
+) {
+    if (!hasPendingAppAction) {
+        return DTCallKitMuteActionClassificationNativeAction;
+    }
+    if (actionMatchesAppActionUUID) {
+        return DTCallKitMuteActionClassificationAppCallback;
+    }
+    // Before an external action supersedes the app request, a different-UUID
+    // callback with the same target is the VPIO/CallKit echo we need to absorb.
+    // Once superseded, provenance is ambiguous: the same value can be a second
+    // real user tap back to the original state. Forward all later non-exact
+    // actions so Swift's pending-intent and idempotency guards preserve ordering.
+    if (!appActionSuperseded && actionMuted == appActionTarget) {
+        return DTCallKitMuteActionClassificationSameTargetSystemEcho;
+    }
+    return DTCallKitMuteActionClassificationOppositeAction;
+}
+
+static NSString *DTCallKitMuteActionClassificationName(DTCallKitMuteActionClassification classification) {
+    switch (classification) {
+        case DTCallKitMuteActionClassificationNativeAction:
+            return @"native-action";
+        case DTCallKitMuteActionClassificationAppCallback:
+            return @"app-callback";
+        case DTCallKitMuteActionClassificationSameTargetSystemEcho:
+            return @"same-target-system-echo";
+        case DTCallKitMuteActionClassificationOppositeAction:
+            return @"opposite-action";
+    }
+    return @"unknown";
+}
+
 static BOOL TTCallKitCriticalFlagValue(id value) {
     if ([value isKindOfClass:NSNumber.class]) {
         return [value boolValue];
@@ -207,6 +249,12 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
 /// Per-call timeout timers (key: uuidString, value: NSTimer)
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSTimer *> *timeoutTimers;
 
+/// Envelope-level idempotency guard shared by all concurrent PushKit callbacks.
+@property (nonatomic, strong) DTVoipEnvelopeDeduplicator *voipEnvelopeDeduplicator;
+
+- (void)handleVoipCallNotifyOnce:(NSDictionary *)apnsInfo
+                      completion:(void (^__nullable)(void))completion;
+
 @end
 
 @implementation DTCallKitManager
@@ -236,6 +284,7 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
         [self.callController.callObserver setDelegate:self queue:callKitQueue()];
         _callerMap = [[NSMutableDictionary alloc] init];
         _timeoutTimers = [NSMutableDictionary dictionary];
+        _voipEnvelopeDeduplicator = [[DTVoipEnvelopeDeduplicator alloc] init];
 
         // Register Darwin notification for background call termination
         [[NotificationHandler shared] registerDarwinNotification];
@@ -265,28 +314,26 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
     }];
 }
 
-/// 立即上报一个占位 incoming call。completion 会在 CallKit 回执后回传 UUID 与成功标志;
-/// 调用方必须据此决定后续路径 —— 若 succeeded==NO,CallKit 并未记录该 UUID,
-/// 不能再走 reportCallWithUUID:updated: 更新流程,否则会在 callerMap 里留下无 UI 的幽灵条目。
-- (void)reportPlaceholderIncomingCallWithCompletion:(void (^)(NSUUID *uuid, BOOL succeeded))completion {
-    NSUUID *uuid = [NSUUID UUID];
+/// 立即上报一个占位 incoming call。completion 会在 CallKit 回执后回传 UUID 与错误;
+/// 调用方必须据此决定后续路径。CallUUIDAlreadyExists 表示共享 UUID 已由并发
+/// delivery 上报，其余 error 才表示不能走 reportCallWithUUID:updated: 更新流程。
+- (void)reportPlaceholderIncomingCallWithUUID:(NSUUID *)uuid
+                                   completion:(void (^)(NSUUID *uuid, NSError *_Nullable error))completion {
     [_provider reportNewIncomingCallWithUUID:uuid
                                       update:[CXCallUpdate new]
                                   completion:^(NSError * _Nullable error) {
-        if (error) {
-            OWSLogError(@"%@ placeholder reportNewIncomingCall failed: %@", DTCallKitManager.logTag, error);
-        }
         if (completion) {
-            completion(uuid, error == nil);
+            completion(uuid, error);
         }
     }];
 }
 
-/// 结束指定占位 UUID (fake / 过期 / 解密失败 / 重复等场景)。
+/// 结束指定占位 UUID (fake / 过期 / 解密失败等场景)。
 - (void)endPlaceholderCall:(nullable NSUUID *)uuid
                 completion:(void (^__nullable)(void))completion {
     if (completion) { completion(); }
     if (uuid) {
+        [self.voipEnvelopeDeduplicator markTerminalCallKitUUID:uuid];
         [_provider reportCallWithUUID:uuid endedAtDate:nil reason:CXCallEndedReasonFailed];
     }
 }
@@ -314,7 +361,37 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
 
     [self.callerMapLock lock];
 
-    // Reject if already at max active calls
+    // A duplicate delivery is a local idempotency event, not a remote reject.
+    // Check it before the capacity guard so an existing full callerMap cannot
+    // turn a duplicate of an active room into a hangup sent to the caller.
+    NSString *incomingRoomId = meetingId;
+    for (WeaCallKitCaller *existingCaller in self.callerMap.allValues) {
+        BOOL sameRoom = incomingRoomId && existingCaller.meetingId && [existingCaller.meetingId isEqualToString:incomingRoomId];
+        BOOL sameCallerNotEnded = [existingCaller.callerAccount isEqualToString:callerID] && !existingCaller.isEnded;
+        if (sameRoom) {
+            [self.callerMapLock unlock];
+            OWSLogWarn(@"%@ duplicate active room dropped locally (sameCallerNotEnded=%d)", self.logTag, sameCallerNotEnded);
+            if (preReportedUUID) {
+                [self endPlaceholderCall:preReportedUUID completion:completion];
+            } else {
+                if (completion) { completion(); }
+            }
+            return;
+        }
+        if (sameCallerNotEnded) {
+            [self.callerMapLock unlock];
+            OWSLogWarn(@"%@ conflicting call from active caller rejected", self.logTag);
+            if (preReportedUUID) {
+                [self endPlaceholderCall:preReportedUUID completion:completion];
+            } else {
+                [self reportFakeCallCompletion:completion];
+            }
+            if (calling) { [self rejectCallFromCallKit:calling]; }
+            return;
+        }
+    }
+
+    // Reject a genuinely different call if already at max active calls.
     NSUInteger activeCount = [self getActiveCallsCountFromCallerMap];
     if (activeCount >= 2) {
         [self.callerMapLock unlock];
@@ -328,26 +405,6 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
             [self rejectCallFromCallKit:calling];
         }
         return;
-    }
-
-    // Check if same callerAccount already has an active call (by roomId, not just account)
-    NSString *incomingRoomId = meetingId;
-    for (WeaCallKitCaller *existingCaller in self.callerMap.allValues) {
-        BOOL sameRoom = incomingRoomId && existingCaller.meetingId && [existingCaller.meetingId isEqualToString:incomingRoomId];
-        BOOL sameCallerNotEnded = [existingCaller.callerAccount isEqualToString:callerID] && !existingCaller.isEnded;
-        if (sameRoom || sameCallerNotEnded) {
-            [self.callerMapLock unlock];
-            OWSLogWarn(@"%@ duplicate call detected (sameRoom=%d, sameCallerNotEnded=%d), rejecting", self.logTag, sameRoom, sameCallerNotEnded);
-            if (preReportedUUID) {
-                [self endPlaceholderCall:preReportedUUID completion:completion];
-            } else {
-                [self reportFakeCallCompletion:completion];
-            }
-            if (calling) {
-                [self rejectCallFromCallKit:calling];
-            }
-            return;
-        }
     }
 
     OWSLogInfo(@"%@ didReceiveCall processing: callerMapCount=%lu", self.logTag, self.callerMap.count);
@@ -378,11 +435,19 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
         NSString *serverGid = [TSGroupThread transformToServerGroupIdWithLocalGroupId:calling.conversationID.groupID];
         __block NSString *resolvedName = nil;
         [SDSDatabaseStorage.shared readWithBlock:^(SDSAnyReadTransaction * _Nonnull transaction) {
-            resolvedName = [DTGroupCryptoDisplayHelper.shared resolveGroupCallDisplayNameWithTrustedPlaintextName:meetingName
-                                                                                                   serverGroupId:serverGid
-                                                                                                     transaction:transaction];
+            // An outsider must not see the group name on the incoming call screen.
+            if (serverGid.length > 0 &&
+                ![DTMeetingManager.shared shouldTreatGroupCallAsInstantWithServerGroupId:serverGid
+                                                                             controlType:calling.controlType
+                                                                             transaction:transaction]) {
+                resolvedName = [DTGroupCryptoDisplayHelper.shared resolveGroupCallDisplayNameWithTrustedPlaintextName:meetingName
+                                                                                                       serverGroupId:serverGid
+                                                                                                         transaction:transaction];
+            }
         }];
-        nameForDisplay = resolvedName;
+        nameForDisplay = resolvedName.length > 0
+            ? resolvedName
+            : [NSString stringWithFormat:@"%@'s instant call", [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerID]];
     } else {
         value = [NSString stringWithFormat:@"instant.%@.%@", callerID, meetingVersion];
         nameForDisplay = [NSString stringWithFormat:@"%@'s instant call", [Environment.shared.contactsManager displayNameForPhoneIdentifier:callerID]];
@@ -549,28 +614,49 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
 {
     [self.callerMapLock lock];
     WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
-    [self.callerMapLock unlock];
     NSUUID *currentUUID = caller.uuid;
     if (currentUUID == nil) {
+        [self.callerMapLock unlock];
         OWSLogError(@"%@ currentUUID == nil", self.logTag);
         return;
     }
     if (!caller.isAccepted) {
+        [self.callerMapLock unlock];
         OWSLogError(@"%@ call not accepted yet", self.logTag);
         return;
     }
     if (caller.isMutedByApp) {
+        [self.callerMapLock unlock];
         OWSLogError(@"%@ isMutedByApp == YES", self.logTag);
         return;
     }
-    caller.isMutedByApp = YES;
-    OWSLogInfo(@"%@ muteCurrentCall", self.logTag);
+    if (caller.isMuted == isMute) {
+        [self.callerMapLock unlock];
+        OWSLogInfo(@"%@ muteCurrentCall skipped: already isMute=%d", self.logTag, isMute);
+        return;
+    }
     CXSetMutedCallAction *muteCallAction = [[CXSetMutedCallAction alloc] initWithCallUUID:currentUUID muted:isMute];
+    caller.isMutedByApp = YES;
+    caller.isMutedByAppSuperseded = NO;
+    caller.appMuteActionUUID = muteCallAction.UUID;
+    caller.appMuteActionTarget = isMute;
+    [self.callerMapLock unlock];
+    OWSLogInfo(@"%@ muteCurrentCall", self.logTag);
     CXTransaction *transaction = [[CXTransaction alloc] initWithAction:muteCallAction];
     [_callController requestTransaction:transaction completion:^(NSError *_Nullable error) {
         if (error == nil) {
             OWSLogInfo(@"%@ CXSetMutedCallAction - success isMute=%d", self.logTag, isMute);
         } else {
+            [self.callerMapLock lock];
+            WeaCallKitCaller *currentCaller = [self.callerMap objectForKey:uuidString];
+            if (currentCaller.isMutedByApp &&
+                [currentCaller.appMuteActionUUID isEqual:muteCallAction.UUID]) {
+                currentCaller.isMutedByApp = NO;
+                currentCaller.isMutedByAppSuperseded = NO;
+                currentCaller.appMuteActionUUID = nil;
+                currentCaller.appMuteActionTarget = NO;
+            }
+            [self.callerMapLock unlock];
             OWSLogError(@"%@ CXSetMutedCallAction - failed isMute=%d", self.logTag, isMute);
         }
     }];
@@ -744,6 +830,7 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
     OWSLogInfo(@"%@ providerDidReset - cleaning up all state", self.logTag);
 
     [self stopAllTimeoutTimers];
+    [self.voipEnvelopeDeduplicator markAllTerminal];
 
     [self.callerMapLock lock];
     NSArray *allUUIDs = [self.callerMap.allKeys copy];
@@ -808,11 +895,10 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
     [self stopTimeoutTimerForUUID:uuidString];
 
     // Do NOT fulfill yet. Hold the answer action so the system call UI stays in the
-    // "Connecting…" state until LiveKit actually connects; -fulfillPendingAnswerAction:
-    // (driven by the .connected lifecycle transition) resolves it. Principle: connect →
-    // answered, can't connect → cancelled. If the room never connects, the app's own
-    // connection-phase timeout ends the call and the caller teardown resolves the held
-    // action (fail), so we never present a fake connected state.
+    // "Connecting…" state until LiveKit connects; -fulfillPendingAnswerAction: is driven
+    // by the room-connected lifecycle transition. Fulfillment lets CallKit activate the
+    // audio session, which is itself required before the app can publish its microphone,
+    // so it must not wait for the media-readiness timer gate.
     [self.callerMapLock lock];
     caller.pendingAnswerAction = action;
     [self.callerMapLock unlock];
@@ -833,6 +919,7 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
     [self.callerMapLock unlock];
 
     if (!caller) {
+        [self.voipEnvelopeDeduplicator markTerminalCallKitUUID:action.callUUID];
         [action fulfill];
         return;
     }
@@ -858,18 +945,64 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
     OWSLogInfo(@"%@ performSetMutedCallAction - muted: %d", self.logTag, action.muted);
     [self.callerMapLock lock];
     WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
-    [self.callerMapLock unlock];
     if (!caller || caller.isEnded) {
+        [self.callerMapLock unlock];
         [action fulfill];
         return;
     }
-    [action fulfill];
-    if (caller.isMutedByApp) {
+    BOOL actionMatchesAppActionUUID = caller.isMutedByApp &&
+        [caller.appMuteActionUUID isEqual:action.UUID];
+    DTCallKitMuteActionClassification classification = DTClassifyCallKitMuteAction(
+        caller.isMutedByApp,
+        caller.isMutedByAppSuperseded,
+        actionMatchesAppActionUUID,
+        action.muted,
+        caller.appMuteActionTarget
+    );
+    OWSLogInfo(
+        @"%@ mute action classified: classification=%@ muted=%d appTarget=%@ exactUUID=%d superseded=%d",
+        self.logTag,
+        DTCallKitMuteActionClassificationName(classification),
+        action.muted,
+        caller.isMutedByApp ? (caller.appMuteActionTarget ? @"1" : @"0") : @"nil",
+        actionMatchesAppActionUUID,
+        caller.isMutedByAppSuperseded
+    );
+    if (classification == DTCallKitMuteActionClassificationAppCallback) {
+        BOOL wasSuperseded = caller.isMutedByAppSuperseded;
         caller.isMutedByApp = NO;
+        caller.isMutedByAppSuperseded = NO;
+        caller.appMuteActionUUID = nil;
+        caller.appMuteActionTarget = NO;
+        if (!wasSuperseded) {
+            caller.isMuted = action.muted;
+        }
+        [self.callerMapLock unlock];
+        if (wasSuperseded) {
+            OWSLogInfo(@"%@ failing superseded app mute action: %@", self.logTag, action.UUID);
+            [action fail];
+        } else {
+            [action fulfill];
+        }
         return;
+    }
+    if (classification == DTCallKitMuteActionClassificationSameTargetSystemEcho) {
+        caller.isMuted = action.muted;
+        [self.callerMapLock unlock];
+        [action fulfill];
+        return;
+    }
+    if (classification == DTCallKitMuteActionClassificationOppositeAction) {
+        // Preserve the exact app action UUID so its delayed callback is still
+        // recognized as an echo, but do not let it overwrite this newer user
+        // action when it arrives. Keep the original app target immutable; once
+        // superseded, the classifier forwards every later non-exact action.
+        caller.isMutedByAppSuperseded = YES;
     }
     caller.hasCallKitMuteIntent = YES;
     caller.isMuted = action.muted;
+    [self.callerMapLock unlock];
+    [action fulfill];
     if (self.delegate && [self.delegate respondsToSelector:@selector(refreshCurrentCallMuteState:uuidString:)]) {
         [self.delegate refreshCurrentCallMuteState:action.muted uuidString:uuidString];
     }
@@ -880,6 +1013,15 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
     if ([action isKindOfClass:[CXSetMutedCallAction class]]) {
         CXSetMutedCallAction *muteAction = (CXSetMutedCallAction *)action;
         NSString *uuidString = muteAction.callUUID.UUIDString;
+        [self.callerMapLock lock];
+        WeaCallKitCaller *caller = [self.callerMap objectForKey:uuidString];
+        if (caller.isMutedByApp && [caller.appMuteActionUUID isEqual:muteAction.UUID]) {
+            caller.isMutedByApp = NO;
+            caller.isMutedByAppSuperseded = NO;
+            caller.appMuteActionUUID = nil;
+            caller.appMuteActionTarget = NO;
+        }
+        [self.callerMapLock unlock];
         if (![self hasCallWithUUID:uuidString]) {
             OWSLogInfo(@"%@ Ignoring timeout for ended call: %@", self.logTag, uuidString);
             [action fulfill];
@@ -887,10 +1029,9 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
         }
     }
     if ([action isKindOfClass:[CXAnswerCallAction class]]) {
-        // CallKit timed out our held answer action. Principle: never show in-call
-        // unless connected — end the call (which fails this action) instead of
-        // fulfilling into a fake connected state.
         NSString *uuidString = ((CXAnswerCallAction *)action).callUUID.UUIDString;
+        // Principle: never show in-call unless connected — end the call
+        // (which fails this action) instead of fulfilling into a fake connected state.
         OWSLogError(@"%@ answer action timed out (CallKit) before connect, ending call, uuid: %@", self.logTag, uuidString);
         [self endHeldAnswerConnectForUUID:uuidString reason:@"callkit-action-timeout"];
         return;
@@ -979,6 +1120,13 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
 
 - (void)resetVariableData:(NSString *)uuidString {
     if (uuidString) {
+        NSUUID *uuid = [[NSUUID alloc] initWithUUIDString:uuidString];
+        if (uuid) {
+            // The path initiating cleanup owns the CallKit end reason. Marking the
+            // claim only closes duplicate callbacks that complete after teardown.
+            [self.voipEnvelopeDeduplicator markTerminalCallKitUUID:uuid];
+        }
+
         // Always stop the timeout timer when cleaning up a caller (F3 fix)
         [self stopTimeoutTimerForUUID:uuidString];
 
@@ -994,35 +1142,6 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
     }
 }
 
-- (void)recreateProvider {
-    // Clean stale callerMap entries before recreating (C2 fix)
-    // Old provider's calls won't be findable after invalidation
-    [self.callerMapLock lock];
-    NSMutableArray *staleKeys = [NSMutableArray array];
-    for (NSString *key in self.callerMap) {
-        WeaCallKitCaller *caller = [self.callerMap objectForKey:key];
-        if (caller.isEnded) {
-            [staleKeys addObject:key];
-        }
-    }
-    if (staleKeys.count > 0) {
-        for (NSString *key in staleKeys) {
-            WeaCallKitCaller *caller = [self.callerMap objectForKey:key];
-            caller.backgroundTask = nil;
-            [self.callerMap removeObjectForKey:key];
-        }
-        OWSLogInfo(@"%@ cleaned %lu stale callerMap entries before provider recreate", self.logTag, staleKeys.count);
-    }
-    [self.callerMapLock unlock];
-
-    CXProvider *oldProvider = self.provider;
-    CXProvider *newProvider = [[CXProvider alloc] initWithConfiguration:self.configuration];
-    [newProvider setDelegate:self queue:callKitQueue()];
-    self.provider = newProvider;
-    [oldProvider invalidate];
-    OWSLogInfo(@"%@ CXProvider recreated to refresh XPC connection", self.logTag);
-}
-
 #pragma mark - Configuration
 
 - (CXProviderConfiguration *)configuration
@@ -1033,7 +1152,10 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
         UIImage *iconMaskImage = [UIImage imageNamed:@"callKit_icon"];
         _configuration.iconTemplateImageData = UIImagePNGRepresentation(iconMaskImage);
         _configuration.ringtoneSound = @"calling.caf";
-        _configuration.maximumCallGroups = 1;
+        // Keep CallKit's default maximumCallGroups (2). A limit of 1 can reject
+        // a valid new offer while the previous asynchronous end transaction is
+        // still draining. Limit each individual group to one call instead.
+        _configuration.maximumCallsPerCallGroup = 1;
         _configuration.supportsVideo = YES;
     }
     return _configuration;
@@ -1059,20 +1181,102 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
 #pragma mark - VoIP Push
 
 - (void)handleVoipCallNotify:(NSDictionary *)apnsInfo completion:(void (^__nullable)(void))completion {
+    [self handleVoipCallNotifyOnce:apnsInfo completion:completion];
+}
 
-    OWSLogInfo(@"========>CallKit: apnsInfo:%@", apnsInfo);
-    if ([self getActiveCallsCountFromCallerMap] == 0) {
-        [self recreateProvider];
+- (void)handleVoipCallNotifyOnce:(NSDictionary *)apnsInfo completion:(void (^__nullable)(void))completion {
+
+    NSDictionary *callInfo = apnsInfo[@"callInfo"];
+    NSString *encryptedMessage = apnsInfo[@"msg"];
+    NSString *identity = nil;
+
+    if (DTParamsUtils.validateDictionary(callInfo)) {
+        identity = [DTVoipIdentityBuilder identityForLegacyCallInfo:callInfo];
+    } else if (DTParamsUtils.validateString(encryptedMessage)) {
+        identity = [self voipEnvelopeIdentityForEncryptedMessage:encryptedMessage];
+    }
+    DTVoipReportClaim *reportClaim = identity
+        ? [self.voipEnvelopeDeduplicator claimReportForIdentity:identity]
+        : nil;
+    BOOL isFirstDelivery = reportClaim ? reportClaim.isFirstDelivery : YES;
+    NSUUID *callKitUUID = reportClaim.callKitUUID ?: [NSUUID UUID];
+    NSString *fingerprint = identity
+        ? [self.voipEnvelopeDeduplicator fingerprintForIdentity:identity]
+        : @"none";
+
+    if (!isFirstDelivery) {
+        OWSLogWarn(@"%@ %@ stage=dedupe result=duplicate fp=%@",
+                   self.logTag,
+                   DTVoipPushLogTag,
+                   fingerprint);
+    } else {
+        OWSLogInfo(@"%@ %@ stage=dedupe result=accepted fp=%@ activeCalls=%lu",
+                   self.logTag,
+                   DTVoipPushLogTag,
+                   fingerprint,
+                   (unsigned long)[self getActiveCallsCountFromCallerMap]);
     }
 
     @weakify(self)
-    [self reportPlaceholderIncomingCallWithCompletion:^(NSUUID *uuid, BOOL succeeded) {
+    // PushKit requires every VoIP delivery to report to CallKit promptly. Keep
+    // this call on the PushKit callback queue; only app-side processing is
+    // serialized onto callKitQueue below.
+    [self reportPlaceholderIncomingCallWithUUID:callKitUUID
+                                     completion:^(NSUUID *uuid, NSError *_Nullable error) {
         @strongify(self)
-        if (!self) { return; }
-        if (!succeeded) {
-            OWSLogWarn(@"%@ placeholder report failed, falling back to non-placeholder flow", DTCallKitManager.logTag);
+        if (!self) {
+            if (completion) { completion(); }
+            return;
         }
-        NSUUID *placeholderUUID = succeeded ? uuid : nil;
+
+        BOOL alreadyReported = [error.domain isEqualToString:CXErrorDomainIncomingCall]
+            && error.code == CXErrorCodeIncomingCallErrorCallUUIDAlreadyExists;
+
+        if (!isFirstDelivery) {
+            // The UUID is shared with the first delivery. A concurrent duplicate can
+            // win the report race. Leave it alive while the owner exists, but close a
+            // retry accepted after the owner has already torn the shared call down.
+            BOOL shouldEnd = !error
+                && [self.voipEnvelopeDeduplicator
+                    shouldEndAcceptedDuplicateForIdentity:identity
+                    callKitUUID:uuid];
+            if (shouldEnd) {
+                [self.provider reportCallWithUUID:uuid
+                                      endedAtDate:nil
+                                           reason:CXCallEndedReasonFailed];
+            }
+            OWSLogWarn(@"%@ %@ stage=duplicate-report result=%@ fp=%@ errorCode=%ld",
+                       self.logTag,
+                       DTVoipPushLogTag,
+                       !error ? (shouldEnd ? @"reported-ended-terminal" : @"reported-shared")
+                              : (alreadyReported ? @"already-reported" : @"failed"),
+                       fingerprint,
+                       (long)error.code);
+            if (completion) { completion(); }
+            return;
+        }
+
+        // If a duplicate callback reported the shared UUID first, CallKit rejects
+        // this callback with CallUUIDAlreadyExists. The placeholder still exists and
+        // the first delivery remains the sole owner of app-side call processing.
+        BOOL hasReportedPlaceholder = error == nil || alreadyReported;
+        if (!hasReportedPlaceholder && identity) {
+            [self.voipEnvelopeDeduplicator forgetIdentity:identity];
+        }
+        NSUUID *placeholderUUID = hasReportedPlaceholder ? uuid : nil;
+        if (hasReportedPlaceholder) {
+            OWSLogInfo(@"%@ %@ stage=placeholder result=%@ fp=%@",
+                       self.logTag,
+                       DTVoipPushLogTag,
+                       alreadyReported ? @"shared-already-reported" : @"succeeded",
+                       fingerprint);
+        } else {
+            OWSLogWarn(@"%@ %@ stage=placeholder result=failed action=fallback fp=%@ errorCode=%ld",
+                       self.logTag,
+                       DTVoipPushLogTag,
+                       fingerprint,
+                       (long)error.code);
+        }
         dispatch_async(callKitQueue(), ^{
             [self processVoipPushWithInfo:apnsInfo
                           placeholderUUID:placeholderUUID
@@ -1114,7 +1318,7 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
 
         if (number_startAt) {
             NSTimeInterval startAt = [number_startAt doubleValue];
-            NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+            NSTimeInterval now = [DTTrustedClock now] / 1000.0;
 
             if (now - startAt > 70) {
                 OWSLogWarn(@"========>CallKit: unexpected voip: %.0f", startAt);
@@ -1154,7 +1358,7 @@ static void TTCallKitRemoveCriticalNotifications(NSString *reason, NSString *uui
             // Apply startAt filter for encrypted path too (G2 fix)
             if ([calling hasTimestamp]) {
                 NSTimeInterval startAt = (NSTimeInterval)[calling timestamp] / 1000.0;
-                NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+                NSTimeInterval now = [DTTrustedClock now] / 1000.0;
                 if (now - startAt > 70) {
                     OWSLogWarn(@"========>CallKit: encrypted call expired: %.0fs ago", now - startAt);
                     [self endPlaceholderCall:placeholderUUID completion:completion];

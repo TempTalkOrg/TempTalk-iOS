@@ -10,15 +10,21 @@ import Foundation
 import LiveKit
 
 struct RoomMetadata {
-    var canPublishAudio: Bool
-    var canPublishVideo: Bool
+    let callType: CallType?
+    let canPublishAudio: Bool
+    let canPublishVideo: Bool
+    let canPublishScreen: Bool
 }
 
 class RoomDataProcessor {
     
     // 处理 Room 对象的 metadata，解析为 RoomMetadata
     static func parseMetadata(from room: Room) -> RoomMetadata? {
-        guard let metadataString = room.metadata, let jsonData = metadataString.data(using: .utf8) else {
+        parseMetadata(from: room.metadata)
+    }
+
+    static func parseMetadata(from metadataString: String?) -> RoomMetadata? {
+        guard let metadataString, let jsonData = metadataString.data(using: .utf8) else {
             Logger.error ("Invalid or missing room metadata string.")
             return nil
         }
@@ -26,14 +32,23 @@ class RoomDataProcessor {
         do {
             // 解析 JSON 数据
             if let jsonObject = try JSONSerialization.jsonObject(with: jsonData, options: []) as? [String: Any] {
-                guard let canPublishAudio = jsonObject["canPublishAudio"] as? Bool,
-                      let canPublishVideo = jsonObject["canPublishVideo"] as? Bool else {
-                    Logger.error("Missing or invalid keys in room metadata.")
-                    return nil
+                let callType: CallType?
+                if let rawCallType = jsonObject["callType"] as? String,
+                   !rawCallType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    // Unknown future values must behave as a multi-party instant call.
+                    callType = CallType(rawValue: rawCallType) ?? .instant
+                } else {
+                    callType = nil
                 }
-                
-                // 返回解析后的 RoomMetadata 对象
-                return RoomMetadata(canPublishAudio: canPublishAudio, canPublishVideo: canPublishVideo)
+
+                // Missing/invalid capability fields retain the previous permissive behavior:
+                // the old strict parser returned nil, so the toolbar did not block publishing.
+                return RoomMetadata(
+                    callType: callType,
+                    canPublishAudio: jsonObject["canPublishAudio"] as? Bool ?? true,
+                    canPublishVideo: jsonObject["canPublishVideo"] as? Bool ?? true,
+                    canPublishScreen: jsonObject["canPublishScreen"] as? Bool ?? true
+                )
             }
         } catch {
             Logger.error("Error parsing room metadata JSON: \(error)")

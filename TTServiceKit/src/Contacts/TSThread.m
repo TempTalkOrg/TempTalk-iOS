@@ -400,11 +400,11 @@ BOOL IsNoteToSelfEnabled(void)
             groupId = ((TSGroupThread *)self).groupModel.groupId;
         }
         DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId
-                                                                                    readAt:[NSDate ows_millisecondTimeStamp]
+                                                                                    readAt:[DTTrustedClock now]
                                                                              maxServerTime:interaction.serverTimestamp
                                                                           notifySequenceId:interaction.notifySequenceId
                                                                              maxSequenceId:interaction.sequenceId];
-        
+
         OWSLogInfo(@"markAllAsRead sendReadRecipet:%@", readPosition);
         [OWSReadReceiptManager.sharedManager sendReadRecipetWithReadPosition:readPosition
                                                                       thread:self
@@ -557,7 +557,10 @@ BOOL IsNoteToSelfEnabled(void)
         }
     } else if ([interaction isKindOfClass:[TSInfoMessage class]]) {
         TSInfoMessage *infoMessage = (TSInfoMessage *)interaction;
-        if (infoMessage.messageType == TSInfoMessageVerificationStateChange ) {
+        // Local copy/forward notices are shown in-thread only, not in the inbox preview.
+        if (infoMessage.messageType == TSInfoMessageVerificationStateChange ||
+            infoMessage.messageType == TSInfoMessageForwardNotice ||
+            infoMessage.messageType == TSInfoMessageCopyNotice) {
             return NO;
         }
     } else if ([interaction isKindOfClass:[OWSDisappearingMessagesConfigurationMessage class]]) {
@@ -1336,7 +1339,9 @@ BOOL IsNoteToSelfEnabled(void)
 - (void)generateReadPositionForOutgoingMessageIfNeeded:(TSOutgoingMessage *)outgoingMessage
                                                 thread:(TSThread *)thread
                                            transaction:(SDSAnyWriteTransaction *)transaction {
-    if (outgoingMessage.serverTimestamp > 0) {
+    if (outgoingMessage.messageState == TSOutgoingMessageStateSent
+        && outgoingMessage.recipientStateMap.count > 0
+        && outgoingMessage.serverTimestamp > 0) {
         NSString *localNumber = [[TSAccountManager shared] localNumberWithTransaction:transaction];
         if (localNumber) {
             NSData *groupId = nil;
@@ -1346,7 +1351,7 @@ BOOL IsNoteToSelfEnabled(void)
             }
 
             DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId
-                                                                                         readAt:outgoingMessage.timestamp
+                                                                                         readAt:[DTTrustedClock now]
                                                                                   maxServerTime:outgoingMessage.serverTimestamp
                                                                                notifySequenceId:outgoingMessage.notifySequenceId
                                                                                   maxSequenceId:outgoingMessage.sequenceId];

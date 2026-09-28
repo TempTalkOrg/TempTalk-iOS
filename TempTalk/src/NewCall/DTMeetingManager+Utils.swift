@@ -8,6 +8,7 @@
 
 import AVFAudio
 import LiveKit
+import QuartzCore
 
 extension DTMeetingManager {
     func sampleBulletRtmCalls() -> [String] {
@@ -143,241 +144,119 @@ extension DTMeetingManager {
         let callConfig = CallConfigManager.fetchCallConfig()
         return callConfig.createCallMsg
     }
+
+    static func redactedCallLogIdentifier(_ value: String?) -> String {
+        guard let value, !value.isEmpty else { return "nil" }
+        return "***\(value.suffix(6))"
+    }
     
     // MARK: - 参会人排序
 
-    func sortedMeetingParticipants() -> [Participant] {
+    // Small-grid (≤2) ordering. Uses the same stable order as the multi-grid path so tiles don't
+    // reshuffle when a 2-person call flips useMultiGrid → legacy after the collapse delay; this also
+    // matches the pre-refactor "local first" ordering.
+    func legacySortedMeetingParticipants() -> [Participant] {
         guard let room = roomContext?.room else { return [] }
-        return sortedMeetings(participants: Array(room.allParticipants.values))
+        resetActiveSpeakerGridState()
+        return stableMeetingOrder(participants: Array(room.allParticipants.values))
     }
 
-    /// 计算八宫格 + 剩余参会人排序列表。
-    ///
-    /// 计算部分全部交给静态纯函数 `computeSortedMeetings`,不直接修改 `visibleParticipants`;
-    /// 新 visible 通过 `scheduleVisibleParticipantsUpdate` 异步 commit,
-    /// 避免在 SwiftUI body getter 中产生同步副作用导致的 body 重入 race(参见 issue 1f351e7d)。
-    func sortedMeetings(participants: [Participant]) -> [Participant] {
-        let (visible, remaining) = Self.computeSortedMeetings(
-            participants: participants,
-            currentVisible: visibleParticipants,
-            localParticipant: roomContext?.room.localParticipant
+    func sortedMeetingParticipants(visibleWindow: Int, now: TimeInterval = CACurrentMediaTime()) -> [Participant] {
+        guard let room = roomContext?.room else { return [] }
+        return sortedMeetings(
+            participants: Array(room.allParticipants.values),
+            visibleWindow: visibleWindow,
+            now: now
         )
-        scheduleVisibleParticipantsUpdate(visible)
+    }
+
+    /// 计算多人宫格 + 剩余参会人排序列表。纯计算,无副作用;
+    /// 调度器状态由 `computeSortedMeetings` 在主线程内就地维护(参见 issue 1f351e7d)。
+    func sortedMeetings(
+        participants: [Participant],
+        visibleWindow: Int,
+        now: TimeInterval
+    ) -> [Participant] {
+        let (visible, remaining) = computeSortedMeetings(
+            participants: participants,
+            visibleWindow: visibleWindow,
+            now: now
+        )
         return visible + remaining
     }
 
-    /// 主动刷新一次 `visibleParticipants`,供 delegate / onChange 等非 body 流程同步调用。
-    func refreshVisibleParticipants() {
-        guard let room = roomContext?.room else {
-            setVisibleParticipants([])
-            return
-        }
-        let participants = Array(room.allParticipants.values)
-        let (visible, _) = Self.computeSortedMeetings(
-            participants: participants,
-            currentVisible: visibleParticipants,
-            localParticipant: room.localParticipant
-        )
-        setVisibleParticipants(visible)
+    /// Reset scheduler state. Main-thread only — see `activeSpeakerGridState` isolation note on `computeSortedMeetings`.
+    func resetActiveSpeakerGridState() {
+        AssertIsOnMainThread()
+        activeSpeakerGridState = ActiveSpeakerScheduler.State()
     }
 
-    /// `visibleParticipants` 的唯一写入入口。任意线程可调,内部切到主线程并在内容真正变化时才 assign。
-    @nonobjc
-    func setVisibleParticipants(_ newVisible: [Participant]) {
-        DispatchMainThreadSafe { [weak self] in
-            guard let self else { return }
-            let oldIds = self.visibleParticipants.map { Self.visibleParticipantSignature($0) }
-            let newIds = newVisible.map { Self.visibleParticipantSignature($0) }
-            guard oldIds != newIds else { return }
-            self.visibleParticipants = newVisible
-        }
-    }
-
-    /// 合并同一 MainActor tick 内的多次 commit,避免 SwiftUI body 重入时反复触发 state 更新。
-    private func scheduleVisibleParticipantsUpdate(_ newVisible: [Participant]) {
-        guard !isVisibleParticipantsUpdateScheduled else { return }
-        isVisibleParticipantsUpdateScheduled = true
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.isVisibleParticipantsUpdateScheduled = false
-            self.setVisibleParticipants(newVisible)
-        }
-    }
-    
-    // MARK: - 参会人排序(纯函数实现,不读写实例 state)
-
-    private static let maxVisibleParticipantCount = 8
-
-    /// 基于输入计算新的 `(visible, remaining)` 列表。
-    private static func computeSortedMeetings(
+    /// Compute the new `(visible, remaining)` lists.
+    ///
+    /// Mutates `activeSpeakerGridState` in place, so this must run on the main thread only.
+    /// It is currently reached solely from the SwiftUI body path (main thread); the assertion
+    /// guards against any future off-main caller introducing a data race on the scheduler state.
+    private func computeSortedMeetings(
         participants: [Participant],
-        currentVisible: [Participant],
-        localParticipant: Participant?
+        visibleWindow: Int,
+        now: TimeInterval
     ) -> (visible: [Participant], remaining: [Participant]) {
-        var visible = currentVisible
-
-        // Step 1: 清理 visible 中已离会的人，并替换为当前 Room 的 Participant 实例。
-        // 同一个会议反复进入时 identity 可能相同，但 Participant 对象已经换了。
-        var participantsByIdentity: [String: Participant] = [:]
-        for participant in participants {
-            guard let id = participant.identity?.stringValue else { continue }
-            participantsByIdentity[id] = participant
-        }
-        visible = visible.compactMap { participant in
-            guard let id = participant.identity?.stringValue else { return nil }
-            return participantsByIdentity[id]
+        AssertIsOnMainThread()
+        let orderedParticipants = stableMeetingOrder(participants: participants)
+        guard orderedParticipants.count >= 7 else {
+            resetActiveSpeakerGridStateIfNeeded()
+            return (orderedParticipants, [])
         }
 
-        // Step 2/3: 不满补充;已满替换
-        if visible.count < maxVisibleParticipantCount {
-            fillBelowLimit(
-                &visible,
-                limit: maxVisibleParticipantCount,
-                participants: participants,
-                localParticipant: localParticipant
+        let snapshots = orderedParticipants.map { participant in
+            ActiveSpeakerParticipantSnapshot(
+                id: Self.gridParticipantId(participant),
+                isSpeaking: participant.isSpeaking,
+                isScreenSharing: participant.isScreenShareEnabled(),
+                isCameraEnabled: participant.isCameraEnabled(),
+                isMicrophoneEnabled: participant.isMicrophoneEnabled(),
+                audioLevel: participant.audioLevel,
+                lastSpokeAt: UInt64(max(participant.lastSpokeAt, 0)),
+                isLocal: participant is LocalParticipant
             )
-        } else {
-            fillUpperLimit(&visible, participants: participants)
         }
-
-        // Step 4: 本端 > 视频 > 其他
-        sortVisible(&visible, localIdentity: localParticipant?.identity?.stringValue)
-
-        // Step 5: 剩余参会人按权重排序
-        let visibleIds = Set(visible.compactMap { $0.identity?.stringValue })
-        let remaining = participants.filter {
-            guard let id = $0.identity?.stringValue else { return false }
-            return !visibleIds.contains(id)
-        }.sorted { a, b in
-            let ca = a.isCameraEnabled() ? 1 : 2
-            let cb = b.isCameraEnabled() ? 1 : 2
-            if ca != cb { return ca < cb }
-
-            if a.isSpeaking && b.isSpeaking {
-                return a.audioLevel > b.audioLevel
-            } else if a.isSpeaking {
-                return true
-            } else if b.isSpeaking {
-                return false
-            }
-
-            let ma = a.isMicrophoneEnabled() ? 1 : 2
-            let mb = b.isMicrophoneEnabled() ? 1 : 2
-            if ma != mb { return ma < mb }
-
-            return a.id < b.id
-        }
-
-        return (visible, remaining)
+        let orderedIds = ActiveSpeakerScheduler.scheduledIds(
+            participants: snapshots,
+            visibleWindow: min(max(visibleWindow, 1), orderedParticipants.count),
+            now: now,
+            state: &activeSpeakerGridState
+        )
+        let byId = Dictionary(uniqueKeysWithValues: orderedParticipants.map { (Self.gridParticipantId($0), $0) })
+        let scheduledParticipants = orderedIds.compactMap { byId[$0] }
+        let effectiveWindow = min(max(visibleWindow, 1), scheduledParticipants.count)
+        return (
+            Array(scheduledParticipants.prefix(effectiveWindow)),
+            Array(scheduledParticipants.dropFirst(effectiveWindow))
+        )
     }
 
-    private static func fillBelowLimit(
-        _ current: inout [Participant],
-        limit: Int,
-        participants: [Participant],
-        localParticipant: Participant?
-    ) {
-        var addedIdentities = Set(current.compactMap { $0.identity?.stringValue })
-
-        func tryAppend(_ participant: Participant) {
-            guard let id = participant.identity?.stringValue,
-                  !addedIdentities.contains(id) else { return }
-            current.append(participant)
-            addedIdentities.insert(id)
-        }
-
-        if let localParticipant,
-           let localId = localParticipant.identity?.stringValue,
-           !addedIdentities.contains(localId) {
-            current.insert(localParticipant, at: 0)
-            addedIdentities.insert(localId)
-        }
-
-        for participant in participants where participant.isCameraEnabled() {
-            tryAppend(participant)
-            if current.count >= limit { break }
-        }
-
-        if current.count < limit {
-            for participant in participants where participant.isMicrophoneEnabled() {
-                tryAppend(participant)
-                if current.count >= limit { break }
-            }
-        }
-    }
-
-    private static func fillUpperLimit(
-        _ current: inout [Participant],
-        participants: [Participant]
-    ) {
-        // dropFirst + minSpokeIndex/replaceableIndex 都要求至少 2 个元素
-        guard current.count >= 2 else { return }
-
-        let visibleIdentities = Set(current.compactMap { $0.identity?.stringValue })
-        let otherParticipants = participants.filter {
-            guard let id = $0.identity?.stringValue else { return false }
-            return !visibleIdentities.contains(id)
-        }
-        guard !otherParticipants.isEmpty else { return }
-
-        let minSpokeIndex = current.enumerated().dropFirst().min(by: {
-            $0.element.lastSpokeAt < $1.element.lastSpokeAt
-        })?.offset
-
-        let now = Date().ows_millisecondsSince1970
-        let timeThreshold: UInt64 = 10000
-        let others = current.dropFirst().enumerated()
-        let inactiveParticipants = others.filter { _, participant in
-            now - UInt64(participant.lastSpokeAt) > timeThreshold
-        }
-
-        let silentAndInvisible = inactiveParticipants.filter {
-            !$0.element.isMicrophoneEnabled() && !$0.element.isCameraEnabled()
-        }
-        let speakingInvisible = inactiveParticipants.filter {
-            $0.element.isMicrophoneEnabled() && !$0.element.isCameraEnabled()
-        }
-        let candidates: [(offset: Int, element: Participant)] =
-            !silentAndInvisible.isEmpty ? silentAndInvisible :
-            (!speakingInvisible.isEmpty ? speakingInvisible : [])
-
-        if let target = candidates.max(by: {
-            (now - UInt64($0.element.lastSpokeAt)) < (now - UInt64($1.element.lastSpokeAt))
-        }) {
-            let replaceableIndex = target.offset + 1
-            for participant in otherParticipants where participant.isCameraEnabled() {
-                if replaceableIndex < current.count {
-                    current[replaceableIndex] = participant
-                }
-                break
-            }
-        }
-
-        for participant in otherParticipants where participant.isSpeaking {
-            if let idx = minSpokeIndex, idx < current.count {
-                current[idx] = participant
-            }
-            break
-        }
-    }
-
-    private static func sortVisible(_ current: inout [Participant], localIdentity: String?) {
-        current.sort { a, b in
-            func priority(_ p: Participant) -> Int {
-                if p.identity?.stringValue == localIdentity { return 0 }
-                if p.isCameraEnabled() { return 1 }
-                return 2
+    private func stableMeetingOrder(participants: [Participant]) -> [Participant] {
+        let localIdentity = roomContext?.room.localParticipant.identity?.stringValue
+        return participants.sorted { a, b in
+            func priority(_ p: Participant) -> (Int, Int, String) {
+                let local = p.identity?.stringValue == localIdentity ? 0 : 1
+                let sharing = p.isScreenShareEnabled() ? 0 : 1
+                return (local, sharing, Self.gridParticipantId(p))
             }
             return priority(a) < priority(b)
         }
     }
 
-    private static func visibleParticipantSignature(_ participant: Participant) -> String {
-        let identity = participant.identity?.stringValue ?? "nil"
-        let sid = participant.sid?.stringValue ?? "nil"
-        return "\(identity)#\(sid)#\(ObjectIdentifier(participant).hashValue)"
+    private func resetActiveSpeakerGridStateIfNeeded() {
+        if activeSpeakerGridState != ActiveSpeakerScheduler.State() {
+            activeSpeakerGridState = ActiveSpeakerScheduler.State()
+        }
     }
-    
+
+    private static func gridParticipantId(_ participant: Participant) -> String {
+        participant.identity?.stringValue ?? participant.sid?.stringValue ?? participant.id
+    }
+
     // 小列表的规则
     @MainActor
     func sortedParticipants() -> [Participant] {
@@ -403,39 +282,33 @@ extension DTMeetingManager {
             if screenShareA != screenShareB {
                 return screenShareA < screenShareB
             }
-            
+
             // 有视频的在前
             let cameraEnabledA = a.isCameraEnabled() ? 1 : 2
             let cameraEnabledB = b.isCameraEnabled() ? 1 : 2
             if cameraEnabledA != cameraEnabledB {
                 return cameraEnabledA < cameraEnabledB
             }
-            
-            // 如果都在说话，按音频级别排序
-            let isSpeakingA = a.isSpeaking
-            let isSpeakingB = b.isSpeaking
-            if isSpeakingA && isSpeakingB {
-                return a.audioLevel < b.audioLevel
-            } else if isSpeakingA {
-                return true
-            } else if isSpeakingB {
-                return false
+
+            // 正在说话的在前(都在说话不比音量，避免抖动)
+            if a.isSpeaking != b.isSpeaking {
+                return a.isSpeaking
             }
-            
+
             // 麦克风开启的在前
             let micEnabledA = a.isMicrophoneEnabled() ? 1 : 2
             let micEnabledB = b.isMicrophoneEnabled() ? 1 : 2
             if micEnabledA != micEnabledB {
                 return micEnabledA < micEnabledB
             }
-            
+
             // 按说话时间排序
             let aLastSpokeAt = a.lastSpokeAt
             let bLastSpokeAt = b.lastSpokeAt
             if aLastSpokeAt != bLastSpokeAt {
                 return aLastSpokeAt > bLastSpokeAt
             }
-            
+
             // 最后按加入会议时间排序(ios 闪动，改为id)
             return a.id < b.id
         })
@@ -517,12 +390,13 @@ extension DTMeetingManager {
                                 timestamp: UInt64? = nil,
                                 serverTimestamp: UInt64? = nil,
                                 source: String? = nil) {
+        // Resolve first so both the normal success path and the teardown fallback claim delivery
+        // against the same call attempt.
+        let call = call ?? currentCall
         // 处理开始会议的主叫和非主叫的逻辑
         prepareForMeetingCaller(isCaller: isCaller,
+                                call: call,
                                 thread: thread)
-        // Resolve the passed call (fall back to currentCall) so the gate reads the same model the
-        // downstream generation uses, not the global that a concurrent reset may have cleared.
-        let call = call ?? currentCall
         // 处理开始和邀请的本地消息
         guard call.createCallMsg else { return }
         prepareForMeetingStartOrInvite(call: call,
@@ -533,12 +407,18 @@ extension DTMeetingManager {
     }
     
     private func prepareForMeetingCaller(isCaller: Bool = true,
+                                         call: DTLiveKitCallModel,
                                          thread: TSThread? = nil,
                                          timestamp: UInt64? = nil) {
         if isCaller {
             if let startThread = thread {
                 if startThread.isGroupThread() {
-                    self.sendGroupCallMessage(thread: startThread)
+                    self.sendGroupCallMessage(
+                        thread: startThread,
+                        call: call,
+                        acceptedRoomId: call.roomId,
+                        trigger: "normal-success"
+                    )
                 } else {
                     self.send1on1CallMessage(thread: startThread)
                 }
@@ -645,7 +525,12 @@ extension DTMeetingManager {
         }
     }
     
-    func muteAudio(_ muted: Bool) async {
+    @discardableResult
+    func muteAudio(
+        _ muted: Bool,
+        userInitiated: Bool = false,
+        syncCallKitOnFailure: Bool = true
+    ) async -> Bool {
         // Idempotency: skip when LiveKit's mic is already in the requested state.
         // Prevents redundant setMicrophone calls (each toggles the VPIO hardware
         // and is mirrored back by iOS as another CallKit action) from sustaining
@@ -654,11 +539,23 @@ extension DTMeetingManager {
             let currentlyEnabled = room.localParticipant.isMicrophoneEnabled()
             if currentlyEnabled == !muted {
                 Logger.info("\(logTag) call utils mute audio \(muted) skipped: mic already \(muted ? "muted" : "unmuted")")
-                return
+                return true
             }
         }
         Logger.info("\(logTag) call utils mute audio \(muted)")
-        await roomContext?.setLocalMicrophone(enable: !muted)
+        guard let roomContext else { return false }
+        let didApply = await roomContext.setLocalMicrophone(
+            enable: !muted,
+            userInitiated: userInitiated
+        )
+        if userInitiated, syncCallKitOnFailure, !didApply {
+            // A direct native CallKit action already changed the system UI. If
+            // LiveKit rejects it, restore the actual microphone state.
+            await roomContext.syncLocalMicrophoneStateToCallKit(
+                muted: !roomContext.room.localParticipant.isMicrophoneEnabled()
+            )
+        }
+        return didApply
     }
     
     func syncLocalMicrophoneStateToCallKit(_ muted: Bool) {
@@ -923,6 +820,10 @@ extension DTMeetingManager {
                 }
             }
         }
+    }
+
+    func forceRefreshAuthToken() async throws -> String {
+        try await DTTokenHelper.sharedInstance.forceRefreshGlobalAuthToken()
     }
     
     func getProfileInfo(

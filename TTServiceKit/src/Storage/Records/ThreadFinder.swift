@@ -318,7 +318,7 @@ struct GRDBThreadFinder: ThreadFinder {
 
     func enumerateInactiveThreads(groupInterval: Double, contactInterval: Double, transaction: GRDBReadTransaction, block: @escaping (TSThread) -> Void) throws {
 
-        let currentInterval = NSDate().timeIntervalSince1970
+        let currentInterval = TimeInterval(DTTrustedClock.now()) / 1000
         let groupArchiveT = currentInterval - groupInterval
         let contactArchiveT = currentInterval - contactInterval
                 
@@ -513,4 +513,3 @@ struct GRDBThreadFinder: ThreadFinder {
         return try cursor.all()
     }
 }
-

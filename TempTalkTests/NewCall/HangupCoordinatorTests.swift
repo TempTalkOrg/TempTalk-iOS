@@ -324,3 +324,54 @@ final class HangupCoordinatorTests: XCTestCase {
         XCTAssertEqual(mock.lifecycleState, .idle)
     }
 }
+
+// MARK: - Fast group-call teardown CallMsg
+
+final class GroupStartCallMessageCommitTests: XCTestCase {
+
+    private func makeCall(createCallMsg: Bool = false) -> DTLiveKitCallModel {
+        let call = DTLiveKitCallModel()
+        call.isInitiator = true
+        call.callType = .group
+        call.controlType = DTMeetingManager.sourceControlStart
+        call.createCallMsg = createCallMsg
+        return call
+    }
+
+    func test_acceptedStartDuringTeardown_commitsLegacyGroupCallMsg() {
+        XCTAssertTrue(
+            DTMeetingManager.shouldCommitGroupStartCallMessageDuringTeardown(
+                call: makeCall(),
+                source: "startCall",
+                acceptedRoomId: "room-1"
+            )
+        )
+    }
+
+    func test_failedStartDuringTeardown_doesNotCommitCallMsg() {
+        XCTAssertFalse(
+            DTMeetingManager.shouldCommitGroupStartCallMessageDuringTeardown(
+                call: makeCall(),
+                source: "startCall",
+                acceptedRoomId: ""
+            )
+        )
+    }
+
+    func test_serverGeneratedMode_doesNotSendLegacyCallMsg() {
+        XCTAssertFalse(
+            DTMeetingManager.shouldCommitGroupStartCallMessageDuringTeardown(
+                call: makeCall(createCallMsg: true),
+                source: "startCall",
+                acceptedRoomId: "room-1"
+            )
+        )
+    }
+
+    func test_groupCallMsgDelivery_canOnlyBeClaimedOnce() {
+        let call = makeCall()
+
+        XCTAssertTrue(call.claimGroupStartCallMessageDelivery())
+        XCTAssertFalse(call.claimGroupStartCallMessageDelivery())
+    }
+}

@@ -12,7 +12,6 @@
 typedef enum : NSUInteger {
     DTSignInModeTypeLogin = 0,//登陆
     DTSignInModeTypeFromMeRebind = 1,//从我的进入绑定
-    DTSignInModeTypeRegisterViaInviteCode = 2,//邀请码注册
 } DTSignInModeType;
 
 typedef enum : NSUInteger {

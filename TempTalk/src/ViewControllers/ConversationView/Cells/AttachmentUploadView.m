@@ -127,9 +127,23 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)ensureViewState
 {
     BOOL isUploading = !self.isAttachmentReady && self.lastProgress != 0;
+    if (self.suppressesProgressUI) {
+        // Caller draws its own treatment; stay transparent so we don't dim on top.
+        self.backgroundColor = nil;
+        self.progressView.hidden = YES;
+        self.progressLabel.hidden = YES;
+        return;
+    }
     self.backgroundColor = (isUploading ? [UIColor colorWithWhite:0.f alpha:0.2f] : nil);
     self.progressView.hidden = !isUploading;
     self.progressLabel.hidden = !isUploading;
+}
+
+- (void)setSuppressesProgressUI:(BOOL)suppressesProgressUI
+{
+    _suppressesProgressUI = suppressesProgressUI;
+
+    [self ensureViewState];
 }
 
 - (void)attachmentUploadProgress:(NSNotification *)notification

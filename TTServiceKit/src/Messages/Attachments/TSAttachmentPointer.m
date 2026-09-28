@@ -46,6 +46,8 @@ NS_ASSUME_NONNULL_BEGIN
                    encryptionKey:(NSData *)encryptionKey
                           height:(unsigned int)height
                     isDownloaded:(BOOL)isDownloaded
+               preprocessingKind:(TSAttachmentPreprocessingKind)preprocessingKind
+             preprocessingParams:(nullable NSData *)preprocessingParams
                         serverId:(unsigned long long)serverId
                   sourceFilename:(nullable NSString *)sourceFilename
                            width:(unsigned int)width
@@ -66,6 +68,8 @@ NS_ASSUME_NONNULL_BEGIN
                      encryptionKey:encryptionKey
                             height:height
                       isDownloaded:isDownloaded
+                 preprocessingKind:preprocessingKind
+               preprocessingParams:preprocessingParams
                           serverId:serverId
                     sourceFilename:sourceFilename
                              width:width];

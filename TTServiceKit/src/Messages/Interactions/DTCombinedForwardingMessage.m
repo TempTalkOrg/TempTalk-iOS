@@ -25,7 +25,86 @@
 
 @interface DTCombinedForwardingMessage ()
 
++ (DTCombinedForwardingMessage *_Nullable)buildSingleForwardingMessageWithMessage:(DTCombinedForwardingMessage *)message
+                                                                      transaction:(SDSAnyWriteTransaction *)transaction
+                                                               pendingAttachments:(NSMutableArray<TSAttachment *> *)pendingAttachments;
+
 @end
+
+static TSAttachment *_Nullable DTCopyAttachmentForForwarding(TSAttachment *_Nullable originAttachment)
+{
+    if ([originAttachment isKindOfClass:[TSAttachmentPointer class]]) {
+        // Keep an independent pointer so recalling/deleting the source message cannot
+        // remove the attachment metadata before the forwarded message downloads it.
+        TSAttachmentPointer *originPointer = (TSAttachmentPointer *)originAttachment;
+        TSAttachmentPointer *copiedPointer = [[TSAttachmentPointer alloc] initWithServerId:originPointer.serverId
+                                                                                       key:originPointer.encryptionKey
+                                                                                    digest:originPointer.digest
+                                                                                 byteCount:originPointer.byteCount
+                                                                               contentType:originPointer.contentType
+                                                                                     relay:originPointer.relay
+                                                                            sourceFilename:originPointer.sourceFilename
+                                                                            attachmentType:originPointer.attachmentType
+                                                                            albumMessageId:nil
+                                                                                   albumId:nil];
+        copiedPointer.width = originPointer.width;
+        copiedPointer.height = originPointer.height;
+        return copiedPointer;
+    }
+
+    if (![originAttachment isKindOfClass:[TSAttachmentStream class]]) {
+        OWSProdError(@"Cannot copy missing or unsupported forwarding attachment.");
+        return nil;
+    }
+
+    TSAttachmentStream *originStream = (TSAttachmentStream *)originAttachment;
+    NSError *readError = nil;
+    NSData *_Nullable plaintext = [originStream readDataFromFileWithError:&readError];
+    if (!plaintext || readError) {
+        NSString *errorLog = [NSString stringWithFormat:@"Failed to read forwarding attachment: %@", readError];
+        OWSProdError(errorLog);
+        return nil;
+    }
+
+    TSAttachmentStream *copiedStream = [[TSAttachmentStream alloc] initWithContentType:originStream.contentType
+                                                                             byteCount:plaintext.length
+                                                                        sourceFilename:originStream.sourceFilename
+                                                                        albumMessageId:nil
+                                                                               albumId:nil];
+    // The uploader compares this original upload hash with the plaintext before
+    // re-uploading, so preserve it while writing a fresh outgoing plaintext file.
+    copiedStream.encryptionKey = originStream.encryptionKey;
+    copiedStream.attachmentType = originStream.attachmentType;
+    copiedStream.width = originStream.width;
+    copiedStream.height = originStream.height;
+    copiedStream.cachedAudioDurationSeconds = originStream.cachedAudioDurationSeconds;
+    copiedStream.decibelSamples = originStream.decibelSamples;
+
+    NSError *writeError = nil;
+    if (![copiedStream writeData:plaintext error:&writeError] || writeError) {
+        NSString *errorLog = [NSString stringWithFormat:@"Failed to write forwarding attachment: %@", writeError];
+        OWSProdError(errorLog);
+        NSError *cleanupError = nil;
+        [copiedStream removePlaintextFileWithError:&cleanupError];
+        return nil;
+    }
+    return copiedStream;
+}
+
+static void DTCleanupPendingForwardingAttachments(NSArray<TSAttachment *> *attachments)
+{
+    for (TSAttachment *attachment in attachments) {
+        if (![attachment isKindOfClass:[TSAttachmentStream class]]) {
+            continue;
+        }
+        NSError *cleanupError = nil;
+        [(TSAttachmentStream *)attachment removePlaintextFileWithError:&cleanupError];
+        if (cleanupError) {
+            NSString *errorLog = [NSString stringWithFormat:@"Failed to clean up forwarding attachment: %@", cleanupError];
+            OWSProdError(errorLog);
+        }
+    }
+}
 
 @implementation DTCombinedForwardingMessage
 
@@ -171,11 +250,21 @@
 
     
     NSMutableArray *subForwardingMessages = @[].mutableCopy;
+    NSMutableArray<TSAttachment *> *pendingAttachments = [NSMutableArray new];
+    __block BOOL didFailToCopyAttachment = NO;
     [messages enumerateObjectsUsingBlock:^(TSMessage * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
         
         DTCombinedForwardingMessage * subForwardingMessage = nil;
         if(obj.combinedForwardingMessage){
-            DTCombinedForwardingMessage *newForwardingMessage = [self buildSingleForwardingMessageWithMessage:obj.combinedForwardingMessage transaction:transaction];
+            DTCombinedForwardingMessage *newForwardingMessage =
+                [self buildSingleForwardingMessageWithMessage:obj.combinedForwardingMessage
+                                                   transaction:transaction
+                                            pendingAttachments:pendingAttachments];
+            if (!newForwardingMessage) {
+                didFailToCopyAttachment = YES;
+                *stop = YES;
+                return;
+            }
             [self handleMessageLevel:newForwardingMessage level:0];
             subForwardingMessage = newForwardingMessage;
         }else{
@@ -223,54 +312,21 @@
             subForwardingMessage.forwardingMentions = obj.mentions;
             NSMutableArray<NSString *> *attachmentIds = [NSMutableArray new];
             [obj.attachmentIds enumerateObjectsUsingBlock:^(NSString * attachmentId, NSUInteger idx, BOOL * _Nonnull stop) {
-                
                 TSAttachment *originAttachment = [TSAttachment anyFetchWithUniqueId:attachmentId transaction:transaction];
-                TSAttachment *copiedAttachment = nil;
-                if([originAttachment isKindOfClass:[TSAttachmentPointer class]]){
-                    //支持转发本地未下载的附件，这里 copy 一下是防止原始消息被撤回或删除，导致关联的 attachment 信息被删除
-                    TSAttachmentPointer *originAttachmentPointer = (TSAttachmentPointer *)originAttachment;
-                    copiedAttachment = [[TSAttachmentPointer alloc] initWithServerId:originAttachmentPointer.serverId
-                                                                                 key:originAttachmentPointer.encryptionKey
-                                                                              digest:originAttachmentPointer.digest
-                                                                           byteCount:originAttachmentPointer.byteCount
-                                                                         contentType:originAttachmentPointer.contentType
-                                                                               relay:originAttachmentPointer.relay
-                                                                      sourceFilename:originAttachmentPointer.sourceFilename
-                                                                      attachmentType:originAttachmentPointer.attachmentType
-                                                                      albumMessageId:nil
-                                                                             albumId:nil];
-                    if(copiedAttachment) {
-                        [copiedAttachment anyInsertWithTransaction:transaction];
-                        if(copiedAttachment.uniqueId) {
-                            [attachmentIds addObject:copiedAttachment.uniqueId];
-                        }
-                    }
-                }else if ([originAttachment isKindOfClass:[TSAttachmentStream class]]){
-                    TSAttachmentStream *originAttachmentStream = (TSAttachmentStream *)originAttachment;
-                    copiedAttachment = [[TSAttachmentStream alloc] initWithContentType:originAttachmentStream.contentType byteCount:originAttachmentStream.byteCount sourceFilename:originAttachmentStream.sourceFilename albumMessageId:nil albumId:nil];
-                    // 复制文件后记录下文件之前上传时的 hash 值：encryptionKey，在转发前需要校验 hash 判断本地文件是否被篡改
-                    copiedAttachment.encryptionKey = originAttachment.encryptionKey;
-                    NSError *error;
-                    BOOL copyResult = [[NSFileManager defaultManager] copyItemAtPath:originAttachmentStream.filePath
-                                                                              toPath:((TSAttachmentStream *)copiedAttachment).filePath
-                                                                               error:&error];
-                    if(error || !copyResult){
-                        NSString *errorLog = [NSString stringWithFormat:@"%@ copy error: %@", self.logTag, error.description];
-                        OWSProdError(errorLog);
-                    }
-                    
-                    if(copiedAttachment){
-                        [copiedAttachment anyInsertWithTransaction:transaction];
-                        if(copiedAttachment.uniqueId){
-                            [attachmentIds addObject:copiedAttachment.uniqueId];
-                        }
-                    }
-                    
-                }else{
-                    
+                TSAttachment *copiedAttachment = DTCopyAttachmentForForwarding(originAttachment);
+                if (!copiedAttachment || !copiedAttachment.uniqueId) {
+                    didFailToCopyAttachment = YES;
+                    *stop = YES;
+                    return;
                 }
-                
+                [pendingAttachments addObject:copiedAttachment];
+                [attachmentIds addObject:copiedAttachment.uniqueId];
             }];
+
+            if (didFailToCopyAttachment) {
+                *stop = YES;
+                return;
+            }
             
             subForwardingMessage.forwardingAttachmentIds = attachmentIds.copy;
             
@@ -289,6 +345,15 @@
         }
         
     }];
+
+    if (didFailToCopyAttachment) {
+        DTCleanupPendingForwardingAttachments(pendingAttachments);
+        return nil;
+    }
+
+    for (TSAttachment *attachment in pendingAttachments) {
+        [attachment anyInsertWithTransaction:transaction];
+    }
     
     forwardingMessage.subForwardingMessages = subForwardingMessages.copy;
     
@@ -297,64 +362,56 @@
 
 + (DTCombinedForwardingMessage *_Nullable)buildSingleForwardingMessageWithMessage:(DTCombinedForwardingMessage *)message
                                                                       transaction:(nonnull SDSAnyWriteTransaction *)transaction{
+    NSMutableArray<TSAttachment *> *pendingAttachments = [NSMutableArray new];
+    DTCombinedForwardingMessage *_Nullable forwardingMessage =
+        [self buildSingleForwardingMessageWithMessage:message
+                                           transaction:transaction
+                                    pendingAttachments:pendingAttachments];
+    if (!forwardingMessage) {
+        DTCleanupPendingForwardingAttachments(pendingAttachments);
+        return nil;
+    }
+    for (TSAttachment *attachment in pendingAttachments) {
+        [attachment anyInsertWithTransaction:transaction];
+    }
+    return forwardingMessage;
+}
+
++ (DTCombinedForwardingMessage *_Nullable)buildSingleForwardingMessageWithMessage:(DTCombinedForwardingMessage *)message
+                                                                      transaction:(SDSAnyWriteTransaction *)transaction
+                                                               pendingAttachments:(NSMutableArray<TSAttachment *> *)pendingAttachments {
     DTCombinedForwardingMessage * forwardingMessage = [message copy];
-    
     NSMutableArray *subItems = @[].mutableCopy;
-    
+    __block BOOL didFailToCopyAttachment = NO;
+
     [forwardingMessage.subForwardingMessages enumerateObjectsUsingBlock:^(DTCombinedForwardingMessage * _Nonnull subForwardingMessage, NSUInteger idx, BOOL * _Nonnull stop) {
-        
-        DTCombinedForwardingMessage *newMessage = [self buildSingleForwardingMessageWithMessage:subForwardingMessage transaction:transaction];
+        DTCombinedForwardingMessage *newMessage =
+            [self buildSingleForwardingMessageWithMessage:subForwardingMessage
+                                               transaction:transaction
+                                        pendingAttachments:pendingAttachments];
+        if (!newMessage) {
+            didFailToCopyAttachment = YES;
+            *stop = YES;
+            return;
+        }
         NSMutableArray *attachmentIds = @[].mutableCopy;
         __block NSString *body = nil;
         [subForwardingMessage.forwardingAttachmentIds enumerateObjectsUsingBlock:^(NSString * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
             TSAttachment *attachment = [TSAttachment anyFetchWithUniqueId:obj transaction:transaction];
-            TSAttachment *copiedAttachment = nil;
-            if([attachment isKindOfClass:[TSAttachmentPointer class]]){
-                //支持转发本地未下载的附件，这里 copy 一下是防止原始消息被撤回或删除，导致关联的 attachment 信息被删除
-                TSAttachmentPointer *originAttachmentPointer = (TSAttachmentPointer *)attachment;
-                copiedAttachment = [[TSAttachmentPointer alloc] initWithServerId:originAttachmentPointer.serverId
-                                                                             key:originAttachmentPointer.encryptionKey
-                                                                          digest:originAttachmentPointer.digest
-                                                                       byteCount:originAttachmentPointer.byteCount
-                                                                     contentType:originAttachmentPointer.contentType
-                                                                           relay:originAttachmentPointer.relay
-                                                                  sourceFilename:originAttachmentPointer.sourceFilename
-                                                                  attachmentType:originAttachmentPointer.attachmentType
-                                                                  albumMessageId:nil
-                                                                         albumId:nil];
-                if(copiedAttachment) {
-                    [copiedAttachment anyInsertWithTransaction:transaction];
-                    if(copiedAttachment.uniqueId) {
-                        [attachmentIds addObject:copiedAttachment.uniqueId];
-                    }
-                }
-                
-            }else if ([attachment isKindOfClass:[TSAttachmentStream class]]){
-                TSAttachmentStream *originAttachmentStream = (TSAttachmentStream *)attachment;
-                copiedAttachment = [[TSAttachmentStream alloc] initWithContentType:originAttachmentStream.contentType byteCount:originAttachmentStream.byteCount sourceFilename:originAttachmentStream.sourceFilename albumMessageId:nil albumId:nil];
-                // 复制文件后记录下文件之前上传时的 hash 值：encryptionKey，在转发前需要校验 hash 判断本地文件是否被篡改
-                copiedAttachment.encryptionKey = originAttachmentStream.encryptionKey;
-                NSError *error;
-                BOOL copyResult = [[NSFileManager defaultManager] copyItemAtPath:originAttachmentStream.filePath
-                                                                          toPath:((TSAttachmentStream *)copiedAttachment).filePath
-                                                                           error:&error];
-                if(error || !copyResult){
-                    NSString *errorLog = [NSString stringWithFormat:@"%@ copy error: %@", self.logTag, error.description];
-                    OWSProdError(errorLog);
-                }
-                
-                if(copiedAttachment){
-                    [copiedAttachment anyInsertWithTransaction:transaction];
-                    if(copiedAttachment.uniqueId){
-                        [attachmentIds addObject:copiedAttachment.uniqueId];
-                    }
-                }
-                
-            }else{
-                
+            TSAttachment *copiedAttachment = DTCopyAttachmentForForwarding(attachment);
+            if (!copiedAttachment || !copiedAttachment.uniqueId) {
+                didFailToCopyAttachment = YES;
+                *stop = YES;
+                return;
             }
-            
+            [pendingAttachments addObject:copiedAttachment];
+            [attachmentIds addObject:copiedAttachment.uniqueId];
         }];
+
+        if (didFailToCopyAttachment) {
+            *stop = YES;
+            return;
+        }
         
         newMessage.forwardingAttachmentIds = attachmentIds.copy;
         
@@ -366,11 +423,12 @@
             [subItems addObject:newMessage];
         }
     }];
-    
+
+    if (didFailToCopyAttachment) {
+        return nil;
+    }
+
     forwardingMessage.subForwardingMessages = subItems.copy;
-    
-    
-    
     return forwardingMessage;
 }
 

@@ -472,14 +472,20 @@ extension ConversationViewController {
         guard let contactThread = self.thread as? TSContactThread else {
             return
         }
-        AddFriendHandler.handleRequestAddFriend(identifier: contactThread.contactIdentifier(),
-                                                sourceType: .unknow,
-                                                sourceConversationID: nil,
-                                                shareContactCardUId: nil,
-                                                action: nil,
-                                                failure:  { errorString in
-            OWSLogger.error("ask friend error in conversation: \(errorString)")
-        })
+        let source = contextualAddFriendSource
+        Task { @MainActor in
+            do {
+                try await AddFriendHandler.handleRequestAddFriend(
+                    identifier: contactThread.contactIdentifier(),
+                    source: source
+                )
+            } catch AddFriendHandler.AddFriendError.accountUnavailable {
+                // Unified account-unavailable UI already shown by AddFriendHandler.
+                OWSLogger.info("[AddFriend] conversation button: account unavailable (19009)")
+            } catch {
+                OWSLogger.error("[AddFriend] conversation button error: \((error as NSError).localizedDescription)")
+            }
+        }
     }
     
     func startCallAction() {
@@ -524,7 +530,9 @@ extension ConversationViewController: OWSNavigationChildController {
         if conversationViewMode == .main {
             view.endEditing(true)
         }
-        return false
+        // Block back-nav while a modal (e.g. QuickLook preview) is presented or mid-dismiss;
+        // a swipe/tap in that window races the dismiss transition and desyncs the nav stack.
+        return presentedViewController != nil
     }
     
     // TODO: 下面的方法在 OC 全部转成 Swift 后删除，extension 中已经提供了全部实现

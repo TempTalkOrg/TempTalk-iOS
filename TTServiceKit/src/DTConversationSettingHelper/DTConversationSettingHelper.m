@@ -26,11 +26,14 @@ extern NSString *const TSInboxGroup;
 @property (nonatomic, strong) DTGetConversationApi *muteStatuesApi;
 @property (nonatomic, strong) DTSetConversationApi *configApi;
 @property (nonatomic, strong) NSDate *lastTimeDate;
-@property (nonatomic, strong, readwrite) NSMutableArray *loadedActiveSettingThreadIds;
+@property (nonatomic, strong) AtomicStringArray *atomicLoadedActiveSettingThreadIds;
 
 @property (nonatomic, strong) DTFetchThreadConfigAPI *conversationShareConfigApi;
 @property (nonatomic, strong) NSDate *lastRequestconversationShareTimeDate;
-@property (nonatomic, strong, readwrite) NSMutableArray *loadedConversationShareThreadIds;
+@property (nonatomic, strong) AtomicStringArray *atomicLoadedConversationShareThreadIds;
+
+- (void)addLoadedActiveSettingThreadIdIfNeeded:(NSString *)threadId;
+- (void)addLoadedConversationShareThreadIdIfNeeded:(NSString *)threadId;
 @end
 
 @implementation DTConversationSettingHelper
@@ -44,6 +47,15 @@ extern NSString *const TSInboxGroup;
         sharedInstance = [[self alloc] init];
     });
     return sharedInstance;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _atomicLoadedActiveSettingThreadIds = [AtomicStringArray new];
+        _atomicLoadedConversationShareThreadIds = [AtomicStringArray new];
+    }
+    return self;
 }
 
 - (void)requestAllActiveThreadsConversationSettingAndSaveResult {
@@ -108,11 +120,7 @@ extern NSString *const TSInboxGroup;
     }
     NSDate *now = [NSDate date];
     if (self.lastTimeDate && ([now timeIntervalSinceDate:self.lastTimeDate] > kDiffTimeInterval)) {
-        @synchronized (self) {
-            if (self.loadedActiveSettingThreadIds.count) {
-                [self.loadedActiveSettingThreadIds removeAllObjects];
-            }
-        }
+        [self.atomicLoadedActiveSettingThreadIds removeAll];
         [self requestConversationSettingAndSaveResultWithConversationIds:conversationIds];
     }
 }
@@ -125,11 +133,7 @@ extern NSString *const TSInboxGroup;
     }
     NSDate *now = [NSDate date];
     if (self.lastRequestconversationShareTimeDate && ([now timeIntervalSinceDate:self.lastRequestconversationShareTimeDate] > kDiffTimeInterval)) {
-        @synchronized (self) {
-            if (self.loadedConversationShareThreadIds.count) {
-                [self.loadedConversationShareThreadIds removeAllObjects];
-            }
-        }
+        [self.atomicLoadedConversationShareThreadIds removeAll];
         [self requestConversationSharingConfigurationStatesAndSaveResultWithConversationIds:conversationIds saveResult:true success:nil failure:nil];
     }
 }
@@ -210,9 +214,7 @@ extern NSString *const TSInboxGroup;
                                                            transaction:writeTransaction];
                             }
                             
-                            if (![self.loadedActiveSettingThreadIds containsObject:entity.conversation]) {
-                                [self.loadedActiveSettingThreadIds addObject:entity.conversation];
-                            }
+                            [self addLoadedConversationShareThreadIdIfNeeded:entity.conversation];
                             loopBatchIndex += 1;
                         }];
                     });
@@ -273,9 +275,7 @@ extern NSString *const TSInboxGroup;
                                                    transaction:writeTransaction];
                     }
                     
-                    if (![self.loadedActiveSettingThreadIds containsObject:entity.conversation]) {
-                        [self.loadedActiveSettingThreadIds addObject:entity.conversation];
-                    }
+                    [self addLoadedConversationShareThreadIdIfNeeded:entity.conversation];
                 }];
                 
                 self.lastRequestconversationShareTimeDate = [NSDate date];
@@ -347,9 +347,7 @@ extern NSString *const TSInboxGroup;
                                 }];
                             }
                             
-                            if (![self.loadedActiveSettingThreadIds containsObject:entity.conversation]) {
-                                [self.loadedActiveSettingThreadIds addObject:entity.conversation];
-                            }
+                            [self addLoadedActiveSettingThreadIdIfNeeded:entity.conversation];
                             
                             if([thread isKindOfClass:[TSContactThread class]]){
                                 [self applyRemarkFieldsFromEntity:entity
@@ -397,9 +395,7 @@ extern NSString *const TSInboxGroup;
                         }];
                     }
                     
-                    if (![self.loadedActiveSettingThreadIds containsObject:entity.conversation]) {
-                        [self.loadedActiveSettingThreadIds addObject:entity.conversation];
-                    }
+                    [self addLoadedActiveSettingThreadIdIfNeeded:entity.conversation];
                     
                     if([thread isKindOfClass:[TSContactThread class]]){
                         [self applyRemarkFieldsFromEntity:entity
@@ -518,17 +514,23 @@ extern NSString *const TSInboxGroup;
 }
 
 - (NSMutableArray *)loadedActiveSettingThreadIds {
-    if (!_loadedActiveSettingThreadIds) {
-        _loadedActiveSettingThreadIds = [NSMutableArray array];
-    }
-    return _loadedActiveSettingThreadIds;
+    return [[self.atomicLoadedActiveSettingThreadIds get] mutableCopy];
 }
 
-- (NSMutableArray *)loadedConversationShareThreadIds {
-    if (!_loadedConversationShareThreadIds) {
-        _loadedConversationShareThreadIds = [NSMutableArray array];
+- (void)addLoadedActiveSettingThreadIdIfNeeded:(NSString *)threadId {
+    if (threadId.length == 0) {
+        return;
     }
-    return _loadedConversationShareThreadIds;
+
+    [self.atomicLoadedActiveSettingThreadIds appendIfAbsent:threadId];
+}
+
+- (void)addLoadedConversationShareThreadIdIfNeeded:(NSString *)threadId {
+    if (threadId.length == 0) {
+        return;
+    }
+
+    [self.atomicLoadedConversationShareThreadIds appendIfAbsent:threadId];
 }
 
 - (nullable NSString *)encryptRemarkString:( NSString * _Nonnull )remarkName receptid:(NSString * _Nonnull)receptid {

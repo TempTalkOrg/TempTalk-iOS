@@ -6,8 +6,10 @@
 #import "OWSAudioMessageView.h"
 #import "OWSMessageHeaderView.h"
 #import "Yelling-Swift.h"
-#import <AssetsLibrary/AssetsLibrary.h>
+#import <Photos/Photos.h>
 #import <SignalCoreKit/NSString+OWS.h>
+#import <SignalCoreKit/Threading.h>
+#import <TTMessaging/TTMessaging-Swift.h>
 #import <TTMessaging/OWSUnreadIndicator.h>
 #import <TTServiceKit/OWSContact.h>
 #import <TTServiceKit/TSInteraction.h>
@@ -43,7 +45,26 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
             return @"OWSMessageCellType_Card";
         case OWSMessageCellType_CombinedForwarding:
             return @"OWSMessageCellType_CombinedForwarding";
+        case OWSMessageCellType_VideoTranscoding:
+            return @"OWSMessageCellType_VideoTranscoding";
     }
+}
+
+// Saving an image or a GIF is near-instant, so keep the loading HUD up long enough to be read
+// instead of letting it flash. Videos take longer and simply outlive it.
+static const NSTimeInterval kSaveMediaMinLoadingDuration = 0.3;
+
+static void ShowSaveMediaResultToast(BOOL success)
+{
+    DispatchMainThreadSafe(^{
+        if (success) {
+            [DTToastHelper showSuccess:Localized(@"CHAT_FOLDER_SAVE_SUCCESS_TIP",
+                                           @"Toast shown after media is saved to the photo library")];
+        } else {
+            [DTToastHelper showFailure:Localized(@"CHAT_FOLDER_SAVE_FAILED_TIP",
+                                           @"Toast shown when saving media to the photo library fails")];
+        }
+    });
 }
 
 @interface DTWeakRefrence : NSObject
@@ -532,7 +553,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
 
     return [self displayableTextForCacheKey:displayableTextCacheKey
                                   textBlock:^{
-                                      NSData *textData = [NSData dataWithContentsOfURL:attachmentStream.mediaURL];
+                                      NSData *textData = attachmentStream.decryptedData;
                                       NSString *text =
                                           [[NSString alloc] initWithData:textData encoding:NSUTF8StringEncoding];
                                       return text;
@@ -714,11 +735,29 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
         if ([attachment isKindOfClass:[TSAttachmentStream class]]) {
             self.attachmentStream = (TSAttachmentStream *)attachment;
 
+            // Video placeholder awaiting compression. Fall back to the regular
+            // video cell once the message has failed, so the standard failure UI
+            // takes over instead of a spinner that will never resolve.
+            if (self.attachmentStream.preprocessingKind == TSAttachmentPreprocessingKindVideoCompression) {
+                BOOL isFailed = NO;
+                if ([message isKindOfClass:[TSOutgoingMessage class]]) {
+                    isFailed = ((TSOutgoingMessage *)message).messageState == TSOutgoingMessageStateFailed;
+                }
+                self.mediaSize = [self.attachmentStream imageSize];
+                self.messageCellType = isFailed ? OWSMessageCellType_Video : OWSMessageCellType_VideoTranscoding;
+                if (self.mediaSize.width <= 0 || self.mediaSize.height <= 0) {
+                    // No usable size (thumbnail generation would also have failed) —
+                    // fall through to a generic attachment so layout stays valid.
+                    self.messageCellType = OWSMessageCellType_GenericAttachment;
+                }
+                return;
+            }
+
             if ([attachment.contentType isEqualToString:OWSMimeTypeOversizeTextMessage]) {
                 self.messageCellType = OWSMessageCellType_OversizeTextMessage;
                 self.displayableBodyText = [self displayableBodyTextForOversizeTextAttachment:self.attachmentStream
                                                                                 interactionId:message.uniqueId];
-                
+
             } else if ([self.attachmentStream isAnimatedImageAttachment] || [self.attachmentStream isImage] ||
                 [self.attachmentStream isVideo]) {
                 if ([self.attachmentStream isAnimatedImageAttachment]) {
@@ -997,7 +1036,8 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
             OWSFailDebug(@"%@ Can't copy not-yet-downloaded attachment", self.logTag);
             break;
         }
-        case OWSMessageCellType_Unknown: {
+        case OWSMessageCellType_Unknown:
+        case OWSMessageCellType_VideoTranscoding: {
             OWSFailDebug(@"%@ No text to copy", self.logTag);
             break;
         }
@@ -1045,7 +1085,8 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
         case OWSMessageCellType_OversizeTextMessage:
         case OWSMessageCellType_ContactShare:
         case OWSMessageCellType_Card:
-        case OWSMessageCellType_CombinedForwarding: {
+        case OWSMessageCellType_CombinedForwarding:
+        case OWSMessageCellType_VideoTranscoding: {
             OWSFailDebug(@"%@ No media to copy", self.logTag);
             break;
         }
@@ -1059,7 +1100,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
                 OWSFailDebug(@"%@ Unknown MIME type: %@", self.logTag, self.attachmentStream.contentType);
                 utiType = (NSString *)kUTTypeGIF;
             }
-            NSData *data = [NSData dataWithContentsOfURL:[self.attachmentStream mediaURL]];
+            NSData *data = self.attachmentStream.decryptedData;
             if (!data) {
                 OWSFailDebug(@"%@ Could not load attachment data: %@", self.logTag, [self.attachmentStream mediaURL]);
                 return;
@@ -1094,6 +1135,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
         }
         case OWSMessageCellType_CombinedForwarding:
         case OWSMessageCellType_Card:
+        case OWSMessageCellType_VideoTranscoding:
         case OWSMessageCellType_Unknown: {
             OWSFailDebug(@"%@ No text to share", self.logTag);
             break;
@@ -1114,6 +1156,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
         case OWSMessageCellType_ContactShare:
         case OWSMessageCellType_Card:
         case OWSMessageCellType_CombinedForwarding:
+        case OWSMessageCellType_VideoTranscoding:
             OWSFailDebug(@"No media to share.");
             break;
         case OWSMessageCellType_StillImage:
@@ -1139,6 +1182,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
         case OWSMessageCellType_ContactShare:
         case OWSMessageCellType_Card:
         case OWSMessageCellType_CombinedForwarding:
+        case OWSMessageCellType_VideoTranscoding:
             return NO;
         case OWSMessageCellType_StillImage:
         case OWSMessageCellType_AnimatedImage:
@@ -1146,9 +1190,12 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
         case OWSMessageCellType_Audio:
             return NO;
         case OWSMessageCellType_Video:
-            return UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(self.attachmentStream.mediaURL.path);
+            // Building the message action menu must not synchronously decrypt a large video.
+            // The save action performs authenticated decryption and reports any failure.
+            return self.attachmentStream != nil;
         case OWSMessageCellType_GenericAttachment:
-            return NO;
+            // Generic files download via the system share sheet ("Save to Files").
+            return self.attachmentStream != nil;
         case OWSMessageCellType_DownloadingAttachment: {
             return NO;
         }
@@ -1164,48 +1211,104 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
         case OWSMessageCellType_ContactShare:
         case OWSMessageCellType_Card:
         case OWSMessageCellType_CombinedForwarding:
+        case OWSMessageCellType_VideoTranscoding:
             OWSFailDebug(@"%@ Cannot save text data.", self.logTag);
             break;
         case OWSMessageCellType_StillImage:
-        case OWSMessageCellType_AnimatedImage: {
-            NSData *data = [NSData dataWithContentsOfURL:[self.attachmentStream mediaURL]];
-            if (!data) {
-                OWSFailDebug(@"%@ Could not load image data: %@", self.logTag, [self.attachmentStream mediaURL]);
-                return;
-            }
-            ALAssetsLibrary *library = [[ALAssetsLibrary alloc] init];
-            [library writeImageDataToSavedPhotosAlbum:data
-                                             metadata:nil
-                                      completionBlock:^(NSURL *assetURL, NSError *error) {
-                                          if (error) {
-                                              DDLogWarn(@"Error Saving image to photo album: %@", error);
-
-                                          } else {
-                                              [DTToastHelper showSuccess:Localized(@"CHAT_FOLDER_SAVE_SUCCESS_TIP",
-                                                                                             @"Title format for action sheet that offers to block an unknown user."
-                                                                                             @"Embeds {{the unknown user's name or phone number}}.")];
-                                          }
-                                      }];
+        case OWSMessageCellType_AnimatedImage:
+            [self saveToPhotosAlbumWithResourceType:PHAssetResourceTypePhoto];
             break;
-        }
         case OWSMessageCellType_Audio:
             OWSFailDebug(@"%@ Cannot save media data.", self.logTag);
             break;
         case OWSMessageCellType_Video:
-            if (UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(self.attachmentStream.mediaURL.path)) {
-                UISaveVideoAtPathToSavedPhotosAlbum(self.attachmentStream.mediaURL.path, self, nil, nil);
-            } else {
-                OWSFailDebug(@"%@ Could not save incompatible video data.", self.logTag);
-            }
+            [self saveToPhotosAlbumWithResourceType:PHAssetResourceTypeVideo];
             break;
         case OWSMessageCellType_GenericAttachment:
-            OWSFailDebug(@"%@ Cannot save media data.", self.logTag);
+            if (self.attachmentStream) {
+                [AttachmentSharing showShareUIForAttachment:self.attachmentStream];
+            } else {
+                OWSFailDebug(@"%@ Cannot save media data.", self.logTag);
+            }
             break;
         case OWSMessageCellType_DownloadingAttachment: {
             OWSFailDebug(@"%@ Can't save not-yet-downloaded attachment", self.logTag);
             break;
         }
     }
+}
+
+// Saves an encrypted-at-rest attachment to the photo library without ever staging
+// plaintext on disk. Authorization is requested before decrypting, so a denied prompt
+// never costs a full decrypt, and the decrypt itself stays off the main thread.
+- (void)saveToPhotosAlbumWithResourceType:(PHAssetResourceType)resourceType
+{
+    NSString *logTag = self.logTag;
+    TSAttachmentStream *_Nullable attachmentStream = self.attachmentStream;
+    if (!attachmentStream) {
+        OWSFailDebug(@"%@ Cannot save media data.", logTag);
+        return;
+    }
+
+    NSString *_Nullable uniformTypeIdentifier = [MIMETypeUtil utiTypeForMIMEType:attachmentStream.contentType];
+    if ([uniformTypeIdentifier hasPrefix:@"dyn."] ||
+        [uniformTypeIdentifier isEqualToString:(NSString *)kUTTypeData]) {
+        // Generic or unknown MIME types carry no useful format information. Keep the options UTI
+        // unset so PhotoKit can infer the format instead of rejecting the asset.
+        uniformTypeIdentifier = nil;
+    }
+
+    [PHPhotoLibrary requestAuthorizationForAccessLevel:PHAccessLevelAddOnly
+                                               handler:^(PHAuthorizationStatus status) {
+        if (status != PHAuthorizationStatusAuthorized && status != PHAuthorizationStatusLimited) {
+            // Retrying can't succeed once access is denied, so point at Settings instead of toasting "try again".
+            OWSLogError(@"%@ Photo library add-only access not granted: %ld", logTag, (long)status);
+            DispatchMainThreadSafe(^{
+                [OWSAlerts showNoPhotoLibraryPermissionAlert];
+            });
+            return;
+        }
+
+        DispatchMainThreadSafe(^{
+            [DTToastHelper allowInteraction:NO];
+            [DTToastHelper svShow];
+        });
+        CFTimeInterval startedAt = CACurrentMediaTime();
+
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            void (^finish)(BOOL) = ^(BOOL success) {
+                NSTimeInterval elapsed = CACurrentMediaTime() - startedAt;
+                NSTimeInterval remaining = MAX(0.0, kSaveMediaMinLoadingDuration - elapsed);
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(remaining * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(),
+                    ^{
+                        ShowSaveMediaResultToast(success);
+                    });
+            };
+
+            NSData *_Nullable data = nil;
+            @autoreleasepool {
+                data = attachmentStream.decryptedData;
+            }
+            if (!data) {
+                OWSLogError(@"%@ Could not load media data to save.", logTag);
+                finish(NO);
+                return;
+            }
+
+            [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
+                PHAssetCreationRequest *request = [PHAssetCreationRequest creationRequestForAsset];
+                PHAssetResourceCreationOptions *options = [PHAssetResourceCreationOptions new];
+                options.uniformTypeIdentifier = uniformTypeIdentifier;
+                [request addResourceWithType:resourceType data:data options:options];
+            } completionHandler:^(BOOL success, NSError *_Nullable error) {
+                if (!success) {
+                    OWSLogError(@"%@ Error saving in-memory media: %@", logTag, error);
+                }
+                finish(success);
+            }];
+        });
+    }];
 }
 
 - (void)deleteAction
@@ -1235,6 +1338,7 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
         case OWSMessageCellType_ContactShare:
         case OWSMessageCellType_Card:
         case OWSMessageCellType_CombinedForwarding:
+        case OWSMessageCellType_VideoTranscoding:
             return NO;
         case OWSMessageCellType_StillImage:
         case OWSMessageCellType_AnimatedImage:
@@ -1257,10 +1361,12 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
 
     switch (self.messageCellType) {
         case OWSMessageCellType_Unknown:
-        case OWSMessageCellType_ContactShare:
-        case OWSMessageCellType_Audio:
-        case OWSMessageCellType_CombinedForwarding:
+        // Still compressing — the message isn't on the wire yet.
+        case OWSMessageCellType_VideoTranscoding:
             return NO;
+        // Menu redesign intentionally enables reactions for all standard content
+        // types, including ContactShare / Audio / CombinedForwarding; rendering is
+        // data-driven off reactionMap, so no per-type render change is needed.
         case OWSMessageCellType_TextMessage:
         case OWSMessageCellType_OversizeTextMessage:
         case OWSMessageCellType_StillImage:
@@ -1268,6 +1374,9 @@ NSString *NSStringForOWSMessageCellType(OWSMessageCellType cellType)
         case OWSMessageCellType_Video:
         case OWSMessageCellType_GenericAttachment:
         case OWSMessageCellType_Card:
+        case OWSMessageCellType_ContactShare:
+        case OWSMessageCellType_Audio:
+        case OWSMessageCellType_CombinedForwarding:
             return YES;
         case OWSMessageCellType_DownloadingAttachment:
             return self.hasBodyText;

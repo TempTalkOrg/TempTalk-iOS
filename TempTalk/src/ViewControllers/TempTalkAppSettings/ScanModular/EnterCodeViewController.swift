@@ -353,14 +353,8 @@ final class EnterCodeViewController: OWSViewController {
             cardType = .selfNoneEdit
         }
 
-        // Set correct source based on input type
-        if isInviteCode {
-            DTAddFriendSourceManager.shared.setOtherSource(.randomCode)
-        } else {
-            DTAddFriendSourceManager.shared.setOtherSource(.inSearchUserId)
-        }
-
-        let cardVC = DTPersonalCardController(type: cardType, recipientId: recipientId, account: account)
+        let addFriendSource: AddFriendSource = isInviteCode ? .randomCode : .search
+        let cardVC = DTPersonalCardController(type: cardType, recipientId: recipientId, account: account, addFriendSource: addFriendSource)
         cardVC.isFromContacts = true
         if let navigationController = self.navigationController {
             navigationController.pushViewController(cardVC, animated: true)

@@ -53,6 +53,13 @@ struct StateTransition: Equatable {
     let to: CallLifecycleState
     let forced: Bool
     let reason: String?
+
+    /// CallKit answer fulfillment is a prerequisite for iOS to activate the call audio session.
+    /// Waiting for media readiness here would deadlock microphone publication behind the held
+    /// `CXAnswerCallAction`, so the room-connected transition is the release point.
+    var shouldFulfillPendingCallKitAnswer: Bool {
+        to == .connected
+    }
 }
 
 // MARK: - CallStateMachine
@@ -166,5 +173,208 @@ final class CallStateMachine {
 
     private static func isLegal(from: CallLifecycleState, to: CallLifecycleState) -> Bool {
         legalTransitions[from]?.contains(to) == true
+    }
+}
+
+// MARK: - Call type state machine
+
+enum CallTypeResolutionSource: Equatable {
+    case legacy
+    case roomMetadata(CallType)
+    case localInstantOverride
+    case instantLatched
+}
+
+extension CallTypeResolutionSource: CustomStringConvertible {
+    /// Logs the wire value (`1on1`) rather than the Swift case name (`private`), so diagnostics
+    /// match the terminology used by the server and the other clients.
+    var description: String {
+        switch self {
+        case .legacy:
+            return "legacy"
+        case let .roomMetadata(callType):
+            return "roomMetadata(\(callType.rawValue))"
+        case .localInstantOverride:
+            return "localInstantOverride"
+        case .instantLatched:
+            return "instantLatched"
+        }
+    }
+}
+
+struct CallTypeResolutionState: Equatable {
+    let source: CallTypeResolutionSource
+    let effectiveType: CallType
+}
+
+struct CallTypeTransition: Equatable {
+    let from: CallTypeResolutionState
+    let to: CallTypeResolutionState
+}
+
+/// Keeps the server-provided room call type and the legacy local inference in parallel.
+///
+/// The server value is only consulted for calls that started as 1v1: "this became instant while I
+/// was not looking" is the one type change a client cannot detect on its own, because a second
+/// device of the same peer takes its own participant slot. Group and instant calls have no such
+/// blind spot and stay on the legacy inference.
+///
+/// Instant is terminal — the type is only ever corrected downwards — and the legacy inference,
+/// itself monotonic, takes over whenever metadata is absent, unusable or not applicable.
+final class CallTypeStateMachine {
+    private(set) var authoritativeCallType: CallType?
+    private(set) var state: CallTypeResolutionState
+
+    private let initialLegacyType: CallType
+    private var legacyType: CallType
+    /// Set as soon as any resolution yields instant; from then on instant is the answer.
+    private var hasLatchedInstant = false
+    private let subject = PassthroughSubject<CallTypeTransition, Never>()
+
+    var statePublisher: AnyPublisher<CallTypeTransition, Never> {
+        subject.eraseToAnyPublisher()
+    }
+
+    init(initialCallType: CallType) {
+        initialLegacyType = initialCallType
+        legacyType = initialCallType
+        state = CallTypeResolutionState(source: .legacy, effectiveType: initialCallType)
+    }
+
+    /// The source call type still owns connection/message side effects even when the
+    /// effective UI type is locally corrected to instant.
+    var connectionFlowType: CallType {
+        initialLegacyType
+    }
+
+    var usesOneToOneConnectionFlow: Bool {
+        connectionFlowType == .private
+    }
+
+    /// Stores the latest metadata value (including nil) and resolves the effective type.
+    /// A nil value deliberately returns control to the preserved legacy inference.
+    func ingest(
+        metadataCallType: CallType?,
+        participantCount: Int,
+        isSelfInGroup: Bool
+    ) -> CallTypeTransition? {
+        authoritativeCallType = metadataCallType
+        return resolve(participantCount: participantCount, isSelfInGroup: isSelfInGroup)
+    }
+
+    /// Records a deliberate local 1on1/group -> instant conversion.
+    ///
+    /// Latching here means a stale 1on1 metadata value arriving while the server update is
+    /// in flight can no longer undo the upgrade. Keeping `legacyType` in sync mirrors it
+    /// into the fallback used when metadata is absent or unparsable.
+    func forceInstantForLocalUpgrade() -> CallTypeTransition? {
+        hasLatchedInstant = true
+        legacyType = .instant
+        return transition(
+            to: CallTypeResolutionState(
+                source: .localInstantOverride,
+                effectiveType: .instant
+            )
+        )
+    }
+
+    /// Re-evaluates participant/group corrections without changing the latest metadata value.
+    func reevaluate(
+        participantCount: Int,
+        isSelfInGroup: Bool
+    ) -> CallTypeTransition? {
+        resolve(participantCount: participantCount, isSelfInGroup: isSelfInGroup)
+    }
+
+    private func resolve(
+        participantCount: Int,
+        isSelfInGroup: Bool
+    ) -> CallTypeTransition? {
+        // Snapshot before updateLegacyType, which may latch on its own: the latch only decides
+        // *this* resolution if it was already set on entry. Otherwise a downgrade happening now
+        // would report `instantLatched` and hide where the instant actually came from.
+        let wasLatched = hasLatchedInstant
+        updateLegacyType(participantCount: participantCount, isSelfInGroup: isSelfInGroup)
+
+        let nextState: CallTypeResolutionState
+        if wasLatched {
+            // Terminal: neither a shrinking participant count nor a stale 1on1/group
+            // metadata value may promote the call back.
+            nextState = CallTypeResolutionState(
+                source: .instantLatched,
+                effectiveType: .instant
+            )
+        } else if let authoritativeCallType,
+                  let effectiveType = resolveAuthoritativeType(
+                      authoritativeCallType,
+                      participantCount: participantCount
+                  ) {
+            // Instant reached through the authoritative value — whether the server said so
+            // outright or the local correction did — is final.
+            if effectiveType == .instant {
+                hasLatchedInstant = true
+            }
+            nextState = CallTypeResolutionState(
+                source: .roomMetadata(authoritativeCallType),
+                effectiveType: effectiveType
+            )
+        } else {
+            nextState = CallTypeResolutionState(source: .legacy, effectiveType: legacyType)
+        }
+
+        return transition(to: nextState)
+    }
+
+    private func transition(to nextState: CallTypeResolutionState) -> CallTypeTransition? {
+        let previousState = state
+        state = nextState
+
+        // Source-only changes do not affect UI or interaction semantics.
+        guard previousState.effectiveType != nextState.effectiveType else {
+            return nil
+        }
+        let transition = CallTypeTransition(from: previousState, to: nextState)
+        subject.send(transition)
+        return transition
+    }
+
+    /// A legacy downgrade also latches: it means a third party really did join (or we left
+    /// the group), which is exactly the irreversible condition. An initial type that merely
+    /// happens to be instant does not latch, so late metadata can still correct it to group.
+    ///
+    /// `isSelfInGroup` reads as "not a *certain* outsider" (see `DTMeetingManager.groupMembership`):
+    /// an undecidable verdict arrives as true, so only a real roster missing us downgrades the call.
+    private func updateLegacyType(participantCount: Int, isSelfInGroup: Bool) {
+        switch legacyType {
+        case .private where participantCount > 2:
+            legacyType = .instant
+            hasLatchedInstant = true
+        case .group where !isSelfInGroup:
+            legacyType = .instant
+            hasLatchedInstant = true
+        default:
+            break
+        }
+    }
+
+    /// Answers exactly one question: has this 1v1 call turned into an instant call? Group- and
+    /// instant-origin calls resolve locally, so nil hands the decision back to the legacy inference.
+    private func resolveAuthoritativeType(
+        _ callType: CallType,
+        participantCount: Int
+    ) -> CallType? {
+        guard initialLegacyType == .private else {
+            return nil
+        }
+
+        switch callType {
+        case .private:
+            return participantCount <= 2 ? .private : .instant
+        case .instant:
+            return .instant
+        case .group:
+            // A room this device joined as a 1v1 is never really a group room: unusable value.
+            return nil
+        }
     }
 }

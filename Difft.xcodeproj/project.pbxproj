@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		0F934E19045DE0448C7B567A /* CallStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8993CBA8AFFBE6C76226F9DD /* CallStateMachine.swift */; };
+		A1E2EE010000000000000001 /* E2EEInfoViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1E2EE030000000000000001 /* E2EEInfoViewController.swift */; };
+		A1E2EE020000000000000001 /* DTE2EENoticeTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1E2EE040000000000000001 /* DTE2EENoticeTextView.swift */; };
 		17DC7BD072C52AF0EACEC74C /* ConversationViewController+CopyMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C4BD1C7417AB742E3C5E993 /* ConversationViewController+CopyMessage.swift */; };
 		1F0435BC9EE47E51CF0D7B9E /* VoiceMessageRecipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C800E7E8B08A05D3CECD5F1 /* VoiceMessageRecipe.swift */; };
 		34074F61203D0CBE004596AE /* OWSSounds.m in Sources */ = {isa = PBXBuildFile; fileRef = 34074F5F203D0CBD004596AE /* OWSSounds.m */; };
@@ -235,7 +237,6 @@
 		5B0F3AE02E9E897700E01BFD /* FeedbackReasonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B0F3ADF2E9E896F00E01BFD /* FeedbackReasonsView.swift */; };
 		5B2039562E54B9D700C4460C /* ConversationJoinCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2039552E54B9C200C4460C /* ConversationJoinCallView.swift */; };
 		5B255DD42FF52F8900F08FEF /* DTGifFavoriteActionPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B255DD32FF52F8900F08FEF /* DTGifFavoriteActionPopover.swift */; };
-		5B2AA2C12F0F64210009D03A /* DTAddFriendSourceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2AA2C02F0F64210009D03A /* DTAddFriendSourceManager.swift */; };
 		5B2AA2C32F0FA2FE0009D03A /* VoicePlaybackSpeedViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2AA2C22F0FA2FE0009D03A /* VoicePlaybackSpeedViewController.swift */; };
 		5B2AA2D92F14D5FE0009D03A /* GrayReleaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2AA2D62F14D5FE0009D03A /* GrayReleaseManager.swift */; };
 		5B2AA2DA2F14D5FE0009D03A /* DTGrayReleaseAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2AA2D52F14D5FE0009D03A /* DTGrayReleaseAPI.swift */; };
@@ -257,7 +258,6 @@
 		5B7F7E952DDC5F3800B2C3E9 /* LiveKitContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B7F7E942DDC5F3500B2C3E9 /* LiveKitContext.swift */; };
 		5B7F7E972DDC6A4900B2C3E9 /* DTRTCAudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B7F7E962DDC6A4900B2C3E9 /* DTRTCAudioSession.swift */; };
 		5B82415D2F27D0DA00C6E441 /* DTConfidentialVoiceMessageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B82415C2F27D0DA00C6E441 /* DTConfidentialVoiceMessageController.swift */; };
-		5B82415E2F27D0DA00C6E442 /* DTConfidentialFilePreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B82415F2F27D0DA00C6E442 /* DTConfidentialFilePreviewController.swift */; };
 		5B826FFF2E81300D0045B767 /* ScreenLockSelectedViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B826FFE2E812FD40045B767 /* ScreenLockSelectedViewController.swift */; };
 		5B8270042E82DE4E0045B767 /* DTGestureLockViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8270032E82DE490045B767 /* DTGestureLockViewController.swift */; };
 		5B886A5F2EE0193600A886B3 /* DTImageDownloadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B886A5E2EE0193600A886B3 /* DTImageDownloadingView.swift */; };
@@ -379,6 +379,7 @@
 		76EB063A18170B33006006FC /* FunctionalUtil.m in Sources */ = {isa = PBXBuildFile; fileRef = 76EB04EB18170B33006006FC /* FunctionalUtil.m */; };
 		7BC892564EAA5B3438BD767C /* DTProxySettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B05B63A0F1AAFC60CFA7BCD1 /* DTProxySettingsViewController.swift */; };
 		7F325002CB9ED5054106CF06 /* HangupCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517E007297EF23B6BDFA9952 /* HangupCoordinatorTests.swift */; };
+		A69600000000000000000002 /* VoipPushDeduplicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A69600000000000000000001 /* VoipPushDeduplicationTests.swift */; };
 		91A15E40DCD047A0947A4517 /* IncomingCallBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7173478F5B6643759C9206D4 /* IncomingCallBannerView.swift */; };
 		953656DF2BDE4C6890339C73 /* DTConfidentialMessageAlertController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F322AAFA691245C0863F6DE0 /* DTConfidentialMessageAlertController.swift */; };
 		A10FDF79184FB4BB007FF963 /* MediaPlayer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 76C87F18181EFCE600C4ACAB /* MediaPlayer.framework */; };
@@ -393,6 +394,7 @@
 		A1C32D5017A06538000A904E /* AddressBookUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1C32D4F17A06537000A904E /* AddressBookUI.framework */; };
 		A1C32D5117A06544000A904E /* AddressBook.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1C32D4D17A0652C000A904E /* AddressBook.framework */; };
 		A1F0A0022F99F00100A1B2C3 /* ForwardNoticeOutgoingMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F0A0012F99F00100A1B2C3 /* ForwardNoticeOutgoingMessageTests.swift */; };
+		A1F0A0042F99F00100A1B2C3 /* EnvelopeConversationValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F0A0032F99F00100A1B2C3 /* EnvelopeConversationValidatorTests.swift */; };
 		A2F0A111330000000000B001 /* ForwardNoticeBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F0A101330000000000B001 /* ForwardNoticeBuilder.swift */; };
 		A2F0A112330000000000B001 /* ForwardNoticeDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F0A102330000000000B001 /* ForwardNoticeDispatcher.swift */; };
 		A2F0A113330000000000B001 /* ForwardMessageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F0A103330000000000B001 /* ForwardMessageService.swift */; };
@@ -401,6 +403,8 @@
 		A2F0A116330000000000B001 /* SingleShotContinuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F0A106330000000000B001 /* SingleShotContinuation.swift */; };
 		A3EB58C92DC1E72F00EFD438 /* AudioPipelineProcessor in Frameworks */ = {isa = PBXBuildFile; productRef = A3EB58C82DC1E72F00EFD438 /* AudioPipelineProcessor */; };
 		A5509ECA1A69AB8B00ABA4BC /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A5509EC91A69AB8B00ABA4BC /* Main.storyboard */; };
+		AA10FA1D2026072900000002 /* ConversationSendFailedTipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10FA1D2026072900000001 /* ConversationSendFailedTipView.swift */; };
+		AA10FA1D2026072900000004 /* HomeViewCellSnippetBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10FA1D2026072900000003 /* HomeViewCellSnippetBuilder.swift */; };
 		AD83FF3F1A73426500B5C81A /* audio_pause_button_blue.png in Resources */ = {isa = PBXBuildFile; fileRef = AD83FF381A73426500B5C81A /* audio_pause_button_blue.png */; };
 		AD83FF401A73426500B5C81A /* audio_pause_button_blue@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = AD83FF391A73426500B5C81A /* audio_pause_button_blue@2x.png */; };
 		AD83FF411A73426500B5C81A /* audio_play_button_blue@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = AD83FF3A1A73426500B5C81A /* audio_play_button_blue@2x.png */; };
@@ -580,6 +584,7 @@
 		CE9ED5422D59D108009E1BAC /* DTMeetingManager+Cipher.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9ED5282D59D108009E1BAC /* DTMeetingManager+Cipher.swift */; };
 		CE9ED5432D59D108009E1BAC /* DTMeetingManager+CallAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9ED5272D59D108009E1BAC /* DTMeetingManager+CallAlert.swift */; };
 		CE9ED5442D59D108009E1BAC /* RoomContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9ED5112D59D108009E1BAC /* RoomContext.swift */; };
+		A6C0D10230F0000000000001 /* CallNetworkQualityTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6C0D10130F0000000000001 /* CallNetworkQualityTracker.swift */; };
 		CE9ED5452D59D108009E1BAC /* Binding+OptionSet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9ED5152D59D108009E1BAC /* Binding+OptionSet.swift */; };
 		CE9ED5462D59D108009E1BAC /* DTHostingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9ED50F2D59D108009E1BAC /* DTHostingController.swift */; };
 		CE9ED5482D59D108009E1BAC /* ParticipantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9ED51D2D59D108009E1BAC /* ParticipantView.swift */; };
@@ -704,6 +709,10 @@
 		CEADF5CA2E78349E0068547A /* ViewControllerUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = CEADF5C92E78349E0068547A /* ViewControllerUtils.m */; };
 		CEADF5CB2E78349E0068547A /* ViewControllerUtils.h in Headers */ = {isa = PBXBuildFile; fileRef = CEADF5C82E78349E0068547A /* ViewControllerUtils.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		CEADF5CD2E7835AD0068547A /* AttachmentApprovalViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEADF5CC2E7835AD0068547A /* AttachmentApprovalViewController.swift */; };
+		AA10FA1D2026080400000012 /* MediaPreviewItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10FA1D2026080400000011 /* MediaPreviewItem.swift */; };
+		AA10FA1D2026080400000014 /* MediaPreviewProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10FA1D2026080400000013 /* MediaPreviewProcessor.swift */; };
+		AA10FA1D2026080400000016 /* MediaPreviewCollectionCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10FA1D2026080400000015 /* MediaPreviewCollectionCell.swift */; };
+		AA10FA1D2026080400000018 /* MediaPreviewViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10FA1D2026080400000017 /* MediaPreviewViewController.swift */; };
 		CEADF5DB2E7837EA0068547A /* EditContactShareNameViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEADF5DA2E7837EA0068547A /* EditContactShareNameViewController.swift */; };
 		CEADF5DD2E7837F60068547A /* ModalActivityIndicatorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEADF5DC2E7837F60068547A /* ModalActivityIndicatorViewController.swift */; };
 		CEADF5E02E7838170068547A /* NewNonContactConversationViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CEADF5DF2E7838170068547A /* NewNonContactConversationViewController.m */; };
@@ -794,7 +803,6 @@
 		CEB228EE2C5FB1EA002408E1 /* ConversationCellRenderItemBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB228ED2C5FB1EA002408E1 /* ConversationCellRenderItemBuilder.swift */; };
 		CEB228F92C75EAA8002408E1 /* ConversationQuotedMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB228F32C75EAA7002408E1 /* ConversationQuotedMessageView.swift */; };
 		CEB228FD2C75EAA8002408E1 /* ConversationEmojiReactionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB228F42C75EAA7002408E1 /* ConversationEmojiReactionView.swift */; };
-		CEB30FA02C3397D600A3CC48 /* ConversationActionMenuSheetController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB30F9F2C3397D600A3CC48 /* ConversationActionMenuSheetController.swift */; };
 		CEB5E2F62872D92600383B60 /* HomeViewController+Unread.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB5E2F52872D92600383B60 /* HomeViewController+Unread.swift */; };
 		CEB80BF92D040255000AE2A8 /* AddFriendHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB80BF82D040255000AE2A8 /* AddFriendHandler.swift */; };
 		CEB80BFB2D040261000AE2A8 /* ConversationViewController+friend.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB80BFA2D040261000AE2A8 /* ConversationViewController+friend.swift */; };
@@ -836,6 +844,7 @@
 		CEE492E02BEC705A006FE189 /* ConversationMessageHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE492DF2BEC705A006FE189 /* ConversationMessageHeaderView.swift */; };
 		CEE492E52BED8918006FE189 /* ConversationMessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE492E42BED8918006FE189 /* ConversationMessageBubbleView.swift */; };
 		CEE492EF2BF05D7B006FE189 /* ConversationMessageBubbleView+BodyMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE492EE2BF05D7B006FE189 /* ConversationMessageBubbleView+BodyMedia.swift */; };
+		AA10FA1D2026080400000002 /* SpinningArcView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10FA1D2026080400000001 /* SpinningArcView.swift */; };
 		CEE492F42BF1276B006FE189 /* ConversationMessageBubbleView+BodyText.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE492F32BF1276B006FE189 /* ConversationMessageBubbleView+BodyText.swift */; };
 		CEE492F92BF1AEC2006FE189 /* ConversationMessageBubbleView+Gesture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE492F82BF1AEC2006FE189 /* ConversationMessageBubbleView+Gesture.swift */; };
 		CEE5EBE62D709FB2007790BD /* RoomDataProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE5EBE52D709FB2007790BD /* RoomDataProcessor.swift */; };
@@ -925,6 +934,7 @@
 		DE703E566E6721B2CBE83E44 /* Pods_TTMessaging.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B6E5B1084195C4C43C049AFC /* Pods_TTMessaging.framework */; };
 		DTA11C0001SAFE0068547A /* DTLinkSafetyChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DTA11C0002SAFE0068547A /* DTLinkSafetyChecker.swift */; };
 		E1368CBE18A1C36B00109378 /* MessageUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B9EB5ABC1884C002007CBB57 /* MessageUI.framework */; };
+		A1C0D1010F01A10100C0FFEE /* CallMediaPermissionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0D1000F01A10100C0FFEE /* CallMediaPermissionCoordinator.swift */; };
 		E2A56CDE989CB0FDDD425CD1 /* HangupCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A0553764864C3CCD0EB34E /* HangupCoordinator.swift */; };
 		EF764C351DB67CC5000D9A87 /* UIViewController+Permissions.m in Sources */ = {isa = PBXBuildFile; fileRef = EF764C341DB67CC5000D9A87 /* UIViewController+Permissions.m */; };
 		F235215126BC3A1800D2B7C6 /* DTMultiChatItemModel.m in Sources */ = {isa = PBXBuildFile; fileRef = F235215026BC3A1800D2B7C6 /* DTMultiChatItemModel.m */; };
@@ -1023,6 +1033,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A1E2EE030000000000000001 /* E2EEInfoViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = E2EEInfoViewController.swift; sourceTree = "<group>"; };
+		A1E2EE040000000000000001 /* DTE2EENoticeTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTE2EENoticeTextView.swift; sourceTree = "<group>"; };
 		043F82D04BEFFAE921332189 /* Pods_Yelling.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Yelling.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		09B3B1AC5443AA36FB69C062 /* Pods-ShareExtension.release_test.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ShareExtension.release_test.xcconfig"; path = "Target Support Files/Pods-ShareExtension/Pods-ShareExtension.release_test.xcconfig"; sourceTree = "<group>"; };
 		0C4BD1C7417AB742E3C5E993 /* ConversationViewController+CopyMessage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationViewController+CopyMessage.swift"; sourceTree = "<group>"; };
@@ -1291,6 +1303,7 @@
 		4CB5F26820F7D060004D1B42 /* MessageActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageActions.swift; sourceTree = "<group>"; };
 		4CFF4C0920F55BBA005DA313 /* MenuActionsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuActionsViewController.swift; sourceTree = "<group>"; };
 		517E007297EF23B6BDFA9952 /* HangupCoordinatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HangupCoordinatorTests.swift; path = TempTalkTests/NewCall/HangupCoordinatorTests.swift; sourceTree = SOURCE_ROOT; };
+		A69600000000000000000001 /* VoipPushDeduplicationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = VoipPushDeduplicationTests.swift; path = TempTalkTests/NewCall/VoipPushDeduplicationTests.swift; sourceTree = SOURCE_ROOT; };
 		534AA218688130EF05BEA434 /* Pods-TTMessaging.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TTMessaging.release.xcconfig"; path = "Target Support Files/Pods-TTMessaging/Pods-TTMessaging.release.xcconfig"; sourceTree = "<group>"; };
 		5B0F3AB72E86482300E01BFD /* LogoutDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogoutDelegate.swift; sourceTree = "<group>"; };
 		5B0F3AB92E8648B800E01BFD /* LogoutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogoutManager.swift; sourceTree = "<group>"; };
@@ -1308,7 +1321,6 @@
 		5B0F3ADF2E9E896F00E01BFD /* FeedbackReasonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackReasonsView.swift; sourceTree = "<group>"; };
 		5B2039552E54B9C200C4460C /* ConversationJoinCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationJoinCallView.swift; sourceTree = "<group>"; };
 		5B255DD32FF52F8900F08FEF /* DTGifFavoriteActionPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTGifFavoriteActionPopover.swift; sourceTree = "<group>"; };
-		5B2AA2C02F0F64210009D03A /* DTAddFriendSourceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTAddFriendSourceManager.swift; sourceTree = "<group>"; };
 		5B2AA2C22F0FA2FE0009D03A /* VoicePlaybackSpeedViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePlaybackSpeedViewController.swift; sourceTree = "<group>"; };
 		5B2AA2D52F14D5FE0009D03A /* DTGrayReleaseAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTGrayReleaseAPI.swift; sourceTree = "<group>"; };
 		5B2AA2D62F14D5FE0009D03A /* GrayReleaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrayReleaseManager.swift; sourceTree = "<group>"; };
@@ -1331,8 +1343,8 @@
 		5B7F7E902DDC270F00B2C3E9 /* RoutePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePickerView.swift; sourceTree = "<group>"; };
 		5B7F7E942DDC5F3500B2C3E9 /* LiveKitContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKitContext.swift; sourceTree = "<group>"; };
 		5B7F7E962DDC6A4900B2C3E9 /* DTRTCAudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTRTCAudioSession.swift; sourceTree = "<group>"; };
+		A1C0D1000F01A10100C0FFEE /* CallMediaPermissionCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CallMediaPermissionCoordinator.swift; sourceTree = "<group>"; };
 		5B82415C2F27D0DA00C6E441 /* DTConfidentialVoiceMessageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTConfidentialVoiceMessageController.swift; sourceTree = "<group>"; };
-		5B82415F2F27D0DA00C6E442 /* DTConfidentialFilePreviewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTConfidentialFilePreviewController.swift; sourceTree = "<group>"; };
 		5B826FFE2E812FD40045B767 /* ScreenLockSelectedViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenLockSelectedViewController.swift; sourceTree = "<group>"; };
 		5B8270032E82DE490045B767 /* DTGestureLockViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTGestureLockViewController.swift; sourceTree = "<group>"; };
 		5B886A5E2EE0193600A886B3 /* DTImageDownloadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTImageDownloadingView.swift; sourceTree = "<group>"; };
@@ -1483,6 +1495,7 @@
 		A1C32D4D17A0652C000A904E /* AddressBook.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AddressBook.framework; path = System/Library/Frameworks/AddressBook.framework; sourceTree = SDKROOT; };
 		A1C32D4F17A06537000A904E /* AddressBookUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AddressBookUI.framework; path = System/Library/Frameworks/AddressBookUI.framework; sourceTree = SDKROOT; };
 		A1F0A0012F99F00100A1B2C3 /* ForwardNoticeOutgoingMessageTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ForwardNoticeOutgoingMessageTests.swift; sourceTree = "<group>"; };
+		A1F0A0032F99F00100A1B2C3 /* EnvelopeConversationValidatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EnvelopeConversationValidatorTests.swift; sourceTree = "<group>"; };
 		A1FDCBEE16DAA6C300868894 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		A2F0A101330000000000B001 /* ForwardNoticeBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardNoticeBuilder.swift; sourceTree = "<group>"; };
 		A2F0A102330000000000B001 /* ForwardNoticeDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardNoticeDispatcher.swift; sourceTree = "<group>"; };
@@ -1492,6 +1505,8 @@
 		A2F0A106330000000000B001 /* SingleShotContinuation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingleShotContinuation.swift; sourceTree = "<group>"; };
 		A4C3F987EB826E1D4834BCE3 /* Pods-NSE.release_test.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-NSE.release_test.xcconfig"; path = "Target Support Files/Pods-NSE/Pods-NSE.release_test.xcconfig"; sourceTree = "<group>"; };
 		A5509EC91A69AB8B00ABA4BC /* Main.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = Main.storyboard; path = Storyboard/Main.storyboard; sourceTree = "<group>"; };
+		AA10FA1D2026072900000001 /* ConversationSendFailedTipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSendFailedTipView.swift; sourceTree = "<group>"; };
+		AA10FA1D2026072900000003 /* HomeViewCellSnippetBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewCellSnippetBuilder.swift; sourceTree = "<group>"; };
 		ABE2E180D97CA27939BB5791 /* Pods_NSE.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_NSE.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AD83FF381A73426500B5C81A /* audio_pause_button_blue.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = audio_pause_button_blue.png; sourceTree = "<group>"; };
 		AD83FF391A73426500B5C81A /* audio_pause_button_blue@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "audio_pause_button_blue@2x.png"; sourceTree = "<group>"; };
@@ -1697,6 +1712,7 @@
 		CE9883092CE5E94500DF081A /* chative-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "chative-Info.plist"; sourceTree = "<group>"; };
 		CE9ED50F2D59D108009E1BAC /* DTHostingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTHostingController.swift; sourceTree = "<group>"; };
 		CE9ED5112D59D108009E1BAC /* RoomContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomContext.swift; sourceTree = "<group>"; };
+		A6C0D10130F0000000000001 /* CallNetworkQualityTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallNetworkQualityTracker.swift; sourceTree = "<group>"; };
 		CE9ED5132D59D108009E1BAC /* DTMeetingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTMeetingModels.swift; sourceTree = "<group>"; };
 		CE9ED5152D59D108009E1BAC /* Binding+OptionSet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Binding+OptionSet.swift"; sourceTree = "<group>"; };
 		CE9ED5162D59D108009E1BAC /* ExampleRoomMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExampleRoomMessage.swift; sourceTree = "<group>"; };
@@ -1868,6 +1884,10 @@
 		CEADF5C82E78349E0068547A /* ViewControllerUtils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ViewControllerUtils.h; sourceTree = "<group>"; };
 		CEADF5C92E78349E0068547A /* ViewControllerUtils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ViewControllerUtils.m; sourceTree = "<group>"; };
 		CEADF5CC2E7835AD0068547A /* AttachmentApprovalViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentApprovalViewController.swift; sourceTree = "<group>"; };
+		AA10FA1D2026080400000011 /* MediaPreviewItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPreviewItem.swift; sourceTree = "<group>"; };
+		AA10FA1D2026080400000013 /* MediaPreviewProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPreviewProcessor.swift; sourceTree = "<group>"; };
+		AA10FA1D2026080400000015 /* MediaPreviewCollectionCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPreviewCollectionCell.swift; sourceTree = "<group>"; };
+		AA10FA1D2026080400000017 /* MediaPreviewViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPreviewViewController.swift; sourceTree = "<group>"; };
 		CEADF5DA2E7837EA0068547A /* EditContactShareNameViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditContactShareNameViewController.swift; sourceTree = "<group>"; };
 		CEADF5DC2E7837F60068547A /* ModalActivityIndicatorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModalActivityIndicatorViewController.swift; sourceTree = "<group>"; };
 		CEADF5DE2E7838170068547A /* NewNonContactConversationViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NewNonContactConversationViewController.h; sourceTree = "<group>"; };
@@ -1962,7 +1982,6 @@
 		CEB228ED2C5FB1EA002408E1 /* ConversationCellRenderItemBuilder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ConversationCellRenderItemBuilder.swift; sourceTree = "<group>"; };
 		CEB228F32C75EAA7002408E1 /* ConversationQuotedMessageView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ConversationQuotedMessageView.swift; sourceTree = "<group>"; };
 		CEB228F42C75EAA7002408E1 /* ConversationEmojiReactionView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ConversationEmojiReactionView.swift; sourceTree = "<group>"; };
-		CEB30F9F2C3397D600A3CC48 /* ConversationActionMenuSheetController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationActionMenuSheetController.swift; sourceTree = "<group>"; };
 		CEB5E2F52872D92600383B60 /* HomeViewController+Unread.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeViewController+Unread.swift"; sourceTree = "<group>"; };
 		CEB80BF82D040255000AE2A8 /* AddFriendHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddFriendHandler.swift; sourceTree = "<group>"; };
 		CEB80BFA2D040261000AE2A8 /* ConversationViewController+friend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationViewController+friend.swift"; sourceTree = "<group>"; };
@@ -2014,6 +2033,7 @@
 		CEE492DF2BEC705A006FE189 /* ConversationMessageHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMessageHeaderView.swift; sourceTree = "<group>"; };
 		CEE492E42BED8918006FE189 /* ConversationMessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMessageBubbleView.swift; sourceTree = "<group>"; };
 		CEE492EE2BF05D7B006FE189 /* ConversationMessageBubbleView+BodyMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationMessageBubbleView+BodyMedia.swift"; sourceTree = "<group>"; };
+		AA10FA1D2026080400000001 /* SpinningArcView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpinningArcView.swift; sourceTree = "<group>"; };
 		CEE492F32BF1276B006FE189 /* ConversationMessageBubbleView+BodyText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationMessageBubbleView+BodyText.swift"; sourceTree = "<group>"; };
 		CEE492F82BF1AEC2006FE189 /* ConversationMessageBubbleView+Gesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationMessageBubbleView+Gesture.swift"; sourceTree = "<group>"; };
 		CEE5EBE52D709FB2007790BD /* RoomDataProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomDataProcessor.swift; sourceTree = "<group>"; };
@@ -2368,6 +2388,7 @@
 				34386A4E207D0C01009F5D9C /* HomeViewCell.h */,
 				34386A50207D0C01009F5D9C /* HomeViewCell.m */,
 				CE9ED55D2D59D5A2009E1BAC /* HomeViewCell.swift */,
+				AA10FA1D2026072900000003 /* HomeViewCellSnippetBuilder.swift */,
 				DCB1D70828325B1500181773 /* DTHomeVirtualCell.h */,
 				DCB1D70928325B1500181773 /* DTHomeVirtualCell.m */,
 				CE9ED55F2D59D5D5009E1BAC /* DTHomeVirtualCell.swift */,
@@ -2600,6 +2621,8 @@
 		34B3F8331E8DF1700035BE1A /* ViewControllers */ = {
 			isa = PBXGroup;
 			children = (
+				A1E2EE030000000000000001 /* E2EEInfoViewController.swift */,
+				A1E2EE040000000000000001 /* DTE2EENoticeTextView.swift */,
 				5BBCEBEA2EFE370C009F67B4 /* FloatingConversation */,
 				CEA87F812CF9B712007480A1 /* TempTalkAppSettings */,
 				CEFC1AFE2C096717006D2529 /* ImageRecognization */,
@@ -2698,11 +2721,13 @@
 				CEBED87E2BE4833D007B21DF /* ConversationMessageCell.swift */,
 				CEE492CB2BE85192006FE189 /* ConversationIncomingMessageCell.swift */,
 				CEE492D02BE851A5006FE189 /* ConversationOutgoingMessageCell.swift */,
+				AA10FA1D2026072900000001 /* ConversationSendFailedTipView.swift */,
 				CEE492DF2BEC705A006FE189 /* ConversationMessageHeaderView.swift */,
 				CEE492D52BEC4FE4006FE189 /* ConversationMessageFooterView.swift */,
 				CEE492DA2BEC69EC006FE189 /* ConversationDateSeparatorView.swift */,
 				CEE492E42BED8918006FE189 /* ConversationMessageBubbleView.swift */,
 				CEE492EE2BF05D7B006FE189 /* ConversationMessageBubbleView+BodyMedia.swift */,
+				AA10FA1D2026080400000001 /* SpinningArcView.swift */,
 				CEE492F32BF1276B006FE189 /* ConversationMessageBubbleView+BodyText.swift */,
 				CEE492F82BF1AEC2006FE189 /* ConversationMessageBubbleView+Gesture.swift */,
 				CEC782D12BFCF633000EE138 /* OWSAudioSliderView.swift */,
@@ -2889,6 +2914,10 @@
 				453034AA200289F50018945D /* VideoPlayerView.swift */,
 				45F59A092029140500E8D2B0 /* OWSVideoPlayer.swift */,
 				CEADF5CC2E7835AD0068547A /* AttachmentApprovalViewController.swift */,
+				AA10FA1D2026080400000011 /* MediaPreviewItem.swift */,
+				AA10FA1D2026080400000013 /* MediaPreviewProcessor.swift */,
+				AA10FA1D2026080400000015 /* MediaPreviewCollectionCell.swift */,
+				AA10FA1D2026080400000017 /* MediaPreviewViewController.swift */,
 			);
 			path = attachments;
 			sourceTree = "<group>";
@@ -3377,6 +3406,7 @@
 			children = (
 				5BD449442F9B4A0B00736798 /* TranscriptJob */,
 				A1F0A0012F99F00100A1B2C3 /* ForwardNoticeOutgoingMessageTests.swift */,
+				A1F0A0032F99F00100A1B2C3 /* EnvelopeConversationValidatorTests.swift */,
 				5BC558EE2F91CA2B00A1275B /* GroupCrypto */,
 				EF4966823D7071AC2FF23089 /* NewCall */,
 			);
@@ -3392,7 +3422,6 @@
 				CE04099C2C247382004E9915 /* ConversationEmojiSheetViewController.swift */,
 				CE0409AA2C2ABD36004E9915 /* DTTextSelectionView.swift */,
 				CE0409AF2C2BB9D0004E9915 /* DTTextSelectionHighlightingView.swift */,
-				CEB30F9F2C3397D600A3CC48 /* ConversationActionMenuSheetController.swift */,
 			);
 			path = Menu;
 			sourceTree = "<group>";
@@ -3438,7 +3467,6 @@
 				CE7F2FEA2757B0FA00A574E1 /* DTEditPersonInfoController.h */,
 				CE7F2FE92757B0FA00A574E1 /* DTEditPersonInfoController.m */,
 				CE7ED60D2B84A4E7008224A1 /* DTPersonalCardController+ShareContact.swift */,
-				5B2AA2C02F0F64210009D03A /* DTAddFriendSourceManager.swift */,
 			);
 			path = PersonalCard;
 			sourceTree = "<group>";
@@ -3530,6 +3558,7 @@
 				5BBFEB812E1683B70019E4C2 /* DTRaiseHandController.swift */,
 				5B7F7E942DDC5F3500B2C3E9 /* LiveKitContext.swift */,
 				CE9ED50F2D59D108009E1BAC /* DTHostingController.swift */,
+				A6C0D10130F0000000000001 /* CallNetworkQualityTracker.swift */,
 				CE9ED5112D59D108009E1BAC /* RoomContext.swift */,
 				5BB589A12DB61F72000E7821 /* RoomContext+RoomDelegate.swift */,
 				5BCF73132F2B55EE0046327D /* DTCriticalAlertConfirmController.swift */,
@@ -3595,6 +3624,7 @@
 				5BDB7A9D2F30D65E003827F3 /* RoomIdManager.swift */,
 				8993CBA8AFFBE6C76226F9DD /* CallStateMachine.swift */,
 				F7A0553764864C3CCD0EB34E /* HangupCoordinator.swift */,
+				A1C0D1000F01A10100C0FFEE /* CallMediaPermissionCoordinator.swift */,
 			);
 			path = NewCall;
 			sourceTree = "<group>";
@@ -4097,7 +4127,6 @@
 				CEE973A72D0FD9EA0028D1AF /* NSObject+UILabelHelper.m */,
 				5BBF9F0F2F24658F002526BC /* DTConfidentialMessageContentViewController.swift */,
 				5B82415C2F27D0DA00C6E441 /* DTConfidentialVoiceMessageController.swift */,
-				5B82415F2F27D0DA00C6E442 /* DTConfidentialFilePreviewController.swift */,
 				6F5F019F34DB43FEBB967E03 /* DTConfidentialHintToast.swift */,
 			);
 			path = Confidential;
@@ -4302,6 +4331,7 @@
 			children = (
 				7819DF222B22085B1E6748F7 /* CallStateMachineTests.swift */,
 				517E007297EF23B6BDFA9952 /* HangupCoordinatorTests.swift */,
+				A69600000000000000000001 /* VoipPushDeduplicationTests.swift */,
 			);
 			path = NewCall;
 			sourceTree = "<group>";
@@ -5059,7 +5089,6 @@
 				"${BUILT_PRODUCTS_DIR}/JSQMessagesViewController/JSQMessagesViewController.framework",
 				"${BUILT_PRODUCTS_DIR}/JSQSystemSoundPlayer/JSQSystemSoundPlayer.framework",
 				"${BUILT_PRODUCTS_DIR}/JXCategoryView/JXCategoryView.framework",
-				"${BUILT_PRODUCTS_DIR}/JXPagingView/JXPagingView.framework",
 				"${BUILT_PRODUCTS_DIR}/MJRefresh/MJRefresh.framework",
 				"${BUILT_PRODUCTS_DIR}/Mantle/Mantle.framework",
 				"${BUILT_PRODUCTS_DIR}/PanModal/PanModal.framework",
@@ -5118,7 +5147,6 @@
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/JSQMessagesViewController.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/JSQSystemSoundPlayer.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/JXCategoryView.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/JXPagingView.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/MJRefresh.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Mantle.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/PanModal.framework",
@@ -5198,6 +5226,10 @@
 				CEADF5E42E7838340068547A /* ScreenLockViewController.m in Sources */,
 				DCED091D274BC3B20032B4B9 /* UIView+SignalUI.swift in Sources */,
 				CEADF5CD2E7835AD0068547A /* AttachmentApprovalViewController.swift in Sources */,
+				AA10FA1D2026080400000012 /* MediaPreviewItem.swift in Sources */,
+				AA10FA1D2026080400000014 /* MediaPreviewProcessor.swift in Sources */,
+				AA10FA1D2026080400000016 /* MediaPreviewCollectionCell.swift in Sources */,
+				AA10FA1D2026080400000018 /* MediaPreviewViewController.swift in Sources */,
 				CE7F2FC9275381E300A574E1 /* DTProfileAttachmentEntity.m in Sources */,
 				CEEA0A472C09C10C0090C80E /* Sound.swift in Sources */,
 				450998681FD8C0FF00D89EB3 /* AttachmentSharing.m in Sources */,
@@ -5342,6 +5374,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1E2EE010000000000000001 /* E2EEInfoViewController.swift in Sources */,
+				A1E2EE020000000000000001 /* DTE2EENoticeTextView.swift in Sources */,
 				CE47B2AC2B441AF700ABC833 /* ALView+PureLayoutExtension.m in Sources */,
 				B02220EA2255AD1A0052ED09 /* ContactEditingViewController.m in Sources */,
 				DC3B75E926F3817A008F88C0 /* DTMessageActionFloatView.swift in Sources */,
@@ -5370,7 +5404,6 @@
 				CEA87F022CF8128A007480A1 /* DTLoginWithEmailCodeApi.swift in Sources */,
 				CEA87F032CF8128A007480A1 /* DeviceTransferService+URL.swift in Sources */,
 				5B82415D2F27D0DA00C6E441 /* DTConfidentialVoiceMessageController.swift in Sources */,
-				5B82415E2F27D0DA00C6E442 /* DTConfidentialFilePreviewController.swift in Sources */,
 				DD8837A5D9E2441EAC7C037E /* DTConfidentialHintToast.swift in Sources */,
 				CEA87F042CF8128A007480A1 /* SelfSignedIdentity.swift in Sources */,
 				CEA87F052CF8128A007480A1 /* DTVerificationEmailCodeApi.swift in Sources */,
@@ -5600,6 +5633,7 @@
 				CE3BB46B2BD653FF003E5CB9 /* ConversationCell.swift in Sources */,
 				CEB228FD2C75EAA8002408E1 /* ConversationEmojiReactionView.swift in Sources */,
 				CE9ED55E2D59D5A2009E1BAC /* HomeViewCell.swift in Sources */,
+				AA10FA1D2026072900000004 /* HomeViewCellSnippetBuilder.swift in Sources */,
 				340FC8BC204DAC8D007AEB0F /* FingerprintViewController.m in Sources */,
 				CE10E3B12B4BCF1D00DE87FB /* CVViewState.swift in Sources */,
 				CE80B8202B9F8C8A0032BE2E /* DTFloatingView.swift in Sources */,
@@ -5621,7 +5655,6 @@
 				CEB228F92C75EAA8002408E1 /* ConversationQuotedMessageView.swift in Sources */,
 				CE0409B02C2BB9D0004E9915 /* DTTextSelectionHighlightingView.swift in Sources */,
 				F2A32C8C2695B41D008AA536 /* DTInputAtCache.m in Sources */,
-				5B2AA2C12F0F64210009D03A /* DTAddFriendSourceManager.swift in Sources */,
 				CEB0951B2CAA964200A65F14 /* DTPanGestureRecognizer.swift in Sources */,
 				45D2AC02204885170033C692 /* OWS2FAReminderViewController.swift in Sources */,
 				CEF26B91299E1B9E00D7CDD8 /* DTGroupSettingChangedProcessor.m in Sources */,
@@ -5651,6 +5684,7 @@
 				457C87B82032645C008D52D6 /* DebugUINotifications.swift in Sources */,
 				CE89BF972A31AA0200E69F19 /* DTLottieBridge.swift in Sources */,
 				CEE492EF2BF05D7B006FE189 /* ConversationMessageBubbleView+BodyMedia.swift in Sources */,
+				AA10FA1D2026080400000002 /* SpinningArcView.swift in Sources */,
 				CE4F79F427434CD000DBCEE2 /* DTForwardPreviewViewController.swift in Sources */,
 				5B31F7952EC1AD5C003158EC /* ConversationTool.swift in Sources */,
 				458E38371D668EBF0094BD24 /* OWSDeviceProvisioningURLParser.m in Sources */,
@@ -5668,6 +5702,7 @@
 				CEAA3E41278590FD008DD10C /* DTGroupMemberController.m in Sources */,
 				CEBA62922C0EB5F500994B67 /* DTImageRecognizeButton.swift in Sources */,
 				CEE492D12BE851A5006FE189 /* ConversationOutgoingMessageCell.swift in Sources */,
+				AA10FA1D2026072900000002 /* ConversationSendFailedTipView.swift in Sources */,
 				CED851F02A722DF700E87226 /* DTLeaveOrDisbandGroup.swift in Sources */,
 				CED851E82A6EC39F00E87226 /* DTGroupInCommonController.swift in Sources */,
 				34D8C0271ED3673300188D7C /* DebugUIMessages.m in Sources */,
@@ -5675,7 +5710,6 @@
 				CE0D574727F1652C00AC3BB9 /* DTInputBarMoreItem.m in Sources */,
 				34DBF003206BD5A500025978 /* OWSMessageTextView.m in Sources */,
 				34D1F0B41F86D31D0066283D /* ConversationCollectionView.m in Sources */,
-				CEB30FA02C3397D600A3CC48 /* ConversationActionMenuSheetController.swift in Sources */,
 				34B3F8821E8DF1700035BE1A /* NewContactThreadViewController.m in Sources */,
 				CEE492F92BF1AEC2006FE189 /* ConversationMessageBubbleView+Gesture.swift in Sources */,
 				CEFC1B052C0968C3006D2529 /* DTImageRecognizedContent.swift in Sources */,
@@ -5806,6 +5840,7 @@
 				CE9ED5422D59D108009E1BAC /* DTMeetingManager+Cipher.swift in Sources */,
 				CEADDCFB2D64A1C400A3E91A /* CallScreenShareView.swift in Sources */,
 				CE9ED5432D59D108009E1BAC /* DTMeetingManager+CallAlert.swift in Sources */,
+				A6C0D10230F0000000000001 /* CallNetworkQualityTracker.swift in Sources */,
 				CE9ED5442D59D108009E1BAC /* RoomContext.swift in Sources */,
 				5B4615162E28ECE200143F4A /* DTUpdateNoiseController.swift in Sources */,
 				CE9ED5452D59D108009E1BAC /* Binding+OptionSet.swift in Sources */,
@@ -5902,6 +5937,7 @@
 				5BA0E52E2E7B0C0100C4C40F /* CallServiceUrlManager.swift in Sources */,
 				5BA0E5302E7B0C0100C4C411 /* CallConnectionCoordinator.swift in Sources */,
 				E2A56CDE989CB0FDDD425CD1 /* HangupCoordinator.swift in Sources */,
+				A1C0D1010F01A10100C0FFEE /* CallMediaPermissionCoordinator.swift in Sources */,
 				BDCD8998DA7E1205EA798272 /* DTMultiSelectCopyFormatter.swift in Sources */,
 				433BE3E7953F8FE9DCBBB9AC /* CopyNoticeDispatcher.swift in Sources */,
 				17DC7BD072C52AF0EACEC74C /* ConversationViewController+CopyMessage.swift in Sources */,
@@ -5919,6 +5955,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1F0A0022F99F00100A1B2C3 /* ForwardNoticeOutgoingMessageTests.swift in Sources */,
+				A1F0A0042F99F00100A1B2C3 /* EnvelopeConversationValidatorTests.swift in Sources */,
 				5BC558EF2F91CA2B00A1275B /* MockGroupCryptoKeyStore.swift in Sources */,
 				5BC558F02F91CA2B00A1275B /* GroupCryptoDisplayHelperTests.swift in Sources */,
 				5BC558F12F91CA2B00A1275B /* GroupKeyMessageHandlerTests.swift in Sources */,
@@ -5934,6 +5971,7 @@
 				5BC558FA2F91CA2B00A1275B /* MockGroupCryptoAPI.swift in Sources */,
 				F87292C330CDA2B320BEB18D /* CallStateMachineTests.swift in Sources */,
 				7F325002CB9ED5054106CF06 /* HangupCoordinatorTests.swift in Sources */,
+				A69600000000000000000002 /* VoipPushDeduplicationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -6047,13 +6085,13 @@
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				INFOPLIST_FILE = TTShareExtension/temptalk/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
@@ -6126,13 +6164,13 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = TTShareExtension/temptalk/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -6193,7 +6231,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				INFOPLIST_FILE = TTMessaging/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -6326,7 +6364,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = TTMessaging/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -6468,7 +6506,7 @@
 					"\"$(SRCROOT)/Libraries\"/**",
 				);
 				INFOPLIST_FILE = "TempTalk/chative-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -6478,7 +6516,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -6546,7 +6584,7 @@
 					"\"$(TARGET_TEMP_DIR)/../$(PROJECT_NAME).build/DerivedSources\"",
 				);
 				INFOPLIST_FILE = "TempTalk/test/Supporting Files/TempTalkTests-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -6631,13 +6669,13 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = TTShareExtension/temptalk/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				OTHER_SWIFT_FLAGS = "$(inherited) -DDEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
@@ -6718,7 +6756,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = TTMessaging/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -6928,7 +6966,7 @@
 					"\"$(SRCROOT)/Libraries\"/**",
 				);
 				INFOPLIST_FILE = "TempTalk/chative-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -6938,7 +6976,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited) -DTESTABLE_BUILD";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -7003,7 +7041,7 @@
 					"\"$(SRCROOT)/Libraries\"/**",
 				);
 				INFOPLIST_FILE = "TempTalk/chative-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -7013,7 +7051,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative;
@@ -7080,7 +7118,7 @@
 					"\"$(TARGET_TEMP_DIR)/../$(PROJECT_NAME).build/DerivedSources\"",
 				);
 				INFOPLIST_FILE = "TempTalk/test/Supporting Files/TempTalkTests-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -7152,7 +7190,7 @@
 					"\"$(TARGET_TEMP_DIR)/../$(PROJECT_NAME).build/DerivedSources\"",
 				);
 				INFOPLIST_FILE = "TempTalk/test/Supporting Files/TempTalkTests-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -7290,7 +7328,7 @@
 					"\"$(SRCROOT)/Libraries\"/**",
 				);
 				INFOPLIST_FILE = "TempTalk/chative-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -7300,7 +7338,7 @@
 					"$(SRCROOT)",
 				);
 				LLVM_LTO = NO;
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				OTHER_LDFLAGS = "$(inherited)";
 				OTHER_SWIFT_FLAGS = "$(inherited)";
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest;
@@ -7369,7 +7407,7 @@
 					"\"$(TARGET_TEMP_DIR)/../$(PROJECT_NAME).build/DerivedSources\"",
 				);
 				INFOPLIST_FILE = "TempTalk/test/Supporting Files/TempTalkTests-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -7455,13 +7493,13 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = TTShareExtension/temptalk/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -7538,7 +7576,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_FILE = TTMessaging/Info.plist;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -7599,13 +7637,13 @@
 				INFOPLIST_FILE = NSE/temptalk/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NSE;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7655,13 +7693,13 @@
 				INFOPLIST_FILE = NSE/temptalk/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NSE;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7712,13 +7750,13 @@
 				INFOPLIST_FILE = NSE/temptalk/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NSE;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chative.NSE;
@@ -7770,13 +7808,13 @@
 				INFOPLIST_FILE = NSE/temptalk/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = NSE;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.8.9;
+				MARKETING_VERSION = 3.9.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = org.difft.chativetest.NSE;
@@ -7877,7 +7915,7 @@
 			repositoryURL = "https://github.com/difftim/client-sdk-swift";
 			requirement = {
 				kind = exactVersion;
-				version = "2.12.1-a28";
+				version = "2.15.2-a5";
 			};
 		};
 		A3EB58C72DC1E58300EFD438 /* XCRemoteSwiftPackageReference "denoise-plugin-swift" */ = {

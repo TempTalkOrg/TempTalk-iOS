@@ -47,6 +47,8 @@ static NSInteger const kAttachmentAutoDownloadMaxSize = 10 * 1024 * 1024;
                    encryptionKey:(NSData *)encryptionKey
                           height:(unsigned int)height
                     isDownloaded:(BOOL)isDownloaded
+               preprocessingKind:(TSAttachmentPreprocessingKind)preprocessingKind
+             preprocessingParams:(nullable NSData *)preprocessingParams
                         serverId:(unsigned long long)serverId
                   sourceFilename:(nullable NSString *)sourceFilename
                            width:(unsigned int)width
@@ -54,7 +56,7 @@ static NSInteger const kAttachmentAutoDownloadMaxSize = 10 * 1024 * 1024;
   mostRecentFailureLocalizedText:(nullable NSString *)mostRecentFailureLocalizedText
                            relay:(NSString *)relay
                            state:(TSAttachmentPointerState)state
-NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessageId:appearInMediaGallery:attachmentSchemaVersion:attachmentType:byteCount:contentType:encryptionKey:height:isDownloaded:serverId:sourceFilename:width:digest:mostRecentFailureLocalizedText:relay:state:));
+NS_DESIGNATED_INITIALIZER NS_SWIFT_NAME(init(grdbId:uniqueId:albumId:albumMessageId:appearInMediaGallery:attachmentSchemaVersion:attachmentType:byteCount:contentType:encryptionKey:height:isDownloaded:preprocessingKind:preprocessingParams:serverId:sourceFilename:width:digest:mostRecentFailureLocalizedText:relay:state:));
 
 // clang-format on
 

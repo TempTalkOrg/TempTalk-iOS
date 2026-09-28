@@ -301,6 +301,18 @@
 /* Accessibility label for placing call button */
 "CALL_LABEL" = "Call";
 
+/* Alert body when the camera permission is denied for a call. Embeds {{app name}} twice. */
+"CALL_MEDIA_PERMISSION_CAMERA_MESSAGE" = "Allow %1$@ to use your camera in system settings, then return to %1$@ and try again. Changing permissions may disconnect you from the current call.";
+
+/* Alert title when the camera permission is denied for a call */
+"CALL_MEDIA_PERMISSION_CAMERA_TITLE" = "Cannot Access Camera";
+
+/* Alert body when the microphone permission is denied for a call. Embeds {{app name}} twice. */
+"CALL_MEDIA_PERMISSION_MICROPHONE_MESSAGE" = "Allow %1$@ to use your microphone in system settings, then return to %1$@ and try again. Changing permissions may disconnect you from the current call.";
+
+/* Alert title when the microphone permission is denied for a call */
+"CALL_MEDIA_PERMISSION_MICROPHONE_TITLE" = "Cannot Access Microphone";
+
 /* Call setup status label after outgoing call times out */
 "CALL_SCREEN_STATUS_NO_ANSWER" = "No Answer.";
 
@@ -1360,6 +1372,15 @@
 /* media picker option to choose from library */
 "MEDIA_FROM_LIBRARY_BUTTON" = "Photo Library";
 
+/* Confirmation shown when closing the media preview while assets are still processing */
+"MEDIA_PREVIEW_CLOSE_WHILE_COMPRESSING" = "Media is still being processed. Are you sure you want to close?";
+
+/* Toast shown when send is tapped while assets are still processing */
+"MEDIA_PREVIEW_COMPRESSING_TOAST" = "Processing, please wait...";
+
+/* Alert shown when send is tapped and some assets failed to process, embeds {{number of failed items}} */
+"MEDIA_PREVIEW_ITEMS_FAILED" = "%ld item(s) couldn't be processed and won't be sent.";
+
 /* Confirmation button text to delete selected media from the gallery, embeds {{number of messages}} */
 "MEDIA_GALLERY_DELETE_MULTIPLE_MESSAGES_FORMAT" = "Delete %d Messages";
 
@@ -1384,6 +1405,9 @@
 /* Action sheet button title */
 "MESSAGE_ACTION_DELETE_MESSAGE" = "Delete";
 
+/* Action sheet button title for resending a failed message */
+"MESSAGE_ACTION_RESEND" = "Resend";
+
 /* Action sheet button subtitle */
 "MESSAGE_ACTION_DELETE_MESSAGE_SUBTITLE" = "It will be deleted on this device only";
 
@@ -1394,7 +1418,7 @@
 "MESSAGE_ACTION_DELETE_MESSAGE_OK" = "OK";
 
 /* Action sheet button title */
-"MESSAGE_ACTION_DETAILS" = "More Info";
+"MESSAGE_ACTION_DETAILS" = "Info";
 
 "MESSAGE_ACTION_QUOTE" = "Quote";
 
@@ -1405,18 +1429,19 @@
 "MESSAGE_ACTION_FORWARD" = "Forward";
 
 /* Action sheet button title */
-"MESSAGE_ACTION_FORWARD_TO_NOTE" = "Save";
+"MESSAGE_ACTION_FORWARD_TO_NOTE" = "Add to Saved";
 
 /* Action sheet button title for saving image to self */
 "MESSAGE_ACTION_FORWARD_TO_NOTE_IMAGE" = "Add to Saved";
 
 /* Action sheet button title */
-"MESSAGE_ACTION_MULTI_SELECT" = "Select Multiple";
+"MESSAGE_ACTION_MULTI_SELECT" = "Select";
 
 "MESSAGE_ACTION_RECALL" = "Recall";
 
 /* Action sheet button title */
-"MESSAGE_ACTION_SAVE_MEDIA" = "Download";
+"MESSAGE_ACTION_SAVE_MEDIA" = "Save to Photos";
+"MESSAGE_ACTION_DOWNLOAD_FILE" = "Download";
 
 /* Action sheet button title for saving image */
 "MESSAGE_ACTION_SAVE_MEDIA_IMAGE" = "Save to Photos";
@@ -1522,6 +1547,9 @@
 
 /* Label indicating that a message failed to send. */
 "MESSAGE_STATUS_SEND_FAILED" = "Send Failed";
+
+/* Hint below a failed outgoing message, tapping it resends the message */
+"MESSAGE_STATUS_SEND_FAILED_TAP_TO_RETRY" = "Send failed · Tap to retry";
 
 /* message status while message is sending. */
 "MESSAGE_STATUS_SENDING" = "Sending...";
@@ -3347,9 +3375,9 @@
 "NON_FRIEND_ONLY_TEXT_MESSAGE" = "Non-friends can only send text messages";
 "PERSON_CARD_SHARE_CARD" = "Share";
 
-"LOGIN_ERROR" = "Email/Code/Phone Error";
+"LOGIN_ERROR" = "Invalid email or phone number";
 "LOGIN_EMAIL_PLACEHOLDER" = "Enter your Email or Code";
-"LOGIN_EMAIL_PLACEHOLDER_CHATIVE" = "Email/Phone Number/Invite Code";
+"LOGIN_EMAIL_PLACEHOLDER_CHATIVE" = "Email/Phone Number";
 "LOGIN_EMAIL_PLACEHOLDER_CHATIVE_SIGNIN" = "Enter Email/Phone Number";
 "LOGIN_EMAIL_PLACEHOLDER_CHATIVE_SIGNIN_EMAIL" = "Enter Email";
 
@@ -3480,6 +3508,9 @@
 "PINNED_INFO_MESSAGE_DEFAULT_PREVIEW" = "You've got a new pin message";
 
 "HOMEVIEWCELL_DRAFT" = "[Draft]";
+
+/* A label for conversations with a message that failed to send. */
+"HOMEVIEWCELL_SEND_FAILED" = "[Send failed]";
 
 /* Chat Folder */
 "CHAT_FOLDER_VC_TITLE" = "Chat Folders";
@@ -3671,6 +3702,28 @@
 
 "Open Chative on your old device, bring it nearby, and make sure Wi-Fi and Bluetooth are enabled on both devices. Then, Scan the following QR code with the old device." = "Open Chative on your old device, bring it nearby, and make sure Wi-Fi and Bluetooth are enabled on both devices. Then, Scan the following QR code with the old device.";
 
+"DEVICE_TRANSFER_QR_INSTRUCTIONS" = "Open %@ on your old device, then scan this QR code.\nKeep both devices close together with Wi-Fi and Bluetooth turned on. Until the transfer is complete on both devices, keep %@ in the foreground and do not switch apps, lock the screen, or leave the transfer page.";
+
+"DEVICE_TRANSFER_IN_PROGRESS_INSTRUCTIONS" = "Keep both devices close together with Wi-Fi and Bluetooth turned on. Keep %@ in the foreground and do not switch apps, lock the screen, or leave this page until both devices show that the transfer is complete.";
+
+"DEVICE_TRANSFER_LOCAL_NETWORK_TITLE" = "Local Network Access Needed";
+
+"DEVICE_TRANSFER_LOCAL_NETWORK_BODY" = "Allow %@ to access Local Network in Settings, then return to %@ and start the transfer again. This permission lets both devices connect nearby and transfer data.";
+
+"DEVICE_TRANSFER_SETTINGS_BUTTON" = "Settings";
+
+"DEVICE_TRANSFER_QR_EXPIRED_TITLE" = "QR Code Expired";
+
+"DEVICE_TRANSFER_QR_EXPIRED_BODY" = "This QR code has expired. Scan the new QR code and start the transfer again.";
+
+"DEVICE_TRANSFER_CONNECTION_FAILED_TITLE" = "Connection Failed";
+
+"DEVICE_TRANSFER_CONNECTION_FAILED_BODY" = "Connection failed. Start the transfer again.";
+
+"DEVICE_TRANSFER_INTERRUPTED_TITLE" = "Transfer Interrupted";
+
+"DEVICE_TRANSFER_INTERRUPTED_BODY" = "The transfer was interrupted. Start the transfer again.";
+
 "Receiving Data" = "Receiving Data";
 
 "Keep both devices on and near each other." = "Keep both devices on and near each other.";
@@ -3685,6 +3738,8 @@
 
 "Transfer Failed" = "Transfer Failed";
 
+"DEVICE_TRANSFER_QR_GENERATION_FAILED_BODY" = "Could not generate a QR code. Please try again.";
+
 "The transfer failed. %1$@.Please try again." = "The transfer failed. %1$@.Please try again.";
 
 "Are you sure to transfer all your data to this device: %1$@'s iPhone?" = "Are you sure to transfer all your data to this device: %1$@'s iPhone?";
@@ -3695,7 +3750,13 @@
 
 "DEVICE_TRANSFER_ERROR_GENERIC" = "The transfer couldn't complete, please ensure your devices are near each other";
 
+"DEVICE_TRANSFER_ERROR_BACKGROUNDED_DEVICE" = "Keep both devices open and unlocked during transfer, then try again.";
+
 "DEVICE_TRANSFER_ERROR_CERTIFICATE_MISMATCH" = "Unable to verify your new device";
+
+"DEVICE_TRANSFER_ERROR_NOT_ENOUGH_SPACE" = "There isn't enough storage space on the new device to complete the transfer.";
+
+"DEVICE_TRANSFER_ERROR_NOT_ENOUGH_SPACE_THIS_DEVICE" = "There isn't enough storage space on this device to prepare the transfer. Free up some space and try again.";
 
 "DEVICE_TRANSFER_ERROR_UNSUPPORTED_VERSION" = "Update to the latest version";
 
@@ -3756,7 +3817,7 @@
 "ACCEPT" = "Accept";
 "REQUEST_BAR_WARNING" = "⚠️ DO NOT trust unknown users.";
 "REQUEST_BAR_WARNING_BOLD" = "DO NOT";
-"CONVERSATION_WARNING_HEADER" = "🔒 Privacy first. Fully anonymous and end-to-end encrypted. DO NOT trust unknown users.";
+"CONVERSATION_WARNING_HEADER" = "Privacy first. Fully anonymous and end-to-end encrypted. DO NOT trust unknown users. Learn more";
 "BLOCK&REPORT" = "Block & Report";
 "BLOCK_REPORT_TITLE" = "Are you sure you want to do this?";
 
@@ -3946,6 +4007,10 @@
 
 "MEETING_NAVAGATION_RECONNECTING_FAILURE" = "Reconnection failed";
 "MEETING_NAVAGATION_CONNECTING" = "connecting...";
+"MEETING_NAVAGATION_DISCONNECTING" = "Disconnecting...";
+"MEETING_NAVAGATION_MEDIA_SEND_ISSUE" = "Others may not hear you. Recovering…";
+"MEETING_NAVAGATION_SELF_NETWORK_POOR" = "Your network is poor and may affect call quality";
+"MEETING_PARTICIPANT_NETWORK_POOR_ACCESSIBILITY" = "%@'s network is poor";
 
 "MEETING_SEND_ALL" = "Send to all";
 "METTING_CONNECT_EXCEPTION_TIPS" = "Unable to connect to the meeting. Please try again";
@@ -4076,6 +4141,19 @@
 
 "CALL_MORE_CRITICAL_ALERT" = "Critical Alert";
 "MEETING_NAVAGATION_CALLING" = "Calling...";
+"MEETING_NAVAGATION_E2EE" = "End-to-end encrypted";
+"CONVERSATION_E2EE_HEADER" = "Messages and calls are end-to-end encrypted — only you and the people in this chat can read messages or listen to calls. Learn more";
+"CONVERSATION_E2EE_LEARN_MORE" = "Learn more";
+"CONVERSATION_E2EE_INPUT_PLACEHOLDER" = "End-to-end encrypted";
+"CHAT_LIST_E2EE_FOOTER" = "Messages and calls are end-to-end encrypted. Learn more";
+"E2EE_INFO_TITLE" = "Your chats and calls are private";
+"E2EE_INFO_INTRO" = "End-to-end encryption helps make sure only you and the people you choose to chat with can read messages or listen to calls. No one else can read or listen, not even Quicall. Protected content includes:";
+"E2EE_INFO_ITEM_1" = "Text and voice messages";
+"E2EE_INFO_ITEM_2" = "Voice and video calls";
+"E2EE_INFO_ITEM_3" = "Photos, videos, and files";
+"E2EE_INFO_CAVEAT" = "End-to-end encryption doesn't stop the people you chat with from copying, saving, forwarding, taking screenshots, or recording. Share sensitive content only with people you trust.";
+"E2EE_INFO_LEARN_MORE" = "Learn more";
+"E2EE_INFO_DISMISS" = "OK";
 "MEETING_CRITICAL_ALERT_DANMU" = "sent a Critical Alert";
 "MEETING_CRITICAL_ALERT_TIPS" = "No answer? Send a Critical Alert.";
 "MEETING_CRITICAL_ALERT_NO_ANSWER" = "No answer? ";
@@ -4216,3 +4294,9 @@
 "PROXY_PROTECT_CALL_TITLE" = "Protect IP address in calls";
 "PROXY_PROTECT_CALL_DESC" = "When on, calls are also routed through the proxy to hide your real IP from Quicall. This may reduce call quality.";
 "PROXY_PROTECT_NEED_PROXY" = "Turn on Use proxy first.";
+
+/* Network certificate validation failure warning */
+"net_risk_warning_title" = "Network Security Warning";
+"net_risk_warning_message" = "Your current network may not be secure. We recommend switching networks before continuing.";
+"net_risk_warning_ignore" = "Continue";
+"net_risk_warning_quit" = "Exit";

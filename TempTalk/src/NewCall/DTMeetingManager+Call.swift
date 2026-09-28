@@ -9,22 +9,24 @@
 import DTProto
 import LiveKit
 import SwiftUI
+import TTServiceKit
+
+enum IncomingCallPresentationGuard {
+    static func shouldPresent(
+        expectedRoomId: String,
+        currentRoomId: String?,
+        lifecycleState: DTMeetingManager.MeetingLifecycleState
+    ) -> Bool {
+        currentRoomId == expectedRoomId && lifecycleState == .connecting
+    }
+}
 
 extension DTMeetingManager {
     /// - Parameters:
     ///   - thread: 发起1on1/group时传入
     ///   - recipientIds: 发起instant会议时需要
     ///   - displayLoading: 是否展示loading
-    /// Non-nil reason when the user's self-hosted proxy is ON but can't carry a private call:
-    /// not actually running, missing TURN (`t`) media relay, no usable signaling channel, or the
-    /// last reachability probe said unavailable. nil = OK to call. Keyed on `isEnabled` (user
-    /// intent), so a call is never silently made direct and leaks the real IP.
-    ///
-    /// Signaling hides the IP one of two ways: QUIC-over-proxy (MASQUE, share-link `q`, any iOS) or
-    /// WSS over the app's loopback CONNECT tunnel. The WSS tunnel relies on URLSession's
-    /// `connectionProxyDictionary`, which `URLSessionWebSocketTask` only honors on iOS 17+; on older
-    /// iOS it is silently ignored and the WebSocket connects directly. So without `q`, a call is only
-    /// allowed on iOS 17+ — otherwise blocked, never leaked.
+    /// Returns a static proxy capability failure, or nil when calls are supported.
     var proxyCallBlockReason: String? {
         // In-call IP protection off → calls go direct (proxy doesn't carry them), so never block.
         guard ProxyManager.shared.protectCallIPEnabled else { return nil }
@@ -38,7 +40,6 @@ extension DTMeetingManager {
         if cfg.quicEnabled == false {
             guard #available(iOS 17, *) else { return "no QUIC relay (q); WSS proxy needs iOS 17+" }
         }
-        if ProxyManager.shared.lastProbeStatus == .unavailable { return "proxy unavailable" }
         return nil
     }
 
@@ -168,6 +169,8 @@ extension DTMeetingManager {
         newCall.callType = callType
         newCall.callState = .outgoing
         newCall.conversationId = conversationId
+        newCall.clientCallId = UUID().uuidString.lowercased()
+        newCall.isInitiator = true
         Logger.info("\(logTag) currentCall callType is \(callType)")
 
         if newCall.callType == .private {
@@ -176,7 +179,7 @@ extension DTMeetingManager {
             }
         }
 
-        let timestamp = Date.ows_millisecondTimestamp()
+        let timestamp = DTTrustedClock.clientStampMs()
         newCall.timestamp = timestamp
         newCall.createCallMsg = createCallMsgEnabled()
         newCall.controlType = DTMeetingManager.sourceControlStart
@@ -227,7 +230,8 @@ extension DTMeetingManager {
                     fromCallKit: false,
                     cipherMessages: protoMessages,
                     encInfos: protoEncInfos,
-                    publicKey: stringPublicKey
+                    publicKey: stringPublicKey,
+                    clientCallId: newCall.clientCallId
                 )
             } catch {
                 Logger.error("\(logTag) Start call failed: \(error)")
@@ -443,6 +447,7 @@ extension DTMeetingManager {
         cipherMessages: [Livekit_TTCipherMessages]?,
         encInfos: [Livekit_TTEncInfo]?,
         publicKey: String?,
+        clientCallId: String? = nil,
         skipCleanup: Bool = false
     ) async {
         Logger.info("\(logTag) connecting directly to LiveKit with ttCallRequest, skipCleanup: \(skipCleanup)")
@@ -482,6 +487,7 @@ extension DTMeetingManager {
                 publicKey: publicKey,
                 cipherMessages: cipherMessages,
                 encInfos: encInfos,
+                clientCallId: clientCallId,
                 collapseId: collapseId,
                 token: token
             )
@@ -496,7 +502,15 @@ extension DTMeetingManager {
                 return
             }
 
-            guard await setupRoomContextIfNeeded(token: token, publicKey: publicKey ?? "") else {
+            guard await setupRoomContextIfNeeded(token: token, publicKey: publicKey ?? "", callType: callType) else {
+                guard lifecycleState == .connecting else {
+                    Logger.info(
+                        "\(logTag) setupRoomContext finished after local exit, " +
+                        "suppress connection failure toast, state=\(lifecycleState)"
+                    )
+                    isAnswering = false
+                    return
+                }
                 await MainActor.run {
                     DTToastHelper.hide()
                     DTToastHelper.dismiss(withInfo: Localized("ROOM_CONNECT_FAILED"))
@@ -524,6 +538,14 @@ extension DTMeetingManager {
                 }
             }
         } catch {
+            guard lifecycleState != .disconnecting, lifecycleState != .idle else {
+                Logger.info(
+                    "\(logTag) connect preparation ended after local exit, " +
+                    "suppress connection failure toast, state=\(lifecycleState), error=\(error)"
+                )
+                isAnswering = false
+                return
+            }
             Logger.error("\(logTag) request token error: \(error)")
             isAnswering = false
             await hangupCall(needSyncCallKit: fromCallKit,
@@ -543,6 +565,7 @@ extension DTMeetingManager {
         publicKey: String? = nil,
         cipherMessages: [Livekit_TTCipherMessages]? = nil,
         encInfos: [Livekit_TTEncInfo]? = nil,
+        clientCallId: String? = nil,
         collapseId: String,
         token: String
     ) -> ConnectOptions {
@@ -558,6 +581,7 @@ extension DTMeetingManager {
                     $0.publicKey = publicKey
                     $0.cipherMessages = cipherMessages
                     $0.encInfos = encInfos
+                    $0.clientCallID = clientCallId ?? ""
                     $0.notification = Livekit_TTNotification.with {
                         $0.type = Int32(DTApnsMessageType.ENC_CALL.rawValue)
                         $0.args = .with { $0.collapseID = collapseId }
@@ -620,7 +644,7 @@ extension DTMeetingManager {
     }
 
     @MainActor
-    private func setupRoomContextIfNeeded(token: String, publicKey _: String) async -> Bool {
+    private func setupRoomContextIfNeeded(token: String, publicKey _: String, callType: CallType) async -> Bool {
         if roomContext != nil {
             Logger.error("\(logTag) roomContext still exists after cleanup, forcing cleanup")
             await ensureCleanConnectionState(roomId: currentCall.roomId)
@@ -632,8 +656,8 @@ extension DTMeetingManager {
             return false
         }
 
-        roomContext = RoomContext(token: token, lkContext: appContext)
-        Logger.info("\(logTag) created new roomContext (attempt-driven)")
+        roomContext = RoomContext(token: token, lkContext: appContext, initialCallType: callType)
+        Logger.info("\(logTag)[calltype] created new roomContext (attempt-driven), initialCallType=\(callType.rawValue)")
         return true
     }
 
@@ -705,49 +729,125 @@ extension DTMeetingManager {
             return
         }
 
-        let coordinator = CallConnectionCoordinator()
-        do {
-            _ = try await coordinator.connectToRoomWithFailover(
-                connectAttempt: { [weak roomContext] attempt in
-                    guard let roomContext else { throw CallError.roomContextCreationFailed }
-                    _ = try await roomContext.connect(
-                        fromCallKit: fromCallKit,
-                        attempt: attempt,
-                        baseConnectOptions: baseConnectOptions
-                    )
-                },
-                reporter: CallStatisticsLogManager.shared
-            )
+        var connectOptions = baseConnectOptions
+        var didRetryRejectedAppToken = false
 
-            let state = roomContext.room.connectionState
-            if state != .connected {
-                Logger.error("\(logTag) coordinator returned success but room state=\(state), treating as failure")
-                throw CallError.connectionFailed
-            }
-        } catch is CancellationError {
-            Logger.info("\(logTag) room connect cancelled, skip hangup")
-            isAnswering = false
-        } catch {
-            Logger.info("\(logTag) coordinator failover exhausted, error: \(error)")
-            isAnswering = false
-            let failedRoomId = currentCall.roomId
-            let isPrivateCaller = currentCall.callType == .private && currentCall.isCaller
-            await hangupCall(needSyncCallKit: fromCallKit,
-                             isByLocal: true,
-                             roomId: failedRoomId)
-            if let lkError = error as? LiveKitError, lkError.type == .startCall {
-                if lkError.response?.base.status == 22001 {
-                    if let roomId = failedRoomId {
-                        handleMeetingBar(roomId: roomId, action: .remove)
-                    }
-                    await DTToastHelper.dismiss(withInfo: Localized("CALL_NO_CONNECT_ENDED"))
-                } else {
-                    await DTToastHelper.dismiss(withInfo: lkError.response?.base.reason ?? Localized("ROOM_CONNECT_FAILED"))
+        while true {
+            let authAttempt = didRetryRejectedAppToken ? 2 : 1
+            let proxyRequested = ProxyManager.shared.isEnabled && ProxyManager.shared.protectCallIPEnabled
+            Logger.info(
+                "\(logTag) [startcall-auth] attempt=\(authAttempt)/2, " +
+                "tokenPresent=\(!(connectOptions.ttCallRequest?.token.isEmpty ?? true)), " +
+                "proxyRequested=\(proxyRequested), transport=\(connectOptions.transportKind)"
+            )
+            do {
+                let coordinator = CallConnectionCoordinator()
+                let attemptConnectOptions = connectOptions
+                _ = try await coordinator.connectToRoomWithFailover(
+                    connectAttempt: { [weak roomContext] attempt in
+                        guard let roomContext else { throw CallError.roomContextCreationFailed }
+                        _ = try await roomContext.connect(
+                            fromCallKit: fromCallKit,
+                            attempt: attempt,
+                            baseConnectOptions: attemptConnectOptions
+                        )
+                    },
+                    reporter: CallStatisticsLogManager.shared
+                )
+
+                let state = roomContext.room.connectionState
+                if state != .connected {
+                    Logger.error("\(logTag) coordinator returned success but room state=\(state), treating as failure")
+                    throw CallError.connectionFailed
                 }
-            } else if case CallError.tokenExpired = error, isPrivateCaller {
-                await DTToastHelper.dismiss(withInfo: Localized("SINGLE_CALL_TIMEOUT"))
-            } else {
-                await DTToastHelper.dismiss(withInfo: Localized("ROOM_CONNECT_FAILED"))
+                Logger.info(
+                    "\(logTag) [startcall-auth] succeeded on attempt=\(authAttempt)/2, " +
+                    "tokenRefreshUsed=\(didRetryRejectedAppToken)"
+                )
+                return
+            } catch is CancellationError {
+                guard self.roomContext === roomContext else {
+                    Logger.info("\(logTag) [startcall-auth] stale connection cancellation ignored after roomContext changed")
+                    return
+                }
+                Logger.info("\(logTag) room connect cancelled, skip hangup")
+                isAnswering = false
+                return
+            } catch {
+                let connectionError = error
+                guard self.roomContext === roomContext else {
+                    Logger.info("\(logTag) [startcall-auth] stale connection failure ignored after roomContext changed")
+                    return
+                }
+
+                if !didRetryRejectedAppToken,
+                   CallAuthenticationFailure.isAppTokenRejected(connectionError)
+                {
+                    didRetryRejectedAppToken = true
+                    let rejectedStatus = (connectionError as? LiveKitError)?.response?.base.status ?? 0
+                    Logger.warn(
+                        "\(logTag) [startcall-auth] app token rejected by call service, status=\(rejectedStatus), " +
+                        "attempt=\(authAttempt)/2; force-refreshing before the only retry"
+                    )
+                    do {
+                        let previousToken = connectOptions.ttCallRequest?.token
+                        let previousClientCallId = connectOptions.ttCallRequest?.startCall.clientCallID
+                        let refreshedToken = try await forceRefreshAuthToken()
+                        guard lifecycleState == .connecting, self.roomContext === roomContext else {
+                            Logger.info("\(logTag) [startcall-auth] refresh completed after call exit; suppress retry")
+                            return
+                        }
+                        let refreshedOptions = connectOptions.replacingTTCallToken(with: refreshedToken)
+                        let clientCallIdPreserved = previousClientCallId == refreshedOptions.ttCallRequest?.startCall.clientCallID
+                        connectOptions = refreshedOptions
+                        Logger.info(
+                            "\(logTag) [startcall-auth] token refresh applied, tokenChanged=\(previousToken != refreshedToken), " +
+                            "clientCallIdPreserved=\(clientCallIdPreserved); retrying startCall"
+                        )
+                        continue
+                    } catch {
+                        Logger.error("\(logTag) [startcall-auth] force-refresh app token failed: \(error)")
+                    }
+                } else if didRetryRejectedAppToken,
+                          CallAuthenticationFailure.isAppTokenRejected(connectionError)
+                {
+                    Logger.error("\(logTag) [startcall-auth] refreshed app token was rejected; retry limit reached (2/2)")
+                }
+
+                guard self.roomContext === roomContext else {
+                    Logger.info("\(logTag) [startcall-auth] stale refresh failure ignored after roomContext changed")
+                    return
+                }
+                guard lifecycleState != .disconnecting, lifecycleState != .idle else {
+                    Logger.info(
+                        "\(logTag) room connect ended after local exit, " +
+                        "suppress connection failure toast, state=\(lifecycleState), error=\(connectionError)"
+                    )
+                    isAnswering = false
+                    return
+                }
+                Logger.info("\(logTag) coordinator failover exhausted, error: \(connectionError)")
+                isAnswering = false
+                let failedRoomId = currentCall.roomId
+                let isPrivateCaller = currentCall.callType == .private && currentCall.isCaller
+                await hangupCall(needSyncCallKit: fromCallKit,
+                                 isByLocal: true,
+                                 roomId: failedRoomId)
+                if let lkError = connectionError as? LiveKitError, lkError.type == .startCall {
+                    if lkError.response?.base.status == 22001 {
+                        if let roomId = failedRoomId {
+                            handleMeetingBar(roomId: roomId, action: .remove)
+                        }
+                        await DTToastHelper.dismiss(withInfo: Localized("CALL_NO_CONNECT_ENDED"))
+                    } else {
+                        await DTToastHelper.dismiss(withInfo: lkError.response?.base.reason ?? Localized("ROOM_CONNECT_FAILED"))
+                    }
+                } else if case CallError.tokenExpired = connectionError, isPrivateCaller {
+                    await DTToastHelper.dismiss(withInfo: Localized("SINGLE_CALL_TIMEOUT"))
+                } else {
+                    await DTToastHelper.dismiss(withInfo: Localized("ROOM_CONNECT_FAILED"))
+                }
+                return
             }
         }
     }
@@ -808,25 +908,46 @@ extension DTMeetingManager {
                 // ✅ Async room validity check — doesn't block answering
                 Task.detached { [weak self] in
                     guard let self else { return }
-                    if let result = await DTMeetingManager.checkRoomIdValid(roomId) {
-                        if result.anotherDeviceJoined || result.userStopped {
-                            Logger.info("\(logTag) roomId invalid, hanging up after CallKit answer")
-                            await hangupCall(
+                    switch await DTMeetingManager.checkRoomAvailability(roomId) {
+                    case .gone:
+                        Logger.info("\(self.logTag) roomId gone, hanging up after CallKit answer")
+                        await self.hangupCall(
+                            needSyncCallKit: true,
+                            isByLocal: true,
+                            roomId: roomId,
+                            showErrorToast: true
+                        )
+                    case .valid(let anotherDeviceJoined, let userStopped):
+                        if anotherDeviceJoined || userStopped {
+                            Logger.info("\(self.logTag) roomId unavailable, hanging up after CallKit answer")
+                            await self.hangupCall(
                                 needSyncCallKit: true,
                                 isByLocal: true,
                                 roomId: roomId,
                                 showErrorToast: true
                             )
                         }
+                    case .unknown:
+                        Logger.info("\(self.logTag) roomId probe transient failure after CallKit answer, keep call")
                     }
                 }
             } else {
-                guard let result = await DTMeetingManager.checkRoomIdValid(roomId) else {
+                switch await DTMeetingManager.checkRoomAvailability(roomId) {
+                case .gone:
+                    Logger.info("\(logTag) roomId gone, skip incoming call UI")
                     return
+                case .valid(let anotherDeviceJoined, let userStopped):
+                    if anotherDeviceJoined || userStopped {
+                        Logger.info("\(logTag) checkRoom anotherDeviceJoined\(anotherDeviceJoined) userStopped\(userStopped)")
+                        return
+                    }
+                case .unknown:
+                    // Probe failed (transport/decode); fail-open and still present the incoming UI.
+                    Logger.info("\(logTag) roomId probe transient failure, present incoming UI anyway")
                 }
 
-                if result.anotherDeviceJoined || result.userStopped {
-                    Logger.info("\(logTag) checkRoomIdValid anotherDeviceJoined\(result.anotherDeviceJoined) userStopped\(result.userStopped)")
+                guard shouldPresentIncomingCall(roomId: roomId) else {
+                    Logger.info("\(logTag) incoming call torn down during room check, skip incoming UI")
                     return
                 }
 
@@ -839,6 +960,11 @@ extension DTMeetingManager {
                 onPlaySound?()
 
                 DispatchMainThreadSafe {
+                    guard self.shouldPresentIncomingCall(roomId: roomId) else {
+                        Logger.info("\(self.logTag) incoming call torn down before presentation, skip incoming UI")
+                        self.stopSound()
+                        return
+                    }
                     self.startCallTimeoutTimer()
                     if DTMeetingManager.isVoiceRecordingActive {
                         self.presentIncomingCallBanner(call: call, caller: caller, roomId: roomId, publicKey: publicKey, emk: emk)
@@ -896,9 +1022,18 @@ extension DTMeetingManager {
         // Room validity check — doesn't block answering
         Task { [weak self] in
             guard let self else { return }
-            if let result = await DTMeetingManager.checkRoomIdValid(roomId) {
-                if result.anotherDeviceJoined || result.userStopped {
-                    Logger.info("\(self.logTag) roomId invalid, hanging up after CallKit answer")
+            switch await DTMeetingManager.checkRoomAvailability(roomId) {
+            case .gone:
+                Logger.info("\(self.logTag) roomId gone, hanging up after CallKit answer")
+                await self.hangupCall(
+                    needSyncCallKit: true,
+                    isByLocal: true,
+                    roomId: roomId,
+                    showErrorToast: true
+                )
+            case .valid(let anotherDeviceJoined, let userStopped):
+                if anotherDeviceJoined || userStopped {
+                    Logger.info("\(self.logTag) roomId unavailable, hanging up after CallKit answer")
                     await self.hangupCall(
                         needSyncCallKit: true,
                         isByLocal: true,
@@ -906,6 +1041,8 @@ extension DTMeetingManager {
                         showErrorToast: true
                     )
                 }
+            case .unknown:
+                Logger.info("\(self.logTag) roomId probe transient failure after CallKit answer, keep call")
             }
         }
     }
@@ -920,6 +1057,12 @@ extension DTMeetingManager {
                 onAnswer: { [weak self] in
                     guard let self else { return }
                     Logger.info("\(logTag) answer from alertView")
+                    guard shouldPresentIncomingCall(roomId: roomId) else {
+                        Logger.info("\(logTag) stale answer ignored for roomId: \(roomId)")
+                        stopCallTimeoutTimer()
+                        dismissAnswerWindowIfNeeded()
+                        return
+                    }
                     clearAnswerVCState()
                     stopCallTimeoutTimer()
                     answerCall(caller: caller, roomId: roomId, publicKey: publicKey, emk: emk, fromCallKit: false)
@@ -929,8 +1072,13 @@ extension DTMeetingManager {
                     guard let self else { return }
 
                     Logger.info("\(logTag) reject from alertView")
-                    clearAnswerVCState()
+                    let isCurrentIncomingCall = shouldPresentIncomingCall(roomId: roomId)
+                    dismissAnswerWindowIfNeeded()
                     stopCallTimeoutTimer()
+                    guard isCurrentIncomingCall else {
+                        Logger.info("\(logTag) stale reject dismissed for roomId: \(roomId)")
+                        return
+                    }
                     if currentCall.callType != .private {
                         handleMeetingBar(call: call, action: .add)
                     }
@@ -960,6 +1108,21 @@ extension DTMeetingManager {
     /// 清理 AnswerVC 状态
     private func clearAnswerVCState() {
         answerVC = nil
+    }
+
+    private func shouldPresentIncomingCall(roomId: String) -> Bool {
+        IncomingCallPresentationGuard.shouldPresent(
+            expectedRoomId: roomId,
+            currentRoomId: currentCall.roomId,
+            lifecycleState: lifecycleState
+        )
+    }
+
+    @MainActor
+    private func dismissAnswerWindowIfNeeded() {
+        guard let answerVC else { return }
+        OWSWindowManager.shared().endCall(answerVC) {}
+        self.answerVC = nil
     }
 
     // MARK: - Incoming Call Banner (during voice recording)

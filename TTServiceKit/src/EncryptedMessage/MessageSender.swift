@@ -17,6 +17,11 @@ extension TSOutgoingActivityNoticeMessage: SyncPlainTextBuildable {}
 extension MessageSender {
     
     static let senderRetryAttempts = 3
+
+    private func updateTrustedClock(from metaData: DTAPIMetaEntity) {
+        guard let serverTimestamp = metaData.serverTimestamp as NSNumber? else { return }
+        DTTrustedClock.shared.update(serverTimeMs: serverTimestamp.uint64Value, source: .baseResponse)
+    }
     
     @objc
     public func sendPrivateMessage(label: String,
@@ -122,7 +127,7 @@ extension MessageSender {
         if let responseError, let statusCode = responseError.httpStatusCode, !(message is OWSReadReceiptsForSenderMessage) {
             if statusCode == 432 {
                 databaseStorage.asyncWrite { wTransaction in
-                    let now = NSDate.ows_millisecondTimeStamp()
+                    let now = DTTrustedClock.clientStampMs()
                     if let contactThread = TSContactThread.getThread(contactId: recipient.recipientId(), transaction: wTransaction) {
                         let infoMsg = TSInfoMessage.init(timestamp: now, in: contactThread, messageType: .notFriend)
                         infoMsg.anyInsert(transaction: wTransaction)
@@ -134,7 +139,7 @@ extension MessageSender {
                    let metaData = try MTLJSONAdapter.model(of: DTAPIMetaEntity.self, fromJSONDictionary: jsonData) as? DTAPIMetaEntity {
                     if metaData.status == 10105 {
                         databaseStorage.asyncWrite { wTransaction in
-                            let now = NSDate.ows_millisecondTimeStamp()
+                            let now = DTTrustedClock.clientStampMs()
                             if let contactThread = TSContactThread.getThread(contactId: recipient.recipientId(), transaction: wTransaction) {
                                 let infoMsg = TSInfoMessage.init(timestamp: now, in: contactThread, messageType: .userUnLogined)
                                 infoMsg.anyInsert(transaction: wTransaction)
@@ -143,7 +148,7 @@ extension MessageSender {
                         }
                     } else if metaData.status == 10110 {
                         databaseStorage.asyncWrite { wTransaction in
-                            let now = NSDate.ows_millisecondTimeStamp()
+                            let now = DTTrustedClock.clientStampMs()
                             if let contactThread = TSContactThread.getThread(contactId: recipient.recipientId(), transaction: wTransaction) {
                                 let infoMsg = TSInfoMessage.init(timestamp: now, in: contactThread, messageType: .userAccountCanceled)
                                 infoMsg.anyInsert(transaction: wTransaction)
@@ -173,6 +178,7 @@ extension MessageSender {
         //handle success result:
         if metaData.status == DTAPIRequestResponseStatus.OK.rawValue ||
             metaData.status == DTAPIRequestResponseStatus.unsupportedMsgVersion.rawValue{
+            updateTrustedClock(from: metaData)
             
             if metaData.status == DTAPIRequestResponseStatus.unsupportedMsgVersion.rawValue {
                 OWSLogger.error("unsupported private message version!")
@@ -257,6 +263,7 @@ extension MessageSender {
         //handle success result:
         if metaData.status == DTAPIRequestResponseStatus.OK.rawValue ||
             metaData.status == DTAPIRequestResponseStatus.unsupportedMsgVersion.rawValue{
+            updateTrustedClock(from: metaData)
             
             if metaData.status == DTAPIRequestResponseStatus.unsupportedMsgVersion.rawValue {
                 OWSLogger.error("unsupported group message version!")
@@ -528,6 +535,7 @@ extension MessageSender {
 
         if metaData.status == DTAPIRequestResponseStatus.OK.rawValue ||
             metaData.status == DTAPIRequestResponseStatus.unsupportedMsgVersion.rawValue {
+            updateTrustedClock(from: metaData)
             if metaData.status == DTAPIRequestResponseStatus.unsupportedMsgVersion.rawValue {
                 OWSLogger.error("unsupported \(label) message version!")
             }

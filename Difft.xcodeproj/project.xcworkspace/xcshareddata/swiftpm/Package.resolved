@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/difftim/client-sdk-swift",
       "state" : {
-        "revision" : "c6714b4bb58a218714dcfd6156694bf802769468",
-        "version" : "2.12.1-a28"
+        "revision" : "c3a8493287f5609489087c686010e383e8bf6de5",
+        "version" : "2.15.2-a5"
       }
     },
     {
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/livekit/livekit-uniffi-xcframework.git",
       "state" : {
-        "revision" : "61229f4032131311b997ddb1bc1cb8f5afbe30c8",
-        "version" : "0.0.5"
+        "revision" : "7c161254ce7cd55debc48023f69a917076b12a26",
+        "version" : "0.0.6"
       }
     },
     {
@@ -35,15 +35,6 @@
       "state" : {
         "revision" : "3dd282d3269b061853a3b3bcd23a509d2aa166ce",
         "version" : "6.2.0"
-      }
-    },
-    {
-      "identity" : "swift-collections",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-collections.git",
-      "state" : {
-        "revision" : "8c0c0a8b49e080e54e5e328cc552821ff07cd341",
-        "version" : "1.2.1"
       }
     },
     {
@@ -67,10 +58,10 @@
     {
       "identity" : "webrtc-xcframework",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/chative/webrtc-xcframework.git",
+      "location" : "https://github.com/3th1UOYgUtJkurSZ/webrtc-xcframework.git",
       "state" : {
-        "revision" : "48e4a907ca4ab5eca48d341422d6b72ce5496ba1",
-        "version" : "144.7559.8"
+        "revision" : "782ab246ff5aa411b80b2c25af4c6f815b62b0dd",
+        "version" : "144.7559.11"
       }
     }
   ],

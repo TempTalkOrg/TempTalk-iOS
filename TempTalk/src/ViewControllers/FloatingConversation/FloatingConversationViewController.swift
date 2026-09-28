@@ -22,6 +22,9 @@ class FloatingConversationViewController: UIViewController {
 
     private let thread: TSThread?
     private let configuration: FloatingConversationConfiguration
+    /// Passed on to the conversation we create, so a friend request sent from a floating chat
+    /// reports the same provenance as one sent from the card that opened it.
+    private var addFriendSource: AddFriendSource = .unspecified
     private var conversationVC: ConversationViewController?
     private var customViewController: UIViewController?
     private var shouldWrapInNavigationController: Bool
@@ -81,9 +84,12 @@ class FloatingConversationViewController: UIViewController {
     }
 
     /// 使用 TSThread 初始化（兼容旧代码）
-    init(thread: TSThread, configuration: FloatingConversationConfiguration = .default) {
+    init(thread: TSThread,
+         configuration: FloatingConversationConfiguration = .default,
+         addFriendSource: AddFriendSource = .unspecified) {
         self.thread = thread
         self.configuration = configuration
+        self.addFriendSource = addFriendSource
         self.shouldWrapInNavigationController = true
 
         super.init(nibName: nil, bundle: nil)
@@ -174,6 +180,7 @@ class FloatingConversationViewController: UIViewController {
                 viewMode: .main,
                 isFromPersonalCard: true
             )
+            newConversationVC.enteredFromAddFriendSource = addFriendSource
             conversationVC = newConversationVC
             targetViewController = newConversationVC
         } else if let existingConversationVC = conversationVC {

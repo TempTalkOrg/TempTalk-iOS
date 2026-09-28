@@ -147,7 +147,7 @@
         
         NSString * upinfo = [DTGroupUtils getTranslateSettingChangedInfoStringWithUserChangeType:self.type];
         if (upinfo && upinfo.length) {
-            uint64_t now = [NSDate ows_millisecondTimeStamp];
+            uint64_t now = [DTTrustedClock clientStampMs];
             [[[TSInfoMessage alloc] initWithTimestamp:now
                                              inThread:self.thread
                                           messageType:TSInfoMessageTypeGroupUpdate

@@ -21,6 +21,11 @@ typedef void (^AttachmentStateBlock)(BOOL isAttachmentReady);
 - (instancetype)initWithAttachment:(TSAttachmentStream *)attachment
            attachmentStateCallback:(AttachmentStateBlock _Nullable)attachmentStateCallback;
 
+/// Suppresses the built-in progress bar and label, leaving only the state callback.
+/// For cells that draw their own treatment: video cells share one spinner between
+/// compression and upload, which the user has no reason to tell apart. Defaults to NO.
+@property (nonatomic) BOOL suppressesProgressUI;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -301,6 +301,18 @@
 /* Accessibility label for placing call button */
 "CALL_LABEL" = "打电话";
 
+/* Alert body when the camera permission is denied for a call. Embeds {{app name}} twice. */
+"CALL_MEDIA_PERMISSION_CAMERA_MESSAGE" = "请在系统设置中允许 %1$@ 使用摄像头，然后返回 %1$@ 重试。修改权限后，你可能会退出当前通话。";
+
+/* Alert title when the camera permission is denied for a call */
+"CALL_MEDIA_PERMISSION_CAMERA_TITLE" = "无法访问摄像头";
+
+/* Alert body when the microphone permission is denied for a call. Embeds {{app name}} twice. */
+"CALL_MEDIA_PERMISSION_MICROPHONE_MESSAGE" = "请在系统设置中允许 %1$@ 使用麦克风，然后返回 %1$@ 重试。修改权限后，你可能会退出当前通话。";
+
+/* Alert title when the microphone permission is denied for a call */
+"CALL_MEDIA_PERMISSION_MICROPHONE_TITLE" = "无法访问麦克风";
+
 /* Call setup status label after outgoing call times out */
 "CALL_SCREEN_STATUS_NO_ANSWER" = "没有应答。";
 
@@ -1360,6 +1372,15 @@
 /* media picker option to choose from library */
 "MEDIA_FROM_LIBRARY_BUTTON" = "相册";
 
+/* Confirmation shown when closing the media preview while assets are still processing */
+"MEDIA_PREVIEW_CLOSE_WHILE_COMPRESSING" = "媒体仍在处理中，确定要关闭吗？";
+
+/* Toast shown when send is tapped while assets are still processing */
+"MEDIA_PREVIEW_COMPRESSING_TOAST" = "正在处理，请稍候…";
+
+/* Alert shown when send is tapped and some assets failed to process, embeds {{number of failed items}} */
+"MEDIA_PREVIEW_ITEMS_FAILED" = "%ld 个文件处理失败，将不会发送。";
+
 /* Confirmation button text to delete selected media from the gallery, embeds {{number of messages}} */
 "MEDIA_GALLERY_DELETE_MULTIPLE_MESSAGES_FORMAT" = "删除%d条消息";
 
@@ -1384,6 +1405,9 @@
 /* Action sheet button title */
 "MESSAGE_ACTION_DELETE_MESSAGE" = "删除";
 
+/* Action sheet button title for resending a failed message */
+"MESSAGE_ACTION_RESEND" = "重发";
+
 /* Action sheet button subtitle */
 "MESSAGE_ACTION_DELETE_MESSAGE_SUBTITLE" = "仅在本设备将其删除";
 
@@ -1394,7 +1418,7 @@
 "MESSAGE_ACTION_DELETE_MESSAGE_OK" = "确认";
 
 /* Action sheet button title */
-"MESSAGE_ACTION_DETAILS" = "更多信息";
+"MESSAGE_ACTION_DETAILS" = "详情";
 
 "MESSAGE_ACTION_QUOTE" = "引用";
 
@@ -1405,7 +1429,7 @@
 "MESSAGE_ACTION_FORWARD" = "转发";
 
 /* Action sheet button title */
-"MESSAGE_ACTION_FORWARD_TO_NOTE" = "保存";
+"MESSAGE_ACTION_FORWARD_TO_NOTE" = "收藏";
 
 /* Action sheet button title for saving image to self */
 "MESSAGE_ACTION_FORWARD_TO_NOTE_IMAGE" = "收藏";
@@ -1416,10 +1440,11 @@
 "MESSAGE_ACTION_RECALL" = "撤回";
 
 /* Action sheet button title */
-"MESSAGE_ACTION_SAVE_MEDIA" = "下载";
+"MESSAGE_ACTION_SAVE_MEDIA" = "存至相册";
+"MESSAGE_ACTION_DOWNLOAD_FILE" = "下载";
 
 /* Action sheet button title for saving image */
-"MESSAGE_ACTION_SAVE_MEDIA_IMAGE" = "保存到相册";
+"MESSAGE_ACTION_SAVE_MEDIA_IMAGE" = "存至相册";
 
 /* Action sheet button title */
 "MESSAGE_ACTION_CREATE_TASK" = "添加任务";
@@ -1520,6 +1545,9 @@
 
 /* Label indicating that a message failed to send. */
 "MESSAGE_STATUS_SEND_FAILED" = "发送失败。";
+
+/* Hint below a failed outgoing message, tapping it resends the message */
+"MESSAGE_STATUS_SEND_FAILED_TAP_TO_RETRY" = "发送失败 · 点击重试";
 
 /* message status while message is sending. */
 "MESSAGE_STATUS_SENDING" = "正在发送...";
@@ -3301,9 +3329,9 @@
 "NON_FRIEND_ONLY_TEXT_MESSAGE" = "非好友仅支持发送文本消息";
 "PERSON_CARD_SHARE_CARD" = "分享名片";
 
-"LOGIN_ERROR" = "邮箱/邀请码/手机号 错误";
+"LOGIN_ERROR" = "邮箱/手机号错误";
 "LOGIN_EMAIL_PLACEHOLDER" = "输入邮箱或Code码";
-"LOGIN_EMAIL_PLACEHOLDER_CHATIVE" = "邮箱/手机号/邀请码";
+"LOGIN_EMAIL_PLACEHOLDER_CHATIVE" = "邮箱/手机号";
 "LOGIN_EMAIL_PLACEHOLDER_CHATIVE_SIGNIN" = "输入邮箱/手机号";
 "LOGIN_EMAIL_PLACEHOLDER_CHATIVE_SIGNIN_EMAIL" = "输入邮箱";
 "Line_NewLine" = "换行";
@@ -3431,6 +3459,9 @@
 "PINNED_INFO_MESSAGE_DEFAULT_PREVIEW" = "您有新的pin消息";
 
 "HOMEVIEWCELL_DRAFT" = "[草稿]";
+
+/* A label for conversations with a message that failed to send. */
+"HOMEVIEWCELL_SEND_FAILED" = "[发送失败]";
 
 /* Chat Folder */
 "CHAT_FOLDER_VC_TITLE" = "会话分组";
@@ -3623,6 +3654,28 @@
 
 "Open Chative on your old device, bring it nearby, and make sure Wi-Fi and Bluetooth are enabled on both devices. Then, Scan the following QR code with the old device." = "在旧设备上打开Chative拿到旁边，确定两个设备都开启了Wi-Fi和蓝牙，然后用旧设备扫描下面的二维码。";
 
+"DEVICE_TRANSFER_QR_INSTRUCTIONS" = "在旧设备打开 %@，扫描此二维码。\n请将两台设备靠近放置，并保持 Wi-Fi 和蓝牙开启。迁移完成前，请保持 %@ 在前台，不要切换 App、锁屏或离开迁移页面。";
+
+"DEVICE_TRANSFER_IN_PROGRESS_INSTRUCTIONS" = "请将两台设备靠近放置，并保持 Wi-Fi 和蓝牙开启。两台设备均显示迁移完成前，请保持 %@ 在前台，不要切换 App、锁屏或离开迁移页面。";
+
+"DEVICE_TRANSFER_LOCAL_NETWORK_TITLE" = "需要开启本地网络";
+
+"DEVICE_TRANSFER_LOCAL_NETWORK_BODY" = "请在系统设置中允许 %@ 访问本地网络，然后返回 %@ 重新开始迁移。此权限用于让两台设备在附近连接并传输数据。";
+
+"DEVICE_TRANSFER_SETTINGS_BUTTON" = "设置";
+
+"DEVICE_TRANSFER_QR_EXPIRED_TITLE" = "二维码已过期";
+
+"DEVICE_TRANSFER_QR_EXPIRED_BODY" = "二维码已过期，请扫描新二维码并重新开始迁移。";
+
+"DEVICE_TRANSFER_CONNECTION_FAILED_TITLE" = "连接失败";
+
+"DEVICE_TRANSFER_CONNECTION_FAILED_BODY" = "连接失败，请重新开始迁移。";
+
+"DEVICE_TRANSFER_INTERRUPTED_TITLE" = "迁移已中断";
+
+"DEVICE_TRANSFER_INTERRUPTED_BODY" = "迁移已中断，请重新开始。";
+
 "Receiving Data" = "接收数据中";
 
 "Keep both devices on and near each other." = "请保持两个设备都处于打开状态。";
@@ -3637,6 +3690,8 @@
 
 "Transfer Failed" = "迁移失败";
 
+"DEVICE_TRANSFER_QR_GENERATION_FAILED_BODY" = "无法生成二维码，请重试。";
+
 "The transfer failed. %1$@.Please try again." = "迁移失败。%1$@。Please try again。";
 
 "Are you sure to transfer all your data to this device: %1$@'s iPhone?" = "你确定要迁移所有数据到这个设备吗： %1$@ 的iPhone?";
@@ -3647,7 +3702,13 @@
 
 "DEVICE_TRANSFER_ERROR_GENERIC" = "迁移失败，请确保你的设备足够靠近并重试";
 
+"DEVICE_TRANSFER_ERROR_BACKGROUNDED_DEVICE" = "请保持两台设备打开并处于解锁状态，然后重试。";
+
 "DEVICE_TRANSFER_ERROR_CERTIFICATE_MISMATCH" = "无法验证你的新设备，请重试";
+
+"DEVICE_TRANSFER_ERROR_NOT_ENOUGH_SPACE" = "新设备存储空间不足，无法完成迁移。";
+
+"DEVICE_TRANSFER_ERROR_NOT_ENOUGH_SPACE_THIS_DEVICE" = "本机存储空间不足，无法准备迁移数据。请清理空间后重试。";
 
 "DEVICE_TRANSFER_ERROR_UNSUPPORTED_VERSION" = "请更新到最新版本并重试";
 
@@ -3704,7 +3765,7 @@
 "ACCEPT" = "接受";
 "REQUEST_BAR_WARNING" = "⚠️ 请勿轻信陌生人。";
 "REQUEST_BAR_WARNING_BOLD" = "请勿";
-"CONVERSATION_WARNING_HEADER" = "🔒 隐私优先 · 全程匿名 · 端到端消息加密。请勿轻信陌生人。";
+"CONVERSATION_WARNING_HEADER" = "隐私优先 · 全程匿名 · 端到端消息加密。请勿轻信陌生人。了解更多";
 "BLOCK&REPORT" = "屏蔽 & 上报";
 "BLOCK_REPORT_TITLE" = "你确定你要这么做吗?";
 
@@ -3793,6 +3854,9 @@
 /* input bar action button title when send File */
 "INPUTTOOL_ATTACHMENT_FILE_BUTTON" = "文档";
 
+/* input bar action button title when open GIF picker */
+"INPUTTOOL_ATTACHMENT_GIF_BUTTON" = "表情";
+
 /* input bar action button title when open Confidential Mode */
 "INPUTTOOL_ATTACHMENT_CONFIDENTIAL_BUTTON" = "机密模式";
 
@@ -3869,7 +3933,7 @@
 "GROUP_MEETING_OTHER_END_CALL" = "通话已结束";
 
 "MESSAGE_ACTION_SPEECHTOTEXT" = "转文字";
-"MESSAGE_ACTION_SPEECHTOTEXT_ORIGIN" = "取消转文字";
+"MESSAGE_ACTION_SPEECHTOTEXT_ORIGIN" = "收起文字";
 
 "SPEECHTOTEXT_CONVERT_TIP_MESSAGE" = "转换中...";
 "SPEECHTOTEXT_CONVERT_TIP_MESSAGE_FAILED" = "转文字失败";
@@ -3891,6 +3955,10 @@
 
 "MEETING_NAVAGATION_RECONNECTING_FAILURE" = "重连失败";
 "MEETING_NAVAGATION_CONNECTING" = "连接中...";
+"MEETING_NAVAGATION_DISCONNECTING" = "正在断开连接...";
+"MEETING_NAVAGATION_MEDIA_SEND_ISSUE" = "对方可能听不到你，正在恢复…";
+"MEETING_NAVAGATION_SELF_NETWORK_POOR" = "你的网络不佳，可能影响通话质量";
+"MEETING_PARTICIPANT_NETWORK_POOR_ACCESSIBILITY" = "%@网络不佳";
 
 "MEETING_SEND_ALL" = "发送所有人";
 "METTING_CONNECT_EXCEPTION_TIPS" = "会议连接异常，请重试";
@@ -4021,6 +4089,19 @@
 
 "CALL_MORE_CRITICAL_ALERT" = "紧急联络";
 "MEETING_NAVAGATION_CALLING" = "呼叫中";
+"MEETING_NAVAGATION_E2EE" = "已端到端加密";
+"CONVERSATION_E2EE_HEADER" = "消息和通话已端到端加密，只有你和聊天里的人可以查看消息或收听通话。了解更多";
+"CONVERSATION_E2EE_LEARN_MORE" = "了解更多";
+"CONVERSATION_E2EE_INPUT_PLACEHOLDER" = "已端到端加密";
+"CHAT_LIST_E2EE_FOOTER" = "消息和通话都已端到端加密。了解更多";
+"E2EE_INFO_TITLE" = "你的聊天和通话都是私密的";
+"E2EE_INFO_INTRO" = "端到端加密可确保只有你和你选择聊天的对象可以查看消息或收听通话。除此之外的任何人都无法查看或收听，Quicall 也不例外。保护内容包括：";
+"E2EE_INFO_ITEM_1" = "文字和语音消息";
+"E2EE_INFO_ITEM_2" = "语音和视频通话";
+"E2EE_INFO_ITEM_3" = "照片、视频和文件";
+"E2EE_INFO_CAVEAT" = "端到端加密不能阻止聊天对象复制、保存、转发、截图或录音。请只与信任的人分享敏感内容。";
+"E2EE_INFO_LEARN_MORE" = "了解更多";
+"E2EE_INFO_DISMISS" = "知道了";
 "MEETING_CRITICAL_ALERT_DANMU" = "发起紧急联络成功";
 "MEETING_CRITICAL_ALERT_TIPS" = "无人应答？发起紧急联络";
 "MEETING_CRITICAL_ALERT_NO_ANSWER" = "无人应答？";
@@ -4169,9 +4250,15 @@
 "GIF_FAVORITE_ADDED" = "已添加到 GIF 收藏";
 "GIF_FAVORITE_FAILED" = "无法添加到 GIF 收藏，请稍后重试";
 "GIF_FAVORITE_REMOVE" = "从 GIF 收藏移除";
-"MESSAGE_ACTION_ADD_TO_FAVORITE" = "添加到 GIF 收藏";
+"MESSAGE_ACTION_ADD_TO_FAVORITE" = "收藏GIF";
 "gif_favorites_cap_title" = "GIF 收藏已达上限";
 "gif_favorites_cap_message" = "GIF 收藏最多 200 个。你可以替换最早添加的一个，或先移除部分。";
 "gif_favorites_cap_confirm" = "替换最早的";
 "gif_favorites_cap_cancel" = "取消";
 "gif_favorites_add_size_limit" = "此 GIF 过大，无法添加到 GIF 收藏";
+
+/* Network certificate validation failure warning */
+"net_risk_warning_title" = "网络安全警告";
+"net_risk_warning_message" = "当前网络可能不安全，建议切换网络后继续使用。";
+"net_risk_warning_ignore" = "继续";
+"net_risk_warning_quit" = "退出";

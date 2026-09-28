@@ -432,7 +432,8 @@ NS_ASSUME_NONNULL_BEGIN
                     
                     // sync group message
                     if ([localNumber isEqualToString:envelope.source] &&
-                        (DTParamsUtils.validateString(hotDataDestination) || content.dataMessage.group)) {
+                        (DTParamsUtils.validateString(hotDataDestination)
+                         || [DTEnvelopeConversationValidator isGroupDataMessage:content.dataMessage])) {
                         
                         [self handleHotDataIncomingEnvelopeJob:job
                                                       envelope:envelope
@@ -488,6 +489,27 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertDebug(envelope);
     OWSAssertDebug(dataMessage);
     OWSAssertDebug(transaction);
+
+    NSString *localNumber = [[TSAccountManager sharedInstance] localNumberWithTransaction:transaction];
+    BOOL isSelfSync = DTParamsUtils.validateString(localNumber)
+        && DTParamsUtils.validateString(envelope.source)
+        && [envelope.source isEqualToString:localNumber];
+    if (!isSelfSync) {
+        BOOL conversationMatches;
+        if ([DTEnvelopeConversationValidator isGroupDataMessage:dataMessage]) {
+            conversationMatches = [DTEnvelopeConversationValidator isEnvelope:envelope
+                                                         consistentWithGroupID:dataMessage.group.id
+                                                                       context:@"DataMessage"];
+        } else {
+            conversationMatches = [DTEnvelopeConversationValidator isEnvelope:envelope
+                                                consistentWithOneToOneNumber:envelope.source
+                                                                       context:@"DataMessage"];
+        }
+        if (!conversationMatches) {
+            OWSLogWarn(@"%@ DataMessage dropped: delivery conversation does not match decrypted content.", self.logTag);
+            return;
+        }
+    }
     
     if (dataMessage.hasTimestamp) {
         if (dataMessage.timestamp <= 0) {
@@ -507,7 +529,7 @@ NS_ASSUME_NONNULL_BEGIN
         return;
     }
     
-    if (dataMessage.group) {
+    if ([DTEnvelopeConversationValidator isGroupDataMessage:dataMessage]) {
         [DTGroupKeyMessageHandler.shared handleFallbackGroupRootKeyWithGroupContext:dataMessage.group transaction:transaction];
     }
 
@@ -522,7 +544,7 @@ NS_ASSUME_NONNULL_BEGIN
         }
     }
     
-    if (dataMessage.group) {
+    if ([DTEnvelopeConversationValidator isGroupDataMessage:dataMessage]) {
         TSGroupThread *_Nullable groupThread =
         [TSGroupThread threadWithGroupId:dataMessage.group.id transaction:transaction];
         
@@ -662,8 +684,9 @@ NS_ASSUME_NONNULL_BEGIN
             
             if (receiptMessage.readPosition) {
                 DSKProtoReadPosition *readPositionProto = receiptMessage.readPosition;
-                DTReadPositionEntity *readPosition = [DTReadPositionEntity readPostionEntityWithProto:readPositionProto];
-                
+                DTReadPositionEntity *readPosition = [DTReadPositionEntity readPostionEntityWithProto:readPositionProto
+                                                                              receiptServerTimestamp:envelope.systemShowTimestamp];
+
                 if(readPosition.maxServerTime <=0 || readPosition.readAt <= 0) {
                     OWSProdError(@"ReceiptMessage, invalid readPosition: maxServerTime or readAt <= 0!")
                     return;
@@ -691,9 +714,13 @@ NS_ASSUME_NONNULL_BEGIN
                     if(thread.isGroupThread){
                         groupId = ((TSGroupThread *)thread).groupModel.groupId;
                     }
+                    uint64_t readAt = [DTTrustedClock now];
+                    if (envelope.systemShowTimestamp > 0) {
+                        readAt = MIN(readAt, envelope.systemShowTimestamp);
+                    }
                     // TODO: maxSequenceId
                     DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId
-                                                                                                readAt:[NSDate ows_millisecondTimeStamp]
+                                                                                                readAt:readAt
                                                                                          maxServerTime:outgoingmessage.timestampForSorting
                                                                                       notifySequenceId:outgoingmessage.notifySequenceId
                                                                                          maxSequenceId:outgoingmessage.sequenceId];
@@ -712,9 +739,13 @@ NS_ASSUME_NONNULL_BEGIN
                     }
                     
                 } else {
+                    uint64_t readAt = [DTTrustedClock now];
+                    if (envelope.systemShowTimestamp > 0) {
+                        readAt = MIN(readAt, envelope.systemShowTimestamp);
+                    }
                     // TODO: maxSequenceId
                     DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:[NSData data]
-                                                                                                readAt:[NSDate ows_millisecondTimeStamp]
+                                                                                                readAt:readAt
                                                                                          maxServerTime:maxTimestamp.unsignedLongValue
                                                                                       notifySequenceId:0
                                                                                          maxSequenceId:0];
@@ -732,7 +763,8 @@ NS_ASSUME_NONNULL_BEGIN
             if (outgoingmessage && outgoingmessage.isConfidentialMessage && receiptMessage.messageMode == DSKProtoDataMessageMessageModeConfidential) {
                 // Use serial queue to prevent race conditions
                 NSString *messageId = outgoingmessage.uniqueId;
-                uint64_t messageTimestamp = outgoingmessage.timestamp;
+                // Keep the placeholder at the original server-axis position.
+                uint64_t messageTimestamp = outgoingmessage.timestampForSorting;
                 NSString *threadId = outgoingmessage.uniqueThreadId;
 
                 dispatch_async(self.confidentialPlaceholderQueue, ^{
@@ -914,7 +946,7 @@ NS_ASSUME_NONNULL_BEGIN
         return;
     }
     
-    if (dataMessage.group) {
+    if ([DTEnvelopeConversationValidator isGroupDataMessage:dataMessage]) {
         // 先快照群状态再调 fallback，防止 fallback 链路扩展后影响下面的判断
         TSGroupThread *groupThread = [TSGroupThread threadWithGroupId:dataMessage.group.id transaction:transaction];
         BOOL groupUnknown = !groupThread || (groupThread.groupModel && groupThread.groupModel.version == 0);
@@ -1079,6 +1111,7 @@ NS_ASSUME_NONNULL_BEGIN
         OWSLogInfo(@"%@ Received %ld read receipt(s)", self.logTag, (u_long)syncMessage.read.count);
         [OWSReadReceiptManager.sharedManager processReadReceiptsFromLinkedDevice:syncMessage.read
                                                                    readTimestamp:envelope.timestamp
+                                                          receiptServerTimestamp:envelope.systemShowTimestamp
                                                                      transaction:transaction];
     } else if (syncMessage.criticalRead.count > 0) {
         //
@@ -1131,8 +1164,29 @@ NS_ASSUME_NONNULL_BEGIN
                (unsigned long)forwardNotice.sourceAuthorIds.count,
                isSelfSync);
 
+    BOOL requiresSourceMembershipFallback = NO;
+    if (!isSelfSync) {
+        DSKProtoConversationId *payloadConversation = forwardNotice.conversation;
+        DTEnvelopeConversationValidationResult validationResult;
+        if (payloadConversation.groupID.length > 0) {
+            validationResult = [DTEnvelopeConversationValidator validationResultForEnvelope:envelope
+                                                                      consistentWithGroupID:payloadConversation.groupID
+                                                                                    context:@"ForwardNotice"];
+            requiresSourceMembershipFallback = validationResult == DTEnvelopeConversationValidationResultUnavailable;
+        } else {
+            validationResult = [DTEnvelopeConversationValidator validationResultForEnvelope:envelope
+                                                              consistentWithOneToOneNumber:envelope.source
+                                                                                    context:@"ForwardNotice"];
+        }
+        if (validationResult == DTEnvelopeConversationValidationResultMismatched) {
+            OWSLogWarn(@"%@ ForwardNotice dropped: delivery conversation does not match decrypted content.", self.logTag);
+            return;
+        }
+    }
+
     TSThread *thread = [self threadForForwardNoticeEnvelope:envelope
                                               forwardNotice:forwardNotice
+                            requiresSourceMembershipFallback:requiresSourceMembershipFallback
                                                 transaction:transaction];
     if (!thread) {
         OWSLogError(@"%@ ForwardNotice dropped: thread not found.", self.logTag);
@@ -1197,13 +1251,25 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (nullable TSThread *)threadForForwardNoticeEnvelope:(DSKProtoEnvelope *)envelope
                                          forwardNotice:(DSKProtoForwardNoticeMessage *)forwardNotice
+                       requiresSourceMembershipFallback:(BOOL)requiresSourceMembershipFallback
                                            transaction:(SDSAnyWriteTransaction *)transaction
 {
     DSKProtoConversationId *payloadConv = forwardNotice.conversation;
 
     NSData *groupID = payloadConv.groupID;
     if (groupID.length > 0) {
-        return [TSGroupThread threadWithGroupId:groupID transaction:transaction];
+        TSGroupThread *groupThread = [TSGroupThread threadWithGroupId:groupID transaction:transaction];
+        if (!groupThread) {
+            OWSLogWarn(@"%@ ForwardNotice dropped: group thread not found for groupID.", self.logTag);
+            return nil;
+        }
+        if (requiresSourceMembershipFallback
+            && ![groupThread.groupModel.groupMemberIds containsObject:envelope.source]) {
+            OWSLogWarn(@"%@ ForwardNotice dropped: unstamped source=%@ is not a member of group=%@",
+                       self.logTag, envelope.source, groupThread.uniqueId);
+            return nil;
+        }
+        return groupThread;
     }
 
     NSString *localNumber = [TSAccountManager localNumber];
@@ -1268,9 +1334,30 @@ NS_ASSUME_NONNULL_BEGIN
                (unsigned long)copyData.sourceAuthorIds.count,
                isSelfSync);
 
-    // §3.1-5/6/7  Resolve target thread with member & well-formed checks
+    BOOL requiresSourceMembershipFallback = NO;
+    if (!isSelfSync) {
+        DSKProtoConversationId *payloadConversation = activityNotice.conversation;
+        DTEnvelopeConversationValidationResult validationResult;
+        if (payloadConversation.groupID.length > 0) {
+            validationResult = [DTEnvelopeConversationValidator validationResultForEnvelope:envelope
+                                                                      consistentWithGroupID:payloadConversation.groupID
+                                                                                    context:@"ActivityNotice"];
+            requiresSourceMembershipFallback = validationResult == DTEnvelopeConversationValidationResultUnavailable;
+        } else {
+            validationResult = [DTEnvelopeConversationValidator validationResultForEnvelope:envelope
+                                                              consistentWithOneToOneNumber:envelope.source
+                                                                                    context:@"ActivityNotice"];
+        }
+        if (validationResult == DTEnvelopeConversationValidationResultMismatched) {
+            OWSLogWarn(@"%@ ActivityNotice dropped: delivery conversation does not match decrypted content.", self.logTag);
+            return;
+        }
+    }
+
+    // Resolve the target thread after the delivery-channel cross-check.
     TSThread *thread = [self threadForActivityNoticeEnvelope:envelope
                                              activityNotice:activityNotice
+                           requiresSourceMembershipFallback:requiresSourceMembershipFallback
                                                 transaction:transaction];
     if (!thread) {
         OWSLogWarn(@"%@ ActivityNotice dropped: thread not resolved, source=%@", self.logTag, envelope.source);
@@ -1331,11 +1418,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (nullable TSThread *)threadForActivityNoticeEnvelope:(DSKProtoEnvelope *)envelope
                                         activityNotice:(DSKProtoMessageActivityNotice *)activityNotice
+                      requiresSourceMembershipFallback:(BOOL)requiresSourceMembershipFallback
                                            transaction:(SDSAnyWriteTransaction *)transaction
 {
     DSKProtoConversationId *payloadConv = activityNotice.conversation;
 
-    // §3.1-5  Group: verify envelope.source is a member
     NSData *groupID = payloadConv.groupID;
     if (groupID.length > 0) {
         TSGroupThread *groupThread = [TSGroupThread threadWithGroupId:groupID transaction:transaction];
@@ -1343,8 +1430,9 @@ NS_ASSUME_NONNULL_BEGIN
             OWSLogWarn(@"%@ ActivityNotice dropped: group thread not found for groupID.", self.logTag);
             return nil;
         }
-        if (![groupThread.groupModel.groupMemberIds containsObject:envelope.source]) {
-            OWSLogWarn(@"%@ ActivityNotice dropped: source=%@ is not a member of group=%@",
+        if (requiresSourceMembershipFallback
+            && ![groupThread.groupModel.groupMemberIds containsObject:envelope.source]) {
+            OWSLogWarn(@"%@ ActivityNotice dropped: unstamped source=%@ is not a member of group=%@",
                        self.logTag, envelope.source, groupThread.uniqueId);
             return nil;
         }
@@ -1551,7 +1639,7 @@ NS_ASSUME_NONNULL_BEGIN
     DTRealSourceEntity *realSource = [DTRealSourceEntity realSourceEntityWithProto:dataMessage.screenShot.source];
     // Use transaction-based method to ensure database lookup for nickname
     NSString *nameString = [self.contactsManager displayNameForPhoneIdentifier:envelope.source transaction:transaction];
-    TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:[NSDate ows_millisecondTimeStamp]
+    TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:[DTTrustedClock clientStampMs]
                                                                  inThread:thread
                                                               messageType:TSInfoMessageScreenshotMessage
                                                          expiresInSeconds:dataMessage.expireTimer
@@ -1934,7 +2022,7 @@ NS_ASSUME_NONNULL_BEGIN
             reaction = [DTReactionMessage reactionWithProto:dataMessage];
             DTRealSourceEntity *ownSource = [[DTRealSourceEntity alloc] initSourceWithTimestamp:timestamp sourceDevice:sourceDevice source:source];
             reaction.ownSource = ownSource;
-            reaction.conversationId = source;
+            reaction.conversationId = thread.uniqueId;
             [reaction saveWithTransaction:transaction];
             
             if (self.handleUnsupportedMessage) {
@@ -2096,7 +2184,7 @@ NS_ASSUME_NONNULL_BEGIN
             groupId = ((TSGroupThread *)thread).groupModel.groupId;
         }
         DTReadPositionEntity *readPosition = [[DTReadPositionEntity alloc] initWithGroupId:groupId
-                                                                                    readAt:[NSDate ows_millisecondTimeStamp]
+                                                                                    readAt:[DTTrustedClock now]
                                                                              maxServerTime:incomingMessage.serverTimestamp
                                                                           notifySequenceId:incomingMessage.notifySequenceId
                                                                              maxSequenceId:incomingMessage.sequenceId];
@@ -2263,7 +2351,7 @@ NS_ASSUME_NONNULL_BEGIN
     OWSAssertDebug(dataMessage);
     OWSAssertDebug(transaction);
 
-    if (dataMessage.group) {
+    if ([DTEnvelopeConversationValidator isGroupDataMessage:dataMessage]) {
         NSData *groupId = dataMessage.group.id;
         OWSAssertDebug(groupId.length > 0);
         TSGroupThread *_Nullable groupThread = [TSGroupThread threadWithGroupId:groupId transaction:transaction];

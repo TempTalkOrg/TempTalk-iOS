@@ -29,15 +29,10 @@ private extension ConversationViewController {
 
     /// 过滤出可被撤回的消息(必须是 outgoing + 未过撤回时限)
     func filterRecallableMessages() -> [ConversationViewItem] {
-        let currentTimestamp = NSDate.ows_millisecondTimeStamp()
-        let recallThreshold = DTRecallConfig.fetch().timeoutInterval
+        let currentTimestamp = DTTrustedClock.now()
 
         return viewState.selectedMessageItems.filter { viewItem in
-            guard viewItem.interaction is TSOutgoingMessage else { return false }
-            let msgTimestamp = viewItem.interaction.timestamp
-            guard currentTimestamp >= msgTimestamp else { return false }
-            let messageDuration = Double(currentTimestamp - msgTimestamp)
-            return messageDuration <= (recallThreshold * 1000)
+            isRecallableByTrustedTime(viewItem.interaction, now: currentTimestamp)
         }
     }
 
@@ -67,15 +62,12 @@ private extension ConversationViewController {
         let dispatchGroup = DispatchGroup()
         let targetThread = thread
 
-        let baseTimestamp = NSDate.ows_millisecondTimeStamp()
-
-        for (index, outgoingMessage) in outgoingMessages.enumerated() {
+        for outgoingMessage in outgoingMessages {
             dispatchGroup.enter()
-            let explicitTimestamp = baseTimestamp + UInt64(index)
             ThreadUtil.sendRecallMessage(
                 withOriginMessage: outgoingMessage,
                 in: targetThread,
-                explicitTimestamp: explicitTimestamp
+                explicitTimestamp: DTTrustedClock.clientStampMs()
             ) {
                 dispatchGroup.leave()
             } failure: { _ in

@@ -128,15 +128,10 @@ import TTMessaging
     }
 
     func countRecallableMessages() -> Int {
-        let currentTimestamp = NSDate.ows_millisecondTimeStamp()
-        let recallThreshold = DTRecallConfig.fetch().timeoutInterval
+        let currentTimestamp = DTTrustedClock.now()
 
         return viewState.selectedMessageItems.filter { viewItem in
-            guard viewItem.interaction is TSOutgoingMessage else { return false }
-            let msgTimestamp = viewItem.interaction.timestamp
-            guard currentTimestamp >= msgTimestamp else { return false }
-            let messageDuration = Double(currentTimestamp - msgTimestamp)
-            return messageDuration <= (recallThreshold * 1000)
+            isRecallableByTrustedTime(viewItem.interaction, now: currentTimestamp)
         }.count
     }
 

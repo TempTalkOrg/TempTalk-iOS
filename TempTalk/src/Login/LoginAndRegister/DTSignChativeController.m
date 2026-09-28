@@ -31,7 +31,6 @@
 @property (nonatomic, assign) DTLoginState loginState;
 
 
-@property (nonatomic, strong) NSNumber *isNewRegister;
 @property (nonatomic, readonly) AccountManager *accountManager;
 @property (nonatomic, strong) NSString *vCodeCompleteNumber;
 @property (nonatomic, strong) NSString *vCodePhoneNumber;
@@ -246,28 +245,14 @@
 }
 
 
-- (void)autoRegisterWithInviteCode:(NSString *) inviteCode {
-    if(DTParamsUtils.validateString(inviteCode)){
-        self.tfAccount.text = inviteCode;
-        self.loginButton.isSelected = true;
-        self.loginButton.userInteractionEnabled = true;
-        NSString *strippedText = [self.tfAccount.text ows_stripped];
-        [self resetSubviewsLayoutWithState:DTLoginStateTypePreLogin errorMesssage:nil];
-        [self registerWithInviteCode:strippedText];
-    }
-}
-
-
 - (void)loginButtonClick:(UIButton *)sender {
     NSString *strippedText = [self.tfAccount.text ows_stripped];
-    //邀请码
-    BOOL isInvitedCode = [DTPatternHelper validateChativeInvitedCode:strippedText];
     BOOL isEmail = [DTPatternHelper validateEmail:strippedText];
     NSString *phoneString = [DTPatternHelper verificationTextInputNumer:strippedText];
     BOOL isPhone = DTParamsUtils.validateString(phoneString);
     NSString *plusPhoneString = [DTPatternHelper verificationTextInputNumerWithPlus:strippedText];
     BOOL isPlusPhone = DTParamsUtils.validateString(plusPhoneString);
-    if (!isInvitedCode && !isEmail && !isPhone && !isPlusPhone) {
+    if (!isEmail && !isPhone && !isPlusPhone) {
         [self resetSubviewsLayoutWithState:DTLoginStateTypeLoginFailed errorMesssage:Localized(@"LOGIN_ERROR", @"")];
         return;
     }
@@ -287,10 +272,6 @@
         return;
     }
     
-    if (isInvitedCode) {
-        [self registerWithInviteCode:strippedText];
-        return;
-    }
 }
 
 - (void)loginViaPhoneNumber:(BOOL)isPlusPhone {
@@ -458,71 +439,6 @@
     signInVC.signInModeType = self.signInModeType;
     signInVC.titleString =  [NSString stringWithFormat:@"Sign in to %@",TSConstants.appDisplayName];
     [self.navigationController pushViewController:signInVC animated:true];
-}
-
-#pragma mark invited Code login
-- (void)registerWithInviteCode:(NSString *)inviteCode {
-    [DTToastHelper showHudInView:self.view];
-    @weakify(self);
-    [[TSAccountManager
-      sharedInstance]
-     exchangeAccountWithInviteCode: inviteCode
-     success:^(DTAPIMetaEntity *metaEntity){
-        @strongify(self);
-        BOOL accountOk = FALSE;
-        do {
-            NSDictionary *responseData = metaEntity.data;
-            if (![responseData isKindOfClass:[NSDictionary class]]) { break;}
-            NSString *number = [(NSDictionary *)responseData objectForKey:@"account"];
-            if (number.length) {
-                TSAccountManager *manager = [TSAccountManager sharedInstance];
-                manager.phoneNumberAwaitingVerification = number;
-            }
-            NSString *vCode = [(NSDictionary *)responseData objectForKey:@"vcode"];
-            NSString *inviter = [(NSDictionary *)responseData objectForKey:@"inviter"];
-            if (!vCode) { break; }
-            accountOk = TRUE;
-            self.vCode = vCode;
-            self.isNewRegister = @(1);
-            [self sendinfoMessageWith:inviter];
-            [self submitVerificationWithCode:self.vCode screenLock:nil];
-            
-        } while(false);
-        if (FALSE == accountOk) {
-            [DTToastHelper hide];
-            NSString *errorMessage = [NSError errorDesc:nil errResponse:nil];
-            [self resetSubviewsLayoutWithState:DTLoginStateTypeLoginFailed errorMesssage:errorMessage];
-        }
-    }failure:^(NSError *error){
-        [DTToastHelper hide];
-        NSString *errorMessage = [NSError errorDesc:error errResponse:nil];
-        [self resetSubviewsLayoutWithState:DTLoginStateTypeLoginFailed errorMesssage:errorMessage];
-    }];
-}
-
-
-- (void)sendinfoMessageWith:(NSString *)inviter {
-    __block TSContactThread *cThread = nil;
-    DatabaseStorageAsyncWrite(self.databaseStorage, ^(SDSAnyWriteTransaction *writeTransaction) {
-        cThread = [TSContactThread getOrCreateThreadWithContactId:inviter transaction:writeTransaction];
-        SignalAccount *account = [SignalAccount anyFetchWithUniqueId:cThread.contactIdentifier transaction:writeTransaction];
-        OWSContactsManager *contactsManager = Environment.shared.contactsManager;
-        if(account){
-            Contact *contact = account.contact;
-            if(!contact){
-                contact = [[Contact alloc] initWithRecipientId:cThread.contactIdentifier];
-            }
-            contact.external = false;
-            account.contact = contact;
-            [contactsManager updateSignalAccountWithRecipientId:cThread.contactIdentifier withNewSignalAccount:account withTransaction:writeTransaction];
-        } else {
-            account = [[SignalAccount alloc] initWithRecipientId:cThread.contactIdentifier];
-            Contact *contact = [[Contact alloc] initWithFullName:cThread.contactIdentifier phoneNumber:cThread.contactIdentifier];
-            contact.external = false;
-            account.contact = contact;
-            [contactsManager updateSignalAccountWithRecipientId:cThread.contactIdentifier withNewSignalAccount:account withTransaction:writeTransaction];
-        }
-    });
 }
 
 - (void)submitVerificationWithCode:(NSString *)code screenLock:(DTScreenLockEntity * __nullable)screenlock {

@@ -29,7 +29,7 @@ class ConversationJoinCallView: UIView {
     }
     
     private func setupViews() {
-        self.backgroundColor = UIColor(rgbHex: Theme.isDarkThemeEnabled ? 0x181A20 : 0xFFFFFF)
+        applyTheme()
         
         // 头像
         avatarView.layer.cornerRadius = 14
@@ -39,7 +39,6 @@ class ConversationJoinCallView: UIView {
         
         // 文本
         textLabel.font = UIFont.systemFont(ofSize: 14)
-        textLabel.textColor = UIColor(rgbHex: Theme.isDarkThemeEnabled ? 0xEAECEF : 0x1E2329)
         textLabel.numberOfLines = 1
         textLabel.lineBreakMode = .byTruncatingTail
         addSubview(textLabel)
@@ -54,8 +53,13 @@ class ConversationJoinCallView: UIView {
         addSubview(joinButton)
         
         // 分割线
-        separatorLine.backgroundColor = UIColor(rgbHex: Theme.isDarkThemeEnabled ? 0x2B3139 : 0xEAECEF)
         addSubview(separatorLine)
+    }
+
+    func applyTheme() {
+        backgroundColor = Theme.bgpagePrimaryColor
+        textLabel.textColor = Theme.tprimaryColor
+        separatorLine.backgroundColor = Theme.dividerColor
     }
     
     private func setupConstraints() {

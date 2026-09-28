@@ -522,9 +522,12 @@ extern NSString *const kDTAddToGroupItemIdentifier;
     
     [self.groupSettingChangedProcessor changeGroupSettingWithPropertyName:@"publishRule"
                                                                     value:publish_rule
-                                                                  success:^(SDSAnyWriteTransaction *writeTransaction){
+                                               successWithServerTimestamp:^(SDSAnyWriteTransaction *writeTransaction, uint64_t serverTimestamp) {
         [DTToastHelper hide];
-        TSInfoMessage *groupUpdateInfoMessage = [DTGroupUpdateInfoMessageHelper groupUpdatePublishRuleInfoMessage:publish_rule timestamp:[NSDate ows_millisecondTimeStamp] serverTimestamp:[NSDate ows_millisecondTimeStamp]  inThread:self.thread];
+        TSInfoMessage *groupUpdateInfoMessage = [DTGroupUpdateInfoMessageHelper groupUpdatePublishRuleInfoMessage:publish_rule
+                                                                                                       timestamp:[DTTrustedClock clientStampMs]
+                                                                                                 serverTimestamp:serverTimestamp
+                                                                                                        inThread:self.thread];
         [groupUpdateInfoMessage anyInsertWithTransaction:writeTransaction];
         [self updateTableContents];
     } failure:^{

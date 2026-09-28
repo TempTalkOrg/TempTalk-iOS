@@ -17,20 +17,20 @@
     TSInfoMessage * publishRuleChangeSystemMessage = nil;
     if (publishRule && [publishRule intValue] == 0) { // 仅管理员可以发言
         publishRuleChangeSystemMessage = [[TSInfoMessage alloc] initActionInfoMessageWithType:TSInfoMessageGroupPublishRuleChange
-                                                                                        timestamp:[NSDate ows_millisecondTimeStamp]
+                                                                                        timestamp:timestamp
                                                                                   serverTimestamp:serverTimestamp
                                                                                          inThread:thread
                                                                                     customMessage:[[NSAttributedString alloc] initWithString:Localized(@"INFO_MESSAGE_ONLY_OWNER_CAN_SPEAK", nil)]];
         
     } else if (publishRule && [publishRule intValue] == 1) {
         publishRuleChangeSystemMessage = [[TSInfoMessage alloc] initActionInfoMessageWithType:TSInfoMessageGroupPublishRuleChange
-                                                                                        timestamp:[NSDate ows_millisecondTimeStamp]
+                                                                                        timestamp:timestamp
                                                                               serverTimestamp:serverTimestamp
                                                                                          inThread:thread
                                                                                     customMessage:[[NSAttributedString alloc] initWithString:Localized(@"INFO_MESSAGE_ONLY_MODERATORS_CAN_SPEAK", nil)]];
     } else if (publishRule && [publishRule intValue] == 2) {
         publishRuleChangeSystemMessage = [[TSInfoMessage alloc] initActionInfoMessageWithType:TSInfoMessageGroupPublishRuleChange
-                                                                                        timestamp:[NSDate ows_millisecondTimeStamp]
+                                                                                        timestamp:timestamp
                                                                                   serverTimestamp:serverTimestamp
                                                                                          inThread:thread
                                                                                     customMessage:[[NSAttributedString alloc] initWithString:Localized(@"INFO_MESSAGE_EVERYONE_CAN_SPEAK", nil)]];
@@ -39,7 +39,7 @@
 }
 
 + (TSInfoMessage *)gOpenAutoClearSwitchInfoMessageWithThread:(TSGroupThread *)thread isOn:(BOOL)isOn {
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    uint64_t now = [DTTrustedClock clientStampMs];
     NSString *updateGroupInfo = isOn ? Localized(@"LIST_GROUP_AUTO_CLEAN_TURN_ON_MSG", nil) : Localized(@"LIST_GROUP_AUTO_CLEAN_TURN_OFF_MSG", nil);
     TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:now
                                                                  inThread:thread
@@ -51,7 +51,7 @@
 
 + (TSInfoMessage *)gPrivilegeConfidentialInfoMessageWithThread:(TSGroupThread *)thread
                                                   operatorName:(NSString *)operatorName {
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    uint64_t now = [DTTrustedClock clientStampMs];
     NSString *updateGroupInfo = [NSString stringWithFormat:Localized(@"GROUP_INFO_TURN_ON_PROVILEGE_CONFIDENTIAL", nil), operatorName];
     TSInfoMessage *infoMessage = [[TSInfoMessage alloc] initWithTimestamp:now
                                                                  inThread:thread
@@ -64,7 +64,7 @@
 + (TSInfoMessage *)groupUpdateExtPrivateChatInfoMessage:(TSGroupThread *)thread
                                                        turnOn:(BOOL)turnOn
                                                   operatorName:(NSString *)operatorName {
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    uint64_t now = [DTTrustedClock clientStampMs];
     NSString *updateGroupInfo;
     if (turnOn) {
         updateGroupInfo = [NSString stringWithFormat:Localized(@"GROUP_UPDATE_OPEN_EXT_PRIVATE_CHAT_INFO_MESSAGE", nil), Localized(@"YOU", @"")];

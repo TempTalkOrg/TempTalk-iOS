@@ -185,7 +185,7 @@ public class DTWeakContactManager: NSObject {
                                transaction: SDSAnyWriteTransaction) {
         let serverNow = serverTimestamp != 0
             ? Int64(serverTimestamp)
-            : Int64(NSDate.ows_millisecondTimeStamp())
+            : Int64(DTTrustedClock.now())
         let record = DTWeakContactRecord(
             uid: uid,
             reason: reason,
@@ -280,6 +280,7 @@ public class DTWeakContactManager: NSObject {
 
         databaseStorage.write { transaction in
             let contactsManager = TextSecureKitEnv.shared().contactsManager
+            let localNumber = TSAccountManager.shared.localNumber(with: transaction)
             // Overwrite cache with the server mirror, applying diffs.
             for (uid, record) in serverMap {
                 if cacheBefore.contains(uid) {
@@ -293,7 +294,9 @@ public class DTWeakContactManager: NSObject {
                 }
             }
             for uid in cacheBefore.subtracting(serverSet) {
-                let isFriend = contactsManager.signalAccount(forRecipientId: uid, transaction: transaction)?.isFriend ?? false
+                let isFriend = contactsManager
+                    .signalAccount(forRecipientId: uid, transaction: transaction)?
+                    .isFriend(localNumber: localNumber) ?? false
                 if isFriend {
                     // Re-friended (friend sync already ran): clear placeholder, keep conversation.
                     self.clearWeakPlaceholderCore(uid: uid, transaction: transaction)

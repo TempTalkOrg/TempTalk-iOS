@@ -10,6 +10,7 @@
 #import "UIView+SignalUI.h"
 #import <QuartzCore/QuartzCore.h>
 #import <TTServiceKit/NSTimer+OWS.h>
+#import <TTServiceKit/TTServiceKit-Swift.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -82,7 +83,10 @@ const CGFloat kDisappearingMessageIconSize = 12.f;
         return;
     }
 
-    CGFloat secondsLeft = MAX(0, (self.expirationTimestamp - [NSDate ows_millisecondTimeStamp]) / 1000.f);
+    uint64_t now = [DTTrustedClock now];
+    CGFloat secondsLeft = self.expirationTimestamp > now
+        ? (self.expirationTimestamp - now) / 1000.f
+        : 0;
     CGFloat progress = 0.f;
     if (self.initialDurationSeconds > 0) {
         progress = CGFloatClamp(secondsLeft / self.initialDurationSeconds, 0.f, 1.f);

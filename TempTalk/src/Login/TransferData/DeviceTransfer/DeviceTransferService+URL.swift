@@ -23,11 +23,7 @@ extension DeviceTransferService {
     private static let certificateHashKey = "certificateHash"
     private static let transferModeKey = "transferMode"
 
-    func urlForTransfer(mode: TransferMode) throws -> URL {
-        guard let identity = identity else {
-            throw OWSAssertionError("unexpectedly missing identity")
-        }
-
+    func urlForTransfer(mode: TransferMode, identity: SecIdentity) throws -> URL {
         var components = URLComponents()
         components.scheme = AppLinkNotificationHandler.kURLSchemeChative
         components.host = AppLinkNotificationHandler.kURLHostTransfer

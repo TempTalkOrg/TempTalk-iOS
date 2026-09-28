@@ -50,6 +50,10 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
 
 @interface HomeViewController () <OWSQRScannerDelegate, DatabaseChangeDelegate, ActionFloatViewDelegate, OWSNavigationChildController>
 
+// Implemented in HomeViewController+TableView.swift.
+- (void)updateEncryptionFooter;
+- (void)presentEndToEndEncryptionInfoFromHome;
+
 // UI Components
 @property (nonatomic, strong) HomeEmptyBoxView *emptyBoxView;
 @property (nonatomic, strong) HomeReminderViewCell *reminderViewCell;
@@ -284,6 +288,10 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
 - (void)setupEmptyBoxView {
     HomeEmptyBoxView *emptyBoxView = [HomeEmptyBoxView new];
     _emptyBoxView = emptyBoxView;
+    __weak typeof(self) weakSelf = self;
+    emptyBoxView.didTapEncryptionHint = ^{
+        [weakSelf presentEndToEndEncryptionInfoFromHome];
+    };
     self.tableView.backgroundView = emptyBoxView;
 }
 
@@ -301,7 +309,7 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
 }
 
 - (void)setupTableViewFooter {
-    self.tableView.tableFooterView = [[UIView alloc] initWithFrame:CGRectZero];
+    [self updateEncryptionFooter];
 }
 
 #pragma mark - Navigation Bar
@@ -431,13 +439,7 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
             break;
             
         case ActionFloatViewItemTypeScan: {
-            DTScanQRCodeController *scanQRCodeController = [DTScanQRCodeController new];
-            @weakify(self);
-            scanQRCodeController.didReceiveHandler = ^(NSURL *url) {
-                @strongify(self);
-                [self showDeviceTransfer:url];
-            };
-            [self.navigationController pushViewController:scanQRCodeController animated:YES];
+            [self showDeviceTransferScanner];
             break;
         }
             
@@ -461,6 +463,16 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
 
 - (void)floatViewDidRemoveFromSuperView {
     self.actionFloatView = nil;
+}
+
+- (void)showDeviceTransferScanner {
+    DTScanQRCodeController *scanQRCodeController = [DTScanQRCodeController new];
+    @weakify(self);
+    scanQRCodeController.didReceiveHandler = ^(NSURL *url) {
+        @strongify(self);
+        [self showDeviceTransfer:url];
+    };
+    [self.navigationController pushViewController:scanQRCodeController animated:YES];
 }
 
 - (void)showDeviceTransfer:(NSURL *_Nonnull)url {
@@ -653,6 +665,11 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
                  object:nil];
     
     [center addObserver:self
+               selector:@selector(outgoingMessageSendStateDidChange:)
+                   name:DTOutgoingMessageSendStateDidChangeNotification
+                 object:nil];
+
+    [center addObserver:self
                selector:@selector(socketStateDidChange)
                    name:OWSWebSocket.webSocketStateDidChange
                  object:nil];
@@ -694,6 +711,36 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
         OWSLogWarn(@"groupAvatarDidChange: missing threadId");
         return;
     }
+    [self invalidateCellsForThreadIds:[NSSet setWithObject:threadId]];
+}
+
+/// Send-failed and sending indicators are read live per cell, while a message-state flip leaves the
+/// thread row untouched. The usual database update path can therefore drop it at -previewEqualTo:;
+/// invalidate the affected cell directly.
+- (void)outgoingMessageSendStateDidChange:(NSNotification *)notification {
+    OWSAssertIsOnMainThread();
+
+    NSString *threadId = notification.userInfo[DTOutgoingMessageSendStateThreadIdKey];
+    if (!threadId.length) {
+        OWSLogWarn(@"outgoingMessageSendStateDidChange: missing threadId");
+        return;
+    }
+
+    // A diffable snapshot can be queued behind the full reload that runs when HomeVC becomes
+    // visible again. Refresh the matching visible cell first so the indicator reflects the
+    // committed database state on this run-loop turn; the normal invalidation below keeps caches
+    // and non-visible cells correct.
+    for (UITableViewCell *visibleCell in self.tableView.visibleCells) {
+        if (![visibleCell isKindOfClass:[HomeViewCell class]]) {
+            continue;
+        }
+        HomeViewCell *homeCell = (HomeViewCell *)visibleCell;
+        if ([homeCell.thread.threadRecord.uniqueId isEqualToString:threadId]) {
+            [homeCell refreshSendingStatus];
+            break;
+        }
+    }
+
     [self invalidateCellsForThreadIds:[NSSet setWithObject:threadId]];
 }
 
@@ -1281,6 +1328,8 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
 - (void)updateViewState {
     NSInteger inboxCount = [self.threadMapping numberOfItemsInSection:HomeViewControllerSectionConversations];
     NSUInteger archiveCount = self.threadMapping.archiveCount;
+
+    self.emptyBoxView.showsEncryptionHint = self.homeViewMode == HomeViewMode_Inbox;
     
     if (self.homeViewMode == HomeViewMode_Inbox && inboxCount == 0) {
         [self updateEmptyBoxText];
@@ -1291,6 +1340,8 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
     } else {
         [_emptyBoxView setHidden:YES];
     }
+
+    [self updateEncryptionFooter];
 }
 
 - (void)updateEmptyBoxText {
@@ -1326,6 +1377,7 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
     
     [self.emptyBoxView applyTheme];
     [self.reminderViewCell applyTheme];
+    [self updateEncryptionFooter];
     [self fullReloadDataWithAnimated:NO completion:nil];
 }
 
@@ -1334,6 +1386,9 @@ static CGFloat const kSearchBarContainerHeight = 59.0;  // kSearchBarHeight + 15
     
     [self socketStateDidChange];
     [self setupActionFloatView];
+    [self updateEmptyBoxText];
+    [self.emptyBoxView applyTheme];
+    [self updateEncryptionFooter];
     [self fullReloadDataWithAnimated:NO completion:nil];
 }
 

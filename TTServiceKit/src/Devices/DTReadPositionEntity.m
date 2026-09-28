@@ -55,6 +55,10 @@
     uint64_t maxNotifySequenceID = [SDS fitsInInt64:readPositionProto.maxNotifySequenceID] ? readPositionProto.maxNotifySequenceID : 0;
     uint64_t maxSequenceID = [SDS fitsInInt64:readPositionProto.maxSequenceID] ? readPositionProto.maxSequenceID : 0;
 
+    if (readAt == 0) {
+        readAt = maxServerTime;
+    }
+
     DTReadPositionEntity *readPositionEntity = [[DTReadPositionEntity alloc] initWithGroupId:readPositionProto.groupID
                                                                                       readAt:readAt
                                                                                maxServerTime:maxServerTime
@@ -62,6 +66,15 @@
                                                                                maxSequenceId:maxSequenceID];
     return readPositionEntity;
 
+}
+
++ (DTReadPositionEntity *)readPostionEntityWithProto:(DSKProtoReadPosition *)readPositionProto
+                              receiptServerTimestamp:(uint64_t)receiptServerTimestamp {
+    DTReadPositionEntity *entity = [self readPostionEntityWithProto:readPositionProto];
+    if (receiptServerTimestamp > 0 && entity.readAt > receiptServerTimestamp) {
+        entity.readAt = receiptServerTimestamp;
+    }
+    return entity;
 }
 
 + (nullable DSKProtoReadPosition *)readPostionProtoWithEntity:(nullable DTReadPositionEntity *)readPositionEntity{

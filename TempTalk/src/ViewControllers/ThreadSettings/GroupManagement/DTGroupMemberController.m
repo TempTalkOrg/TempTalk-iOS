@@ -7,6 +7,7 @@
 
 #import "DTGroupMemberController.h"
 #import "Yelling-Swift.h"
+#import <TTServiceKit/TTServiceKit-Swift.h>
 #import "SignalApp.h"
 #import "ViewControllerUtils.h"
 #import <TTMessaging/BlockListUIUtils.h>
@@ -513,7 +514,7 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
 
 - (void)generateInfoMessageWithUpdateGroupInfo:(NSString *)updateGroupInfo
                                  transaction:(SDSAnyWriteTransaction *)transaction{
-    uint64_t now = [NSDate ows_millisecondTimeStamp];
+    uint64_t now = [DTTrustedClock clientStampMs];
     [[[TSInfoMessage alloc] initWithTimestamp:now
                                      inThread:self.thread
                                   messageType:TSInfoMessageTypeGroupUpdate
@@ -739,7 +740,11 @@ CGFloat const kGroupMemberBottomViewHeight = 70;
     [actionSheetController addAction:[UIAlertAction actionWithTitle:contactInfoTitle
                                                               style:UIAlertActionStyleDefault
                                                             handler:^(UIAlertAction *_Nonnull action) {
-                                                                [self showProfileCardInfoWith:recipientId isFromSameThread:false isPresent:false isFromContacts:true];
+                                                                NSString *groupIdStr = [TSGroupThread transformToServerGroupIdWithLocalGroupId:self.thread.groupModel.groupId];
+                                                                DTAddFriendSource *addFriendSource = groupIdStr.length > 0
+                                                                    ? [DTAddFriendSource fromGroupWithGroupId:groupIdStr]
+                                                                    : DTAddFriendSource.unspecified;
+                                                                [self showProfileCardInfoWith:recipientId addFriendSource:addFriendSource isFromSameThread:false isPresent:false isFromContacts:true];
                                                             }]];
 
     BOOL isBlocked;

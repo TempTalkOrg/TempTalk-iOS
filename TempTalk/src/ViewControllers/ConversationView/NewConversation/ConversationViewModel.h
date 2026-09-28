@@ -51,6 +51,9 @@ typedef NS_ENUM(NSUInteger, ConversationUpdateItemType) {
 @property (nonatomic, readonly) NSArray<NSString *> *needRefreshIds;
 @property (nonatomic, readonly, nullable) NSNumber *unreadIndicatorIndex;
 @property (nonatomic, readonly, nullable) NSNumber *focusItemIndex;
+// Index of the earliest loaded outgoing message that failed to send. Ranks equally
+// with unreadIndicatorIndex when deciding where a freshly opened conversation lands.
+@property (nonatomic, readonly, nullable) NSNumber *oldestFailedOutgoingIndex;
 
 // 方便根据 uniqueId 查找对应的 viewItem (时间复杂度 O(n))
 @property (nonatomic, readonly) NSDictionary<NSString *, id<ConversationViewItem>> *viewItemsMap;
@@ -98,7 +101,7 @@ typedef NS_ENUM(NSUInteger, ConversationUpdateItemType) {
                             completion:(void (^ __nullable)(BOOL))completion;
 
 - (void)conversationViewModelWillLoadMoreItems;
-- (void)conversationViewModelDidLoadMoreItems;
+- (void)conversationViewModelDidFinishLoadMoreItemsWithSuccess:(BOOL)success;
 - (void)conversationViewModelDidUpdateLoadMoreStatus;
 
 // Called after the view model recovers from a severe error
@@ -144,8 +147,8 @@ typedef NS_ENUM(NSUInteger, ConversationUpdateItemType) {
 - (BOOL)canLoadNewerItems;
 - (BOOL)canFetchOlderItems;
 - (BOOL)canFetchNewerItems;
-- (void)appendOlderItemsWithTransaction:(SDSAnyReadTransaction *)transaction;
-- (void)appendNewerItemsWithTransaction:(SDSAnyReadTransaction *)transaction;
+- (BOOL)appendOlderItemsWithTransaction:(SDSAnyReadTransaction *)transaction;
+- (BOOL)appendNewerItemsWithTransaction:(SDSAnyReadTransaction *)transaction;
 
 // hot data reload
 //- (BOOL)reloadViewItemsWithTransaction:(SDSAnyReadTransaction *)transaction;
@@ -162,9 +165,14 @@ typedef NS_ENUM(NSUInteger, ConversationUpdateItemType) {
                                   transaction:(SDSAnyReadTransaction *)transaction
                                    completion:(void (^)(NSIndexPath * _Nullable))completion;
 
-- (void)ensureLoadWindowContainsNewestItemsWithTransaction:(SDSAnyReadTransaction *)transaction;
+- (BOOL)ensureLoadWindowContainsNewestItemsWithTransaction:(SDSAnyReadTransaction *)transaction
+                                                completion:(void (^)(BOOL isFinished))completion;
 
 - (void)appendUnsavedOutgoingTextMessage:(TSOutgoingMessage *)outgoingMessage;
+
+/// Refreshes one loaded interaction from storage and emits the corresponding view update.
+/// Used when a sender completion is more authoritative than a coalesced database notification.
+- (void)refreshInteractionWithUniqueId:(NSString *)uniqueId;
 
 - (void)buildViewItemWithInteraction:(TSInteraction *)interaction
                          transaction:(SDSAnyReadTransaction *)transaction

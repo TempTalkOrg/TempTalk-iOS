@@ -13,6 +13,21 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+typedef NS_ENUM(NSInteger, DTCallKitMuteActionClassification) {
+    DTCallKitMuteActionClassificationNativeAction,
+    DTCallKitMuteActionClassificationAppCallback,
+    DTCallKitMuteActionClassificationSameTargetSystemEcho,
+    DTCallKitMuteActionClassificationOppositeAction,
+};
+
+FOUNDATION_EXPORT DTCallKitMuteActionClassification DTClassifyCallKitMuteAction(
+    BOOL hasPendingAppAction,
+    BOOL appActionSuperseded,
+    BOOL actionMatchesAppActionUUID,
+    BOOL actionMuted,
+    BOOL appActionTarget
+);
+
 @interface DTCallKitManager (CallerMapTool)
 
 #pragma mark - UUID 查找
@@ -106,6 +121,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL hungup;
 @property (nonatomic, assign) BOOL isMuted;
 @property (nonatomic, assign) BOOL isMutedByApp;
+@property (nonatomic, assign) BOOL isMutedByAppSuperseded;
+@property (nonatomic, strong, nullable) NSUUID *appMuteActionUUID;
+@property (nonatomic, assign) BOOL appMuteActionTarget;
 @property (nonatomic, assign) BOOL hasCallKitMuteIntent;
 @property (nonatomic, assign) CallStatus status;
 @property (nonatomic, assign) CKCallSystemState systemState;

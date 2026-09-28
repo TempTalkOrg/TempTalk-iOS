@@ -6,6 +6,7 @@
 #import "BlockListUIUtils.h"
 #import "ContactsViewHelper.h"
 #import "Yelling-Swift.h"
+#import <TTServiceKit/TTServiceKit-Swift.h>
 #import <TTMessaging/OWSContactsManager.h>
 #import <TTServiceKit/SignalAccount.h>
 #import <TTServiceKit/DTToastHelper.h>
@@ -264,6 +265,18 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
     return result;
 }
 
+/// Same veto the row-tap path applies, resolved for either a contact or a virtual user.
+- (BOOL)canRecipientBeSelected:(nullable SignalAccount *)signalAccount virtualUserId:(nullable NSString *)virtualUserId {
+    if (signalAccount.recipientId) {
+        return [self canSignalAccountBeSelected:signalAccount];
+    }
+    if (DTParamsUtils.validateString(virtualUserId)) {
+        return [self canUserIdOrEmailBeSelected:virtualUserId];
+    }
+
+    return YES;
+}
+
 - (BOOL)canMeetingMemberBeSelected:(SignalAccount *)signalAccount {
     BOOL result = YES;
     
@@ -459,7 +472,7 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
                 instance.groupModel.groupMemberIds = self.memberRecipientIds.allObjects;
             }];
                         
-            uint64_t now = [NSDate ows_millisecondTimeStamp];
+            uint64_t now = [DTTrustedClock clientStampMs];
             [[[TSInfoMessage alloc] initWithTimestamp:now inThread:self.thread messageType:TSInfoMessageGroupAddMember customMessage:updateGroupInfo] anyInsertWithTransaction:transaction];
             
             [transaction addAsyncCompletionOnMain:^{
@@ -688,6 +701,12 @@ NSString *const kDTAddToGroupItemIdentifier = @"kDTAddToGroupItemIdentifier";
 
     // Existing members are not selectable: gray DisabledSelected checkbox, no table selection.
     BOOL isExistingMember = DTParamsUtils.validateString(recipientId) && [self.previousMemberRecipientIds containsObject:recipientId];
+    // Meeting invites veto current participants through the delegate instead of
+    // previousMemberRecipientIds, so mirror that veto here — otherwise their checkbox stays
+    // empty and only flickers on tap before the veto reverts it.
+    if (!isExistingMember) {
+        isExistingMember = self.from == SelectRecipientFrom_Meeting && ![self canRecipientBeSelected:signalAccount virtualUserId:virtualUserId];
+    }
     if (isExistingMember) {
         contactCell.selectionStatus = ContactCellSelectionStatusDisabledSelected;
         return;

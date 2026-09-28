@@ -26,7 +26,8 @@ public struct CallServiceUrlDiskState: Codable, Equatable {
     }
 
     public var isExpired: Bool {
-        Int64(Date().timeIntervalSince1970 * 1000) >= expiresAtMillis
+        let trustedNowMs = Int64(DTTrustedClock.now())
+        return trustedNowMs >= expiresAtMillis
     }
 }
 
@@ -274,7 +275,8 @@ public actor CallServiceUrlManager {
 
     private func applyFetchResult(_ remote: ServiceUrls) {
         let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
-        let serverSec = remote.serverTimestampSeconds ?? Date().timeIntervalSince1970
+        // Keep the fallback on the server time axis.
+        let serverSec = remote.serverTimestampSeconds ?? (Double(DTTrustedClock.now()) / 1000)
         let expiresAtMillis = Int64((serverSec + Double(remote.ttl)) * 1000)
 
         let merged: CallServiceUrlDiskState
@@ -301,7 +303,8 @@ public actor CallServiceUrlManager {
     private func throttle(minIntervalMs: Int64) -> Bool {
         guard let last = inMemory?.lastFetchedAtMillis else { return false }
         let nowMillis = Int64(Date().timeIntervalSince1970 * 1000)
-        return (nowMillis - last) < minIntervalMs
+        let elapsed = nowMillis - last
+        return elapsed >= 0 && elapsed < minIntervalMs
     }
 
     private static func callApi() async throws -> ServiceUrls {
